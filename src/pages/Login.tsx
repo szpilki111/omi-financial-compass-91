@@ -18,6 +18,14 @@ import { Button } from '@/components/ui/button';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin';
 
+interface ProfileInsertParams {
+  user_id: string;
+  user_name: string;
+  user_role: Role;
+  user_email: string;
+  location_id: string | null;
+}
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,31 +85,18 @@ const Login = () => {
       return;
     }
 
+    if (password.length < 6) {
+      setError("Hasło musi mieć co najmniej 6 znaków");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       console.log("Rozpoczynanie procesu rejestracji...");
       
-      // Sprawdzanie w tabeli profiles, czy istnieje użytkownik z takim emailem
-      const { data: existingProfile, error: profileCheckError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (profileCheckError) {
-        console.error("Error checking profiles:", profileCheckError);
-        setError("Wystąpił błąd podczas sprawdzania profilu");
-        setIsLoading(false);
-        return;
-      }
-
-      if (existingProfile) {
-        setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Bezpieczniejsza metoda sprawdzania czy użytkownik już istnieje w auth
-      // Próbujemy zarejestrować użytkownika i sprawdzamy czy jest błąd o już istniejącym użytkowniku
+      // Usunięto problematyczne sprawdzanie tabeli profiles
+      
+      // Rejestracja użytkownika - Supabase sprawdzi automatycznie, czy email już istnieje
       console.log("Tworzenie konta użytkownika...");
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -165,7 +160,7 @@ const Login = () => {
         user_role: role,
         user_email: email,
         location_id: locationId
-      } as any);
+      } as ProfileInsertParams);
       
       if (profileError) {
         console.error("Error creating profile:", profileError);
@@ -175,11 +170,26 @@ const Login = () => {
       }
       
       console.log("Rejestracja zakończona pomyślnie");
-      toast({
-        title: "Rejestracja udana",
-        description: "Konto zostało utworzone. Możesz się teraz zalogować.",
-        duration: 5000,
-      });
+      
+      // Automatyczne logowanie po rejestracji
+      const success = await login(email, password);
+      if (success) {
+        toast({
+          title: "Rejestracja udana",
+          description: "Konto zostało utworzone. Jesteś teraz zalogowany.",
+          duration: 5000,
+        });
+        navigate('/dashboard', { replace: true });
+      } else {
+        toast({
+          title: "Rejestracja udana",
+          description: "Konto zostało utworzone, ale nie udało się zalogować automatycznie. Możesz zalogować się ręcznie.",
+          duration: 5000,
+        });
+        
+        // Przełącz z powrotem na formularz logowania
+        setIsSigningUp(false);
+      }
       
       // Czyszczenie formularza
       setEmail('');
@@ -187,8 +197,6 @@ const Login = () => {
       setName('');
       setLocation('');
       setRole('ekonom');
-      
-      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
       
     } catch (err: any) {
       console.error("Signup error:", err);
