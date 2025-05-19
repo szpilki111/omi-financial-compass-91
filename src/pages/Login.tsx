@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -78,17 +77,17 @@ const Login = () => {
     try {
       console.log("Rozpoczynanie procesu rejestracji...");
       
-      // 1. Sprawdź, czy użytkownik o podanym emailu już istnieje w auth
-      const { data: authUser, error: authCheckError } = await supabase.auth.admin.getUserByEmail(email);
+      // 1. Sprawdzanie czy użytkownik już istnieje poprzez próbę logowania bez hasła
+      const { data: checkData, error: checkError } = await supabase.auth.signInWithOtp({
+        email: email,
+        options: {
+          shouldCreateUser: false // Nie tworzy użytkownika, tylko sprawdza czy istnieje
+        }
+      });
       
-      if (authCheckError && authCheckError.message !== "User not found") {
-        console.error("Error checking auth user:", authCheckError);
-        setError("Wystąpił błąd podczas sprawdzania konta");
-        setIsLoading(false);
-        return;
-      }
-
-      if (authUser) {
+      // Jeśli nie ma błędu "User not found", to oznacza, że użytkownik istnieje
+      if (!checkError || (checkError && !checkError.message.includes("Email not confirmed"))) {
+        console.log("Użytkownik już istnieje");
         setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
         setIsLoading(false);
         return;
