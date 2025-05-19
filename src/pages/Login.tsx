@@ -5,6 +5,16 @@ import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+
+type Role = 'ekonom' | 'prowincjal' | 'admin';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,13 +22,16 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [role, setRole] = useState<Role>('ekonom');
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const location_path = useLocation();
   const { toast } = useToast();
 
   // Get the redirect path or use home page as default
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const from = (location_path.state as { from?: { pathname: string } })?.from?.pathname || '/';
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -56,23 +69,69 @@ const Login = () => {
     setIsLoading(true);
     setError(null);
 
+    if (!name.trim()) {
+      setError("Imię i nazwisko jest wymagane");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // 1. Utwórz konto użytkownika
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: "Nowy Użytkownik", // Domyślna wartość, którą użytkownik może później zmienić
+            full_name: name,
           }
         }
       });
 
-      if (error) {
-        if (error.message === 'User already registered') {
+      if (signUpError) {
+        if (signUpError.message === 'User already registered') {
           setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
         } else {
-          setError(error.message);
+          setError(signUpError.message);
         }
+        return;
+      }
+
+      if (!data.user) {
+        setError("Błąd podczas rejestracji. Spróbuj ponownie.");
+        return;
+      }
+
+      // 2. Utwórz domyślną lokalizację jeśli podano nazwę
+      let locationId = null;
+      if (location.trim()) {
+        const { data: locationData, error: locationError } = await supabase
+          .from('locations')
+          .insert({
+            name: location,
+          })
+          .select('id')
+          .single();
+
+        if (locationError) {
+          console.error("Error creating location:", locationError);
+        } else if (locationData) {
+          locationId = locationData.id;
+        }
+      }
+
+      // 3. Zaktualizuj profil użytkownika z wybraną rolą
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          name: name,
+          role: role,
+          location_id: locationId
+        })
+        .eq('id', data.user.id);
+
+      if (profileError) {
+        console.error("Error updating profile:", profileError);
+        setError("Konto zostało utworzone, ale wystąpił błąd podczas aktualizacji profilu.");
       } else {
         toast({
           title: "Rejestracja udana",
@@ -105,10 +164,27 @@ const Login = () => {
         )}
 
         <form onSubmit={isSigningUp ? handleSignUp : handleSubmit} className="space-y-4">
+          {isSigningUp && (
+            <div>
+              <Label htmlFor="name" className="omi-form-label">
+                Imię i nazwisko
+              </Label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="omi-form-input"
+                required
+                placeholder="Wprowadź imię i nazwisko"
+              />
+            </div>
+          )}
+          
           <div>
-            <label htmlFor="email" className="omi-form-label">
+            <Label htmlFor="email" className="omi-form-label">
               Adres email
-            </label>
+            </Label>
             <input
               id="email"
               type="email"
@@ -121,9 +197,9 @@ const Login = () => {
           </div>
 
           <div>
-            <label htmlFor="password" className="omi-form-label">
+            <Label htmlFor="password" className="omi-form-label">
               Hasło
-            </label>
+            </Label>
             <input
               id="password"
               type="password"
@@ -134,6 +210,43 @@ const Login = () => {
               placeholder={isSigningUp ? "Min. 6 znaków" : ""}
             />
           </div>
+
+          {isSigningUp && (
+            <>
+              <div>
+                <Label htmlFor="role" className="omi-form-label">
+                  Rola
+                </Label>
+                <Select 
+                  value={role} 
+                  onValueChange={(value) => setRole(value as Role)}
+                >
+                  <SelectTrigger className="omi-form-input">
+                    <SelectValue placeholder="Wybierz rolę" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ekonom">Ekonom</SelectItem>
+                    <SelectItem value="prowincjal">Prowincjał</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="location" className="omi-form-label">
+                  Dom zakonny (opcjonalnie)
+                </Label>
+                <input
+                  id="location"
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="omi-form-input"
+                  placeholder="Nazwa domu zakonnego"
+                />
+              </div>
+            </>
+          )}
 
           {!isSigningUp && (
             <div className="flex items-center justify-between">
@@ -180,9 +293,6 @@ const Login = () => {
             <p>Dane testowe:</p>
             <p>Email: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
             <p>Hasło: <strong>password123</strong></p>
-            <p className="mt-1 text-red-500">
-              <strong>Uwaga:</strong> Aby móc zalogować się kontami testowymi, musisz utworzyć te konta w panelu Supabase.
-            </p>
           </div>
         </form>
       </div>
