@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +13,8 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin';
 
@@ -97,22 +100,9 @@ const Login = () => {
         return;
       }
 
-      // Sprawdzanie również w tabeli auth, czy istnieje użytkownik z takim emailem
-      const { data: { users }, error: authCheckError } = await supabase.auth.admin.listUsers();
-      
-      if (authCheckError) {
-        console.error("Error checking auth users:", authCheckError);
-      } else {
-        const existingUser = users.find(user => user.email === email);
-        if (existingUser) {
-          setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
-          setIsLoading(false);
-          return;
-        }
-      }
-
+      // Bezpieczniejsza metoda sprawdzania czy użytkownik już istnieje w auth
+      // Próbujemy zarejestrować użytkownika i sprawdzamy czy jest błąd o już istniejącym użytkowniku
       console.log("Tworzenie konta użytkownika...");
-      // 2. Utwórz konto użytkownika
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -126,7 +116,14 @@ const Login = () => {
 
       if (signUpError) {
         console.error("Signup error:", signUpError);
-        setError(signUpError.message || "Wystąpił błąd podczas rejestracji");
+        
+        // Jeśli błąd wskazuje na już istniejącego użytkownika
+        if (signUpError.message.includes("already registered")) {
+          setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
+        } else {
+          setError(signUpError.message || "Wystąpił błąd podczas rejestracji");
+        }
+        
         setIsLoading(false);
         return;
       }
