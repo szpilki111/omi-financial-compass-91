@@ -4,12 +4,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,12 +51,51 @@ const Login = () => {
     }
   };
 
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: "Nowy Użytkownik", // Domyślna wartość, którą użytkownik może później zmienić
+          }
+        }
+      });
+
+      if (error) {
+        if (error.message === 'User already registered') {
+          setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
+        } else {
+          setError(error.message);
+        }
+      } else {
+        toast({
+          title: "Rejestracja udana",
+          description: "Sprawdź swoją skrzynkę email, aby potwierdzić konto.",
+        });
+        setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
+      }
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      setError(err?.message || "Wystąpił problem podczas rejestracji. Spróbuj ponownie.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-omi-gray-100">
       <div className="bg-white p-8 rounded-md shadow-md w-full max-w-md">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-omi-500">OMI Finanse</h1>
-          <p className="text-omi-gray-500 mt-1">Zaloguj się do systemu</p>
+          <p className="text-omi-gray-500 mt-1">
+            {isSigningUp ? 'Utwórz nowe konto' : 'Zaloguj się do systemu'}
+          </p>
         </div>
 
         {error && (
@@ -63,7 +104,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={isSigningUp ? handleSignUp : handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="omi-form-label">
               Adres email
@@ -90,40 +131,58 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="omi-form-input"
               required
+              placeholder={isSigningUp ? "Min. 6 znaków" : ""}
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                type="checkbox"
-                className="h-4 w-4 border-omi-gray-300 rounded text-omi-500 focus:ring-omi-500"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-omi-gray-700">
-                Zapamiętaj mnie
-              </label>
-            </div>
+          {!isSigningUp && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  className="h-4 w-4 border-omi-gray-300 rounded text-omi-500 focus:ring-omi-500"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-omi-gray-700">
+                  Zapamiętaj mnie
+                </label>
+              </div>
 
-            <div>
-              <a href="#" className="text-sm text-omi-500 hover:text-omi-600">
-                Zapomniałeś hasła?
-              </a>
+              <div>
+                <a href="#" className="text-sm text-omi-500 hover:text-omi-600">
+                  Zapomniałeś hasła?
+                </a>
+              </div>
             </div>
-          </div>
+          )}
 
           <button
             type="submit"
             disabled={isLoading}
             className="omi-btn omi-btn-primary w-full flex justify-center"
           >
-            {isLoading ? <Spinner size="sm" /> : 'Zaloguj się'}
+            {isLoading ? <Spinner size="sm" /> : (isSigningUp ? 'Zarejestruj się' : 'Zaloguj się')}
           </button>
+
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => setIsSigningUp(!isSigningUp)}
+              className="text-sm text-omi-500 hover:text-omi-600"
+            >
+              {isSigningUp 
+                ? 'Masz już konto? Zaloguj się' 
+                : 'Nie masz konta? Zarejestruj się'}
+            </button>
+          </div>
 
           <div className="text-center mt-4 text-xs text-omi-gray-500">
             <p>Dane testowe:</p>
             <p>Email: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
             <p>Hasło: <strong>password123</strong></p>
+            <p className="mt-1 text-red-500">
+              <strong>Uwaga:</strong> Aby móc zalogować się kontami testowymi, musisz utworzyć te konta w panelu Supabase.
+            </p>
           </div>
         </form>
       </div>

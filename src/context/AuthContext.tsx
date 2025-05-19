@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           )
         `)
         .eq('id', userId)
-        .single();
+        .maybeSingle();  // Używamy maybeSingle zamiast single, aby uniknąć błędu jeśli profil nie istnieje
 
       if (error) {
         console.error('Error fetching profile:', error);
@@ -142,9 +142,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error from Supabase:', error);
+        
+        // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
+        let errorMessage = error.message;
+        if (error.message === "Invalid login credentials") {
+          errorMessage = "Nieprawidłowy email lub hasło";
+        }
+        
         toast({
           title: "Błąd logowania",
-          description: error.message,
+          description: errorMessage,
           variant: "destructive",
         });
         return false;
