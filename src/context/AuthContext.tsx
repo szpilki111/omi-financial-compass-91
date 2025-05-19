@@ -45,11 +45,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
+      (event, currentSession) => {
+        console.log('Auth state change event:', event);
         setSession(currentSession);
         
         if (currentSession?.user) {
-          await fetchUserProfile(currentSession.user.id);
+          // Używamy setTimeout aby uniknąć rekurencyjnych wywołań Supabase
+          setTimeout(() => {
+            fetchUserProfile(currentSession.user.id);
+          }, 0);
         } else {
           setUser(null);
         }
@@ -60,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log('Get session result:', currentSession);
         setSession(currentSession);
         
         if (currentSession?.user) {
@@ -82,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch user profile data including location name
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log('Fetching profile for user ID:', userId);
       const { data: profile, error } = await supabase
         .from('profiles')
         .select(`
@@ -97,8 +103,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
+        console.error('Error fetching profile:', error);
         throw error;
       }
+
+      console.log('Profile fetched:', profile);
 
       if (profile) {
         setUser({
@@ -108,9 +117,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: profile.role as Role,
           location: profile.locations ? profile.locations.name : '',
         });
+      } else {
+        console.warn('No profile found for user:', userId);
+        setUser(null);
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('Error in fetchUserProfile:', error);
       setUser(null);
     }
   };
@@ -119,13 +131,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
+      console.log('Attempting login for:', email);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
+      console.log('Login response:', { data, error });
+
       if (error) {
+        console.error('Login error from Supabase:', error);
         toast({
           title: "Błąd logowania",
           description: error.message,
@@ -135,19 +151,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        toast({
-          title: "Zalogowano pomyślnie",
-          description: `Witaj, ${email}!`,
-        });
         return true;
       }
 
       return false;
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('Unexpected login error:', error);
       toast({
         title: "Błąd logowania",
-        description: "Wystąpił problem podczas logowania",
+        description: "Wystąpił nieoczekiwany problem podczas logowania",
         variant: "destructive",
       });
       return false;

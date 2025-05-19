@@ -33,11 +33,17 @@ const Login = () => {
     try {
       const success = await login(email, password);
       if (success) {
+        toast({
+          title: "Logowanie pomyślne",
+          description: "Zostałeś zalogowany do systemu.",
+        });
         navigate(from, { replace: true });
+      } else {
+        setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
       }
     } catch (err: any) {
-      console.error(err);
-      setError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
+      console.error("Login error:", err);
+      setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
     } finally {
       setIsLoading(false);
     }
@@ -113,6 +119,12 @@ const Login = () => {
           >
             {isLoading ? <Spinner size="sm" /> : 'Zaloguj się'}
           </button>
+
+          <div className="text-center mt-4 text-xs text-omi-gray-500">
+            <p>Dane testowe:</p>
+            <p>Email: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
+            <p>Hasło: <strong>password123</strong></p>
+          </div>
         </form>
       </div>
     </div>
