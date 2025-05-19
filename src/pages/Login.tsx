@@ -76,27 +76,46 @@ const Login = () => {
     }
 
     try {
-      // 1. Sprawdź, czy użytkownik o podanym emailu już istnieje
-      const { data: existingUsers, error: checkError } = await supabase
+      console.log("Rozpoczynanie procesu rejestracji...");
+      
+      // 1. Sprawdź, czy użytkownik o podanym emailu już istnieje w auth
+      const { data: authUser, error: authCheckError } = await supabase.auth.admin.getUserByEmail(email);
+      
+      if (authCheckError && authCheckError.message !== "User not found") {
+        console.error("Error checking auth user:", authCheckError);
+        setError("Wystąpił błąd podczas sprawdzania konta");
+        setIsLoading(false);
+        return;
+      }
+
+      if (authUser) {
+        setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Sprawdzanie też w tabeli profili
+      const { data: existingProfile, error: profileCheckError } = await supabase
         .from('profiles')
         .select('email')
         .eq('email', email)
         .maybeSingle();
 
-      if (checkError) {
-        console.error("Error checking existing users:", checkError);
-        setError("Wystąpił błąd podczas sprawdzania emaila");
+      if (profileCheckError) {
+        console.error("Error checking profiles:", profileCheckError);
+        setError("Wystąpił błąd podczas sprawdzania profilu");
         setIsLoading(false);
         return;
       }
 
-      if (existingUsers) {
+      if (existingProfile) {
         setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
         setIsLoading(false);
         return;
       }
 
-      // 2. Utwórz konto użytkownika bez wysyłania emaila potwierdzającego
+      console.log("Tworzenie konta użytkownika...");
+      // 2. Utwórz konto użytkownika
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -110,16 +129,13 @@ const Login = () => {
 
       if (signUpError) {
         console.error("Signup error:", signUpError);
-        if (signUpError.message === 'User already registered') {
-          setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
-        } else {
-          setError(signUpError.message);
-        }
+        setError(signUpError.message || "Wystąpił błąd podczas rejestracji");
         setIsLoading(false);
         return;
       }
 
       if (!data.user) {
+        console.error("No user returned after signup");
         setError("Błąd podczas rejestracji. Spróbuj ponownie.");
         setIsLoading(false);
         return;
@@ -130,6 +146,7 @@ const Login = () => {
       // 3. Utwórz domyślną lokalizację jeśli podano nazwę
       let locationId = null;
       if (location.trim()) {
+        console.log("Tworzenie lokalizacji:", location);
         const { data: locationData, error: locationError } = await supabase
           .from('locations')
           .insert({
@@ -147,6 +164,7 @@ const Login = () => {
       }
 
       // 4. Utworzenie profilu użytkownika
+      console.log("Tworzenie profilu użytkownika...");
       const { error: profileError } = await supabase.rpc('insert_profile_admin', { 
         user_id: data.user.id,
         user_name: name,
@@ -157,22 +175,26 @@ const Login = () => {
       
       if (profileError) {
         console.error("Error creating profile:", profileError);
-        setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu.");
+        setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu: " + profileError.message);
         setIsLoading(false);
         return;
       }
       
+      console.log("Rejestracja zakończona pomyślnie");
       toast({
         title: "Rejestracja udana",
         description: "Konto zostało utworzone. Możesz się teraz zalogować.",
+        duration: 5000,
       });
-      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
       
-      // Opcjonalnie - automatyczne logowanie po rejestracji
-      // const success = await login(email, password);
-      // if (success) {
-      //   navigate('/dashboard', { replace: true });
-      // }
+      // Czyszczenie formularza
+      setEmail('');
+      setPassword('');
+      setName('');
+      setLocation('');
+      setRole('ekonom');
+      
+      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
       
     } catch (err: any) {
       console.error("Signup error:", err);
