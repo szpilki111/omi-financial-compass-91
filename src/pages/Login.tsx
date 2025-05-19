@@ -97,6 +97,20 @@ const Login = () => {
         return;
       }
 
+      // Sprawdzanie również w tabeli auth, czy istnieje użytkownik z takim emailem
+      const { data: { users }, error: authCheckError } = await supabase.auth.admin.listUsers();
+      
+      if (authCheckError) {
+        console.error("Error checking auth users:", authCheckError);
+      } else {
+        const existingUser = users.find(user => user.email === email);
+        if (existingUser) {
+          setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
       console.log("Tworzenie konta użytkownika...");
       // 2. Utwórz konto użytkownika
       const { data, error: signUpError } = await supabase.auth.signUp({
