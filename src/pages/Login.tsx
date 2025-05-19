@@ -1,20 +1,31 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import RegisterDemoButton from '@/components/auth/RegisterDemoButton';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
 
   // Get the redirect path or use home page as default
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,12 +36,10 @@ const Login = () => {
       const success = await login(email, password);
       if (success) {
         navigate(from, { replace: true });
-      } else {
-        setError('System logowania jest aktualnie w trakcie implementacji');
       }
-    } catch (err) {
-      setError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
+    } catch (err: any) {
       console.error(err);
+      setError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
     } finally {
       setIsLoading(false);
     }
@@ -108,8 +117,11 @@ const Login = () => {
           </button>
 
           <div className="text-center mt-4 text-xs text-omi-gray-500">
-            <p>System logowania jest w trakcie implementacji</p>
+            <p>Domyślne hasło dla wszystkich kont: <strong>password123</strong></p>
+            <p>Dostępne konta: admin@omi.pl, prowincjal@omi.pl, ekonom.{'{nazwa_placówki}'}@omi.pl</p>
           </div>
+          
+          <RegisterDemoButton />
         </form>
       </div>
     </div>

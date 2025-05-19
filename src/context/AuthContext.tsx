@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { User, Session } from '@supabase/supabase-js';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin';
 
@@ -35,40 +36,114 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserData | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Initialize auth state from localStorage on app load
+  // Initialize auth state from Supabase on app load
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await fetchUserProfile(currentSession.user.id);
+        } else {
+          setUser(null);
+        }
       }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      localStorage.removeItem('user');
-    } finally {
-      setIsLoading(false);
-    }
+    );
+
+    // THEN check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await fetchUserProfile(currentSession.user.id);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Login function - to be replaced with Supabase auth
+  // Fetch user profile data including location name
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          name,
+          email,
+          role,
+          locations:location_id (
+            name
+          )
+        `)
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (profile) {
+        setUser({
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          role: profile.role as Role,
+          location: profile.locations ? profile.locations.name : '',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setUser(null);
+    }
+  };
+
+  // Login function using Supabase auth
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Placeholder for future Supabase authentication
-      // W przyszłości zostanie zastąpione autentykacją Supabase
-      await new Promise(resolve => setTimeout(resolve, 800));
+      setIsLoading(true);
       
-      // Tymczasowo zwracamy błąd logowania
-      toast({
-        title: "Błąd logowania",
-        description: "Funkcjonalność logowania jest w trakcie implementacji",
-        variant: "destructive",
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
+
+      if (error) {
+        toast({
+          title: "Błąd logowania",
+          description: error.message,
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (data?.user) {
+        toast({
+          title: "Zalogowano pomyślnie",
+          description: `Witaj, ${email}!`,
+        });
+        return true;
+      }
+
       return false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
       toast({
         title: "Błąd logowania",
@@ -76,17 +151,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-    navigate('/login');
-    toast({
-      title: "Wylogowano",
-      description: "Zostałeś pomyślnie wylogowany",
-    });
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      navigate('/login');
+      toast({
+        title: "Wylogowano",
+        description: "Zostałeś pomyślnie wylogowany",
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: "Błąd wylogowania",
+        description: "Wystąpił problem podczas wylogowania",
+        variant: "destructive",
+      });
+    }
   };
 
   // Helper to check if user has required role(s)
