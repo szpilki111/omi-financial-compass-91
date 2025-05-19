@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -75,35 +76,58 @@ const Login = () => {
     }
 
     try {
-      // 1. Utwórz konto użytkownika bez wysyłania emaila potwierdzającego
+      // 1. Sprawdź, czy użytkownik o podanym emailu już istnieje
+      const { data: existingUsers, error: checkError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error("Error checking existing users:", checkError);
+        setError("Wystąpił błąd podczas sprawdzania emaila");
+        setIsLoading(false);
+        return;
+      }
+
+      if (existingUsers) {
+        setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Utwórz konto użytkownika bez wysyłania emaila potwierdzającego
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: name,
-          },
-          emailRedirectTo: undefined, // Wyłączamy przekierowanie z emaila
+            role: role
+          }
         }
       });
 
       if (signUpError) {
+        console.error("Signup error:", signUpError);
         if (signUpError.message === 'User already registered') {
           setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
         } else {
           setError(signUpError.message);
         }
+        setIsLoading(false);
         return;
       }
 
       if (!data.user) {
         setError("Błąd podczas rejestracji. Spróbuj ponownie.");
+        setIsLoading(false);
         return;
       }
 
       console.log("Użytkownik utworzony:", data.user.id);
 
-      // 2. Utwórz domyślną lokalizację jeśli podano nazwę
+      // 3. Utwórz domyślną lokalizację jeśli podano nazwę
       let locationId = null;
       if (location.trim()) {
         const { data: locationData, error: locationError } = await supabase
@@ -122,28 +146,33 @@ const Login = () => {
         }
       }
 
-      // 3. Wstawiamy profil bezpośrednio przez serwis API, omijając RLS
-      try {
-        // Wykonujemy bezpośrednie zapytanie SQL przez funkcję RPC
-        await supabase.rpc('insert_profile_admin', { 
-          user_id: data.user.id,
-          user_name: name,
-          user_role: role,
-          user_email: email,
-          location_id: locationId
-        } as any); // Używamy "as any" aby ominąć sprawdzanie typów TS dla tej funkcji
-        console.log("Profil utworzony bezpośrednio");
-        
-        toast({
-          title: "Rejestracja udana",
-          description: "Konto zostało utworzone. Możesz się teraz zalogować.",
-        });
-        setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
-        
-      } catch (insertError: any) {
-        console.error("Error inserting profile:", insertError);
+      // 4. Utworzenie profilu użytkownika
+      const { error: profileError } = await supabase.rpc('insert_profile_admin', { 
+        user_id: data.user.id,
+        user_name: name,
+        user_role: role,
+        user_email: email,
+        location_id: locationId
+      } as any);
+      
+      if (profileError) {
+        console.error("Error creating profile:", profileError);
         setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu.");
+        setIsLoading(false);
+        return;
       }
+      
+      toast({
+        title: "Rejestracja udana",
+        description: "Konto zostało utworzone. Możesz się teraz zalogować.",
+      });
+      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
+      
+      // Opcjonalnie - automatyczne logowanie po rejestracji
+      // const success = await login(email, password);
+      // if (success) {
+      //   navigate('/dashboard', { replace: true });
+      // }
       
     } catch (err: any) {
       console.error("Signup error:", err);
