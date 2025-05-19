@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -119,26 +118,58 @@ const Login = () => {
         }
       }
 
-      // 3. Zaktualizuj profil użytkownika z wybraną rolą
-      const { error: profileError } = await supabase
+      // 3. Sprawdź czy profil już istnieje
+      const { data: existingProfile, error: profileCheckError } = await supabase
         .from('profiles')
-        .update({ 
-          name: name,
-          role: role,
-          location_id: locationId
-        })
-        .eq('id', data.user.id);
-
-      if (profileError) {
-        console.error("Error updating profile:", profileError);
-        setError("Konto zostało utworzone, ale wystąpił błąd podczas aktualizacji profilu.");
-      } else {
-        toast({
-          title: "Rejestracja udana",
-          description: "Sprawdź swoją skrzynkę email, aby potwierdzić konto.",
-        });
-        setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      
+      if (profileCheckError) {
+        console.error("Error checking profile:", profileCheckError);
       }
+
+      // 4. Utwórz lub zaktualizuj profil użytkownika z wybraną rolą
+      if (existingProfile) {
+        // Profil istnieje, zaktualizuj go
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            name: name,
+            role: role,
+            location_id: locationId,
+            email: email,
+          })
+          .eq('id', data.user.id);
+
+        if (updateError) {
+          console.error("Error updating profile:", updateError);
+          setError("Konto zostało utworzone, ale wystąpił błąd podczas aktualizacji profilu.");
+        }
+      } else {
+        // Profil nie istnieje, utwórz nowy
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ 
+            id: data.user.id,
+            name: name,
+            role: role,
+            location_id: locationId,
+            email: email,
+          });
+
+        if (insertError) {
+          console.error("Error creating profile:", insertError);
+          setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu.");
+        }
+      }
+
+      toast({
+        title: "Rejestracja udana",
+        description: "Sprawdź swoją skrzynkę email, aby potwierdzić konto.",
+      });
+      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
+      
     } catch (err: any) {
       console.error("Signup error:", err);
       setError(err?.message || "Wystąpił problem podczas rejestracji. Spróbuj ponownie.");
