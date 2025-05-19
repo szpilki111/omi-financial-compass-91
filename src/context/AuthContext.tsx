@@ -47,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         console.log('Auth state change event:', event);
+        console.log('Session from event:', currentSession);
         setSession(currentSession);
         
         if (currentSession?.user) {
@@ -68,7 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
+          console.log('User found in session:', currentSession.user.id);
           await fetchUserProfile(currentSession.user.id);
+        } else {
+          console.log('No user in session');
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -77,9 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    console.log('AuthProvider mounted');
     initializeAuth();
 
     return () => {
+      console.log('AuthProvider unmounted');
       subscription.unsubscribe();
     };
   }, []);
@@ -117,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: profile.role as Role,
           location: profile.locations ? profile.locations.name : '',
         });
+        console.log('User state updated with profile data');
       } else {
         console.warn('No profile found for user:', userId);
         setUser(null);

@@ -1,8 +1,9 @@
 
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '../ui/Spinner';
+import { useToast } from '@/hooks/use-toast';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin';
 
@@ -17,6 +18,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, isLoading, checkPermission } = useAuth();
   const location = useLocation();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Debug - sprawdzamy, czy komponent się renderuje i co zawiera
+    console.log('ProtectedRoute render, user:', user);
+    console.log('isLoading:', isLoading);
+    console.log('Current location:', location.pathname);
+    
+    if (!isLoading && !user) {
+      toast({
+        title: "Dostęp zabroniony",
+        description: "Musisz być zalogowany, aby zobaczyć tę stronę",
+        variant: "destructive",
+      });
+    }
+  }, [isLoading, user, location.pathname, toast]);
 
   if (isLoading) {
     return (
