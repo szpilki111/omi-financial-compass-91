@@ -20,6 +20,8 @@ interface Notification {
   read: boolean;
   action_label?: string;
   action_link?: string;
+  user_id: string;
+  created_at: string;
 }
 
 interface Statistic {
@@ -58,7 +60,13 @@ const Dashboard = () => {
           throw error;
         }
         
-        setNotifications(data || []);
+        // Konwertujemy dane z bazy do odpowiedniego formatu
+        const typedNotifications = data?.map(notification => ({
+          ...notification,
+          priority: notification.priority as 'low' | 'medium' | 'high'
+        })) || [];
+        
+        setNotifications(typedNotifications);
       } catch (error) {
         console.error('Błąd podczas pobierania powiadomień:', error);
         toast({

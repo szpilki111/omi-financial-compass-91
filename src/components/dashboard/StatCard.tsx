@@ -10,6 +10,7 @@ interface StatCardProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   className?: string;
+  change?: number; // Dodajemy brakującą właściwość
 }
 
 const StatCard: React.FC<StatCardProps> = ({
@@ -20,6 +21,7 @@ const StatCard: React.FC<StatCardProps> = ({
   trend,
   trendValue,
   className,
+  change, // Dodajemy obsługę właściwości
 }) => {
   const renderTrendIndicator = () => {
     if (!trend || !trendValue) return null;
@@ -62,6 +64,16 @@ const StatCard: React.FC<StatCardProps> = ({
           </div>
           {description && (
             <p className="mt-1 text-sm text-omi-gray-500">{description}</p>
+          )}
+          {change !== undefined && (
+            <p className="mt-1 text-sm">
+              <span className={cn(
+                'font-medium',
+                change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-omi-gray-500'
+              )}>
+                {change > 0 ? '↑' : change < 0 ? '↓' : '→'} {Math.abs(change)}%
+              </span>
+            </p>
           )}
         </div>
       </div>

@@ -9,10 +9,8 @@ interface Notification {
   date: string;
   priority: 'low' | 'medium' | 'high';
   read: boolean;
-  action?: {
-    label: string;
-    link: string;
-  };
+  action_label?: string;
+  action_link?: string;
 }
 
 interface NotificationCardProps {
@@ -47,12 +45,12 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       </div>
       <p className="text-sm text-omi-gray-600 mt-1">{notification.message}</p>
       <div className="flex justify-between items-center mt-2">
-        {notification.action && (
+        {notification.action_label && notification.action_link && (
           <a
-            href={notification.action.link}
+            href={notification.action_link}
             className="text-sm text-omi-500 hover:underline"
           >
-            {notification.action.label}
+            {notification.action_label}
           </a>
         )}
         {!notification.read && onMarkAsRead && (
