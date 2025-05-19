@@ -26,7 +26,7 @@ const Login = () => {
       if (success) {
         navigate(from, { replace: true });
       } else {
-        setError('Błędny email lub hasło');
+        setError('System logowania jest aktualnie w trakcie implementacji');
       }
     } catch (err) {
       setError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
@@ -62,7 +62,7 @@ const Login = () => {
               onChange={(e) => setEmail(e.target.value)}
               className="omi-form-input"
               required
-              placeholder="np. ekonom@omi.pl"
+              placeholder="Wprowadź adres email"
             />
           </div>
 
@@ -108,10 +108,7 @@ const Login = () => {
           </button>
 
           <div className="text-center mt-4 text-xs text-omi-gray-500">
-            <p>Dane testowe:</p>
-            <p>ekonom@omi.pl / haslo123</p>
-            <p>prowincjal@omi.pl / haslo123</p>
-            <p>admin@omi.pl / haslo123</p>
+            <p>System logowania jest w trakcie implementacji</p>
           </div>
         </form>
       </div>

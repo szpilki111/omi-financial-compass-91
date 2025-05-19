@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type Role = 'ekonom' | 'prowincjal' | 'admin';
 
@@ -32,34 +33,6 @@ const AuthContext = createContext<AuthContextType>({
   checkPermission: () => false,
 });
 
-// Mock user data for development
-const MOCK_USERS = [
-  {
-    id: '1',
-    name: 'Jan Kowalski',
-    email: 'ekonom@omi.pl',
-    password: 'haslo123',
-    role: 'ekonom' as Role,
-    location: 'Dom Zakonny Poznań'
-  },
-  {
-    id: '2',
-    name: 'Piotr Nowak',
-    email: 'prowincjal@omi.pl',
-    password: 'haslo123',
-    role: 'prowincjal' as Role,
-    location: 'Prowincjalat OMI'
-  },
-  {
-    id: '3',
-    name: 'Admin Systemowy',
-    email: 'admin@omi.pl',
-    password: 'haslo123',
-    role: 'admin' as Role,
-    location: 'Prowincjalat OMI'
-  }
-];
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,38 +54,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Mock login function - in a real app, this would call an API
+  // Login function - to be replaced with Supabase auth
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Simulate API delay
+      // Placeholder for future Supabase authentication
+      // W przyszłości zostanie zastąpione autentykacją Supabase
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      const foundUser = MOCK_USERS.find(
-        u => u.email === email && u.password === password
-      );
-
-      if (!foundUser) {
-        toast({
-          title: "Błąd logowania",
-          description: "Błędny email lub hasło",
-          variant: "destructive",
-        });
-        return false;
-      }
-
-      // Create a user object without the password
-      const { password: _, ...userData } = foundUser;
-      
-      // Store user in state and localStorage
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
+      // Tymczasowo zwracamy błąd logowania
       toast({
-        title: "Zalogowano pomyślnie",
-        description: `Witaj, ${userData.name}!`,
+        title: "Błąd logowania",
+        description: "Funkcjonalność logowania jest w trakcie implementacji",
+        variant: "destructive",
       });
-      
-      return true;
+      return false;
     } catch (error) {
       console.error('Login error:', error);
       toast({
