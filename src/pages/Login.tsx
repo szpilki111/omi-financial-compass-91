@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import RegisterDemoButton from '@/components/auth/RegisterDemoButton';
 
@@ -118,7 +117,7 @@ const Login = () => {
 
           <div className="text-center mt-4 text-xs text-omi-gray-500">
             <p>Domyślne hasło dla wszystkich kont: <strong>password123</strong></p>
-            <p>Dostępne konta: admin@omi.pl, prowincjal@omi.pl, ekonom.{'{nazwa_placówki}'}@omi.pl</p>
+            <p>Dostępne konta: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
           </div>
           
           <RegisterDemoButton />

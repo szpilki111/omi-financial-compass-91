@@ -22,7 +22,7 @@ const RegisterDemoButton: React.FC = () => {
       
       toast({
         title: "Sukces!",
-        description: "Przykładowe dane zostały utworzone. Możesz teraz zalogować się jako admin@omi.pl, prowincjal@omi.pl lub jako ekonom placówki.",
+        description: "Przykładowe dane zostały utworzone. Dostępne konta: admin@omi.pl, prowincjal@omi.pl, ekonom@omi.pl (hasło: password123)",
         duration: 10000,
       });
       
