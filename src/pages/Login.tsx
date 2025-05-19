@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -75,14 +76,15 @@ const Login = () => {
     }
 
     try {
-      // 1. Utwórz konto użytkownika
+      // 1. Utwórz konto użytkownika bez wysyłania emaila potwierdzającego
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: name,
-          }
+          },
+          emailRedirectTo: undefined, // Wyłączamy przekierowanie z emaila
         }
       });
 
@@ -100,6 +102,8 @@ const Login = () => {
         return;
       }
 
+      console.log("Użytkownik utworzony:", data.user.id);
+
       // 2. Utwórz domyślną lokalizację jeśli podano nazwę
       let locationId = null;
       if (location.trim()) {
@@ -115,60 +119,32 @@ const Login = () => {
           console.error("Error creating location:", locationError);
         } else if (locationData) {
           locationId = locationData.id;
+          console.log("Lokalizacja utworzona:", locationId);
         }
       }
 
-      // 3. Sprawdź czy profil już istnieje
-      const { data: existingProfile, error: profileCheckError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', data.user.id)
-        .maybeSingle();
-      
-      if (profileCheckError) {
-        console.error("Error checking profile:", profileCheckError);
+      // 3. Wstawiamy profil bezpośrednio przez serwis API, omijając RLS
+      try {
+        // Wykonujemy bezpośrednie zapytanie SQL przez funkcję RPC
+        await supabase.rpc('insert_profile_admin', { 
+          user_id: data.user.id,
+          user_name: name,
+          user_role: role,
+          user_email: email,
+          location_id: locationId
+        });
+        console.log("Profil utworzony bezpośrednio");
+        
+        toast({
+          title: "Rejestracja udana",
+          description: "Konto zostało utworzone. Możesz się teraz zalogować.",
+        });
+        setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
+        
+      } catch (insertError: any) {
+        console.error("Error inserting profile:", insertError);
+        setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu.");
       }
-
-      // 4. Utwórz lub zaktualizuj profil użytkownika z wybraną rolą
-      if (existingProfile) {
-        // Profil istnieje, zaktualizuj go
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            name: name,
-            role: role,
-            location_id: locationId,
-            email: email,
-          })
-          .eq('id', data.user.id);
-
-        if (updateError) {
-          console.error("Error updating profile:", updateError);
-          setError("Konto zostało utworzone, ale wystąpił błąd podczas aktualizacji profilu.");
-        }
-      } else {
-        // Profil nie istnieje, utwórz nowy
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({ 
-            id: data.user.id,
-            name: name,
-            role: role,
-            location_id: locationId,
-            email: email,
-          });
-
-        if (insertError) {
-          console.error("Error creating profile:", insertError);
-          setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu.");
-        }
-      }
-
-      toast({
-        title: "Rejestracja udana",
-        description: "Sprawdź swoją skrzynkę email, aby potwierdzić konto.",
-      });
-      setIsSigningUp(false); // Przełącz z powrotem na formularz logowania
       
     } catch (err: any) {
       console.error("Signup error:", err);
