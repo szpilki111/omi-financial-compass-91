@@ -77,23 +77,7 @@ const Login = () => {
     try {
       console.log("Rozpoczynanie procesu rejestracji...");
       
-      // 1. Sprawdzanie czy użytkownik już istnieje poprzez próbę logowania bez hasła
-      const { data: checkData, error: checkError } = await supabase.auth.signInWithOtp({
-        email: email,
-        options: {
-          shouldCreateUser: false // Nie tworzy użytkownika, tylko sprawdza czy istnieje
-        }
-      });
-      
-      // Jeśli nie ma błędu "User not found", to oznacza, że użytkownik istnieje
-      if (!checkError || (checkError && !checkError.message.includes("Email not confirmed"))) {
-        console.log("Użytkownik już istnieje");
-        setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
-        setIsLoading(false);
-        return;
-      }
-      
-      // Sprawdzanie też w tabeli profili
+      // Sprawdzanie w tabeli profiles, czy istnieje użytkownik z takim emailem
       const { data: existingProfile, error: profileCheckError } = await supabase
         .from('profiles')
         .select('email')
