@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/hooks/use-toast';
-import RegisterDemoButton from '@/components/auth/RegisterDemoButton';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -114,13 +113,6 @@ const Login = () => {
           >
             {isLoading ? <Spinner size="sm" /> : 'Zaloguj się'}
           </button>
-
-          <div className="text-center mt-4 text-xs text-omi-gray-500">
-            <p>Domyślne hasło dla wszystkich kont: <strong>password123</strong></p>
-            <p>Dostępne konta: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
-          </div>
-          
-          <RegisterDemoButton />
         </form>
       </div>
     </div>
