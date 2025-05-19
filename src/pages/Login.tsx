@@ -50,19 +50,38 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Helper function for timeouts
+  const timeout = (ms: number) => new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Żądanie przekroczyło limit czasu')), ms)
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      const success = await login(email, password);
+      // Check for any existing session and sign out if found
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
+        await supabase.auth.signOut();
+      }
+
+      console.log("Próba logowania dla:", email);
+      
+      // Add timeout to prevent indefinite loading
+      const success = await Promise.race([
+        login(email, password),
+        timeout(10000) // 10 second timeout
+      ]);
+      
       if (success) {
         toast({
           title: "Logowanie pomyślne",
           description: "Zostałeś zalogowany do systemu.",
         });
-        navigate('/dashboard', { replace: true });
+        navigate(from, { replace: true });
       } else {
         setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
       }
@@ -92,11 +111,16 @@ const Login = () => {
     }
 
     try {
+      // Check for any existing session and sign out if found
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
+        await supabase.auth.signOut();
+      }
+
       console.log("Rozpoczynanie procesu rejestracji...");
       
-      // Usunięto problematyczne sprawdzanie tabeli profiles
-      
-      // Rejestracja użytkownika - Supabase sprawdzi automatycznie, czy email już istnieje
+      // Register user directly - Supabase will check if email exists
       console.log("Tworzenie konta użytkownika...");
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -112,7 +136,6 @@ const Login = () => {
       if (signUpError) {
         console.error("Signup error:", signUpError);
         
-        // Jeśli błąd wskazuje na już istniejącego użytkownika
         if (signUpError.message.includes("already registered")) {
           setError("Ten email jest już zarejestrowany. Użyj opcji logowania.");
         } else {
@@ -132,7 +155,7 @@ const Login = () => {
 
       console.log("Użytkownik utworzony:", data.user.id);
 
-      // 3. Utwórz domyślną lokalizację jeśli podano nazwę
+      // Create default location if provided
       let locationId = null;
       if (location.trim()) {
         console.log("Tworzenie lokalizacji:", location);
@@ -146,13 +169,16 @@ const Login = () => {
 
         if (locationError) {
           console.error("Error creating location:", locationError);
+          setError("Konto utworzono, ale nie udało się dodać lokalizacji: " + locationError.message);
+          setIsLoading(false);
+          return;
         } else if (locationData) {
           locationId = locationData.id;
           console.log("Lokalizacja utworzona:", locationId);
         }
       }
 
-      // 4. Utworzenie profilu użytkownika
+      // Create user profile using RPC
       console.log("Tworzenie profilu użytkownika...");
       const { error: profileError } = await supabase.rpc('insert_profile_admin', { 
         user_id: data.user.id,
@@ -171,27 +197,39 @@ const Login = () => {
       
       console.log("Rejestracja zakończona pomyślnie");
       
-      // Automatyczne logowanie po rejestracji
-      const success = await login(email, password);
-      if (success) {
-        toast({
-          title: "Rejestracja udana",
-          description: "Konto zostało utworzone. Jesteś teraz zalogowany.",
-          duration: 5000,
-        });
-        navigate('/dashboard', { replace: true });
-      } else {
+      // Try to login automatically with timeout protection
+      try {
+        const success = await Promise.race([
+          login(email, password),
+          timeout(10000) // 10 second timeout
+        ]);
+        
+        if (success) {
+          toast({
+            title: "Rejestracja udana",
+            description: "Konto zostało utworzone. Jesteś teraz zalogowany.",
+            duration: 5000,
+          });
+          navigate(from, { replace: true });
+        } else {
+          toast({
+            title: "Rejestracja udana",
+            description: "Konto zostało utworzone, ale nie udało się zalogować automatycznie. Możesz zalogować się ręcznie.",
+            duration: 5000,
+          });
+          setIsSigningUp(false);
+        }
+      } catch (loginErr) {
+        console.error("Error during auto-login:", loginErr);
         toast({
           title: "Rejestracja udana",
           description: "Konto zostało utworzone, ale nie udało się zalogować automatycznie. Możesz zalogować się ręcznie.",
           duration: 5000,
         });
-        
-        // Przełącz z powrotem na formularz logowania
         setIsSigningUp(false);
       }
       
-      // Czyszczenie formularza
+      // Clear form
       setEmail('');
       setPassword('');
       setName('');
@@ -228,7 +266,7 @@ const Login = () => {
               <Label htmlFor="name" className="omi-form-label">
                 Imię i nazwisko
               </Label>
-              <input
+              <Input
                 id="name"
                 type="text"
                 value={name}
@@ -244,7 +282,7 @@ const Login = () => {
             <Label htmlFor="email" className="omi-form-label">
               Adres email
             </Label>
-            <input
+            <Input
               id="email"
               type="email"
               value={email}
@@ -259,14 +297,14 @@ const Login = () => {
             <Label htmlFor="password" className="omi-form-label">
               Hasło
             </Label>
-            <input
+            <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="omi-form-input"
               required
-              placeholder={isSigningUp ? "Min. 6 znaków" : ""}
+              placeholder={isSigningUp ? "Min. 6 znaków" : "Wprowadź hasło"}
             />
           </div>
 
@@ -295,7 +333,7 @@ const Login = () => {
                 <Label htmlFor="location" className="omi-form-label">
                   Dom zakonny (opcjonalnie)
                 </Label>
-                <input
+                <Input
                   id="location"
                   type="text"
                   value={location}
@@ -328,13 +366,13 @@ const Login = () => {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={isLoading}
             className="omi-btn omi-btn-primary w-full flex justify-center"
           >
             {isLoading ? <Spinner size="sm" /> : (isSigningUp ? 'Zarejestruj się' : 'Zaloguj się')}
-          </button>
+          </Button>
 
           <div className="text-center mt-4">
             <button
