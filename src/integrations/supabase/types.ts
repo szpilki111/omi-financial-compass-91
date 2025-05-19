@@ -307,6 +307,16 @@ export type Database = {
         Args: { user_id: string; new_password: string }
         Returns: undefined
       }
+      insert_profile_admin: {
+        Args: {
+          user_id: string
+          user_name: string
+          user_role: string
+          user_email: string
+          location_id?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

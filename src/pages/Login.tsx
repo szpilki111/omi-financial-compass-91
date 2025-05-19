@@ -132,7 +132,7 @@ const Login = () => {
           user_role: role,
           user_email: email,
           location_id: locationId
-        });
+        } as any); // Używamy "as any" aby ominąć sprawdzanie typów TS dla tej funkcji
         console.log("Profil utworzony bezpośrednio");
         
         toast({
