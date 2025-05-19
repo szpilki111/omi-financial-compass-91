@@ -1,0 +1,72 @@
+
+import React from 'react';
+import { cn } from '@/lib/utils';
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  description?: string;
+  icon?: React.ReactNode;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+  className?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  description,
+  icon,
+  trend,
+  trendValue,
+  className,
+}) => {
+  const renderTrendIndicator = () => {
+    if (!trend || !trendValue) return null;
+
+    const trendClasses = {
+      up: 'text-green-600',
+      down: 'text-red-600',
+      neutral: 'text-omi-gray-500',
+    };
+
+    const trendSymbol = {
+      up: '↑',
+      down: '↓',
+      neutral: '→',
+    };
+
+    return (
+      <span className={cn('text-sm font-medium', trendClasses[trend])}>
+        {trendSymbol[trend]} {trendValue}
+      </span>
+    );
+  };
+
+  return (
+    <div
+      className={cn(
+        'bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200',
+        className
+      )}
+    >
+      <div className="flex items-start">
+        {icon && <div className="mr-4 text-omi-400">{icon}</div>}
+        <div className="flex-1">
+          <h3 className="text-sm font-medium text-omi-gray-500">{title}</h3>
+          <div className="mt-1 flex items-baseline">
+            <p className="text-2xl font-semibold text-omi-gray-800">{value}</p>
+            {trend && trendValue && (
+              <p className="ml-2 flex items-baseline">{renderTrendIndicator()}</p>
+            )}
+          </div>
+          {description && (
+            <p className="mt-1 text-sm text-omi-gray-500">{description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default StatCard;
