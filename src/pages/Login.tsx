@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -31,7 +30,7 @@ const Login = () => {
   const { toast } = useToast();
 
   // Get the redirect path or use home page as default
-  const from = (location_path.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const from = (location_path.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -52,7 +51,7 @@ const Login = () => {
           title: "Logowanie pomyślne",
           description: "Zostałeś zalogowany do systemu.",
         });
-        navigate(from, { replace: true });
+        navigate('/dashboard', { replace: true });
       } else {
         setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
       }

@@ -45,16 +45,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         console.log('Auth state change event:', event);
         console.log('Session from event:', currentSession);
         setSession(currentSession);
         
         if (currentSession?.user) {
           // Używamy setTimeout aby uniknąć rekurencyjnych wywołań Supabase
-          setTimeout(() => {
-            fetchUserProfile(currentSession.user.id);
-          }, 0);
+          await fetchUserProfile(currentSession.user.id);
         } else {
           setUser(null);
         }
@@ -73,10 +71,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchUserProfile(currentSession.user.id);
         } else {
           console.log('No user in session');
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -110,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error fetching profile:', error);
+        setIsLoading(false);
         throw error;
       }
 
@@ -128,9 +127,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('No profile found for user:', userId);
         setUser(null);
       }
+      setIsLoading(false);
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
       setUser(null);
+      setIsLoading(false);
     }
   };
 
@@ -161,13 +162,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: errorMessage,
           variant: "destructive",
         });
+        setIsLoading(false);
         return false;
       }
 
       if (data?.user) {
+        await fetchUserProfile(data.user.id);
         return true;
       }
 
+      setIsLoading(false);
       return false;
     } catch (error: any) {
       console.error('Unexpected login error:', error);
@@ -176,9 +180,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Wystąpił nieoczekiwany problem podczas logowania",
         variant: "destructive",
       });
-      return false;
-    } finally {
       setIsLoading(false);
+      return false;
     }
   };
 

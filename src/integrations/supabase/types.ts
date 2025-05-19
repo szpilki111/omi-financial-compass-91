@@ -307,6 +307,10 @@ export type Database = {
         Args: { user_id: string; new_password: string }
         Returns: undefined
       }
+      get_current_user_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       insert_profile_admin: {
         Args: {
           user_id: string
