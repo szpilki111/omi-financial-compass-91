@@ -304,21 +304,29 @@ export type Database = {
     }
     Functions: {
       change_user_password: {
-        Args: { user_id: string; new_password: string }
-        Returns: undefined
+        Args:
+          | { user_id: number; new_password: string }
+          | { user_id: string; new_password: string }
+        Returns: boolean
       }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_current_user_id_fixed: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       insert_profile_admin: {
-        Args: {
-          user_id: string
-          user_name: string
-          user_role: string
-          user_email: string
-          location_id?: string
-        }
+        Args:
+          | { user_id: number; profile_data: Json }
+          | {
+              user_id: string
+              user_name: string
+              user_role: string
+              user_email: string
+              location_id?: string
+            }
         Returns: undefined
       }
     }

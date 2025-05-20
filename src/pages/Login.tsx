@@ -158,39 +158,75 @@ const Login = () => {
       // Create default location if provided
       let locationId = null;
       if (location.trim()) {
-        console.log("Tworzenie lokalizacji:", location);
-        const { data: locationData, error: locationError } = await supabase
-          .from('locations')
-          .insert({
-            name: location,
-          })
-          .select('id')
-          .single();
+        try {
+          console.log("Tworzenie lokalizacji:", location);
+          const { data: locationData, error: locationError } = await supabase
+            .from('locations')
+            .insert({
+              name: location,
+            })
+            .select('id')
+            .single();
 
-        if (locationError) {
-          console.error("Error creating location:", locationError);
-          setError("Konto utworzono, ale nie udało się dodać lokalizacji: " + locationError.message);
-          setIsLoading(false);
-          return;
-        } else if (locationData) {
-          locationId = locationData.id;
-          console.log("Lokalizacja utworzona:", locationId);
+          if (locationError) {
+            console.error("Error creating location:", locationError);
+            // Continue with profile creation, but inform about location error
+            toast({
+              title: "Uwaga",
+              description: "Nie udało się dodać lokalizacji: " + locationError.message,
+              variant: "destructive",
+            });
+          } else if (locationData) {
+            locationId = locationData.id;
+            console.log("Lokalizacja utworzona:", locationId);
+          }
+        } catch (locErr) {
+          console.error("Location creation error:", locErr);
+          // Continue with profile creation, but inform about location error
+          toast({
+            title: "Uwaga",
+            description: "Wystąpił błąd podczas tworzenia lokalizacji",
+            variant: "destructive",
+          });
         }
       }
 
-      // Create user profile using RPC
-      console.log("Tworzenie profilu użytkownika...");
-      const { error: profileError } = await supabase.rpc('insert_profile_admin', { 
-        user_id: data.user.id,
-        user_name: name,
-        user_role: role,
-        user_email: email,
-        location_id: locationId
-      } as ProfileInsertParams);
-      
-      if (profileError) {
-        console.error("Error creating profile:", profileError);
-        setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu: " + profileError.message);
+      // Try direct insert to profiles instead of using RPC
+      try {
+        console.log("Tworzenie profilu użytkownika bezpośrednim zapytaniem...");
+        const { error: directProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            name: name,
+            role: role,
+            email: email,
+            location_id: locationId
+          });
+
+        if (directProfileError) {
+          console.error("Error creating profile directly:", directProfileError);
+          
+          // As a fallback, try using the RPC method
+          console.log("Próba utworzenia profilu przy użyciu RPC...");
+          const { error: profileError } = await supabase.rpc('insert_profile_admin', { 
+            user_id: data.user.id,
+            user_name: name,
+            user_role: role,
+            user_email: email,
+            location_id: locationId
+          } as ProfileInsertParams);
+          
+          if (profileError) {
+            console.error("Error creating profile via RPC:", profileError);
+            setError("Konto zostało utworzone, ale wystąpił błąd podczas tworzenia profilu. Skontaktuj się z administratorem.");
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (profileErr) {
+        console.error("Profile creation error:", profileErr);
+        setError("Konto utworzono, ale wystąpił błąd podczas tworzenia profilu. Skontaktuj się z administratorem.");
         setIsLoading(false);
         return;
       }
