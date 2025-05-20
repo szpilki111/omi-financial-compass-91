@@ -16,7 +16,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
-type Role = 'ekonom' | 'prowincjal' | 'admin';
+// Ograniczamy role do ekonoma
+type Role = 'ekonom';
 
 interface ProfileInsertParams {
   user_id: string;
@@ -32,7 +33,6 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const [role, setRole] = useState<Role>('ekonom');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const { login, isAuthenticated } = useAuth();
@@ -119,6 +119,9 @@ const Login = () => {
       }
 
       console.log("Rozpoczynanie procesu rejestracji...");
+      
+      // Rejestracja tylko jako ekonom
+      const role: Role = 'ekonom';
       
       // Register user directly - Supabase will check if email exists
       console.log("Tworzenie konta użytkownika...");
@@ -270,7 +273,6 @@ const Login = () => {
       setPassword('');
       setName('');
       setLocation('');
-      setRole('ekonom');
       
     } catch (err: any) {
       console.error("Signup error:", err);
@@ -286,7 +288,7 @@ const Login = () => {
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-omi-500">OMI Finanse</h1>
           <p className="text-omi-gray-500 mt-1">
-            {isSigningUp ? 'Utwórz nowe konto' : 'Zaloguj się do systemu'}
+            {isSigningUp ? 'Utwórz nowe konto ekonoma' : 'Zaloguj się do systemu'}
           </p>
         </div>
 
@@ -345,40 +347,20 @@ const Login = () => {
           </div>
 
           {isSigningUp && (
-            <>
-              <div>
-                <Label htmlFor="role" className="omi-form-label">
-                  Rola
-                </Label>
-                <Select 
-                  value={role} 
-                  onValueChange={(value) => setRole(value as Role)}
-                >
-                  <SelectTrigger className="omi-form-input">
-                    <SelectValue placeholder="Wybierz rolę" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ekonom">Ekonom</SelectItem>
-                    <SelectItem value="prowincjal">Prowincjał</SelectItem>
-                    <SelectItem value="admin">Administrator</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="location" className="omi-form-label">
-                  Dom zakonny (opcjonalnie)
-                </Label>
-                <Input
-                  id="location"
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="omi-form-input"
-                  placeholder="Nazwa domu zakonnego"
-                />
-              </div>
-            </>
+            <div>
+              <Label htmlFor="location" className="omi-form-label">
+                Dom zakonny
+              </Label>
+              <Input
+                id="location"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="omi-form-input"
+                required
+                placeholder="Nazwa domu zakonnego"
+              />
+            </div>
           )}
 
           {!isSigningUp && (
@@ -418,13 +400,13 @@ const Login = () => {
             >
               {isSigningUp 
                 ? 'Masz już konto? Zaloguj się' 
-                : 'Nie masz konta? Zarejestruj się'}
+                : 'Nie masz konta? Zarejestruj się jako ekonom'}
             </button>
           </div>
 
           <div className="text-center mt-4 text-xs text-omi-gray-500">
             <p>Dane testowe:</p>
-            <p>Email: <strong>admin@omi.pl</strong>, <strong>prowincjal@omi.pl</strong>, <strong>ekonom@omi.pl</strong></p>
+            <p>Admin: <strong>crmoblaci@gmail.com</strong> | Prowincjał: <strong>prowincjal@omi.pl</strong></p>
             <p>Hasło: <strong>password123</strong></p>
           </div>
         </form>
