@@ -173,8 +173,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        // Tutaj nie używamy fetchUserProfile, aby uniknąć podwójnego ładowania profilu
         // Profil zostanie załadowany przez onAuthStateChange
+        console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
         return true;
       }
 
