@@ -16,7 +16,14 @@ import Index from "./pages/Index";
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -39,13 +46,6 @@ const App = () => (
                 <Dashboard />
               </ProtectedRoute>
             } />
-            
-            {/* Admin routes */}
-            {/* <Route path="/admin" element={
-              <ProtectedRoute requiredRole={['admin', 'prowincjal']}>
-                <AdminPage />
-              </ProtectedRoute>
-            } /> */}
             
             {/* Not found */}
             <Route path="*" element={<NotFound />} />

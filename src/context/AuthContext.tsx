@@ -43,23 +43,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth state from Supabase on app load
   useEffect(() => {
-    // Set up auth state listener FIRST
+    console.log('AuthProvider mounted');
+    
+    // Funkcja do pobierania profilu użytkownika z określonym timeoutem
+    const fetchUserProfile = async (userId: string) => {
+      try {
+        console.log('Fetching profile for user ID:', userId);
+        
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select(`
+            id,
+            name,
+            email,
+            role,
+            locations:location_id (
+              name
+            )
+          `)
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('Profile fetched:', profile);
+
+        if (profile) {
+          setUser({
+            id: profile.id,
+            name: profile.name,
+            email: profile.email,
+            role: profile.role as Role,
+            location: profile.locations ? profile.locations.name : '',
+          });
+          console.log('User state updated with profile data');
+        } else {
+          console.warn('No profile found for user:', userId);
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error in fetchUserProfile:', error);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    // Ustaw nasłuchiwanie zmiany stanu uwierzytelniania
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
+      (event, currentSession) => {
         console.log('Auth state change event:', event);
         console.log('Session from event:', currentSession);
         setSession(currentSession);
         
         if (currentSession?.user) {
           // Używamy setTimeout aby uniknąć rekurencyjnych wywołań Supabase
-          await fetchUserProfile(currentSession.user.id);
+          setTimeout(() => {
+            fetchUserProfile(currentSession.user.id);
+          }, 0);
         } else {
           setUser(null);
+          setIsLoading(false);
         }
       }
     );
 
-    // THEN check for existing session
+    // Sprawdź istniejącą sesję
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -68,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (currentSession?.user) {
           console.log('User found in session:', currentSession.user.id);
-          await fetchUserProfile(currentSession.user.id);
+          fetchUserProfile(currentSession.user.id);
         } else {
           console.log('No user in session');
           setIsLoading(false);
@@ -79,7 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    console.log('AuthProvider mounted');
     initializeAuth();
 
     return () => {
@@ -87,53 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
-
-  // Fetch user profile data including location name
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      console.log('Fetching profile for user ID:', userId);
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          name,
-          email,
-          role,
-          locations:location_id (
-            name
-          )
-        `)
-        .eq('id', userId)
-        .maybeSingle();  // Używamy maybeSingle zamiast single, aby uniknąć błędu jeśli profil nie istnieje
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        setIsLoading(false);
-        throw error;
-      }
-
-      console.log('Profile fetched:', profile);
-
-      if (profile) {
-        setUser({
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          role: profile.role as Role,
-          location: profile.locations ? profile.locations.name : '',
-        });
-        console.log('User state updated with profile data');
-      } else {
-        console.warn('No profile found for user:', userId);
-        setUser(null);
-      }
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
-      setUser(null);
-      setIsLoading(false);
-    }
-  };
 
   // Login function using Supabase auth
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -167,7 +173,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        await fetchUserProfile(data.user.id);
+        // Tutaj nie używamy fetchUserProfile, aby uniknąć podwójnego ładowania profilu
+        // Profil zostanie załadowany przez onAuthStateChange
         return true;
       }
 
