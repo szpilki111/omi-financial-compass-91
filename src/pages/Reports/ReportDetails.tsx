@@ -31,6 +31,11 @@ const rejectFormSchema = z.object({
   comments: z.string().min(1, { message: "Komentarz jest wymagany" }),
 });
 
+// Define proper type for the rejectMutation data
+interface RejectFormData {
+  comments: string;
+}
+
 const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -204,9 +209,9 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }
   });
   
-  // Mutacja do odrzucania raportu
+  // Mutacja do odrzucania raportu - Updated to use the proper type
   const rejectMutation = useMutation({
-    mutationFn: async (data: { comments: string }) => {
+    mutationFn: async (data: RejectFormData) => {
       const { error } = await supabase
         .from('reports')
         .update({
@@ -315,7 +320,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   
   // Obsługa formularza odrzucenia raportu
   const onRejectSubmit = (values: z.infer<typeof rejectFormSchema>) => {
-    rejectMutation.mutate(values);
+    // Now we pass a properly typed object with required comments
+    rejectMutation.mutate({ comments: values.comments });
   };
   
   // Wyświetlanie loadera podczas ładowania danych
