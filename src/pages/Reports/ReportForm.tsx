@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_API_URL } from '@/integrations/supabase/client';
 import { Report, ReportDetailsInsert } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -310,14 +311,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         settlements_total: 0
       };
       
-      // Użyj biblioteki fetch do inicjalizacji szczegółów
-      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details`;
+      // Użyj fetch API do inicjalizacji szczegółów
+      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_ANON_KEY || '',
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`,
+          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`,
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify(detailsData)
@@ -488,7 +489,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <FormLabel>Typ raportu</FormLabel>
                 <Select
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={field.onChange as (value: string) => void}
                   disabled={report?.status !== 'draft' && !!report}
                 >
                   <FormControl>

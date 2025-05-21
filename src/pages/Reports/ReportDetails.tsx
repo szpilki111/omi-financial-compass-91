@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_API_URL } from '@/integrations/supabase/client';
 import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -53,8 +54,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         .select(`
           *,
           location:locations(*),
-          submitted_by:profiles!submitted_by(id, name),
-          reviewed_by:profiles!reviewed_by(id, name)
+          submitted_by_profile:profiles!submitted_by(id, name),
+          reviewed_by_profile:profiles!reviewed_by(id, name)
         `)
         .eq('id', reportId)
         .single();
@@ -70,12 +71,12 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     queryFn: async () => {
       // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
       // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details?report_id=eq.${reportId}`;
+      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
       
       const response = await fetch(apiUrl, {
         headers: {
-          'apikey': process.env.SUPABASE_ANON_KEY || '',
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`
+          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`
         }
       });
       
@@ -172,11 +173,11 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       if (error) throw error;
       
       // Wyślij powiadomienie do użytkownika
-      if (report?.submitted_by?.id) {
+      if (report?.submitted_by_profile?.id) {
         const { error: notifError } = await supabase
           .from('notifications')
           .insert({
-            user_id: report.submitted_by.id,
+            user_id: report.submitted_by_profile.id,
             title: 'Raport zaakceptowany',
             message: `Twój raport "${report.title}" został zaakceptowany.`,
             priority: 'normal',
@@ -220,11 +221,11 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       if (error) throw error;
       
       // Wyślij powiadomienie do użytkownika
-      if (report?.submitted_by?.id) {
+      if (report?.submitted_by_profile?.id) {
         const { error: notifError } = await supabase
           .from('notifications')
           .insert({
-            user_id: report.submitted_by.id,
+            user_id: report.submitted_by_profile.id,
             title: 'Raport odrzucony',
             message: `Twój raport "${report.title}" został odrzucony. Sprawdź komentarze.`,
             priority: 'high',
@@ -258,14 +259,14 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     mutationFn: async (details: Partial<ReportDetails>) => {
       // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
       // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details?report_id=eq.${reportId}`;
+      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
       
       const response = await fetch(apiUrl, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_ANON_KEY || '',
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`,
+          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`,
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
@@ -381,10 +382,10 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
               <p className="font-medium">{format(new Date(report.submitted_at), 'PPP', { locale: pl })}</p>
             </div>
           )}
-          {report?.submitted_by && (
+          {report?.submitted_by_profile?.name && (
             <div>
               <p className="text-omi-gray-500">Złożony przez:</p>
-              <p className="font-medium">{report.submitted_by.name}</p>
+              <p className="font-medium">{report.submitted_by_profile.name}</p>
             </div>
           )}
           {report?.reviewed_at && (
@@ -393,10 +394,10 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
               <p className="font-medium">{format(new Date(report.reviewed_at), 'PPP', { locale: pl })}</p>
             </div>
           )}
-          {report?.reviewed_by && (
+          {report?.reviewed_by_profile?.name && (
             <div>
               <p className="text-omi-gray-500">Przejrzany przez:</p>
-              <p className="font-medium">{report.reviewed_by.name}</p>
+              <p className="font-medium">{report.reviewed_by_profile.name}</p>
             </div>
           )}
         </div>
