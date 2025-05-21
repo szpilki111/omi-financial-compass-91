@@ -344,56 +344,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </Select>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Konto Winien */}
-            <div className="space-y-1">
-              <Label htmlFor="debit_account_id" className="text-sm font-medium">
-                Konto Winien (Debet) *
-              </Label>
-              <Select 
-                value={formData.debit_account_id} 
-                onValueChange={(value) => handleAccountChange('debit_account_id', value)}
-                disabled={!selectedAccountType}
-              >
-                <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}>
-                  <SelectValue placeholder="Wybierz konto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.number} - {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
-            </div>
-            
-            {/* Konto Ma */}
-            <div className="space-y-1">
-              <Label htmlFor="credit_account_id" className="text-sm font-medium">
-                Konto Ma (Kredyt) *
-              </Label>
-              <Select 
-                value={formData.credit_account_id} 
-                onValueChange={(value) => handleAccountChange('credit_account_id', value)}
-                disabled={!selectedAccountType}
-              >
-                <SelectTrigger className={`w-full ${errors.credit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}>
-                  <SelectValue placeholder="Wybierz konto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.number} - {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.credit_account_id && <p className="text-red-500 text-xs">{errors.credit_account_id}</p>}
-            </div>
-          </div>
-          
           {/* Forma rozrachunku */}
           <div className="space-y-1">
             <Label htmlFor="settlement_type" className="text-sm font-medium">
