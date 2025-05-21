@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_API_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_API_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Report, ReportDetailsInsert } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -317,8 +316,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`,
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify(detailsData)

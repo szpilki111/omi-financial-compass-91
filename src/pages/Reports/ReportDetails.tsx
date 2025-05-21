@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_API_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_API_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -75,8 +74,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       
       const response = await fetch(apiUrl, {
         headers: {
-          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
         }
       });
       
@@ -265,8 +264,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY}`,
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
