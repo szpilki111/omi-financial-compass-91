@@ -68,7 +68,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         setAccounts(data);
         
         // Zbieranie unikalnych typów kont
-        const types = Array.from(new Set(data.map((account: Account) => account.type)));
+        const types = Array.from(new Set(data.map((account: Account) => account.name)));
         setAccountTypes(types);
       } catch (error) {
         console.error('Błąd podczas pobierania kont:', error);
@@ -86,7 +86,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   useEffect(() => {
     // Filtrowanie kont na podstawie wybranego typu
     if (selectedAccountType) {
-      const filtered = accounts.filter(account => account.type === selectedAccountType);
+      const filtered = accounts.filter(account => account.name === selectedAccountType);
       setFilteredAccounts(filtered);
     } else {
       setFilteredAccounts(accounts);
