@@ -1,177 +1,110 @@
-import React, { useState } from 'react';
-import { Menu, X, ChevronDown, LogOut } from 'lucide-react';
-import { Link } from 'react-router-dom';
+
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const Header = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const location = useLocation();
+  const { user, signOut } = useAuth();
 
-  // Określamy dostępne elementy menu bazując na roli użytkownika
-  const menuItems = React.useMemo(() => {
-    const items = [
-      { name: 'Strona główna', href: '/dashboard' },
-      { name: 'Księga KPiR', href: '/kpir' },
-      { name: 'Raporty', href: '/raporty' },
-      { name: 'Wizualizacja danych', href: '/wizualizacja' },
-      { name: 'Baza wiedzy', href: '/baza-wiedzy' },
-    ];
-    
-    // Tylko admin i prowincjał widzą sekcję administracji
-    if (user && (user.role === 'admin' || user.role === 'prowincjal')) {
-      items.push({ name: 'Administracja', href: '/admin' });
+  const navItems = [
+    { name: 'Strona główna', path: '/dashboard' },
+    { name: 'Księga KPiR', path: '/kpir' },
+    { name: 'Raporty', path: '/reports' },
+    // Można dodać więcej pozycji menu gdy będą potrzebne
+  ];
+
+  // Zwracanie inicjału imienia użytkownika
+  const getInitial = () => {
+    if (user?.user_metadata?.name) {
+      return user.user_metadata.name.charAt(0).toUpperCase();
     }
-    
-    return items;
-  }, [user]);
-
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-  const toggleUserMenu = () => setUserMenuOpen(!userMenuOpen);
-
-  const handleLogout = () => {
-    logout();
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return '?';
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-omi-gray-200">
-      <div className="mx-auto px-4">
-        <div className="flex justify-between h-16">
-          {/* Logo and mobile menu button */}
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <span className="text-omi-500 font-bold text-2xl">OMI Finanse</span>
-            </div>
-            <div className="hidden md:ml-6 md:flex md:space-x-4 items-center">
-              {menuItems.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className="px-3 py-2 text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100 rounded-md text-sm font-medium"
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* User dropdown and logout button */}
+    <header className="bg-white border-b border-gray-200">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 justify-between">
           <div className="flex items-center">
+            <Link to="/" className="flex-shrink-0 flex items-center">
+              <img
+                className="h-8 w-auto"
+                src="/placeholder.svg"
+                alt="Logo OMI"
+              />
+              <span className="ml-2 text-lg font-semibold text-omi-500">
+                Finanse OMI
+              </span>
+            </Link>
+            
+            {/* Menu nawigacyjne */}
             {user && (
-              <div className="relative ml-3 hidden md:block">
-                <div>
-                  <button
-                    onClick={toggleUserMenu}
-                    className="flex items-center text-sm rounded-full focus:outline-none"
-                    id="user-menu-button"
-                    aria-expanded={userMenuOpen}
-                    aria-haspopup="true"
+              <nav className="hidden md:ml-6 md:flex md:space-x-4">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
+                    ${
+                      location.pathname === item.path
+                        ? 'text-omi-600 bg-gray-100'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
                   >
-                    <span className="mr-2 text-omi-gray-700">{user.name}</span>
-                    <span className="text-xs text-omi-gray-500 mr-2">{user.location}</span>
-                    <ChevronDown className="h-4 w-4 text-omi-gray-500" />
-                  </button>
-                </div>
-                {userMenuOpen && (
-                  <div
-                    className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 py-1"
-                    role="menu"
-                    aria-orientation="vertical"
-                    aria-labelledby="user-menu-button"
-                  >
-                    <div className="block px-4 py-2 text-xs text-omi-gray-500">
-                      Zalogowano jako: {user.role}
-                    </div>
-                    <Link
-                      to="/profil"
-                      className="block px-4 py-2 text-sm text-omi-gray-700 hover:bg-omi-100"
-                      role="menuitem"
-                    >
-                      Profil
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-sm text-omi-gray-700 hover:bg-omi-100"
-                      role="menuitem"
-                    >
+                    {item.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
+          </div>
+          
+          {/* Przyciski z prawej */}
+          <div className="flex items-center">
+            {user ? (
+              <div className="flex items-center ml-4 md:ml-6">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-omi-300 text-white">
+                          {getInitial()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Moje konto</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
                       Wyloguj
-                    </button>
-                  </div>
-                )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
+            ) : (
+              <Link to="/login">
+                <Button variant="default" size="sm">
+                  Logowanie
+                </Button>
+              </Link>
             )}
-
-            {user && (
-              <div className="hidden md:ml-4 md:flex">
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center px-3 py-2 text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100 rounded-md text-sm font-medium"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Wyloguj
-                </button>
-              </div>
-            )}
-
-            {/* Mobile menu button */}
-            <div className="flex md:hidden">
-              <button
-                onClick={toggleMenu}
-                className="inline-flex items-center justify-center p-2 rounded-md text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100 focus:outline-none"
-              >
-                {isMenuOpen ? (
-                  <X className="block h-6 w-6" />
-                ) : (
-                  <Menu className="block h-6 w-6" />
-                )}
-              </button>
-            </div>
           </div>
         </div>
       </div>
-
-      {/* Mobile menu */}
-      {isMenuOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1">
-            {menuItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className="block px-3 py-2 rounded-md text-base font-medium text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100"
-                onClick={toggleMenu}
-              >
-                {item.name}
-              </Link>
-            ))}
-            {user && (
-              <div className="border-t border-omi-gray-200 mt-2 pt-2">
-                <div className="px-3 py-1 text-xs text-omi-gray-500">
-                  Zalogowano jako: {user.role}
-                </div>
-                <div className="px-3 py-1 text-xs text-omi-gray-500 mb-2">
-                  {user.location}
-                </div>
-                <Link
-                  to="/profil"
-                  className="block px-3 py-2 rounded-md text-base font-medium text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100"
-                >
-                  Profil
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-omi-gray-700 hover:text-omi-500 hover:bg-omi-100"
-                >
-                  <div className="flex items-center">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Wyloguj
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 };

@@ -13,6 +13,7 @@ import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
+import Reports from "./pages/Reports";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -53,6 +54,13 @@ const App = () => (
             <Route path="/kpir" element={
               <ProtectedRoute>
                 <KpirPage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Reports routes */}
+            <Route path="/reports" element={
+              <ProtectedRoute>
+                <Reports />
               </ProtectedRoute>
             } />
             
