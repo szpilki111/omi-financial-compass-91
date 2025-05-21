@@ -79,3 +79,34 @@ export interface ReportDetails {
   created_at: string;
   updated_at: string;
 }
+
+// Tymczasowy interfejs dla operacji na tabeli report_details, dopóki typy Supabase nie zostaną zaktualizowane
+export interface ReportDetailsRow {
+  id: string;
+  report_id: string;
+  income_total: number;
+  expense_total: number;
+  balance: number;
+  settlements_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Typ dla operacji insert na tabeli report_details
+export interface ReportDetailsInsert {
+  report_id: string;
+  income_total?: number;
+  expense_total?: number;
+  balance?: number;
+  settlements_total?: number;
+}
+
+// Typ dla operacji update na tabeli report_details
+export interface ReportDetailsUpdate {
+  report_id?: string;
+  income_total?: number;
+  expense_total?: number;
+  balance?: number;
+  settlements_total?: number;
+  updated_at?: string;
+}

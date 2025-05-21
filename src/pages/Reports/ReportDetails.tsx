@@ -1,1532 +1,606 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails as ReportDetailsType } from '@/types/reports';
-import { Spinner } from '@/components/ui/Spinner';
+import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails } from '@/types/reports';
 import { Button } from '@/components/ui/button';
-import { FileDown, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Spinner } from '@/components/ui/Spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
+import { Check, X, FileText, Download } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
-} from '@/components/ui/dialog';
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ReportDetailsProps {
   reportId: string;
 }
 
-const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
-  const [loading, setLoading] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [editedEntries, setEditedEntries] = useState<ReportEntry[]>([]);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<ReportEntry | null>(null);
+const rejectFormSchema = z.object({
+  comments: z.string().min(1, { message: "Komentarz jest wymagany" }),
+});
+
+const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('summary');
+  
+  // Formularz odrzucenia raportu
+  const rejectForm = useForm<z.infer<typeof rejectFormSchema>>({
+    resolver: zodResolver(rejectFormSchema),
+    defaultValues: {
+      comments: "",
+    },
+  });
 
-  // Pobierz dane raportu
-  const { data: report, isLoading: isLoadingReport } = useQuery({
+  // Pobieranie danych raportu
+  const { data: report, isLoading: loadingReport } = useQuery({
     queryKey: ['report', reportId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reports')
-        .select('*')
+        .select('*, location:locations(*), submitted_by:profiles(*), reviewed_by:profiles(*)')
         .eq('id', reportId)
         .single();
         
       if (error) throw error;
-      return data as Report;
+      return data;
     }
   });
   
-  // Pobierz dane sekcji dla odpowiedniego typu raportu
-  const { data: sections, isLoading: isLoadingSections } = useQuery({
-    queryKey: ['report-sections', report?.report_type],
+  // Pobieranie szczegółów raportu (income_total, expense_total, itd.)
+  const { data: reportDetails, isLoading: loadingDetails } = useQuery({
+    queryKey: ['reportDetails', reportId],
     queryFn: async () => {
-      if (!report?.report_type) return [];
+      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
+      // nie jest jeszcze uwzględniona w typach Supabase
+      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details?report_id=eq.${reportId}`;
+      const apiKey = supabase.supabaseKey;
       
-      const { data, error } = await supabase
+      const response = await fetch(apiUrl, {
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Nie udało się pobrać szczegółów raportu');
+      }
+      
+      const data = await response.json();
+      return data[0] as ReportDetails;
+    }
+  });
+
+  // Pobieranie wpisów raportu pogrupowanych według sekcji
+  const { data: sectionsWithEntries, isLoading: loadingSections } = useQuery({
+    queryKey: ['reportSections', reportId],
+    queryFn: async () => {
+      // Pobierz sekcje dla typu raportu
+      const { data: report } = await supabase
+        .from('reports')
+        .select('report_type')
+        .eq('id', reportId)
+        .single();
+      
+      if (!report) {
+        throw new Error("Nie można znaleźć raportu");
+      }
+      
+      const { data: sections, error: sectionsError } = await supabase
         .from('report_sections')
         .select('*')
         .eq('report_type', report.report_type)
         .order('section_order', { ascending: true });
+        
+      if (sectionsError) throw sectionsError;
       
-      if (error) throw error;
-      return data as ReportSection[];
-    },
-    enabled: !!report?.report_type
-  });
-  
-  // Pobierz dane wpisów raportu
-  const { data: entries, isLoading: isLoadingEntries } = useQuery({
-    queryKey: ['report-entries', reportId],
-    queryFn: async () => {
-      const { data, error } = await supabase
+      if (!sections || sections.length === 0) {
+        return [];
+      }
+      
+      // Pobierz wpisy raportu
+      const { data: entries, error: entriesError } = await supabase
         .from('report_entries')
         .select('*')
         .eq('report_id', reportId);
-      
-      if (error) throw error;
-      return data as ReportEntry[];
-    },
-    enabled: !!reportId
-  });
-  
-  // Pobierz szczegóły raportu
-  const { data: reportDetails, isLoading: isLoadingDetails } = useQuery({
-    queryKey: ['report-details', reportId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('report_details')
-        .select('*')
-        .eq('report_id', reportId)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data as ReportDetailsType;
-    },
-    enabled: !!reportId
-  });
-  
-  // Inicjalizacja edytowanych wpisów, gdy wpisy są dostępne i tryb edycji zostaje włączony
-  React.useEffect(() => {
-    if (entries && editMode) {
-      setEditedEntries([...entries]);
-    }
-  }, [entries, editMode]);
-  
-  // Grupujemy wpisy według sekcji
-  const sectionsWithEntries: SectionWithEntries[] = React.useMemo(() => {
-    if (!sections || !entries) return [];
-    
-    const entriesBySectionId: Record<string, ReportEntry[]> = {};
-    
-    // Grupujemy wpisy wg sekcji
-    entries.forEach(entry => {
-      if (entry.section_id) {
-        if (!entriesBySectionId[entry.section_id]) {
-          entriesBySectionId[entry.section_id] = [];
-        }
-        entriesBySectionId[entry.section_id].push(entry);
-      }
-    });
-    
-    // Tworzymy wynikową tablicę sekcji z przypisanymi wpisami
-    return sections.map(section => {
-      return { 
-        section, 
-        entries: entriesBySectionId[section.id] || []
-      };
-    });
-  }, [sections, entries, editMode, editedEntries]);
-  
-  // Ustal, które wpisy nie mają przypisanej sekcji
-  const entriesWithoutSection = React.useMemo(() => {
-    if (!entries) return [];
-    return entries.filter(entry => !entry.section_id);
-  }, [entries]);
-  
-  // Mutacja do aktualizacji wpisów raportu
-  const updateEntriesMutation = useMutation({
-    mutationFn: async (entries: ReportEntry[]) => {
-      // Przygotuj dane do aktualizacji
-      const updates = entries.map(entry => {
-        const { id, report_id, section_id, account_number, account_name, 
-               debit_opening, credit_opening, debit_turnover, 
-               credit_turnover, debit_closing, credit_closing } = entry;
         
+      if (entriesError) throw entriesError;
+      
+      if (!entries) {
+        return sections.map(section => ({
+          section,
+          entries: []
+        }));
+      }
+      
+      // Pogrupuj wpisy według sekcji
+      const result: SectionWithEntries[] = sections.map(section => {
+        const sectionEntries = entries.filter(entry => entry.section_id === section.id);
         return {
-          id,
-          report_id,
-          section_id,
-          account_number,
-          account_name,
-          debit_opening,
-          credit_opening,
-          debit_turnover,
-          credit_turnover,
-          debit_closing,
-          credit_closing
+          section,
+          entries: sectionEntries
         };
       });
       
-      // Aktualizuj wpisy w bazie danych
+      // Dodaj wpisy bez sekcji jeśli istnieją
+      const entriesWithoutSection = entries.filter(entry => !entry.section_id);
+      if (entriesWithoutSection.length > 0) {
+        result.push({
+          section: {
+            id: 'no-section',
+            name: 'Pozycje bez przypisanej sekcji',
+            report_type: report.report_type,
+            section_order: 999
+          },
+          entries: entriesWithoutSection
+        });
+      }
+      
+      return result;
+    }
+  });
+  
+  // Mutacja do akceptacji raportu
+  const acceptMutation = useMutation({
+    mutationFn: async () => {
       const { error } = await supabase
-        .from('report_entries')
-        .upsert(updates);
+        .from('reports')
+        .update({
+          status: 'accepted',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .eq('id', reportId);
         
       if (error) throw error;
       
-      // Zaktualizuj również podsumowanie raportu
-      await updateReportSummary();
-      
-      return true;
+      // Wyślij powiadomienie do użytkownika
+      if (report?.submitted_by?.id) {
+        const { error: notifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: report.submitted_by.id,
+            title: 'Raport zaakceptowany',
+            message: `Twój raport "${report.title}" został zaakceptowany.`,
+            priority: 'normal',
+            action_label: 'Zobacz raport',
+            action_link: `/reports/${reportId}`
+          });
+          
+        if (notifError) console.error('Błąd wysyłania powiadomienia:', notifError);
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['report-entries', reportId] });
-      queryClient.invalidateQueries({ queryKey: ['report-details', reportId] });
-      setEditMode(false);
+      queryClient.invalidateQueries({ queryKey: ['report', reportId] });
       toast({
-        title: "Zapisano zmiany",
-        description: "Pomyślnie zaktualizowano dane raportu.",
+        title: "Sukces",
+        description: "Raport został zaakceptowany.",
         variant: "default",
       });
     },
     onError: (error) => {
       toast({
         title: "Błąd",
-        description: `Nie udało się zapisać zmian: ${error.message}`,
+        description: `Nie udało się zaakceptować raportu: ${error.message}`,
         variant: "destructive",
       });
     }
   });
   
-  // Funkcja do aktualizacji podsumowania raportu
-  const updateReportSummary = async () => {
-    if (!reportId || !editedEntries) return;
-    
-    try {
-      // Oblicz sumy
-      let incomeTotal = 0;
-      let expenseTotal = 0;
-      let settlementsTotal = 0;
+  // Mutacja do odrzucania raportu
+  const rejectMutation = useMutation({
+    mutationFn: async (data: { comments: string }) => {
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'rejected',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: (await supabase.auth.getUser()).data.user?.id,
+          comments: data.comments
+        })
+        .eq('id', reportId);
+        
+      if (error) throw error;
       
-      editedEntries.forEach(entry => {
-        // Konta przychodów (zaczynające się od 7)
-        if (entry.account_number.startsWith('7')) {
-          incomeTotal += Number(entry.credit_closing || 0) - Number(entry.debit_closing || 0);
-        }
-        // Konta kosztów (zaczynające się od 4)
-        else if (entry.account_number.startsWith('4')) {
-          expenseTotal += Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0);
-        }
-        // Konta rozrachunkowe (zaczynające się od 2)
-        else if (entry.account_number.startsWith('2')) {
-          settlementsTotal += Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
-        }
+      // Wyślij powiadomienie do użytkownika
+      if (report?.submitted_by?.id) {
+        const { error: notifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: report.submitted_by.id,
+            title: 'Raport odrzucony',
+            message: `Twój raport "${report.title}" został odrzucony. Sprawdź komentarze.`,
+            priority: 'high',
+            action_label: 'Zobacz raport',
+            action_link: `/reports/${reportId}`
+          });
+          
+        if (notifError) console.error('Błąd wysyłania powiadomienia:', notifError);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report', reportId] });
+      toast({
+        title: "Sukces",
+        description: "Raport został odrzucony.",
+        variant: "default",
+      });
+      rejectForm.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Błąd",
+        description: `Nie udało się odrzucić raportu: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Mutacja do aktualizacji szczegółów raportu
+  const updateDetailsMutation = useMutation({
+    mutationFn: async (details: Partial<ReportDetails>) => {
+      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
+      // nie jest jeszcze uwzględniona w typach Supabase
+      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details?report_id=eq.${reportId}`;
+      const apiKey = supabase.supabaseKey;
+      
+      const response = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          ...details,
+          updated_at: new Date().toISOString()
+        })
       });
       
-      // Oblicz bilans
-      const balance = incomeTotal - expenseTotal;
-      
-      // Aktualizuj lub twórz szczegóły raportu
-      if (reportDetails) {
-        await supabase
-          .from('report_details')
-          .update({
-            income_total: incomeTotal,
-            expense_total: expenseTotal,
-            balance: balance,
-            settlements_total: settlementsTotal,
-            updated_at: new Date().toISOString()
-          })
-          .eq('report_id', reportId);
-      } else {
-        await supabase
-          .from('report_details')
-          .insert({
-            report_id: reportId,
-            income_total: incomeTotal,
-            expense_total: expenseTotal,
-            balance: balance,
-            settlements_total: settlementsTotal
-          });
+      if (!response.ok) {
+        throw new Error('Nie udało się zaktualizować szczegółów raportu');
       }
-    } catch (error) {
-      console.error('Błąd aktualizacji podsumowania raportu:', error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+      toast({
+        title: "Sukces",
+        description: "Szczegóły raportu zostały zaktualizowane.",
+        variant: "default",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Błąd",
+        description: `Nie udało się zaktualizować szczegółów: ${error.message}`,
+        variant: "destructive",
+      });
     }
-  };
+  });
   
-  // Obsługa zmiany wartości pola wpisu
-  const handleEntryChange = (entryId: string, field: keyof ReportEntry, value: string) => {
-    setEditedEntries(prev => 
-      prev.map(entry => 
-        entry.id === entryId 
-          ? { ...entry, [field]: field.includes('debit') || field.includes('credit') ? parseFloat(value) || 0 : value }
-          : entry
-      )
-    );
-  };
-  
-  // Funkcja zapisująca zmiany
-  const handleSaveChanges = () => {
-    updateEntriesMutation.mutate(editedEntries);
-  };
-  
-  // Funkcja do edycji wpisu
-  const handleEditEntry = (entry: ReportEntry) => {
-    setSelectedEntry(entry);
-    setShowEditDialog(true);
-  };
-  
-  // Funkcja zapisująca zmiany w wybranym wpisie
-  const saveSelectedEntry = () => {
-    if (!selectedEntry) return;
-    
-    setEditedEntries(prev => 
-      prev.map(entry => 
-        entry.id === selectedEntry.id ? selectedEntry : entry
-      )
-    );
-    
-    setShowEditDialog(false);
+  // Funkcja do eksportu raportu do PDF
+  const handleExportToPDF = () => {
+    toast({
+      title: "Informacja",
+      description: "Funkcja eksportu do PDF będzie dostępna wkrótce.",
+      variant: "default",
+    });
   };
   
   // Funkcja do eksportu raportu do Excel
-  const exportToExcel = async () => {
-    setLoading(true);
-    try {
-      // W przyszłości tutaj kod do eksportu do Excela
-      alert('Eksport do Excel zostanie zaimplementowany w przyszłości.');
-    } catch (error) {
-      console.error('Błąd podczas eksportu:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleExportToExcel = () => {
+    toast({
+      title: "Informacja",
+      description: "Funkcja eksportu do Excel będzie dostępna wkrótce.",
+      variant: "default",
+    });
   };
-
-  // Funkcja do eksportu raportu do PDF
-  const exportToPdf = async () => {
-    setLoading(true);
-    try {
-      // W przyszłości tutaj kod do eksportu do PDF
-      alert('Eksport do PDF zostanie zaimplementowany w przyszłości.');
-    } catch (error) {
-      console.error('Błąd podczas eksportu:', error);
-    } finally {
-      setLoading(false);
-    }
+  
+  // Obsługa formularza odrzucenia raportu
+  const onRejectSubmit = (values: z.infer<typeof rejectFormSchema>) => {
+    rejectMutation.mutate(values);
   };
-
-  if (isLoadingReport || isLoadingSections || isLoadingEntries || isLoadingDetails) {
+  
+  // Wyświetlanie loadera podczas ładowania danych
+  if (loadingReport || loadingDetails || loadingSections) {
     return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
   }
-
+  
+  // Sprawdzenie czy raport istnieje
   if (!report) {
-    return <div className="text-red-600 p-4">Nie znaleziono raportu.</div>;
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-semibold text-red-500">Błąd</h2>
+        <p className="mt-2">Nie można znaleźć raportu o podanym ID.</p>
+      </div>
+    );
   }
-
-  // Sprawdź, czy bieżący użytkownik może edytować raport
-  const canEdit = report.status === 'draft';
-
-  // Renderowanie dla różnych typów raportów
-  const renderReportContent = () => {
-    switch (report.report_type) {
-      case 'zos':
-        return renderZOSReport();
-      case 'bilans':
-        return renderBalanceSheet();
-      case 'rzis':
-        return renderIncomeStatement();
-      case 'jpk':
-        return renderJPKReport();
-      case 'analiza':
-        return renderAnalysisReport();
-      default:
-        return renderStandardReport();
-    }
-  };
-
-  // Renderowanie raportu ZOS
-  const renderZOSReport = () => {
-    return (
-      <div className="space-y-8">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Zestawienie Obrotów i Sald (ZOS)</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead rowSpan={2}>Konto</TableHead>
-                <TableHead rowSpan={2}>Nazwa</TableHead>
-                <TableHead colSpan={2} className="text-center">Bilans otwarcia</TableHead>
-                <TableHead colSpan={2} className="text-center">Obroty</TableHead>
-                <TableHead colSpan={2} className="text-center">Saldo</TableHead>
-                {editMode && <TableHead rowSpan={2} className="text-center">Akcje</TableHead>}
-              </TableRow>
-              <TableRow>
-                <TableHead className="text-right">Winien</TableHead>
-                <TableHead className="text-right">Ma</TableHead>
-                <TableHead className="text-right">Winien</TableHead>
-                <TableHead className="text-right">Ma</TableHead>
-                <TableHead className="text-right">Winien</TableHead>
-                <TableHead className="text-right">Ma</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sectionsWithEntries.map((swe) => (
-                <React.Fragment key={swe.section.id}>
-                  <TableRow className="bg-gray-50">
-                    <TableCell colSpan={editMode ? 9 : 8} className="font-medium">{swe.section.name}</TableCell>
-                  </TableRow>
-                  {swe.entries.length ? (
-                    swe.entries.map((entry) => {
-                      // W trybie edycji używamy edytowanych wpisów
-                      const editedEntry = editMode 
-                        ? editedEntries.find(e => e.id === entry.id) || entry 
-                        : entry;
-                        
-                      return (
-                        <TableRow key={entry.id}>
-                          <TableCell>{editedEntry.account_number}</TableCell>
-                          <TableCell>{editedEntry.account_name}</TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.debit_opening || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'debit_opening', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.debit_opening?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.credit_opening || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'credit_opening', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.credit_opening?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.debit_turnover || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'debit_turnover', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.debit_turnover?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.credit_turnover || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'credit_turnover', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.credit_turnover?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.debit_closing || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'debit_closing', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.debit_closing?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editMode ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedEntry.credit_closing || 0}
-                                onChange={(e) => handleEntryChange(entry.id, 'credit_closing', e.target.value)}
-                                className="text-right w-24 inline-block"
-                              />
-                            ) : (
-                              editedEntry.credit_closing?.toFixed(2) || '0.00'
-                            )}
-                          </TableCell>
-                          {editMode && (
-                            <TableCell className="text-center">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleEditEntry(editedEntry)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={editMode ? 9 : 8} className="text-center text-muted-foreground">
-                        Brak danych dla tej sekcji
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {/* Sumowanie sekcji */}
-                  <TableRow className="font-medium bg-gray-100">
-                    <TableCell colSpan={2}>Suma dla {swe.section.name}</TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.debit_opening) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.credit_opening) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.debit_turnover) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.credit_turnover) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.debit_closing) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(editMode ? editedEntries : swe.entries)
-                        .filter(entry => entry.section_id === swe.section.id)
-                        .reduce((sum, entry) => sum + (Number(entry.credit_closing) || 0), 0)
-                        .toFixed(2)}
-                    </TableCell>
-                    {editMode && <TableCell></TableCell>}
-                  </TableRow>
-                </React.Fragment>
-              ))}
-              
-              {/* Konta bez przypisanej sekcji */}
-              {entriesWithoutSection.length > 0 && (
-                <React.Fragment>
-                  <TableRow className="bg-gray-50">
-                    <TableCell colSpan={editMode ? 9 : 8} className="font-medium">Konta bez przypisanej sekcji</TableCell>
-                  </TableRow>
-                  {entriesWithoutSection.map((entry) => {
-                    const editedEntry = editMode 
-                      ? editedEntries.find(e => e.id === entry.id) || entry 
-                      : entry;
-                      
-                    return (
-                      <TableRow key={entry.id}>
-                        <TableCell>{editedEntry.account_number}</TableCell>
-                        <TableCell>{editedEntry.account_name}</TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.debit_opening || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'debit_opening', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.debit_opening?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.credit_opening || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'credit_opening', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.credit_opening?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.debit_turnover || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'debit_turnover', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.debit_turnover?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.credit_turnover || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'credit_turnover', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.credit_turnover?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.debit_closing || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'debit_closing', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.debit_closing?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editMode ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedEntry.credit_closing || 0}
-                              onChange={(e) => handleEntryChange(entry.id, 'credit_closing', e.target.value)}
-                              className="text-right w-24 inline-block"
-                            />
-                          ) : (
-                            editedEntry.credit_closing?.toFixed(2) || '0.00'
-                          )}
-                        </TableCell>
-                        {editMode && (
-                          <TableCell className="text-center">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleEditEntry(editedEntry)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </React.Fragment>
-              )}
-              
-              {/* Suma całkowita */}
-              <TableRow className="font-bold border-t-2">
-                <TableCell colSpan={2}>RAZEM</TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.debit_opening) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.credit_opening) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.debit_turnover) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.credit_turnover) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.debit_closing) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(editMode ? editedEntries : entries)?.reduce((sum, entry) => 
-                    sum + (Number(entry.credit_closing) || 0), 0).toFixed(2) || '0.00'}
-                </TableCell>
-                {editMode && <TableCell></TableCell>}
-              </TableRow>
-            </TableBody>
-          </Table>
-          
-          {editMode && (
-            <div className="flex justify-end mt-4 space-x-2">
-              <Button variant="outline" onClick={() => setEditMode(false)}>
-                Anuluj
-              </Button>
-              <Button onClick={handleSaveChanges} disabled={updateEntriesMutation.isPending}>
-                {updateEntriesMutation.isPending && <Spinner className="mr-2 h-4 w-4" />}
-                Zapisz zmiany
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Funkcja renderująca bilans
-  const renderBalanceSheet = () => {
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Bilans</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Aktywa */}
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-2">Aktywa</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kategoria</TableHead>
-                  <TableHead className="text-right">Wartość</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sectionsWithEntries
-                  .filter(swe => ['Aktywa trwałe', 'Aktywa obrotowe'].includes(swe.section.name))
-                  .map(swe => (
-                    <React.Fragment key={swe.section.id}>
-                      <TableRow className="bg-gray-50">
-                        <TableCell colSpan={2} className="font-medium">{swe.section.name}</TableCell>
-                      </TableRow>
-                      {swe.entries.map(entry => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{entry.account_name}</TableCell>
-                          <TableCell className="text-right">
-                            {((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="font-medium">
-                        <TableCell>Razem {swe.section.name}</TableCell>
-                        <TableCell className="text-right">
-                          {swe.entries.reduce((sum, entry) => 
-                            sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </React.Fragment>
-                  ))
-                }
-                <TableRow className="font-bold">
-                  <TableCell>SUMA AKTYWÓW</TableCell>
-                  <TableCell className="text-right">
-                    {sectionsWithEntries
-                      .filter(swe => ['Aktywa trwałe', 'Aktywa obrotowe'].includes(swe.section.name))
-                      .flatMap(swe => swe.entries)
-                      .reduce((sum, entry) => 
-                        sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-          
-          {/* Pasywa */}
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-2">Pasywa</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kategoria</TableHead>
-                  <TableHead className="text-right">Wartość</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sectionsWithEntries
-                  .filter(swe => ['Kapitał (fundusz) własny', 'Zobowiązania i rezerwy na zobowiązania'].includes(swe.section.name))
-                  .map(swe => (
-                    <React.Fragment key={swe.section.id}>
-                      <TableRow className="bg-gray-50">
-                        <TableCell colSpan={2} className="font-medium">{swe.section.name}</TableCell>
-                      </TableRow>
-                      {swe.entries.map(entry => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{entry.account_name}</TableCell>
-                          <TableCell className="text-right">
-                            {((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="font-medium">
-                        <TableCell>Razem {swe.section.name}</TableCell>
-                        <TableCell className="text-right">
-                          {swe.entries.reduce((sum, entry) => 
-                            sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </React.Fragment>
-                  ))
-                }
-                <TableRow className="font-bold">
-                  <TableCell>SUMA PASYWÓW</TableCell>
-                  <TableCell className="text-right">
-                    {sectionsWithEntries
-                      .filter(swe => ['Kapitał (fundusz) własny', 'Zobowiązania i rezerwy na zobowiązania'].includes(swe.section.name))
-                      .flatMap(swe => swe.entries)
-                      .reduce((sum, entry) => 
-                        sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Funkcja renderująca rachunek zysków i strat
-  const renderIncomeStatement = () => {
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Rachunek Zysków i Strat (RZiS)</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Kategoria</TableHead>
-              <TableHead className="text-right">Wartość</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {/* Przychody */}
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">A. Przychody netto</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Przychody netto')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem przychody netto</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Przychody netto')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            {/* Koszty */}
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">B. Koszty działalności operacyjnej</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem koszty działalności operacyjnej</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            {/* Zysk/strata ze sprzedaży */}
-            <TableRow className="font-bold">
-              <TableCell>C. Zysk/strata ze sprzedaży (A-B)</TableCell>
-              <TableCell className="text-right">
-                {(
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody netto')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0)
-                ).toFixed(2)}
-              </TableCell>
-            </TableRow>
-            
-            {/* Pozostałe przychody i koszty operacyjne */}
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">D. Pozostałe przychody operacyjne</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Pozostałe przychody operacyjne')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem pozostałe przychody operacyjne</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Pozostałe przychody operacyjne')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">E. Pozostałe koszty operacyjne</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Pozostałe koszty operacyjne')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem pozostałe koszty operacyjne</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Pozostałe koszty operacyjne')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            {/* Zysk/strata z działalności operacyjnej */}
-            <TableRow className="font-bold">
-              <TableCell>F. Zysk/strata z działalności operacyjnej (C+D-E)</TableCell>
-              <TableCell className="text-right">
-                {(
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody netto')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0) +
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe przychody operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe koszty operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0)
-                ).toFixed(2)}
-              </TableCell>
-            </TableRow>
-            
-            {/* Przychody i koszty finansowe */}
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">G. Przychody finansowe</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Przychody finansowe')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem przychody finansowe</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Przychody finansowe')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            <TableRow className="bg-gray-50">
-              <TableCell colSpan={2} className="font-medium">H. Koszty finansowe</TableCell>
-            </TableRow>
-            {sectionsWithEntries
-              .find(swe => swe.section.name === 'Koszty finansowe')?.entries.map(entry => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.account_name}</TableCell>
-                  <TableCell className="text-right">
-                    {((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))
-            }
-            <TableRow className="font-medium">
-              <TableCell>Razem koszty finansowe</TableCell>
-              <TableCell className="text-right">
-                {sectionsWithEntries
-                  .find(swe => swe.section.name === 'Koszty finansowe')?.entries
-                  .reduce((sum, entry) => 
-                    sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2) || '0.00'}
-              </TableCell>
-            </TableRow>
-            
-            {/* Zysk/strata brutto */}
-            <TableRow className="font-bold bg-gray-100">
-              <TableCell>I. Zysk/strata brutto (F+G-H)</TableCell>
-              <TableCell className="text-right">
-                {(
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody netto')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0) +
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe przychody operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe koszty operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0) +
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody finansowe')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty finansowe')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0)
-                ).toFixed(2)}
-              </TableCell>
-            </TableRow>
-            
-            {/* Podatek dochodowy */}
-            <TableRow>
-              <TableCell>J. Podatek dochodowy</TableCell>
-              <TableCell className="text-right">0.00</TableCell>
-            </TableRow>
-            
-            {/* Zysk/strata netto */}
-            <TableRow className="font-bold text-lg">
-              <TableCell>K. Zysk/strata netto (I-J)</TableCell>
-              <TableCell className="text-right">
-                {(
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody netto')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty działalności operacyjnej')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0) +
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe przychody operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Pozostałe koszty operacyjne')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0) +
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Przychody finansowe')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0) || 0) -
-                  (sectionsWithEntries
-                    .find(swe => swe.section.name === 'Koszty finansowe')?.entries
-                    .reduce((sum, entry) => 
-                      sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0) || 0)
-                ).toFixed(2)}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </div>
-    );
-  };
-
-  // Funkcja renderująca JPK
-  const renderJPKReport = () => {
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Jednolity Plik Kontrolny (JPK)</h2>
-        <p className="text-omi-gray-500 mb-4">
-          Ten raport generuje plik JPK w formacie XML wymaganym przez Krajową Administrację Skarbową.
-        </p>
-        <div className="border rounded-lg p-4 mb-4">
-          <h3 className="text-lg font-medium mb-2">Dane podmiotu</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-omi-gray-500">Nazwa podmiotu:</p>
-              <p className="font-medium">Zgromadzenie Misjonarzy Oblatów Maryi Niepokalanej</p>
-            </div>
-            <div>
-              <p className="text-omi-gray-500">NIP:</p>
-              <p className="font-medium">-</p>
-            </div>
-            <div>
-              <p className="text-omi-gray-500">Adres:</p>
-              <p className="font-medium">-</p>
-            </div>
-            <div>
-              <p className="text-omi-gray-500">Kod pocztowy i miasto:</p>
-              <p className="font-medium">-</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="border rounded-lg p-4 mb-4">
-          <h3 className="text-lg font-medium mb-2">Typ JPK</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="border-2">JPK_VAT</Button>
-            <Button variant="outline" className="border-2">JPK_KR (księgi rachunkowe)</Button>
-            <Button variant="outline" className="border-2">JPK_FA (faktury)</Button>
-          </div>
-        </div>
-        
-        <div className="border rounded-lg p-4 mb-4">
-          <h3 className="text-lg font-medium mb-2">Okres raportowania</h3>
-          <p className="text-omi-gray-500">
-            Raport za okres: {report.period}
-          </p>
-        </div>
-        
-        <div className="flex justify-center mt-6">
-          <Button className="w-full md:w-auto">Generuj plik JPK</Button>
-        </div>
-      </div>
-    );
-  };
-
-  // Funkcja renderująca analizę kosztów i przychodów
-  const renderAnalysisReport = () => {
-    // Grupowanie kont według kategorii i obliczanie sum
-    const incomeAccounts = editMode ? editedEntries : entries ? entries : [];
-    const incomeData = incomeAccounts
-      .filter(entry => entry.account_number.startsWith('7')) // Konta przychodów
-      .map(entry => ({
-        name: entry.account_name,
-        number: entry.account_number,
-        value: (Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)
-      }))
-      .sort((a, b) => b.value - a.value); // Sortuj malejąco wg wartości
-    
-    const expenseAccounts = editMode ? editedEntries : entries ? entries : [];
-    const expenseData = expenseAccounts
-      .filter(entry => entry.account_number.startsWith('4')) // Konta kosztów
-      .map(entry => ({
-        name: entry.account_name,
-        number: entry.account_number,
-        value: (Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)
-      }))
-      .sort((a, b) => b.value - a.value); // Sortuj malejąco wg wartości
-    
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Analiza Kosztów i Przychodów</h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Przychody */}
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-4">Struktura przychodów</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Konto</TableHead>
-                  <TableHead>Nazwa</TableHead>
-                  <TableHead className="text-right">Kwota</TableHead>
-                  <TableHead className="text-right">%</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {incomeData.map(income => {
-                  const totalIncome = incomeData.reduce((sum, item) => sum + item.value, 0);
-                  const percentage = totalIncome ? (income.value / totalIncome * 100) : 0;
-                  
-                  return (
-                    <TableRow key={income.number}>
-                      <TableCell>{income.number}</TableCell>
-                      <TableCell>{income.name}</TableCell>
-                      <TableCell className="text-right">{income.value.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{percentage.toFixed(2)}%</TableCell>
-                    </TableRow>
-                  );
-                })}
-                <TableRow className="font-bold">
-                  <TableCell colSpan={2}>RAZEM PRZYCHODY</TableCell>
-                  <TableCell className="text-right">
-                    {incomeData.reduce((sum, item) => sum + item.value, 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right">100.00%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-          
-          {/* Koszty */}
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-4">Struktura kosztów</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Konto</TableHead>
-                  <TableHead>Nazwa</TableHead>
-                  <TableHead className="text-right">Kwota</TableHead>
-                  <TableHead className="text-right">%</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenseData.map(expense => {
-                  const totalExpense = expenseData.reduce((sum, item) => sum + item.value, 0);
-                  const percentage = totalExpense ? (expense.value / totalExpense * 100) : 0;
-                  
-                  return (
-                    <TableRow key={expense.number}>
-                      <TableCell>{expense.number}</TableCell>
-                      <TableCell>{expense.name}</TableCell>
-                      <TableCell className="text-right">{expense.value.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{percentage.toFixed(2)}%</TableCell>
-                    </TableRow>
-                  );
-                })}
-                <TableRow className="font-bold">
-                  <TableCell colSpan={2}>RAZEM KOSZTY</TableCell>
-                  <TableCell className="text-right">
-                    {expenseData.reduce((sum, item) => sum + item.value, 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right">100.00%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-        
-        {/* Podsumowanie finansowe */}
-        <div className="border p-4 rounded-lg">
-          <h3 className="text-lg font-medium mb-4">Podsumowanie finansowe</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Table>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">Suma przychodów</TableCell>
-                    <TableCell className="text-right">
-                      {incomeData.reduce((sum, item) => sum + item.value, 0).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Suma kosztów</TableCell>
-                    <TableCell className="text-right">
-                      {expenseData.reduce((sum, item) => sum + item.value, 0).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow className="font-bold">
-                    <TableCell>Wynik finansowy</TableCell>
-                    <TableCell className="text-right">
-                      {(
-                        incomeData.reduce((sum, item) => sum + item.value, 0) - 
-                        expenseData.reduce((sum, item) => sum + item.value, 0)
-                      ).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-            <div>
-              <p className="text-omi-gray-500 mb-2">Wskaźniki finansowe:</p>
-              <Table>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">Rentowność</TableCell>
-                    <TableCell className="text-right">
-                      {(() => {
-                        const totalIncome = incomeData.reduce((sum, item) => sum + item.value, 0);
-                        const totalExpense = expenseData.reduce((sum, item) => sum + item.value, 0);
-                        const profit = totalIncome - totalExpense;
-                        return totalIncome ? ((profit / totalIncome) * 100).toFixed(2) + '%' : 'N/A';
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Udział kosztów w przychodach</TableCell>
-                    <TableCell className="text-right">
-                      {(() => {
-                        const totalIncome = incomeData.reduce((sum, item) => sum + item.value, 0);
-                        const totalExpense = expenseData.reduce((sum, item) => sum + item.value, 0);
-                        return totalIncome ? ((totalExpense / totalIncome) * 100).toFixed(2) + '%' : 'N/A';
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Funkcja renderująca standardowy raport
-  const renderStandardReport = () => {
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Raport Standardowy</h2>
-        
-        {reportDetails && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-1">Przychody</h3>
-              <p className="text-2xl font-bold">{reportDetails.income_total.toFixed(2)} PLN</p>
-            </div>
-            <div className="bg-red-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-1">Koszty</h3>
-              <p className="text-2xl font-bold">{reportDetails.expense_total.toFixed(2)} PLN</p>
-            </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-1">Bilans</h3>
-              <p className="text-2xl font-bold">{reportDetails.balance.toFixed(2)} PLN</p>
-            </div>
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-1">Rozrachunki</h3>
-              <p className="text-2xl font-bold">{reportDetails.settlements_total.toFixed(2)} PLN</p>
-            </div>
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-2">Przychody według kategorii</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kategoria</TableHead>
-                  <TableHead className="text-right">Wartość</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries?.filter(entry => entry.account_number.startsWith('7'))
-                  .map(entry => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{entry.account_name}</TableCell>
-                      <TableCell className="text-right">
-                        {((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)).toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                }
-                <TableRow className="font-medium">
-                  <TableCell>Razem przychody</TableCell>
-                  <TableCell className="text-right">
-                    {entries?.filter(entry => entry.account_number.startsWith('7'))
-                      .reduce((sum, entry) => 
-                        sum + ((Number(entry.credit_closing) || 0) - (Number(entry.debit_closing) || 0)), 0).toFixed(2) || '0.00'}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-          
-          <div className="border p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-2">Koszty według kategorii</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kategoria</TableHead>
-                  <TableHead className="text-right">Wartość</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries?.filter(entry => entry.account_number.startsWith('4'))
-                  .map(entry => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{entry.account_name}</TableCell>
-                      <TableCell className="text-right">
-                        {((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)).toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                }
-                <TableRow className="font-medium">
-                  <TableCell>Razem koszty</TableCell>
-                  <TableCell className="text-right">
-                    {entries?.filter(entry => entry.account_number.startsWith('4'))
-                      .reduce((sum, entry) => 
-                        sum + ((Number(entry.debit_closing) || 0) - (Number(entry.credit_closing) || 0)), 0).toFixed(2) || '0.00'}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+  
+  // Rendering głównego komponentu
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <h1 className="text-2xl font-semibold">{report.title}</h1>
-        <p className="text-omi-gray-500">Okres: {report.period}</p>
-      </div>
-      
-      <div className="flex justify-end space-x-3">
-        {canEdit && !editMode && (
-          <Button variant="outline" onClick={() => setEditMode(true)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edytuj dane
-          </Button>
-        )}
-        <Button variant="outline" onClick={exportToExcel} disabled={loading}>
-          <FileDown className="h-4 w-4 mr-2" />
-          Eksportuj do Excel
-        </Button>
-        <Button onClick={exportToPdf} disabled={loading}>
-          <FileDown className="h-4 w-4 mr-2" />
-          Eksportuj do PDF
-        </Button>
-      </div>
-
-      {renderReportContent()}
-      
-      {/* Dialog do edycji wpisu */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edycja danych konta {selectedEntry?.account_number}</DialogTitle>
-          </DialogHeader>
-          {selectedEntry && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Konto</label>
-                  <Input 
-                    value={selectedEntry.account_number} 
-                    readOnly
-                    className="bg-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nazwa</label>
-                  <Input 
-                    value={selectedEntry.account_name} 
-                    readOnly
-                    className="bg-gray-100"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Bilans otwarcia (Winien)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.debit_opening || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      debit_opening: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Bilans otwarcia (Ma)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.credit_opening || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      credit_opening: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Obroty (Winien)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.debit_turnover || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      debit_turnover: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Obroty (Ma)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.credit_turnover || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      credit_turnover: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Saldo (Winien)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.debit_closing || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      debit_closing: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Saldo (Ma)</label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={selectedEntry.credit_closing || 0}
-                    onChange={(e) => setSelectedEntry({
-                      ...selectedEntry,
-                      credit_closing: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-              </div>
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex justify-between items-start flex-wrap gap-4 mb-4">
+          <div>
+            <h2 className="text-2xl font-semibold">{report.title}</h2>
+            <p className="text-omi-gray-500">
+              Status: <span className={`font-medium ${
+                report.status === 'accepted' ? 'text-green-600' : 
+                report.status === 'rejected' ? 'text-red-600' : 
+                report.status === 'submitted' ? 'text-blue-600' : ''
+              }`}>
+                {report.status === 'draft' ? 'Roboczy' : 
+                 report.status === 'submitted' ? 'Złożony' : 
+                 report.status === 'accepted' ? 'Zaakceptowany' : 
+                 report.status === 'rejected' ? 'Odrzucony' : report.status}
+              </span>
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportToPDF} className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Eksportuj do PDF
+            </Button>
+            <Button variant="outline" onClick={handleExportToExcel} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Eksportuj do Excel
+            </Button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+          <div>
+            <p className="text-omi-gray-500">Placówka:</p>
+            <p className="font-medium">{report.location?.name}</p>
+          </div>
+          <div>
+            <p className="text-omi-gray-500">Okres:</p>
+            <p className="font-medium">{report.period}</p>
+          </div>
+          {report.submitted_at && (
+            <div>
+              <p className="text-omi-gray-500">Data złożenia:</p>
+              <p className="font-medium">{format(new Date(report.submitted_at), 'PPP', { locale: pl })}</p>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Anuluj</Button>
-            <Button onClick={saveSelectedEntry}>Zapisz zmiany</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {report.submitted_by && (
+            <div>
+              <p className="text-omi-gray-500">Złożony przez:</p>
+              <p className="font-medium">{report.submitted_by.name}</p>
+            </div>
+          )}
+          {report.reviewed_at && (
+            <div>
+              <p className="text-omi-gray-500">Data przeglądu:</p>
+              <p className="font-medium">{format(new Date(report.reviewed_at), 'PPP', { locale: pl })}</p>
+            </div>
+          )}
+          {report.reviewed_by && (
+            <div>
+              <p className="text-omi-gray-500">Przejrzany przez:</p>
+              <p className="font-medium">{report.reviewed_by.name}</p>
+            </div>
+          )}
+        </div>
+        
+        {report.comments && (
+          <div className="mt-4 p-3 bg-omi-gray-100 rounded">
+            <p className="text-sm font-medium mb-1">Komentarz:</p>
+            <p className="text-sm">{report.comments}</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Jeśli raport ma status 'submitted', pokaż opcje akceptacji/odrzucenia */}
+      {report.status === 'submitted' && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Decyzja</h3>
+          <div className="flex gap-4 items-start">
+            <Button 
+              onClick={() => acceptMutation.mutate()}
+              disabled={acceptMutation.isPending}
+              className="flex items-center gap-2"
+            >
+              {acceptMutation.isPending && <Spinner className="h-4 w-4" />}
+              <Check className="h-4 w-4" />
+              Akceptuj raport
+            </Button>
+            
+            <div className="flex-1">
+              <Form {...rejectForm}>
+                <form onSubmit={rejectForm.handleSubmit(onRejectSubmit)} className="space-y-4">
+                  <FormField
+                    control={rejectForm.control}
+                    name="comments"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Powód odrzucenia</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Wpisz komentarz opisujący powód odrzucenia raportu..." 
+                            className="min-h-24"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    variant="destructive" 
+                    disabled={rejectMutation.isPending}
+                    className="flex items-center gap-2"
+                  >
+                    {rejectMutation.isPending && <Spinner className="h-4 w-4" />}
+                    <X className="h-4 w-4" />
+                    Odrzuć raport
+                  </Button>
+                </form>
+              </Form>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-3 md:w-[500px] mb-4">
+          <TabsTrigger value="summary">Podsumowanie</TabsTrigger>
+          <TabsTrigger value="details">Szczegóły</TabsTrigger>
+          <TabsTrigger value="entries">Zapisy</TabsTrigger>
+        </TabsList>
+        
+        {/* Zawartość zakładki Podsumowanie */}
+        <TabsContent value="summary" className="mt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Przychody</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-green-600">
+                  {reportDetails?.income_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Rozchody</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-red-600">
+                  {reportDetails?.expense_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Bilans</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className={`text-3xl font-bold ${(reportDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {reportDetails?.balance?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Rozrachunki</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600">
+                  {reportDetails?.settlements_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        {/* Zawartość zakładki Szczegóły */}
+        <TabsContent value="details" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Szczegółowe informacje</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-500">Ta sekcja będzie zawierać szczegółowe informacje o raporcie w zależności od jego typu.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Zawartość zakładki Zapisy */}
+        <TabsContent value="entries" className="mt-0">
+          {!sectionsWithEntries || sectionsWithEntries.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Brak zapisów</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Ten raport nie zawiera żadnych zapisów księgowych.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {sectionsWithEntries.map((sectionWithEntries) => (
+                <Card key={sectionWithEntries.section.id}>
+                  <CardHeader>
+                    <CardTitle>{sectionWithEntries.section.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {sectionWithEntries.entries.length === 0 ? (
+                      <p className="text-gray-500">Brak zapisów w tej sekcji</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2 px-4">Konto</th>
+                              <th className="text-left py-2 px-4">Nazwa</th>
+                              <th className="text-right py-2 px-4">B.O. Winien</th>
+                              <th className="text-right py-2 px-4">B.O. Ma</th>
+                              <th className="text-right py-2 px-4">Obroty Winien</th>
+                              <th className="text-right py-2 px-4">Obroty Ma</th>
+                              <th className="text-right py-2 px-4">Saldo Winien</th>
+                              <th className="text-right py-2 px-4">Saldo Ma</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sectionWithEntries.entries.map((entry) => (
+                              <tr key={entry.id} className="border-b">
+                                <td className="py-2 px-4">{entry.account_number}</td>
+                                <td className="py-2 px-4">{entry.account_name}</td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.debit_opening?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.credit_opening?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.debit_turnover?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.credit_turnover?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.debit_closing?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                                <td className="text-right py-2 px-4">
+                                  {entry.credit_closing?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
 
-export default ReportDetails;
+export default ReportDetailsComponent;

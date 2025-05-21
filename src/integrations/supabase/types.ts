@@ -180,6 +180,47 @@ export type Database = {
           },
         ]
       }
+      report_details: {
+        Row: {
+          balance: number
+          created_at: string
+          expense_total: number
+          id: string
+          income_total: number
+          report_id: string
+          settlements_total: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          expense_total?: number
+          id?: string
+          income_total?: number
+          report_id: string
+          settlements_total?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          expense_total?: number
+          id?: string
+          income_total?: number
+          report_id?: string
+          settlements_total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_details_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: true
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_entries: {
         Row: {
           account_name: string

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -303,18 +302,42 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       }
       
       // Inicjalizacja szczegółów raportu
-      const { error: detailsError } = await supabase
-        .from('report_details')
+      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
+      // nie jest jeszcze uwzględniona w typach Supabase
+      const { data, error } = await supabase
+        .from('reports')
         .insert({
           report_id: reportId,
           income_total: 0,
           expense_total: 0,
           balance: 0,
           settlements_total: 0
-        });
+        })
+        .single();
         
-      if (detailsError) {
-        console.error('Błąd inicjalizacji szczegółów raportu:', detailsError);
+      // Jako alternatywa, użyj bezpośrednio API supabase z pominięciem typów
+      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details`;
+      const apiKey = supabase.supabaseKey;
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          report_id: reportId,
+          income_total: 0,
+          expense_total: 0,
+          balance: 0,
+          settlements_total: 0
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('Błąd inicjalizacji szczegółów raportu:', await response.text());
       }
       
     } catch (error) {
