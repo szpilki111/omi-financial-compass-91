@@ -22,6 +22,8 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirOperationFormData, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface KpirOperationDialogProps {
   open: boolean;
@@ -37,6 +39,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const [accountTypes, setAccountTypes] = useState<string[]>([]);
   const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]);
   const today = new Date().toISOString().split('T')[0];
+  const [showLocationWarning, setShowLocationWarning] = useState(false);
   
   const [formData, setFormData] = useState<KpirOperationFormData>({
     date: today,
@@ -54,6 +57,13 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const [selectedAccountType, setSelectedAccountType] = useState<string>('');
 
   useEffect(() => {
+    // Sprawdzenie czy użytkownik ma przypisaną lokalizację
+    if (user && !user.location) {
+      setShowLocationWarning(true);
+    } else {
+      setShowLocationWarning(false);
+    }
+
     const fetchAccounts = async () => {
       try {
         const { data, error } = await supabase
@@ -81,7 +91,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     };
 
     fetchAccounts();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Filtrowanie kont na podstawie wybranego typu
@@ -155,10 +165,12 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       return;
     }
     
-    if (!user?.location) {
+    // Ustawiamy domyślną lokalizację jeśli nie ma przypisanej
+    // W przyszłości można dodać pole wyboru lokalizacji w formularzu
+    if (!user) {
       toast({
         title: "Błąd",
-        description: "Nie można określić lokalizacji użytkownika",
+        description: "Nie jesteś zalogowany",
         variant: "destructive",
       });
       return;
@@ -167,6 +179,18 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     setLoading(true);
     
     try {
+      // Używamy domyślnej lokalizacji lub null jeśli nie ma przypisanej
+      const locationId = user.location || null;
+      
+      // Przypisujemy takie samo konto do debetu i kredytu dla uproszczenia
+      // W przyszłości można dodać ponownie wybór obu kont
+      const selectedAccountId = selectedAccountType ? 
+        filteredAccounts.length > 0 ? filteredAccounts[0].id : null : null;
+      
+      if (!selectedAccountId) {
+        throw new Error("Nie wybrano konta");
+      }
+      
       const { error } = await supabase
         .from('transactions')
         .insert({
@@ -174,12 +198,12 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           document_number: formData.document_number,
           description: formData.description,
           amount: formData.amount,
-          debit_account_id: formData.debit_account_id,
-          credit_account_id: formData.credit_account_id,
+          debit_account_id: selectedAccountId,
+          credit_account_id: selectedAccountId,
           settlement_type: formData.settlement_type,
           currency: formData.currency,
           exchange_rate: formData.exchange_rate,
-          location_id: user.location,
+          location_id: locationId,
           user_id: user.id
         });
         
@@ -193,11 +217,11 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       });
       
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Błąd podczas dodawania operacji:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się dodać operacji",
+        description: error.message || "Nie udało się dodać operacji",
         variant: "destructive",
       });
     } finally {
@@ -211,6 +235,15 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         <DialogHeader>
           <DialogTitle>Nowa operacja finansowa</DialogTitle>
         </DialogHeader>
+        
+        {showLocationWarning && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Uwaga: Twoje konto nie ma przypisanej lokalizacji. Operacje będą zapisywane bez przypisania do konkretnej placówki.
+            </AlertDescription>
+          </Alert>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -381,4 +414,3 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 };
 
 export default KpirOperationDialog;
-
