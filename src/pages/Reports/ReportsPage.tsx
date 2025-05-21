@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { PageTitle } from '@/components/ui/PageTitle';
+import PageTitle from '@/components/ui/PageTitle';
 import ReportsList from './ReportsList';
 import ReportForm from './ReportForm';
 import { Button } from '@/components/ui/button';

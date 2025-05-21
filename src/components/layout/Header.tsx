@@ -15,7 +15,7 @@ import {
 
 const Header = () => {
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { name: 'Strona główna', path: '/dashboard' },
@@ -26,8 +26,8 @@ const Header = () => {
 
   // Zwracanie inicjału imienia użytkownika
   const getInitial = () => {
-    if (user?.user_metadata?.name) {
-      return user.user_metadata.name.charAt(0).toUpperCase();
+    if (user?.name) {
+      return user.name.charAt(0).toUpperCase();
     }
     if (user?.email) {
       return user.email.charAt(0).toUpperCase();
@@ -89,7 +89,7 @@ const Header = () => {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Moje konto</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => signOut()}>
+                    <DropdownMenuItem onClick={() => logout()}>
                       Wyloguj
                     </DropdownMenuItem>
                   </DropdownMenuContent>
