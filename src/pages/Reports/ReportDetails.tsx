@@ -50,6 +50,104 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     },
   });
 
+  // Funkcja do przeliczania sum raportu
+  const calculateAndUpdateReportTotals = async (sections: SectionWithEntries[] | undefined) => {
+    if (!sections || !reportId) return;
+    
+    // Sumowanie przychodów i rozchodów
+    let incomeTotal = 0;
+    let expenseTotal = 0;
+    let settlementsTotal = 0;
+    
+    sections.forEach(sectionWithEntries => {
+      sectionWithEntries.entries.forEach(entry => {
+        // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
+        if (entry.account_number && entry.account_number.startsWith('7')) {
+          // Przychody są zwykle po stronie Ma (credit)
+          incomeTotal += Number(entry.credit_closing || 0);
+        }
+        // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
+        else if (entry.account_number && entry.account_number.startsWith('4')) {
+          // Koszty są zwykle po stronie Winien (debit)
+          expenseTotal += Number(entry.debit_closing || 0);
+        }
+        // Sprawdź czy konto zaczyna się od numeru rozrachunków (2xx)
+        else if (entry.account_number && entry.account_number.startsWith('2')) {
+          // Absolutna wartość salda
+          settlementsTotal += Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
+        }
+      });
+    });
+    
+    // Oblicz bilans jako różnicę między przychodami a wydatkami
+    const balance = incomeTotal - expenseTotal;
+    
+    // Sprawdź czy istnieje już wpis w tabeli report_details
+    const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
+    const checkResponse = await fetch(apiUrl, {
+      headers: {
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
+        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+      }
+    });
+    
+    const details = await checkResponse.json();
+    
+    // Zaktualizuj lub utwórz nowy wpis
+    if (details && details.length > 0) {
+      // Aktualizuj istniejący wpis
+      const updateResponse = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          income_total: incomeTotal,
+          expense_total: expenseTotal,
+          balance: balance,
+          settlements_total: settlementsTotal,
+          updated_at: new Date().toISOString()
+        })
+      });
+      
+      if (!updateResponse.ok) {
+        console.error('Nie udało się zaktualizować szczegółów raportu');
+      } else {
+        // Odśwież dane
+        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+      }
+    } else {
+      // Utwórz nowy wpis
+      const createUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
+      const createResponse = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          report_id: reportId,
+          income_total: incomeTotal,
+          expense_total: expenseTotal,
+          balance: balance,
+          settlements_total: settlementsTotal
+        })
+      });
+      
+      if (!createResponse.ok) {
+        console.error('Nie udało się utworzyć szczegółów raportu');
+      } else {
+        // Odśwież dane
+        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+      }
+    }
+  };
+
   // Pobieranie danych raportu
   const { data: report, isLoading: loadingReport } = useQuery({
     queryKey: ['report', reportId],
@@ -160,114 +258,17 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       }
       
       return result;
-    },
-    onSuccess: async (data) => {
-      // Po pobraniu wszystkich danych, przelicz sumy i zaktualizuj raport
-      try {
-        await calculateAndUpdateReportTotals(data);
-      } catch (error) {
-        console.error("Błąd przy przeliczaniu sum raportu:", error);
-      }
     }
   });
   
-  // Funkcja do przeliczania sum raportu
-  const calculateAndUpdateReportTotals = async (sections: SectionWithEntries[] | undefined) => {
-    if (!sections || !reportId) return;
-    
-    // Sumowanie przychodów i rozchodów
-    let incomeTotal = 0;
-    let expenseTotal = 0;
-    let settlementsTotal = 0;
-    
-    sections.forEach(sectionWithEntries => {
-      sectionWithEntries.entries.forEach(entry => {
-        // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
-        if (entry.account_number && entry.account_number.startsWith('7')) {
-          // Przychody są zwykle po stronie Ma (credit)
-          incomeTotal += Number(entry.credit_closing || 0);
-        }
-        // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
-        else if (entry.account_number && entry.account_number.startsWith('4')) {
-          // Koszty są zwykle po stronie Winien (debit)
-          expenseTotal += Number(entry.debit_closing || 0);
-        }
-        // Sprawdź czy konto zaczyna się od numeru rozrachunków (2xx)
-        else if (entry.account_number && entry.account_number.startsWith('2')) {
-          // Absolutna wartość salda
-          settlementsTotal += Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
-        }
+  // Efekt, który przelicza sumy raportu po załadowaniu danych
+  useEffect(() => {
+    if (sectionsWithEntries) {
+      calculateAndUpdateReportTotals(sectionsWithEntries).catch(error => {
+        console.error("Błąd przy przeliczaniu sum raportu:", error);
       });
-    });
-    
-    // Oblicz bilans jako różnicę między przychodami a wydatkami
-    const balance = incomeTotal - expenseTotal;
-    
-    // Sprawdź czy istnieje już wpis w tabeli report_details
-    const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-    const checkResponse = await fetch(apiUrl, {
-      headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
-      }
-    });
-    
-    const details = await checkResponse.json();
-    
-    // Zaktualizuj lub utwórz nowy wpis
-    if (details && details.length > 0) {
-      // Aktualizuj istniejący wpis
-      const updateResponse = await fetch(apiUrl, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          income_total: incomeTotal,
-          expense_total: expenseTotal,
-          balance: balance,
-          settlements_total: settlementsTotal,
-          updated_at: new Date().toISOString()
-        })
-      });
-      
-      if (!updateResponse.ok) {
-        console.error('Nie udało się zaktualizować szczegółów raportu');
-      } else {
-        // Odśwież dane
-        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
-      }
-    } else {
-      // Utwórz nowy wpis
-      const createUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
-      const createResponse = await fetch(createUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          report_id: reportId,
-          income_total: incomeTotal,
-          expense_total: expenseTotal,
-          balance: balance,
-          settlements_total: settlementsTotal
-        })
-      });
-      
-      if (!createResponse.ok) {
-        console.error('Nie udało się utworzyć szczegółów raportu');
-      } else {
-        // Odśwież dane
-        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
-      }
     }
-  };
+  }, [sectionsWithEntries, reportId]);
   
   // Mutacja do akceptacji raportu
   const acceptMutation = useMutation({
