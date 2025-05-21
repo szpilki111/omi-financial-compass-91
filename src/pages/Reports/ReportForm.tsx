@@ -17,7 +17,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -133,7 +132,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         month: report.month,
         year: report.year,
         location_id: report.location_id,
-        report_type: report.report_type || 'standard',
+        report_type: report.report_type,
       });
     }
   }, [report, form]);
@@ -184,7 +183,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         if (error) throw error;
         return { id: reportId };
       } else {
-        // Tworzenie nowego raportu - upewniamy się, że status ma prawidłową wartość
+        // Tworzenie nowego raportu
         const { data, error } = await supabase
           .from('reports')
           .insert({
@@ -194,7 +193,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             report_type,
             title,
             period,
-            status: 'draft' // Upewniamy się, że używamy poprawnej wartości statusu
+            status: 'draft'
           })
           .select('id')
           .single();
@@ -203,6 +202,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           console.error('Błąd wstawiania raportu:', error);
           throw error;
         }
+        
+        // Inicjalizacja wpisów raportu zgodnie z typem
+        await initializeReportEntries(data.id, report_type, location_id, month, year);
+        
         return data;
       }
     },
@@ -226,6 +229,98 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       });
     }
   });
+  
+  // Funkcja do inicjalizacji wpisów raportu
+  const initializeReportEntries = async (reportId: string, reportType: string, locationId: string, month: number, year: number) => {
+    try {
+      // Pobierz sekcje dla danego typu raportu
+      const { data: sections, error: sectionsError } = await supabase
+        .from('report_sections')
+        .select('*')
+        .eq('report_type', reportType)
+        .order('section_order', { ascending: true });
+        
+      if (sectionsError) throw sectionsError;
+      
+      if (!sections || sections.length === 0) return;
+      
+      // Pobierz mapowania kont do sekcji
+      const { data: mappings, error: mappingsError } = await supabase
+        .from('account_section_mappings')
+        .select('*')
+        .eq('report_type', reportType);
+        
+      if (mappingsError) throw mappingsError;
+      
+      // Pobierz wszystkie konta
+      const { data: accounts, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*');
+        
+      if (accountsError) throw accountsError;
+      
+      if (!accounts || accounts.length === 0) return;
+      
+      // Tworzenie wpisów dla raportu na podstawie kont i ich mapowań
+      const entries = [];
+      
+      for (const account of accounts) {
+        // Znajdź sekcję dla konta na podstawie prefiksu
+        let sectionId = null;
+        
+        if (mappings) {
+          const mapping = mappings.find(m => 
+            account.number.startsWith(m.account_prefix)
+          );
+          
+          if (mapping) {
+            sectionId = mapping.section_id;
+          }
+        }
+        
+        // Tworzenie wpisu raportu
+        entries.push({
+          report_id: reportId,
+          section_id: sectionId,
+          account_number: account.number,
+          account_name: account.name,
+          debit_opening: 0,
+          credit_opening: 0,
+          debit_turnover: 0,
+          credit_turnover: 0,
+          debit_closing: 0,
+          credit_closing: 0
+        });
+      }
+      
+      // Zapisz wpisy do bazy danych
+      if (entries.length > 0) {
+        const { error: entriesError } = await supabase
+          .from('report_entries')
+          .insert(entries);
+          
+        if (entriesError) throw entriesError;
+      }
+      
+      // Inicjalizacja szczegółów raportu
+      const { error: detailsError } = await supabase
+        .from('report_details')
+        .insert({
+          report_id: reportId,
+          income_total: 0,
+          expense_total: 0,
+          balance: 0,
+          settlements_total: 0
+        });
+        
+      if (detailsError) {
+        console.error('Błąd inicjalizacji szczegółów raportu:', detailsError);
+      }
+      
+    } catch (error) {
+      console.error('Błąd inicjalizacji wpisów raportu:', error);
+    }
+  };
 
   // Mutacja do zmiany statusu raportu na 'złożony'
   const submitReportMutation = useMutation({
@@ -251,6 +346,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         description: "Raport został pomyślnie złożony do zatwierdzenia.",
         variant: "default",
       });
+      if (onSuccess) onSuccess();
     },
     onError: (error) => {
       console.error('Błąd zmiany statusu:', error);

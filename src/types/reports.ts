@@ -49,3 +49,33 @@ export interface SectionWithEntries {
   section: ReportSection;
   entries: ReportEntry[];
 }
+
+export interface BudgetPlan {
+  id: string;
+  location_id: string;
+  category_id: string;
+  year: number;
+  month: number;
+  planned_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  account_type: 'income' | 'expense';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportDetails {
+  id: string;
+  report_id: string;
+  income_total: number;
+  expense_total: number;
+  balance: number;
+  settlements_total: number;
+  created_at: string;
+  updated_at: string;
+}
