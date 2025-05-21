@@ -193,6 +193,11 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         throw error;
       }
       
+      toast({
+        title: "Sukces",
+        description: "Operacja została dodana",
+      });
+      
       onSave();
     } catch (error) {
       console.error('Błąd podczas dodawania operacji:', error);
@@ -342,6 +347,54 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          
+          {/* Konto Winien */}
+          <div className="space-y-1">
+            <Label htmlFor="debit_account_id" className="text-sm font-medium">
+              Konto Winien *
+            </Label>
+            <Select 
+              value={formData.debit_account_id} 
+              onValueChange={(value) => handleAccountChange('debit_account_id', value)}
+              disabled={filteredAccounts.length === 0}
+            >
+              <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : ''}`}>
+                <SelectValue placeholder="Wybierz konto Winien" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredAccounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.number} - {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
+          </div>
+
+          {/* Konto Ma */}
+          <div className="space-y-1">
+            <Label htmlFor="credit_account_id" className="text-sm font-medium">
+              Konto Ma *
+            </Label>
+            <Select 
+              value={formData.credit_account_id} 
+              onValueChange={(value) => handleAccountChange('credit_account_id', value)}
+              disabled={filteredAccounts.length === 0}
+            >
+              <SelectTrigger className={`w-full ${errors.credit_account_id ? 'border-red-500' : ''}`}>
+                <SelectValue placeholder="Wybierz konto Ma" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredAccounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.number} - {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.credit_account_id && <p className="text-red-500 text-xs">{errors.credit_account_id}</p>}
           </div>
           
           {/* Forma rozrachunku */}
