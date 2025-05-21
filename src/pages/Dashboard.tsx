@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -29,6 +28,8 @@ interface Statistic {
   value: string | number;
   change?: number;
   icon: React.ReactNode;
+  status?: 'success' | 'warning' | 'error' | 'neutral';
+  statusText?: string;
 }
 
 const Dashboard = () => {
@@ -40,7 +41,10 @@ const Dashboard = () => {
   const [statistics, setStatistics] = useState<Statistic[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [operationCount, setOperationCount] = useState(0);
-  const [reportCount, setReportCount] = useState('0/0');
+  const [reportStatus, setReportStatus] = useState<{status: 'success' | 'error'; text: string}>({
+    status: 'error',
+    text: 'Nie złożony'
+  });
   const [balance, setBalance] = useState('0 PLN');
 
   const isLocalUser = user?.role === 'ekonom';
@@ -114,35 +118,43 @@ const Dashboard = () => {
         
         if (transactionError) throw transactionError;
         
-        // 2. Pobierz ilość złożonych raportów
+        // 2. Sprawdź status raportu za bieżący miesiąc
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+        
         let reportsQuery = supabase
           .from('reports')
-          .select('id', { count: 'exact' })
-          .eq('month', currentDate.getMonth() + 1)
-          .eq('year', currentDate.getFullYear());
+          .select('status')
+          .eq('month', currentMonth)
+          .eq('year', currentYear);
         
         if (isLocalUser && user.location) {
           reportsQuery = reportsQuery.eq('location_id', user.location);
         }
         
-        const { count: submittedReportsCount, error: reportsError } = await reportsQuery;
+        const { data: reportData, error: reportsError } = await reportsQuery;
         
         if (reportsError) throw reportsError;
         
-        // 3. Dla admina, pobierz całkowitą liczbę lokalizacji do raportu
-        let totalLocations = 1; // Domyślnie dla ekonoma
-        if (!isLocalUser) {
-          const { count, error: locationsError } = await supabase
-            .from('locations')
-            .select('id', { count: 'exact' });
-          
-          if (!locationsError && count !== null) {
-            totalLocations = count;
+        // Określenie statusu raportu
+        let reportStatusObj = {
+          status: 'error' as 'success' | 'error',
+          text: 'Nie złożony'
+        };
+        
+        if (reportData && reportData.length > 0) {
+          const status = reportData[0].status;
+          if (status === 'submitted') {
+            reportStatusObj = { status: 'success', text: 'Złożony' };
+          } else if (status === 'approved') {
+            reportStatusObj = { status: 'success', text: 'Zatwierdzony' };
+          } else if (status === 'rejected') {
+            reportStatusObj = { status: 'error', text: 'Odrzucony' };
           }
         }
         
-        // 4. Oblicz saldo (to wymaga bardziej złożonej logiki w prawdziwej implementacji)
-        // Tutaj tylko przykładowe zapytanie
+        setReportStatus(reportStatusObj);
+        
         let balanceAmount = 0;
         try {
           // Uproszczona logika do prezentacji - w rzeczywistości tu byłoby bardziej złożone obliczenie
@@ -169,9 +181,11 @@ const Dashboard = () => {
           console.error('Błąd podczas obliczania salda:', error);
         }
         
+        // 3. Oblicz saldo (to wymaga bardziej złożonej logiki w prawdziwej implementacji)
+        // Tutaj tylko przykładowe zapytanie
+        
         // Aktualizacja stanów
         setOperationCount(transactionCount || 0);
-        setReportCount(`${submittedReportsCount || 0}/${totalLocations}`);
         setBalance(`${balanceAmount.toLocaleString('pl-PL')} PLN`);
         
         // Aktualizacja statystyk
@@ -182,9 +196,11 @@ const Dashboard = () => {
             icon: <CreditCard className="h-6 w-6 text-blue-500" />
           },
           {
-            title: 'Złożone raporty',
-            value: `${submittedReportsCount || 0}/${totalLocations}`,
-            icon: <FileText className="h-6 w-6 text-green-500" />
+            title: 'Status raportu za miesiąc',
+            value: currentDate.toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
+            icon: <FileText className="h-6 w-6 text-green-500" />,
+            status: reportStatusObj.status,
+            statusText: reportStatusObj.text
           },
           {
             title: 'Saldo',
@@ -203,9 +219,11 @@ const Dashboard = () => {
             icon: <CreditCard className="h-6 w-6 text-blue-500" />
           },
           {
-            title: 'Złożone raporty',
-            value: '0/0',
-            icon: <FileText className="h-6 w-6 text-green-500" />
+            title: 'Status raportu za miesiąc',
+            value: new Date().toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
+            icon: <FileText className="h-6 w-6 text-green-500" />,
+            status: 'error',
+            statusText: 'Nie złożony'
           },
           {
             title: 'Saldo',
@@ -309,6 +327,8 @@ const Dashboard = () => {
             value={stat.value}
             change={stat.change}
             icon={stat.icon}
+            status={stat.status}
+            statusText={stat.statusText}
           />
         ))}
       </div>

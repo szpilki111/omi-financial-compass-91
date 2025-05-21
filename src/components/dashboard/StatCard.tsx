@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface StatCardProps {
   title: string;
@@ -10,7 +11,9 @@ interface StatCardProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   className?: string;
-  change?: number; // Dodajemy brakującą właściwość
+  change?: number;
+  status?: 'success' | 'warning' | 'error' | 'neutral';
+  statusText?: string;
 }
 
 const StatCard: React.FC<StatCardProps> = ({
@@ -21,7 +24,9 @@ const StatCard: React.FC<StatCardProps> = ({
   trend,
   trendValue,
   className,
-  change, // Dodajemy obsługę właściwości
+  change,
+  status,
+  statusText,
 }) => {
   const renderTrendIndicator = () => {
     if (!trend || !trendValue) return null;
@@ -42,6 +47,23 @@ const StatCard: React.FC<StatCardProps> = ({
       <span className={cn('text-sm font-medium', trendClasses[trend])}>
         {trendSymbol[trend]} {trendValue}
       </span>
+    );
+  };
+
+  const renderStatus = () => {
+    if (!status || !statusText) return null;
+
+    const statusClasses = {
+      success: 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200',
+      error: 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200',
+      warning: 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200',
+      neutral: 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200',
+    };
+
+    return (
+      <Badge variant="outline" className={cn('text-xs px-2 py-0.5 font-medium', statusClasses[status])}>
+        {statusText}
+      </Badge>
     );
   };
 
@@ -74,6 +96,11 @@ const StatCard: React.FC<StatCardProps> = ({
                 {change > 0 ? '↑' : change < 0 ? '↓' : '→'} {Math.abs(change)}%
               </span>
             </p>
+          )}
+          {status && statusText && (
+            <div className="mt-2">
+              {renderStatus()}
+            </div>
           )}
         </div>
       </div>
