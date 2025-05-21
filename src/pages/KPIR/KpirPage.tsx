@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -91,7 +90,7 @@ const KpirPage: React.FC = () => {
         creditAccount: accountsMap.get(transaction.credit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
         formattedDate: format(new Date(transaction.date), 'dd.MM.yyyy'),
         // Ensure settlement_type is always one of the allowed values
-        settlement_type: (transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek')
+        settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
       }));
 
       setTransactions(formattedTransactions);
@@ -269,4 +268,3 @@ const KpirPage: React.FC = () => {
 };
 
 export default KpirPage;
-

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -14,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Account, ImportRow } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import * as Papa from 'papaparse';
+import Papa from 'papaparse';
 
 interface KpirImportDialogProps {
   open: boolean;
