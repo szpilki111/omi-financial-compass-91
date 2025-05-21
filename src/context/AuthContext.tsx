@@ -12,7 +12,7 @@ interface UserData {
   name: string;
   email: string;
   role: Role;
-  location: string; // Dom zakonny
+  location: string; // Id domu zakonnego
 }
 
 interface AuthContextType {
@@ -57,9 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name,
             email,
             role,
-            locations:location_id (
-              name
-            )
+            location_id
           `)
           .eq('id', userId)
           .maybeSingle();
@@ -79,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: profile.name,
             email: profile.email,
             role: profile.role as Role,
-            location: profile.locations ? profile.locations.name : '',
+            location: profile.location_id || '',
           });
           console.log('User state updated with profile data');
         } else {

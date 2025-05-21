@@ -39,6 +39,9 @@ const Dashboard = () => {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [statistics, setStatistics] = useState<Statistic[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [operationCount, setOperationCount] = useState(0);
+  const [reportCount, setReportCount] = useState('0/0');
+  const [balance, setBalance] = useState('0 PLN');
 
   const isLocalUser = user?.role === 'ekonom';
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
@@ -80,34 +83,143 @@ const Dashboard = () => {
     };
 
     fetchNotifications();
-  }, [user]);
+  }, [user, toast]);
 
-  // Pobieranie statystyk (w rzeczywistej aplikacji byłyby to prawdziwe dane)
+  // Pobieranie rzeczywistych statystyk z bazy danych
   useEffect(() => {
-    // To jest symulacja pobierania statystyk
-    // W rzeczywistej aplikacji dane byłyby pobierane z bazy
-    setTimeout(() => {
-      setStatistics([
-        {
-          title: 'Operacje w tym miesiącu',
-          value: isLocalUser ? '24' : '152',
-          icon: <CreditCard className="h-6 w-6 text-blue-500" />
-        },
-        {
-          title: 'Złożone raporty',
-          value: isLocalUser ? '1/1' : '32/40',
-          icon: <FileText className="h-6 w-6 text-green-500" />
-        },
-        {
-          title: 'Saldo',
-          value: isLocalUser ? '12 450 PLN' : '862 730 PLN',
-          change: 5.2,
-          icon: <BarChart3 className="h-6 w-6 text-purple-500" />
-        },
-      ]);
-      setIsLoadingStats(false);
-    }, 1000);
-  }, [isLocalUser]);
+    const fetchStatistics = async () => {
+      if (!user) return;
+      
+      try {
+        // 1. Pobierz liczbę transakcji w bieżącym miesiącu
+        const currentDate = new Date();
+        const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+        
+        // Format dat dla PostgreSQL
+        const firstDayFormatted = firstDayOfMonth.toISOString().split('T')[0];
+        const lastDayFormatted = lastDayOfMonth.toISOString().split('T')[0];
+        
+        let query = supabase
+          .from('transactions')
+          .select('id', { count: 'exact' })
+          .gte('date', firstDayFormatted)
+          .lte('date', lastDayFormatted);
+          
+        if (isLocalUser && user.location) {
+          query = query.eq('location_id', user.location);
+        }
+        
+        const { count: transactionCount, error: transactionError } = await query;
+        
+        if (transactionError) throw transactionError;
+        
+        // 2. Pobierz ilość złożonych raportów
+        let reportsQuery = supabase
+          .from('reports')
+          .select('id', { count: 'exact' })
+          .eq('month', currentDate.getMonth() + 1)
+          .eq('year', currentDate.getFullYear());
+        
+        if (isLocalUser && user.location) {
+          reportsQuery = reportsQuery.eq('location_id', user.location);
+        }
+        
+        const { count: submittedReportsCount, error: reportsError } = await reportsQuery;
+        
+        if (reportsError) throw reportsError;
+        
+        // 3. Dla admina, pobierz całkowitą liczbę lokalizacji do raportu
+        let totalLocations = 1; // Domyślnie dla ekonoma
+        if (!isLocalUser) {
+          const { count, error: locationsError } = await supabase
+            .from('locations')
+            .select('id', { count: 'exact' });
+          
+          if (!locationsError && count !== null) {
+            totalLocations = count;
+          }
+        }
+        
+        // 4. Oblicz saldo (to wymaga bardziej złożonej logiki w prawdziwej implementacji)
+        // Tutaj tylko przykładowe zapytanie
+        let balanceAmount = 0;
+        try {
+          // Uproszczona logika do prezentacji - w rzeczywistości tu byłoby bardziej złożone obliczenie
+          if (isLocalUser && user.location) {
+            const { data: transactions, error: balanceError } = await supabase
+              .from('transactions')
+              .select('amount, debit_account_id, credit_account_id')
+              .eq('location_id', user.location);
+            
+            if (!balanceError && transactions) {
+              // Prosta logika dla przykładu - w rzeczywistości byłoby to bardziej złożone
+              balanceAmount = transactions.reduce((acc, transaction) => acc + Number(transaction.amount), 0);
+            }
+          } else if (!isLocalUser) {
+            const { data: transactions, error: balanceError } = await supabase
+              .from('transactions')
+              .select('amount');
+            
+            if (!balanceError && transactions) {
+              balanceAmount = transactions.reduce((acc, transaction) => acc + Number(transaction.amount), 0);
+            }
+          }
+        } catch (error) {
+          console.error('Błąd podczas obliczania salda:', error);
+        }
+        
+        // Aktualizacja stanów
+        setOperationCount(transactionCount || 0);
+        setReportCount(`${submittedReportsCount || 0}/${totalLocations}`);
+        setBalance(`${balanceAmount.toLocaleString('pl-PL')} PLN`);
+        
+        // Aktualizacja statystyk
+        setStatistics([
+          {
+            title: 'Operacje w tym miesiącu',
+            value: transactionCount || 0,
+            icon: <CreditCard className="h-6 w-6 text-blue-500" />
+          },
+          {
+            title: 'Złożone raporty',
+            value: `${submittedReportsCount || 0}/${totalLocations}`,
+            icon: <FileText className="h-6 w-6 text-green-500" />
+          },
+          {
+            title: 'Saldo',
+            value: `${balanceAmount.toLocaleString('pl-PL')} PLN`,
+            change: 0, // W rzeczywistości tu by była zmiana procentowa
+            icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+          },
+        ]);
+      } catch (error) {
+        console.error('Błąd podczas pobierania statystyk:', error);
+        // Ustaw domyślne statystyki w przypadku błędu
+        setStatistics([
+          {
+            title: 'Operacje w tym miesiącu',
+            value: '0',
+            icon: <CreditCard className="h-6 w-6 text-blue-500" />
+          },
+          {
+            title: 'Złożone raporty',
+            value: '0/0',
+            icon: <FileText className="h-6 w-6 text-green-500" />
+          },
+          {
+            title: 'Saldo',
+            value: '0 PLN',
+            icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+          },
+        ]);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchStatistics();
+  }, [user, isLocalUser, toast]);
 
   const handleMarkAsRead = async (id: string) => {
     try {

@@ -27,6 +27,11 @@ interface ProfileInsertParams {
   location_id: string | null;
 }
 
+interface Location {
+  id: string;
+  name: string;
+}
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +40,9 @@ const Login = () => {
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const [existingLocations, setExistingLocations] = useState<Location[]>([]);
+  const [isCreatingNewLocation, setIsCreatingNewLocation] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location_path = useLocation();
@@ -42,6 +50,27 @@ const Login = () => {
 
   // Get the redirect path or use home page as default
   const from = (location_path.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+
+  // Pobieranie istniejących lokalizacji
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('locations')
+          .select('id, name')
+          .order('name');
+        
+        if (error) throw error;
+        if (data) setExistingLocations(data);
+      } catch (err) {
+        console.error('Błąd podczas pobierania lokalizacji:', err);
+      }
+    };
+
+    if (isSigningUp) {
+      fetchLocations();
+    }
+  }, [isSigningUp]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -110,6 +139,18 @@ const Login = () => {
       return;
     }
 
+    if (isCreatingNewLocation && !location.trim()) {
+      setError("Nazwa domu zakonnego jest wymagana");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isCreatingNewLocation && !locationId) {
+      setError("Wybierz lokalizację z listy lub utwórz nową");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Check for any existing session and sign out if found
       const { data: { session } } = await supabase.auth.getSession();
@@ -158,11 +199,11 @@ const Login = () => {
 
       console.log("Użytkownik utworzony:", data.user.id);
 
-      // Create default location if provided
-      let locationId = null;
-      if (location.trim()) {
+      // Create default location if provided and selected to create new
+      let selectedLocationId = locationId;
+      if (isCreatingNewLocation && location.trim()) {
         try {
-          console.log("Tworzenie lokalizacji:", location);
+          console.log("Tworzenie nowej lokalizacji:", location);
           const { data: locationData, error: locationError } = await supabase
             .from('locations')
             .insert({
@@ -180,8 +221,8 @@ const Login = () => {
               variant: "destructive",
             });
           } else if (locationData) {
-            locationId = locationData.id;
-            console.log("Lokalizacja utworzona:", locationId);
+            selectedLocationId = locationData.id;
+            console.log("Lokalizacja utworzona:", selectedLocationId);
           }
         } catch (locErr) {
           console.error("Location creation error:", locErr);
@@ -204,7 +245,7 @@ const Login = () => {
             name: name,
             role: role,
             email: email,
-            location_id: locationId
+            location_id: selectedLocationId
           });
 
         if (directProfileError) {
@@ -217,7 +258,7 @@ const Login = () => {
             user_name: name,
             user_role: role,
             user_email: email,
-            location_id: locationId
+            location_id: selectedLocationId
           } as ProfileInsertParams);
           
           if (profileError) {
@@ -273,6 +314,7 @@ const Login = () => {
       setPassword('');
       setName('');
       setLocation('');
+      setLocationId(null);
       
     } catch (err: any) {
       console.error("Signup error:", err);
@@ -347,20 +389,49 @@ const Login = () => {
           </div>
 
           {isSigningUp && (
-            <div>
-              <Label htmlFor="location" className="omi-form-label">
-                Dom zakonny
-              </Label>
-              <Input
-                id="location"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="omi-form-input"
-                required
-                placeholder="Nazwa domu zakonnego"
-              />
-            </div>
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="location-select" className="omi-form-label">
+                    Dom zakonny
+                  </Label>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    className="text-xs text-omi-500 h-6 px-2"
+                    onClick={() => setIsCreatingNewLocation(!isCreatingNewLocation)}
+                  >
+                    {isCreatingNewLocation ? "Wybierz istniejący" : "Utwórz nowy"}
+                  </Button>
+                </div>
+                
+                {isCreatingNewLocation ? (
+                  <Input
+                    id="location"
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="omi-form-input"
+                    required
+                    placeholder="Nazwa nowego domu zakonnego"
+                  />
+                ) : (
+                  <Select value={locationId || ''} onValueChange={setLocationId}>
+                    <SelectTrigger id="location-select" className="w-full">
+                      <SelectValue placeholder="Wybierz dom zakonny" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {existingLocations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </>
           )}
 
           {!isSigningUp && (

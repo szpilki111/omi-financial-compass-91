@@ -6,25 +6,32 @@ import { useAuth } from '@/context/AuthContext';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   useEffect(() => {
-    console.log("Index page - isAuthenticated:", isAuthenticated, "isLoading:", isLoading);
+    console.log("Index page - isAuthenticated:", isAuthenticated, "isLoading:", isLoading, "user:", user);
     
-    if (!isLoading) {
-      if (isAuthenticated) {
-        console.log("User is authenticated, redirecting to dashboard");
-        navigate('/dashboard');
-      } else {
-        console.log("User is not authenticated, redirecting to login");
-        navigate('/login');
+    const redirectTimeout = setTimeout(() => {
+      if (!isLoading) {
+        if (isAuthenticated) {
+          console.log("User is authenticated, redirecting to dashboard");
+          navigate('/dashboard');
+        } else {
+          console.log("User is not authenticated, redirecting to login");
+          navigate('/login');
+        }
       }
-    }
-  }, [navigate, isAuthenticated, isLoading]);
+    }, 100); // Dodajemy małe opóźnienie, aby dać czas na pełne załadowanie kontekstu auth
+    
+    return () => clearTimeout(redirectTimeout);
+  }, [navigate, isAuthenticated, isLoading, user]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-omi-gray-100">
-      <Spinner size="lg" />
+      <div className="text-center">
+        <Spinner size="lg" />
+        <p className="mt-4 text-omi-gray-600">Ładowanie aplikacji...</p>
+      </div>
     </div>
   );
 };
