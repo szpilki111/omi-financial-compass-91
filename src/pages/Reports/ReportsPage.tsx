@@ -40,7 +40,7 @@ const ReportsPage = () => {
   return (
     <MainLayout>
       <div className="flex justify-between items-center mb-4">
-        <PageTitle>Raportowanie</PageTitle>
+        <PageTitle title="Raportowanie" />
         {!isCreatingReport && !selectedReportId && (
           <Button onClick={handleNewReport} className="flex items-center gap-2">
             <PlusCircle className="h-4 w-4" />
