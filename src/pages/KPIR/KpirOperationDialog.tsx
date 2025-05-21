@@ -138,12 +138,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (!formData.date) newErrors.date = 'Data jest wymagana';
     if (!formData.description) newErrors.description = 'Opis jest wymagany';
     if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
-    if (!formData.debit_account_id) newErrors.debit_account_id = 'Konto Winien jest wymagane';
-    if (!formData.credit_account_id) newErrors.credit_account_id = 'Konto Ma jest wymagane';
-    if (formData.debit_account_id === formData.credit_account_id) {
-      newErrors.debit_account_id = 'Konta nie mogą być takie same';
-      newErrors.credit_account_id = 'Konta nie mogą być takie same';
-    }
     if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
     if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
     if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
@@ -349,54 +343,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </Select>
           </div>
           
-          {/* Konto Winien */}
-          <div className="space-y-1">
-            <Label htmlFor="debit_account_id" className="text-sm font-medium">
-              Konto Winien *
-            </Label>
-            <Select 
-              value={formData.debit_account_id} 
-              onValueChange={(value) => handleAccountChange('debit_account_id', value)}
-              disabled={filteredAccounts.length === 0}
-            >
-              <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : ''}`}>
-                <SelectValue placeholder="Wybierz konto Winien" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.number} - {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
-          </div>
-
-          {/* Konto Ma */}
-          <div className="space-y-1">
-            <Label htmlFor="credit_account_id" className="text-sm font-medium">
-              Konto Ma *
-            </Label>
-            <Select 
-              value={formData.credit_account_id} 
-              onValueChange={(value) => handleAccountChange('credit_account_id', value)}
-              disabled={filteredAccounts.length === 0}
-            >
-              <SelectTrigger className={`w-full ${errors.credit_account_id ? 'border-red-500' : ''}`}>
-                <SelectValue placeholder="Wybierz konto Ma" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.number} - {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.credit_account_id && <p className="text-red-500 text-xs">{errors.credit_account_id}</p>}
-          </div>
-          
           {/* Forma rozrachunku */}
           <div className="space-y-1">
             <Label htmlFor="settlement_type" className="text-sm font-medium">
@@ -435,3 +381,4 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 };
 
 export default KpirOperationDialog;
+
