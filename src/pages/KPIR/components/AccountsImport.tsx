@@ -1,13 +1,21 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 const AccountsImport: React.FC = () => {
   const { toast } = useToast();
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const importAccounts = async () => {
+    if (isImporting) return;
+
+    setIsImporting(true);
+    setImportStatus("Rozpoczęto import...");
+    
     try {
       toast({
         title: "Rozpoczęto import",
@@ -52,22 +60,53 @@ const AccountsImport: React.FC = () => {
         // Dodaj tutaj więcej kont według potrzeb
       ];
 
-      // Importuj konta do bazy danych
-      const { error } = await supabase.from('accounts').upsert(
-        accounts.map(account => ({
-          number: account.number,
-          name: account.name,
-          type: account.type
-        })),
-        { onConflict: 'number' } // Aktualizuje istniejące konta o tym samym numerze
-      );
+      // Wykonanie importu w mniejszych porcjach, aby uniknąć potencjalnych problemów
+      const batchSize = 10;
+      let importedCount = 0;
+      let failedCount = 0;
 
-      if (error) throw error;
+      for (let i = 0; i < accounts.length; i += batchSize) {
+        const batch = accounts.slice(i, i + batchSize);
+        setImportStatus(`Importowanie kont ${i + 1}-${Math.min(i + batchSize, accounts.length)} z ${accounts.length}...`);
+        
+        try {
+          const { data, error } = await supabase.from('accounts').upsert(
+            batch.map(account => ({
+              number: account.number,
+              name: account.name,
+              type: account.type
+            })),
+            { onConflict: 'number' }
+          );
 
-      toast({
-        title: "Sukces",
-        description: "Konta zostały zaimportowane do bazy danych",
-      });
+          if (error) {
+            console.error("Błąd podczas importu partii kont:", error);
+            failedCount += batch.length;
+            continue;
+          }
+
+          importedCount += batch.length;
+        } catch (batchError) {
+          console.error("Nieoczekiwany błąd podczas importu partii kont:", batchError);
+          failedCount += batch.length;
+        }
+      }
+
+      // Końcowe podsumowanie
+      if (failedCount === 0) {
+        toast({
+          title: "Sukces",
+          description: `Wszystkie ${importedCount} kont zostało zaimportowanych do bazy danych`,
+        });
+        setImportStatus(`Zaimportowano ${importedCount} kont.`);
+      } else {
+        toast({
+          title: "Import częściowy",
+          description: `Zaimportowano ${importedCount} kont, nie udało się zaimportować ${failedCount} kont`,
+          variant: "destructive",
+        });
+        setImportStatus(`Zaimportowano ${importedCount} kont, nie udało się zaimportować ${failedCount} kont.`);
+      }
     } catch (error) {
       console.error("Błąd podczas importu kont:", error);
       toast({
@@ -75,6 +114,9 @@ const AccountsImport: React.FC = () => {
         description: "Nie udało się zaimportować kont do bazy danych",
         variant: "destructive",
       });
+      setImportStatus("Błąd importu. Sprawdź konsolę, aby uzyskać więcej informacji.");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -83,8 +125,26 @@ const AccountsImport: React.FC = () => {
       <p className="mb-4 text-sm text-omi-gray-600">
         Kliknij przycisk poniżej, aby zaimportować plan kont do bazy danych.
       </p>
-      <Button onClick={importAccounts} className="bg-omi-500">
-        Importuj plan kont
+      
+      {importStatus && (
+        <div className="mb-4 text-sm p-3 bg-omi-gray-100 border border-omi-gray-200 rounded">
+          {importStatus}
+        </div>
+      )}
+      
+      <Button 
+        onClick={importAccounts} 
+        className="bg-omi-500"
+        disabled={isImporting}
+      >
+        {isImporting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Importowanie...
+          </>
+        ) : (
+          'Importuj plan kont'
+        )}
       </Button>
     </div>
   );
