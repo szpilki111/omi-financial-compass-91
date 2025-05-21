@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Report } from '@/types/reports';
+import { Report, ReportDetailsInsert } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -230,7 +230,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   });
   
   // Funkcja do inicjalizacji wpisów raportu
-  const initializeReportEntries = async (reportId: string, reportType: string, locationId: string, month: number, year: number) => {
+  const initializeReportEntries = async (reportId: string, reportType: 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza', locationId: string, month: number, year: number) => {
     try {
       // Pobierz sekcje dla danego typu raportu
       const { data: sections, error: sectionsError } = await supabase
@@ -302,38 +302,25 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       }
       
       // Inicjalizacja szczegółów raportu
-      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
-      // nie jest jeszcze uwzględniona w typach Supabase
-      const { data, error } = await supabase
-        .from('reports')
-        .insert({
-          report_id: reportId,
-          income_total: 0,
-          expense_total: 0,
-          balance: 0,
-          settlements_total: 0
-        })
-        .single();
-        
-      // Jako alternatywa, użyj bezpośrednio API supabase z pominięciem typów
-      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details`;
-      const apiKey = supabase.supabaseKey;
+      const detailsData: ReportDetailsInsert = {
+        report_id: reportId,
+        income_total: 0,
+        expense_total: 0,
+        balance: 0,
+        settlements_total: 0
+      };
       
+      // Użyj biblioteki fetch do inicjalizacji szczegółów
+      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details`;
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': apiKey,
-          'Authorization': `Bearer ${apiKey}`,
+          'apikey': process.env.SUPABASE_ANON_KEY || '',
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`,
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({
-          report_id: reportId,
-          income_total: 0,
-          expense_total: 0,
-          balance: 0,
-          settlements_total: 0
-        })
+        body: JSON.stringify(detailsData)
       });
       
       if (!response.ok) {

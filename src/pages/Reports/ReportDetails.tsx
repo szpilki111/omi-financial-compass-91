@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,7 +50,12 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reports')
-        .select('*, location:locations(*), submitted_by:profiles(*), reviewed_by:profiles(*)')
+        .select(`
+          *,
+          location:locations(*),
+          submitted_by:profiles!submitted_by(id, name),
+          reviewed_by:profiles!reviewed_by(id, name)
+        `)
         .eq('id', reportId)
         .single();
         
@@ -66,13 +70,12 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     queryFn: async () => {
       // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
       // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details?report_id=eq.${reportId}`;
-      const apiKey = supabase.supabaseKey;
+      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details?report_id=eq.${reportId}`;
       
       const response = await fetch(apiUrl, {
         headers: {
-          'apikey': apiKey,
-          'Authorization': `Bearer ${apiKey}`
+          'apikey': process.env.SUPABASE_ANON_KEY || '',
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`
         }
       });
       
@@ -255,15 +258,14 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     mutationFn: async (details: Partial<ReportDetails>) => {
       // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
       // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${supabase.supabaseUrl}/rest/v1/report_details?report_id=eq.${reportId}`;
-      const apiKey = supabase.supabaseKey;
+      const apiUrl = `${supabase.getUrl()}/rest/v1/report_details?report_id=eq.${reportId}`;
       
       const response = await fetch(apiUrl, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': apiKey,
-          'Authorization': `Bearer ${apiKey}`,
+          'apikey': process.env.SUPABASE_ANON_KEY || '',
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || ''}`,
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
@@ -337,17 +339,17 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex justify-between items-start flex-wrap gap-4 mb-4">
           <div>
-            <h2 className="text-2xl font-semibold">{report.title}</h2>
+            <h2 className="text-2xl font-semibold">{report?.title}</h2>
             <p className="text-omi-gray-500">
               Status: <span className={`font-medium ${
-                report.status === 'accepted' ? 'text-green-600' : 
-                report.status === 'rejected' ? 'text-red-600' : 
-                report.status === 'submitted' ? 'text-blue-600' : ''
+                report?.status === 'accepted' ? 'text-green-600' : 
+                report?.status === 'rejected' ? 'text-red-600' : 
+                report?.status === 'submitted' ? 'text-blue-600' : ''
               }`}>
-                {report.status === 'draft' ? 'Roboczy' : 
-                 report.status === 'submitted' ? 'Złożony' : 
-                 report.status === 'accepted' ? 'Zaakceptowany' : 
-                 report.status === 'rejected' ? 'Odrzucony' : report.status}
+                {report?.status === 'draft' ? 'Roboczy' : 
+                 report?.status === 'submitted' ? 'Złożony' : 
+                 report?.status === 'accepted' ? 'Zaakceptowany' : 
+                 report?.status === 'rejected' ? 'Odrzucony' : report?.status}
               </span>
             </p>
           </div>
@@ -367,31 +369,31 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
           <div>
             <p className="text-omi-gray-500">Placówka:</p>
-            <p className="font-medium">{report.location?.name}</p>
+            <p className="font-medium">{report?.location?.name}</p>
           </div>
           <div>
             <p className="text-omi-gray-500">Okres:</p>
-            <p className="font-medium">{report.period}</p>
+            <p className="font-medium">{report?.period}</p>
           </div>
-          {report.submitted_at && (
+          {report?.submitted_at && (
             <div>
               <p className="text-omi-gray-500">Data złożenia:</p>
               <p className="font-medium">{format(new Date(report.submitted_at), 'PPP', { locale: pl })}</p>
             </div>
           )}
-          {report.submitted_by && (
+          {report?.submitted_by && (
             <div>
               <p className="text-omi-gray-500">Złożony przez:</p>
               <p className="font-medium">{report.submitted_by.name}</p>
             </div>
           )}
-          {report.reviewed_at && (
+          {report?.reviewed_at && (
             <div>
               <p className="text-omi-gray-500">Data przeglądu:</p>
               <p className="font-medium">{format(new Date(report.reviewed_at), 'PPP', { locale: pl })}</p>
             </div>
           )}
-          {report.reviewed_by && (
+          {report?.reviewed_by && (
             <div>
               <p className="text-omi-gray-500">Przejrzany przez:</p>
               <p className="font-medium">{report.reviewed_by.name}</p>
@@ -399,7 +401,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           )}
         </div>
         
-        {report.comments && (
+        {report?.comments && (
           <div className="mt-4 p-3 bg-omi-gray-100 rounded">
             <p className="text-sm font-medium mb-1">Komentarz:</p>
             <p className="text-sm">{report.comments}</p>
@@ -408,7 +410,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       </div>
       
       {/* Jeśli raport ma status 'submitted', pokaż opcje akceptacji/odrzucenia */}
-      {report.status === 'submitted' && (
+      {report?.status === 'submitted' && (
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold mb-4">Decyzja</h3>
           <div className="flex gap-4 items-start">
