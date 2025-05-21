@@ -9,6 +9,41 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_section_mappings: {
+        Row: {
+          account_prefix: string
+          created_at: string
+          id: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          section_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_prefix: string
+          created_at?: string
+          id?: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          section_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_prefix?: string
+          created_at?: string
+          id?: string
+          report_type?: Database["public"]["Enums"]["report_type"]
+          section_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_section_mappings_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "report_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts: {
         Row: {
           created_at: string
@@ -145,6 +180,96 @@ export type Database = {
           },
         ]
       }
+      report_entries: {
+        Row: {
+          account_name: string
+          account_number: string
+          created_at: string
+          credit_closing: number | null
+          credit_opening: number | null
+          credit_turnover: number | null
+          debit_closing: number | null
+          debit_opening: number | null
+          debit_turnover: number | null
+          id: string
+          report_id: string
+          section_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_number: string
+          created_at?: string
+          credit_closing?: number | null
+          credit_opening?: number | null
+          credit_turnover?: number | null
+          debit_closing?: number | null
+          debit_opening?: number | null
+          debit_turnover?: number | null
+          id?: string
+          report_id: string
+          section_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string
+          created_at?: string
+          credit_closing?: number | null
+          credit_opening?: number | null
+          credit_turnover?: number | null
+          debit_closing?: number | null
+          debit_opening?: number | null
+          debit_turnover?: number | null
+          id?: string
+          report_id?: string
+          section_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_entries_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_entries_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "report_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_sections: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          section_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          section_order: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          report_type?: Database["public"]["Enums"]["report_type"]
+          section_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reports: {
         Row: {
           comments: string | null
@@ -153,6 +278,7 @@ export type Database = {
           location_id: string
           month: number
           period: string
+          report_type: Database["public"]["Enums"]["report_type"]
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
@@ -169,6 +295,7 @@ export type Database = {
           location_id: string
           month: number
           period: string
+          report_type?: Database["public"]["Enums"]["report_type"]
           reviewed_at?: string | null
           reviewed_by?: string | null
           status: string
@@ -185,6 +312,7 @@ export type Database = {
           location_id?: string
           month?: number
           period?: string
+          report_type?: Database["public"]["Enums"]["report_type"]
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -339,7 +467,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      report_type: "standard" | "zos" | "bilans" | "rzis" | "jpk" | "analiza"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -454,6 +582,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      report_type: ["standard", "zos", "bilans", "rzis", "jpk", "analiza"],
+    },
   },
 } as const

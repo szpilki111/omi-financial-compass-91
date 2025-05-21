@@ -4,17 +4,20 @@ import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import ReportsList from './ReportsList';
 import ReportForm from './ReportForm';
+import ReportDetails from './ReportDetails';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const ReportsPage = () => {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
   const { toast } = useToast();
 
   const handleReportCreated = () => {
     setIsCreatingReport(false);
+    setViewMode('list');
     toast({
       title: "Sukces",
       description: "Raport został utworzony pomyślnie.",
@@ -25,41 +28,74 @@ const ReportsPage = () => {
   const handleReportSelected = (reportId: string) => {
     setSelectedReportId(reportId);
     setIsCreatingReport(false);
+    setViewMode('view');
+  };
+
+  const handleEditReport = () => {
+    if (selectedReportId) {
+      setViewMode('edit');
+    }
   };
 
   const handleNewReport = () => {
     setIsCreatingReport(true);
     setSelectedReportId(null);
+    setViewMode('edit');
   };
 
   const handleCancel = () => {
     setIsCreatingReport(false);
     setSelectedReportId(null);
+    setViewMode('list');
   };
 
   return (
     <MainLayout>
       <div className="flex justify-between items-center mb-4">
-        <PageTitle title="Raportowanie" />
-        {!isCreatingReport && !selectedReportId && (
+        <div className="flex items-center">
+          {viewMode !== 'list' && (
+            <Button 
+              variant="ghost" 
+              onClick={handleCancel} 
+              className="mr-2"
+            >
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Powrót
+            </Button>
+          )}
+          <PageTitle title="Raportowanie" />
+        </div>
+        {viewMode === 'list' && (
           <Button onClick={handleNewReport} className="flex items-center gap-2">
             <PlusCircle className="h-4 w-4" />
             Nowy raport
           </Button>
         )}
+        {viewMode === 'view' && (
+          <Button onClick={handleEditReport} className="flex items-center gap-2">
+            Edytuj raport
+          </Button>
+        )}
       </div>
 
-      {isCreatingReport ? (
+      {viewMode === 'edit' && (
         <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Nowy raport</h2>
-          <ReportForm onSuccess={handleReportCreated} onCancel={handleCancel} />
+          <h2 className="text-xl font-semibold mb-4">
+            {isCreatingReport ? 'Nowy raport' : 'Edycja raportu'}
+          </h2>
+          <ReportForm 
+            reportId={selectedReportId || undefined} 
+            onSuccess={handleReportCreated} 
+            onCancel={handleCancel} 
+          />
         </div>
-      ) : selectedReportId ? (
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Edycja raportu</h2>
-          <ReportForm reportId={selectedReportId} onCancel={handleCancel} />
-        </div>
-      ) : (
+      )}
+      
+      {viewMode === 'view' && selectedReportId && (
+        <ReportDetails reportId={selectedReportId} />
+      )}
+      
+      {viewMode === 'list' && (
         <ReportsList onReportSelect={handleReportSelected} />
       )}
     </MainLayout>

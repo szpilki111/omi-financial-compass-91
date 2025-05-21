@@ -44,6 +44,15 @@ const months = [
   { value: 12, label: 'Grudzień' },
 ];
 
+const reportTypes = [
+  { value: 'standard', label: 'Standardowy' },
+  { value: 'zos', label: 'Zestawienie Obrotów i Sald (ZOS)' },
+  { value: 'bilans', label: 'Bilans' },
+  { value: 'rzis', label: 'Rachunek Zysków i Strat (RZiS)' },
+  { value: 'jpk', label: 'Jednolity Plik Kontrolny (JPK)' },
+  { value: 'analiza', label: 'Analiza Kosztów i Przychodów' },
+];
+
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 6 }, (_, i) => currentYear - 2 + i);
 
@@ -57,6 +66,7 @@ const formSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
   location_id: z.string().uuid(),
+  report_type: z.enum(['standard', 'zos', 'bilans', 'rzis', 'jpk', 'analiza'])
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
@@ -112,6 +122,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
       location_id: '',
+      report_type: 'standard',
     },
   });
 
@@ -122,6 +133,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         month: report.month,
         year: report.year,
         location_id: report.location_id,
+        report_type: report.report_type || 'standard',
       });
     }
   }, [report, form]);
@@ -136,7 +148,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Mutacja do zapisywania/aktualizacji raportu
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
-      const { month, year, location_id } = values;
+      const { month, year, location_id, report_type } = values;
       
       // Pobranie nazwy lokalizacji
       const { data: locationData } = await supabase
@@ -149,8 +161,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         throw new Error("Nie można znaleźć lokalizacji");
       }
       
+      const reportTypeLabel = reportTypes.find(t => t.value === report_type)?.label || '';
       const monthName = months.find(m => m.value === month)?.label || '';
-      const title = `Raport ${monthName} ${year} - ${locationData.name}`;
+      const title = `${reportTypeLabel} ${monthName} ${year} - ${locationData.name}`;
       const period = `${monthName} ${year}`;
       
       if (reportId) {
@@ -161,6 +174,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             month,
             year,
             location_id,
+            report_type,
             title,
             period,
             updated_at: new Date().toISOString()
@@ -170,13 +184,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         if (error) throw error;
         return { id: reportId };
       } else {
-        // Tworzenie nowego raportu - upewnijmy się, że status ma prawidłową wartość
+        // Tworzenie nowego raportu - upewniamy się, że status ma prawidłową wartość
         const { data, error } = await supabase
           .from('reports')
           .insert({
             month,
             year,
             location_id,
+            report_type,
             title,
             period,
             status: 'draft' // Upewniamy się, że używamy poprawnej wartości statusu
@@ -350,6 +365,35 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                     {locations?.map(location => (
                       <SelectItem key={location.id} value={location.id}>
                         {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="report_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Typ raportu</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={report?.status !== 'draft' && !!report}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wybierz typ raportu" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {reportTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

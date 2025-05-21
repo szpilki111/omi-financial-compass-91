@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Report } from '@/types/reports';
@@ -42,6 +42,18 @@ const getStatusLabel = (status: Report['status']) => {
     case 'accepted': return 'Zaakceptowany';
     case 'rejected': return 'Odrzucony';
     default: return status;
+  }
+};
+
+const getReportTypeLabel = (type: string) => {
+  switch (type) {
+    case 'standard': return 'Standardowy';
+    case 'zos': return 'ZOS';
+    case 'bilans': return 'Bilans';
+    case 'rzis': return 'RZiS';
+    case 'jpk': return 'JPK';
+    case 'analiza': return 'Analiza';
+    default: return type;
   }
 };
 
@@ -88,6 +100,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         <TableHeader>
           <TableRow>
             <TableHead>Tytuł</TableHead>
+            <TableHead>Typ</TableHead>
             <TableHead>Okres</TableHead>
             <TableHead>Data utworzenia</TableHead>
             <TableHead>Status</TableHead>
@@ -98,6 +111,9 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
           {reports.map((report) => (
             <TableRow key={report.id}>
               <TableCell>{report.title}</TableCell>
+              <TableCell>
+                <Badge variant="secondary">{getReportTypeLabel(report.report_type || 'standard')}</Badge>
+              </TableCell>
               <TableCell>{report.period}</TableCell>
               <TableCell>
                 {report.created_at ? format(new Date(report.created_at), 'PPP', { locale: pl }) : '-'}
