@@ -170,7 +170,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         if (error) throw error;
         return { id: reportId };
       } else {
-        // Tworzenie nowego raportu
+        // Tworzenie nowego raportu - upewnijmy się, że status ma prawidłową wartość
         const { data, error } = await supabase
           .from('reports')
           .insert({
@@ -179,12 +179,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             location_id,
             title,
             period,
-            status: 'draft'
+            status: 'draft' // Upewniamy się, że używamy poprawnej wartości statusu
           })
           .select('id')
           .single();
           
-        if (error) throw error;
+        if (error) {
+          console.error('Błąd wstawiania raportu:', error);
+          throw error;
+        }
         return data;
       }
     },
@@ -200,6 +203,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       if (onSuccess) onSuccess();
     },
     onError: (error) => {
+      console.error('Błąd mutacji:', error);
       toast({
         title: "Błąd",
         description: `Nie udało się ${reportId ? 'zaktualizować' : 'utworzyć'} raportu: ${error.message}`,
@@ -234,6 +238,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       });
     },
     onError: (error) => {
+      console.error('Błąd zmiany statusu:', error);
       toast({
         title: "Błąd",
         description: `Nie udało się złożyć raportu: ${error.message}`,
@@ -246,6 +251,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     setIsSubmitting(true);
     try {
       await mutation.mutateAsync(values);
+    } catch (error) {
+      console.error('Błąd podczas zapisywania:', error);
     } finally {
       setIsSubmitting(false);
     }
