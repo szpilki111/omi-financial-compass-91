@@ -5,12 +5,13 @@ import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FilePlus2, Download, Upload, FileDown, FileUp, Search, Filter } from 'lucide-react';
+import { FilePlus2, Download, Upload, FileDown, FileUp, Search, Filter, Database } from 'lucide-react';
 import { format } from 'date-fns';
 import KpirOperationDialog from './KpirOperationDialog';
 import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
+import AccountsImport from './components/AccountsImport';
 
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ const KpirPage: React.FC = () => {
   const [transactions, setTransactions] = useState<KpirTransaction[]>([]);
   const [showNewOperationDialog, setShowNewOperationDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showAccountsImport, setShowAccountsImport] = useState(false);
   
   // Stan filtrów
   const [filters, setFilters] = useState({
@@ -153,6 +155,10 @@ const KpirPage: React.FC = () => {
     });
   };
 
+  const toggleAccountsImport = () => {
+    setShowAccountsImport(!showAccountsImport);
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -166,8 +172,26 @@ const KpirPage: React.FC = () => {
               <FilePlus2 className="mr-2 h-4 w-4" />
               Nowa operacja
             </Button>
+            {user && user.role === 'admin' && (
+              <Button onClick={toggleAccountsImport} variant="outline">
+                <Database className="mr-2 h-4 w-4" />
+                Plan kont
+              </Button>
+            )}
           </div>
         </div>
+
+        {showAccountsImport && (
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200 mb-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Import planu kont</h3>
+              <Button variant="ghost" size="sm" onClick={toggleAccountsImport}>
+                Zamknij
+              </Button>
+            </div>
+            <AccountsImport />
+          </div>
+        )}
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
           <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
