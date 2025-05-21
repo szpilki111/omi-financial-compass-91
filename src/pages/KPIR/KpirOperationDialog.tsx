@@ -9,6 +9,15 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirOperationFormData, Account } from '@/types/kpir';
@@ -25,6 +34,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
+  const [accountTypes, setAccountTypes] = useState<string[]>([]);
+  const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]);
   const today = new Date().toISOString().split('T')[0];
   
   const [formData, setFormData] = useState<KpirOperationFormData>({
@@ -40,6 +51,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -54,6 +66,10 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         }
         
         setAccounts(data);
+        
+        // Zbieranie unikalnych typów kont
+        const types = Array.from(new Set(data.map((account: Account) => account.type)));
+        setAccountTypes(types);
       } catch (error) {
         console.error('Błąd podczas pobierania kont:', error);
         toast({
@@ -66,6 +82,16 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 
     fetchAccounts();
   }, []);
+
+  useEffect(() => {
+    // Filtrowanie kont na podstawie wybranego typu
+    if (selectedAccountType) {
+      const filtered = accounts.filter(account => account.type === selectedAccountType);
+      setFilteredAccounts(filtered);
+    } else {
+      setFilteredAccounts(accounts);
+    }
+  }, [selectedAccountType, accounts]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -81,6 +107,28 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     // Usuń błąd dla danego pola, jeśli istnieje
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
+    }
+  };
+
+  const handleAccountTypeChange = (value: string) => {
+    setSelectedAccountType(value);
+    // Resetowanie wybranego konta po zmianie typu
+    setFormData({
+      ...formData,
+      debit_account_id: '',
+      credit_account_id: ''
+    });
+  };
+
+  const handleAccountChange = (fieldName: string, accountId: string) => {
+    setFormData({
+      ...formData,
+      [fieldName]: accountId
+    });
+    
+    // Usuń błąd dla danego pola, jeśli istnieje
+    if (errors[fieldName]) {
+      setErrors({ ...errors, [fieldName]: '' });
     }
   };
 
@@ -157,15 +205,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       setLoading(false);
     }
   };
-
-  const groupedAccounts = accounts.reduce<Record<string, Account[]>>((acc, account) => {
-    const type = account.type || 'Inne';
-    if (!acc[type]) {
-      acc[type] = [];
-    }
-    acc[type].push(account);
-    return acc;
-  }, {});
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -288,30 +327,45 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </div>
           </div>
           
+          {/* Typ konta */}
+          <div className="space-y-1">
+            <Label htmlFor="account_type" className="text-sm font-medium">
+              Rodzaj konta *
+            </Label>
+            <Select value={selectedAccountType} onValueChange={handleAccountTypeChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Wybierz rodzaj konta" />
+              </SelectTrigger>
+              <SelectContent>
+                {accountTypes.map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Konto Winien */}
             <div className="space-y-1">
               <Label htmlFor="debit_account_id" className="text-sm font-medium">
                 Konto Winien (Debet) *
               </Label>
-              <select
-                id="debit_account_id"
-                name="debit_account_id"
-                value={formData.debit_account_id}
-                onChange={handleChange}
-                className={`w-full p-2 border rounded-md ${errors.debit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}
+              <Select 
+                value={formData.debit_account_id} 
+                onValueChange={(value) => handleAccountChange('debit_account_id', value)}
+                disabled={!selectedAccountType}
               >
-                <option value="">Wybierz konto</option>
-                {Object.entries(groupedAccounts).map(([type, accounts]) => (
-                  <optgroup key={type} label={type}>
-                    {accounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.number} - {account.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}>
+                  <SelectValue placeholder="Wybierz konto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.number} - {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
             </div>
             
@@ -320,24 +374,22 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
               <Label htmlFor="credit_account_id" className="text-sm font-medium">
                 Konto Ma (Kredyt) *
               </Label>
-              <select
-                id="credit_account_id"
-                name="credit_account_id"
-                value={formData.credit_account_id}
-                onChange={handleChange}
-                className={`w-full p-2 border rounded-md ${errors.credit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}
+              <Select 
+                value={formData.credit_account_id} 
+                onValueChange={(value) => handleAccountChange('credit_account_id', value)}
+                disabled={!selectedAccountType}
               >
-                <option value="">Wybierz konto</option>
-                {Object.entries(groupedAccounts).map(([type, accounts]) => (
-                  <optgroup key={type} label={type}>
-                    {accounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.number} - {account.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                <SelectTrigger className={`w-full ${errors.credit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}>
+                  <SelectValue placeholder="Wybierz konto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.number} - {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.credit_account_id && <p className="text-red-500 text-xs">{errors.credit_account_id}</p>}
             </div>
           </div>
