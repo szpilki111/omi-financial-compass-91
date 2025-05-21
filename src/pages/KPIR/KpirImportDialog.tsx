@@ -14,7 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Account, ImportRow } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { parse } from 'papaparse';
+import * as Papa from 'papaparse';
 
 interface KpirImportDialogProps {
   open: boolean;
@@ -44,7 +44,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
     setFile(selectedFile);
     
     // Użyj Papa Parse do odczytania pliku CSV
-    parse(selectedFile, {
+    Papa.parse(selectedFile, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
@@ -136,7 +136,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
     
     try {
       // Parsuj cały plik
-      parse(file, {
+      Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
         complete: async (results) => {
@@ -221,7 +221,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
                   amount: Math.abs(amount),
                   debit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
                   credit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
-                  settlement_type: 'Bank',
+                  settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
                   currency: 'PLN',
                   exchange_rate: 1,
                   location_id: user.location,

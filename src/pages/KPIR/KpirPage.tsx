@@ -85,11 +85,13 @@ const KpirPage: React.FC = () => {
 
       const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
 
-      const formattedTransactions: KpirTransaction[] = data.map((transaction) => ({
+      const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => ({
         ...transaction,
         debitAccount: accountsMap.get(transaction.debit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
         creditAccount: accountsMap.get(transaction.credit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
         formattedDate: format(new Date(transaction.date), 'dd.MM.yyyy'),
+        // Ensure settlement_type is always one of the allowed values
+        settlement_type: (transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek')
       }));
 
       setTransactions(formattedTransactions);
@@ -267,3 +269,4 @@ const KpirPage: React.FC = () => {
 };
 
 export default KpirPage;
+
