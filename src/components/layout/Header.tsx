@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Menu, X, ChevronDown, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -9,15 +8,23 @@ const Header = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, logout } = useAuth();
 
-  const menuItems = [
-    { name: 'Strona główna', href: '/' },
-    { name: 'Księga KPiR', href: '/kpir' },
-    { name: 'Raporty', href: '/raporty' },
-    { name: 'Wizualizacja danych', href: '/wizualizacja' },
-    { name: 'Baza wiedzy', href: '/baza-wiedzy' },
-    // Admin menu item - would be conditionally shown based on user role
-    { name: 'Administracja', href: '/admin' },
-  ];
+  // Określamy dostępne elementy menu bazując na roli użytkownika
+  const menuItems = React.useMemo(() => {
+    const items = [
+      { name: 'Strona główna', href: '/dashboard' },
+      { name: 'Księga KPiR', href: '/kpir' },
+      { name: 'Raporty', href: '/raporty' },
+      { name: 'Wizualizacja danych', href: '/wizualizacja' },
+      { name: 'Baza wiedzy', href: '/baza-wiedzy' },
+    ];
+    
+    // Tylko admin i prowincjał widzą sekcję administracji
+    if (user && (user.role === 'admin' || user.role === 'prowincjal')) {
+      items.push({ name: 'Administracja', href: '/admin' });
+    }
+    
+    return items;
+  }, [user]);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const toggleUserMenu = () => setUserMenuOpen(!userMenuOpen);

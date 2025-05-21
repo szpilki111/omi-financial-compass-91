@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
+import KpirPage from "./pages/KPIR/KpirPage";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -45,6 +46,13 @@ const App = () => (
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* KPIR routes */}
+            <Route path="/kpir" element={
+              <ProtectedRoute>
+                <KpirPage />
               </ProtectedRoute>
             } />
             

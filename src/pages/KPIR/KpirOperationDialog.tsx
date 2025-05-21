@@ -1,0 +1,382 @@
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { KpirOperationFormData, Account } from '@/types/kpir';
+import { useToast } from '@/hooks/use-toast';
+
+interface KpirOperationDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}
+
+const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose, onSave }) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+  
+  const [formData, setFormData] = useState<KpirOperationFormData>({
+    date: today,
+    document_number: '',
+    description: '',
+    amount: 0,
+    debit_account_id: '',
+    credit_account_id: '',
+    settlement_type: 'Bank',
+    currency: 'PLN',
+    exchange_rate: 1,
+  });
+  
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('id, number, name, type')
+          .order('number', { ascending: true });
+          
+        if (error) {
+          throw error;
+        }
+        
+        setAccounts(data);
+      } catch (error) {
+        console.error('Błąd podczas pobierania kont:', error);
+        toast({
+          title: "Błąd",
+          description: "Nie udało się pobrać listy kont",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchAccounts();
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'amount') {
+      setFormData({ ...formData, [name]: parseFloat(value) || 0 });
+    } else if (name === 'exchange_rate') {
+      setFormData({ ...formData, [name]: parseFloat(value) || 1 });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
+    
+    // Usuń błąd dla danego pola, jeśli istnieje
+    if (errors[name]) {
+      setErrors({ ...errors, [name]: '' });
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.date) newErrors.date = 'Data jest wymagana';
+    if (!formData.description) newErrors.description = 'Opis jest wymagany';
+    if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
+    if (!formData.debit_account_id) newErrors.debit_account_id = 'Konto Winien jest wymagane';
+    if (!formData.credit_account_id) newErrors.credit_account_id = 'Konto Ma jest wymagane';
+    if (formData.debit_account_id === formData.credit_account_id) {
+      newErrors.debit_account_id = 'Konta nie mogą być takie same';
+      newErrors.credit_account_id = 'Konta nie mogą być takie same';
+    }
+    if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
+    if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
+    if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
+      newErrors.exchange_rate = 'Kurs wymiany musi być większy od zera';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    if (!user?.location) {
+      toast({
+        title: "Błąd",
+        description: "Nie można określić lokalizacji użytkownika",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .insert({
+          date: formData.date,
+          document_number: formData.document_number,
+          description: formData.description,
+          amount: formData.amount,
+          debit_account_id: formData.debit_account_id,
+          credit_account_id: formData.credit_account_id,
+          settlement_type: formData.settlement_type,
+          currency: formData.currency,
+          exchange_rate: formData.exchange_rate,
+          location_id: user.location,
+          user_id: user.id
+        });
+        
+      if (error) {
+        throw error;
+      }
+      
+      onSave();
+    } catch (error) {
+      console.error('Błąd podczas dodawania operacji:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się dodać operacji",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const groupedAccounts = accounts.reduce<Record<string, Account[]>>((acc, account) => {
+    const type = account.type || 'Inne';
+    if (!acc[type]) {
+      acc[type] = [];
+    }
+    acc[type].push(account);
+    return acc;
+  }, {});
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nowa operacja finansowa</DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Data */}
+            <div className="space-y-1">
+              <Label htmlFor="date" className="text-sm font-medium">
+                Data operacji *
+              </Label>
+              <input
+                type="date"
+                id="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                className={`w-full p-2 border rounded-md ${errors.date ? 'border-red-500' : 'border-omi-gray-300'}`}
+              />
+              {errors.date && <p className="text-red-500 text-xs">{errors.date}</p>}
+            </div>
+            
+            {/* Numer dokumentu */}
+            <div className="space-y-1">
+              <Label htmlFor="document_number" className="text-sm font-medium">
+                Numer dokumentu
+              </Label>
+              <input
+                type="text"
+                id="document_number"
+                name="document_number"
+                value={formData.document_number}
+                onChange={handleChange}
+                placeholder="FV/2023/01"
+                className="w-full p-2 border border-omi-gray-300 rounded-md"
+              />
+            </div>
+          </div>
+          
+          {/* Opis */}
+          <div className="space-y-1">
+            <Label htmlFor="description" className="text-sm font-medium">
+              Opis operacji *
+            </Label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              rows={2}
+              placeholder="Opis operacji finansowej"
+              className={`w-full p-2 border rounded-md ${errors.description ? 'border-red-500' : 'border-omi-gray-300'}`}
+            />
+            {errors.description && <p className="text-red-500 text-xs">{errors.description}</p>}
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Kwota */}
+            <div className="space-y-1">
+              <Label htmlFor="amount" className="text-sm font-medium">
+                Kwota *
+              </Label>
+              <input
+                type="number"
+                id="amount"
+                name="amount"
+                value={formData.amount}
+                onChange={handleChange}
+                min="0"
+                step="0.01"
+                className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
+              />
+              {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
+            </div>
+            
+            {/* Waluta */}
+            <div className="space-y-1">
+              <Label htmlFor="currency" className="text-sm font-medium">
+                Waluta *
+              </Label>
+              <select
+                id="currency"
+                name="currency"
+                value={formData.currency}
+                onChange={handleChange}
+                className={`w-full p-2 border rounded-md ${errors.currency ? 'border-red-500' : 'border-omi-gray-300'}`}
+              >
+                <option value="PLN">PLN</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="CHF">CHF</option>
+              </select>
+              {errors.currency && <p className="text-red-500 text-xs">{errors.currency}</p>}
+            </div>
+            
+            {/* Kurs wymiany */}
+            <div className="space-y-1">
+              <Label htmlFor="exchange_rate" className="text-sm font-medium">
+                Kurs wymiany {formData.currency !== 'PLN' ? '*' : ''}
+              </Label>
+              <input
+                type="number"
+                id="exchange_rate"
+                name="exchange_rate"
+                value={formData.exchange_rate}
+                onChange={handleChange}
+                min="0.0001"
+                step="0.0001"
+                disabled={formData.currency === 'PLN'}
+                className={`w-full p-2 border rounded-md ${
+                  errors.exchange_rate ? 'border-red-500' : 'border-omi-gray-300'
+                } ${formData.currency === 'PLN' ? 'bg-omi-gray-100' : ''}`}
+              />
+              {errors.exchange_rate && <p className="text-red-500 text-xs">{errors.exchange_rate}</p>}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Konto Winien */}
+            <div className="space-y-1">
+              <Label htmlFor="debit_account_id" className="text-sm font-medium">
+                Konto Winien (Debet) *
+              </Label>
+              <select
+                id="debit_account_id"
+                name="debit_account_id"
+                value={formData.debit_account_id}
+                onChange={handleChange}
+                className={`w-full p-2 border rounded-md ${errors.debit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}
+              >
+                <option value="">Wybierz konto</option>
+                {Object.entries(groupedAccounts).map(([type, accounts]) => (
+                  <optgroup key={type} label={type}>
+                    {accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.number} - {account.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
+            </div>
+            
+            {/* Konto Ma */}
+            <div className="space-y-1">
+              <Label htmlFor="credit_account_id" className="text-sm font-medium">
+                Konto Ma (Kredyt) *
+              </Label>
+              <select
+                id="credit_account_id"
+                name="credit_account_id"
+                value={formData.credit_account_id}
+                onChange={handleChange}
+                className={`w-full p-2 border rounded-md ${errors.credit_account_id ? 'border-red-500' : 'border-omi-gray-300'}`}
+              >
+                <option value="">Wybierz konto</option>
+                {Object.entries(groupedAccounts).map(([type, accounts]) => (
+                  <optgroup key={type} label={type}>
+                    {accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.number} - {account.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {errors.credit_account_id && <p className="text-red-500 text-xs">{errors.credit_account_id}</p>}
+            </div>
+          </div>
+          
+          {/* Forma rozrachunku */}
+          <div className="space-y-1">
+            <Label htmlFor="settlement_type" className="text-sm font-medium">
+              Forma rozrachunku *
+            </Label>
+            <select
+              id="settlement_type"
+              name="settlement_type"
+              value={formData.settlement_type}
+              onChange={handleChange}
+              className={`w-full p-2 border rounded-md ${errors.settlement_type ? 'border-red-500' : 'border-omi-gray-300'}`}
+            >
+              <option value="Gotówka">Gotówka</option>
+              <option value="Bank">Bank</option>
+              <option value="Rozrachunek">Rozrachunek</option>
+            </select>
+            {errors.settlement_type && <p className="text-red-500 text-xs">{errors.settlement_type}</p>}
+          </div>
+          
+          <div className="text-xs text-omi-gray-500">
+            * Pola wymagane
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Anuluj
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Zapisywanie...' : 'Zapisz operację'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default KpirOperationDialog;
