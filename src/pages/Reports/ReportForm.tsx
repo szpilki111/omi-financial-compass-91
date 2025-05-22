@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,6 +37,8 @@ import {
   Card,
   CardContent,
 } from '@/components/ui/card';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
+import KpirSummary from '../KPIR/components/KpirSummary';
 
 interface ReportFormProps {
   reportId?: string;
@@ -58,6 +59,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDraft, setIsDraft] = useState(true);
+
+  // Nowy stan dla podsumowania finansowego
+  const [financialSummary, setFinancialSummary] = useState({
+    income: 0,
+    expense: 0,
+    balance: 0
+  });
 
   // Inicjalizacja formularza
   const form = useForm<z.infer<typeof reportFormSchema>>({
@@ -88,6 +96,56 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     },
     enabled: !!reportId
   });
+
+  // Pobierz podsumowanie finansowe dla wybranego miesiąca i roku
+  useEffect(() => {
+    const fetchFinancialSummary = async () => {
+      if (!user?.location) return;
+
+      const month = form.getValues('month');
+      const year = form.getValues('year');
+      
+      // Tworzenie dat w formacie ISO dla pierwszego i ostatniego dnia miesiąca
+      const firstDayOfMonth = new Date(year, month - 1, 1);
+      const lastDayOfMonth = new Date(year, month, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+  
+      const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
+      setFinancialSummary(summary);
+    };
+
+    fetchFinancialSummary();
+  }, [form.getValues('month'), form.getValues('year'), user?.location]);
+
+  // Reagowanie na zmianę miesiąca lub roku
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'month' || name === 'year') {
+        const fetchFinancialSummary = async () => {
+          if (!user?.location) return;
+          
+          const month = form.getValues('month');
+          const year = form.getValues('year');
+          
+          // Tworzenie dat w formacie ISO dla pierwszego i ostatniego dnia miesiąca
+          const firstDayOfMonth = new Date(year, month - 1, 1);
+          const lastDayOfMonth = new Date(year, month, 0);
+          
+          const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+          const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+  
+          const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
+          setFinancialSummary(summary);
+        };
+  
+        fetchFinancialSummary();
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form.watch, user?.location]);
 
   // Ustawienie domyślnych wartości formularza na podstawie istniejącego raportu
   useEffect(() => {
@@ -220,6 +278,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           if (newReport?.id) {
             await initializeReportEntries(newReport.id, location_id, month, year);
             
+            // Zapisz podsumowanie finansowe od razu
+            await supabase
+              .from('report_details')
+              .insert({
+                report_id: newReport.id,
+                income_total: financialSummary.income,
+                expense_total: financialSummary.expense,
+                balance: financialSummary.balance,
+                settlements_total: 0 // To jest obliczane w innym miejscu
+              });
+              
             // Upewnij się, że raport ma status 'draft' po inicjalizacji
             await supabase
               .from('reports')
@@ -787,6 +856,23 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 )}
               />
             </div>
+          </div>
+
+          {/* Dodane podsumowanie finansowe */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200">
+            <h2 className="text-xl font-semibold mb-4">
+              Podsumowanie finansowe za wybrany okres
+            </h2>
+            
+            <KpirSummary 
+              income={financialSummary.income}
+              expense={financialSummary.expense}
+              balance={financialSummary.balance}
+            />
+            
+            <p className="mt-4 text-sm text-omi-gray-500">
+              Te wartości zostaną automatycznie zapisane w raporcie po jego utworzeniu.
+            </p>
           </div>
 
           {reportId && reportSections && (

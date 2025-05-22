@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -14,6 +13,7 @@ import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 import KpirSummary from './components/KpirSummary';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
@@ -49,71 +49,21 @@ const KpirPage: React.FC = () => {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('transactions')
-        .select(`
-          id,
-          date,
-          document_number,
-          description,
-          amount,
-          debit_account_id,
-          credit_account_id,
-          settlement_type,
-          currency,
-          exchange_rate,
-          location_id
-        `)
-        .order('date', { ascending: false });
+      // Użyj nowej funkcji do obliczania podsumowania finansowego
+      const locationId = user?.location || undefined;
+      const summary = await calculateFinancialSummary(
+        locationId,
+        filters.dateFrom,
+        filters.dateTo
+      );
 
-      // Filtr po lokalizacji dla ekonomów
-      if (user && user.role === 'ekonom' && user.location) {
-        query = query.eq('location_id', user.location);
-      }
+      setTransactions(summary.transactions);
+      setMonthlySummary({
+        income: summary.income,
+        expense: summary.expense,
+        balance: summary.balance
+      });
 
-      // Zastosuj filtr daty od
-      if (filters.dateFrom) {
-        query = query.gte('date', filters.dateFrom);
-      }
-      
-      // Zastosuj filtr daty do
-      if (filters.dateTo) {
-        query = query.lte('date', filters.dateTo);
-      }
-
-      // Zastosuj wyszukiwanie po opisie lub numerze dokumentu
-      if (filters.search) {
-        query = query.or(`description.ilike.%${filters.search}%,document_number.ilike.%${filters.search}%`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        throw error;
-      }
-
-      // Pobierz informacje o kontach, aby móc wyświetlić nazwy zamiast ID
-      const { data: accounts, error: accountsError } = await supabase
-        .from('accounts')
-        .select('id, number, name');
-
-      if (accountsError) {
-        throw accountsError;
-      }
-
-      const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
-
-      const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => ({
-        ...transaction,
-        debitAccount: accountsMap.get(transaction.debit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
-        creditAccount: accountsMap.get(transaction.credit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
-        formattedDate: format(new Date(transaction.date), 'dd.MM.yyyy'),
-        // Ensure settlement_type is always one of the allowed values
-        settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
-      }));
-
-      setTransactions(formattedTransactions);
-      calculateMonthlySummary(formattedTransactions, accountsMap);
     } catch (error) {
       console.error('Błąd podczas pobierania transakcji:', error);
       toast({
@@ -124,38 +74,6 @@ const KpirPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Funkcja do obliczania podsumowania miesięcznego
-  const calculateMonthlySummary = (transactions: KpirTransaction[], accountsMap: Map<string, any>) => {
-    let income = 0;
-    let expense = 0;
-    
-    // Jeśli nie mamy transakcji, zwróć zerowe wartości
-    if (!transactions || transactions.length === 0) {
-      setMonthlySummary({ income: 0, expense: 0, balance: 0 });
-      return;
-    }
-    
-    transactions.forEach(transaction => {
-      const debitAccountNumber = accountsMap.get(transaction.debit_account_id)?.number || '';
-      const creditAccountNumber = accountsMap.get(transaction.credit_account_id)?.number || '';
-      
-      // Przychody - konta zaczynające się od 7
-      if (creditAccountNumber.startsWith('7')) {
-        income += transaction.amount;
-      }
-      
-      // Koszty - konta zaczynające się od 4
-      if (debitAccountNumber.startsWith('4')) {
-        expense += transaction.amount;
-      }
-    });
-    
-    // Oblicz bilans
-    const balance = income - expense;
-    
-    setMonthlySummary({ income, expense, balance });
   };
 
   useEffect(() => {
