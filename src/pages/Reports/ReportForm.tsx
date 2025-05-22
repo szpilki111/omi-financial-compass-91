@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,7 +37,7 @@ import {
   Card,
   CardContent,
 } from '@/components/ui/card';
-import { calculateFinancialSummary, updateReportDetails } from '@/utils/financeUtils';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 import KpirSummary from '../KPIR/components/KpirSummary';
 
 interface ReportFormProps {
