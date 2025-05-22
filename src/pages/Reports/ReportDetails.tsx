@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -307,16 +306,66 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       
       if (!entries || entries.length === 0) {
         console.log("Brak wpisów do przeliczenia sum");
-        toast({
-          title: "Informacja",
-          description: "Brak wpisów w raporcie. Sumy ustawione na 0.",
-          variant: "default",
-        });
-        // Zapisz domyślne wartości
-        await updateOrInsertReportDetails(0, 0, 0, 0);
-        setIsCalculating(false);
-        refetchReportDetails();
-        return;
+        
+        // Jeśli nie ma wpisów, sprawdźmy czy nie ma powiązanych transakcji
+        const { data: transactions, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('location_id', report?.location_id)
+          .gte('date', `${report?.year}-${String(report?.month).padStart(2, '0')}-01`)
+          .lt('date', `${report?.year}-${String(report?.month + 1 > 12 ? 1 : report?.month + 1).padStart(2, '0')}-01`);
+          
+        if (transactionsError) {
+          console.error('Błąd pobierania transakcji:', transactionsError);
+        }
+        
+        if (transactions && transactions.length > 0) {
+          console.log(`Znaleziono ${transactions.length} transakcji do wygenerowania wpisów raportu`);
+          
+          // Inicjalizuj wpisy raportu na podstawie transakcji
+          await initializeReportEntries(transactions);
+          
+          // Po inicjalizacji, spróbuj ponownie pobrać wpisy
+          const { data: freshEntries, error: freshError } = await supabase
+            .from('report_entries')
+            .select('*')
+            .eq('report_id', reportId);
+            
+          if (freshError) {
+            console.error('Błąd podczas ponownego pobierania wpisów:', freshError);
+            setIsCalculating(false);
+            return;
+          }
+          
+          if (!freshEntries || freshEntries.length === 0) {
+            console.log("Nadal brak wpisów po inicjalizacji");
+            toast({
+              title: "Informacja",
+              description: "Brak wpisów w raporcie. Sumy ustawione na 0.",
+              variant: "default",
+            });
+            // Zapisz domyślne wartości
+            await updateOrInsertReportDetails(0, 0, 0, 0);
+            setIsCalculating(false);
+            refetchReportDetails();
+            return;
+          }
+          
+          // Kontynuuj z obliczeniami używając nowo utworzonych wpisów
+          entries = freshEntries;
+        } else {
+          console.log("Brak transakcji do wygenerowania wpisów");
+          toast({
+            title: "Informacja",
+            description: "Brak wpisów i transakcji. Sumy ustawione na 0.",
+            variant: "default",
+          });
+          // Zapisz domyślne wartości
+          await updateOrInsertReportDetails(0, 0, 0, 0);
+          setIsCalculating(false);
+          refetchReportDetails();
+          return;
+        }
       }
       
       console.log(`Znaleziono ${entries.length} wpisów do przeliczenia sum`);
@@ -403,9 +452,175 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }
   };
   
+  // Funkcja do inicjalizacji wpisów raportu na podstawie transakcji
+  const initializeReportEntries = async (transactions) => {
+    try {
+      console.log(`Inicjalizacja wpisów raportu na podstawie ${transactions.length} transakcji`);
+      
+      // Pobierz dane kont
+      const { data: accounts, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*');
+        
+      if (accountsError) {
+        console.error('Błąd pobierania kont:', accountsError);
+        return;
+      }
+      
+      if (!accounts || accounts.length === 0) {
+        console.error('Brak kont w bazie danych');
+        return;
+      }
+      
+      console.log(`Znaleziono ${accounts.length} kont`);
+      
+      // Pobierz sekcje raportu
+      const { data: sections, error: sectionsError } = await supabase
+        .from('report_sections')
+        .select('*')
+        .eq('report_type', 'standard');
+        
+      if (sectionsError) {
+        console.error('Błąd pobierania sekcji:', sectionsError);
+        return;
+      }
+      
+      // Pobierz mapowania kont do sekcji
+      const { data: accountMappings, error: mappingError } = await supabase
+        .from('account_section_mappings')
+        .select('*')
+        .eq('report_type', 'standard');
+        
+      if (mappingError) {
+        console.error('Błąd pobierania mapowań kont:', mappingError);
+      }
+      
+      // Utwórz mapę mapowań kont do sekcji
+      const sectionMap = new Map();
+      if (accountMappings) {
+        for (const mapping of accountMappings) {
+          sectionMap.set(mapping.account_prefix, mapping.section_id);
+        }
+      }
+      
+      // Przygotuj agregaty dla każdego konta
+      const aggregates = {};
+      
+      // Przetwarzaj transakcje
+      for (const transaction of transactions) {
+        // Znajdź konto debetowe
+        const debitAccount = accounts.find(acc => acc.id === transaction.debit_account_id);
+        // Znajdź konto kredytowe
+        const creditAccount = accounts.find(acc => acc.id === transaction.credit_account_id);
+        
+        if (!debitAccount || !creditAccount) {
+          console.warn(`Nie znaleziono kont dla transakcji ${transaction.id}`);
+          continue;
+        }
+        
+        // Inicjalizuj agregaty dla kont, jeśli nie istnieją
+        if (!aggregates[debitAccount.number]) {
+          aggregates[debitAccount.number] = {
+            account_number: debitAccount.number,
+            account_name: debitAccount.name,
+            debit_turnover: 0,
+            credit_turnover: 0,
+            debit_opening: 0,
+            credit_opening: 0,
+            debit_closing: 0,
+            credit_closing: 0
+          };
+        }
+        
+        if (!aggregates[creditAccount.number]) {
+          aggregates[creditAccount.number] = {
+            account_number: creditAccount.number,
+            account_name: creditAccount.name,
+            debit_turnover: 0,
+            credit_turnover: 0,
+            debit_opening: 0,
+            credit_opening: 0,
+            debit_closing: 0,
+            credit_closing: 0
+          };
+        }
+        
+        // Aktualizuj agregaty dla obu kont
+        const amount = Number(transaction.amount);
+        
+        // Debit account - add to debit turnover and closing
+        aggregates[debitAccount.number].debit_turnover += amount;
+        if (debitAccount.type === 'bilansowe') {
+          aggregates[debitAccount.number].debit_closing += amount;
+        }
+        
+        // Credit account - add to credit turnover and closing
+        aggregates[creditAccount.number].credit_turnover += amount;
+        if (creditAccount.type === 'bilansowe') {
+          aggregates[creditAccount.number].credit_closing += amount;
+        }
+      }
+      
+      // Przygotuj wpisy do wstawienia
+      const entriesToInsert = [];
+      
+      for (const accountNumber in aggregates) {
+        const aggregate = aggregates[accountNumber];
+        
+        // Znajdź sekcję dla konta
+        let sectionId = null;
+        
+        // Sprawdź prefiksy od najdłuższych do najkrótszych
+        for (let i = accountNumber.length; i > 0; i--) {
+          const prefix = accountNumber.substring(0, i);
+          if (sectionMap.has(prefix)) {
+            sectionId = sectionMap.get(prefix);
+            break;
+          }
+        }
+        
+        // Dodaj wpis
+        entriesToInsert.push({
+          report_id: reportId,
+          section_id: sectionId,
+          account_number: accountNumber,
+          account_name: aggregate.account_name,
+          debit_opening: aggregate.debit_opening,
+          credit_opening: aggregate.credit_opening,
+          debit_turnover: aggregate.debit_turnover,
+          credit_turnover: aggregate.credit_turnover,
+          debit_closing: aggregate.debit_closing,
+          credit_closing: aggregate.credit_closing
+        });
+      }
+      
+      console.log(`Przygotowano ${entriesToInsert.length} wpisów do zapisania`);
+      
+      // Zapisuj wpisy pojedynczo, aby obejść ograniczenia RLS
+      for (const entry of entriesToInsert) {
+        try {
+          const { error } = await supabase
+            .from('report_entries')
+            .insert(entry);
+            
+          if (error) {
+            console.error(`Błąd zapisywania wpisu dla konta ${entry.account_number}:`, error);
+          }
+        } catch (error) {
+          console.error(`Wyjątek podczas zapisywania wpisu dla konta ${entry.account_number}:`, error);
+        }
+      }
+      
+      console.log('Zakończono inicjalizację wpisów raportu');
+      
+    } catch (error) {
+      console.error('Błąd podczas inicjalizacji wpisów raportu:', error);
+    }
+  };
+  
   // Efekt, który przelicza sumy raportu po załadowaniu danych
   useEffect(() => {
-    if (reportId && report && sectionsWithEntries && !loadingSections) {
+    if (reportId && report && !loadingSections) {
       // Przeliczaj sumy przy ładowaniu szczegółów raportu i gdy zmieniają się wpisy
       calculateAndUpdateReportTotals().catch(error => {
         console.error("Błąd przy przeliczaniu sum raportu:", error);
