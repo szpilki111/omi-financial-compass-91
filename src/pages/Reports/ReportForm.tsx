@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -196,7 +195,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           throw new Error('Raport za ten miesiąc i rok dla tej lokalizacji już istnieje');
         }
         
-        // Tworzenie nowego raportu
+        // Tworzenie nowego raportu z domyślnym statusem 'draft' (wersja robocza)
         const { data: newReport, error } = await supabase
           .from('reports')
           .insert({
@@ -206,7 +205,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             title,
             period,
             report_type: 'standard',
-            status: 'draft',
+            status: 'draft', // Ustawiamy status draft zamiast submitted
             submitted_by: null,
             submitted_at: null
           })
@@ -512,7 +511,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         }
         // Konta rozrachunków zaczynające się od 2
         else if (entry.account_number.startsWith('2')) {
-          const balance = Number(entry.credit_closing || 0) - Number(entry.debit_closing || 0);
+          const balance = Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
           settlementsTotal += balance;
           console.log(`Konto rozrachunku ${entry.account_number}: ${balance} - suma: ${settlementsTotal}`);
         }
@@ -523,62 +522,57 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
       console.log(`Obliczone sumy: przychody=${incomeTotal}, koszty=${expenseTotal}, bilans=${balance}, rozrachunki=${settlementsTotal}`);
 
-      try {
-        // Sprawdź, czy istnieje już rekord podsumowania
-        const { data: existingDetails, error: checkError } = await supabase
-          .from('report_details')
-          .select('id')
-          .eq('report_id', reportId);
+      // Sprawdź, czy istnieje już rekord podsumowania
+      const { data: existingDetails, error: checkError } = await supabase
+        .from('report_details')
+        .select('id')
+        .eq('report_id', reportId);
 
-        if (checkError) {
-          console.error('Błąd przy sprawdzaniu istniejących szczegółów:', checkError);
-          throw checkError;
-        }
-        
-        if (existingDetails && existingDetails.length > 0) {
-          console.log(`Aktualizacja istniejącego podsumowania ${existingDetails[0].id}`);
-          // Aktualizuj istniejący rekord
-          const { error: updateError } = await supabase
-            .from('report_details')
-            .update({
-              income_total: incomeTotal,
-              expense_total: expenseTotal,
-              balance: balance,
-              settlements_total: settlementsTotal,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingDetails[0].id);
-
-          if (updateError) {
-            console.error('Błąd przy aktualizacji podsumowania:', updateError);
-            throw updateError;
-          }
-        } else {
-          console.log(`Tworzenie nowego podsumowania dla raportu ${reportId}`);
-          // Utwórz nowy rekord podsumowania
-          const { error: insertError } = await supabase
-            .from('report_details')
-            .insert({
-              report_id: reportId,
-              income_total: incomeTotal,
-              expense_total: expenseTotal,
-              balance: balance,
-              settlements_total: settlementsTotal
-            });
-
-          if (insertError) {
-            console.error('Błąd przy tworzeniu podsumowania:', insertError);
-            throw insertError;
-          }
-        }
-        console.log('Podsumowanie zostało pomyślnie zaktualizowane');
-      } catch (err) {
-        console.error("Błąd podczas zapisu podsumowania:", err);
-        throw err;
+      if (checkError) {
+        console.error('Błąd przy sprawdzaniu istniejących szczegółów:', checkError);
+        throw checkError;
       }
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji podsumowania raportu:', error);
-      throw new Error('Nie udało się zaktualizować podsumowania raportu');
+      
+      if (existingDetails && existingDetails.length > 0) {
+        console.log(`Aktualizacja istniejącego podsumowania ${existingDetails[0].id}`);
+        // Aktualizuj istniejący rekord
+        const { error: updateError } = await supabase
+          .from('report_details')
+          .update({
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDetails[0].id);
+
+        if (updateError) {
+          console.error('Błąd przy aktualizacji podsumowania:', updateError);
+          throw updateError;
+        }
+      } else {
+        console.log(`Tworzenie nowego podsumowania dla raportu ${reportId}`);
+        // Utwórz nowy rekord podsumowania
+        const { error: insertError } = await supabase
+          .from('report_details')
+          .insert({
+            report_id: reportId,
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal
+          });
+
+        if (insertError) {
+          console.error('Błąd przy tworzeniu podsumowania:', insertError);
+          throw insertError;
+        }
+      }
+      console.log('Podsumowanie zostało pomyślnie zaktualizowane');
+    } catch (err) {
+      console.error("Błąd podczas zapisu podsumowania:", err);
+      throw err;
     }
   };
 
