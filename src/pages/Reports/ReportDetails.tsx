@@ -307,16 +307,36 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       if (!entriesData || entriesData.length === 0) {
         console.log("Brak wpisów do przeliczenia sum");
         
-        // Jeśli nie ma wpisów, sprawdźmy czy nie ma powiązanych transakcji
+        // Jeśli nie ma wpisów, znajdźmy transakcje z odpowiedniego miesiąca i lokalizacji
+        if (!report) {
+          console.error("Brak danych raportu, nie można pobrać transakcji");
+          setIsCalculating(false);
+          return;
+        }
+
+        // Pobierz transakcje dla danego miesiąca i lokalizacji
+        const startDate = `${report.year}-${String(report.month).padStart(2, '0')}-01`;
+        // Oblicz datę końcową (pierwszy dzień następnego miesiąca)
+        const endMonth = report.month === 12 ? 1 : report.month + 1;
+        const endYear = report.month === 12 ? report.year + 1 : report.year;
+        const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+
         const { data: transactions, error: transactionsError } = await supabase
           .from('transactions')
           .select('*')
-          .eq('location_id', report?.location_id)
-          .gte('date', `${report?.year}-${String(report?.month).padStart(2, '0')}-01`)
-          .lt('date', `${report?.year}-${String(report?.month + 1 > 12 ? 1 : report?.month + 1).padStart(2, '0')}-01`);
+          .eq('location_id', report.location_id)
+          .gte('date', startDate)
+          .lt('date', endDate);
           
         if (transactionsError) {
           console.error('Błąd pobierania transakcji:', transactionsError);
+          toast({
+            title: "Błąd",
+            description: "Nie udało się pobrać transakcji do obliczeń.",
+            variant: "destructive",
+          });
+          setIsCalculating(false);
+          return;
         }
         
         if (transactions && transactions.length > 0) {
@@ -341,7 +361,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
             console.log("Nadal brak wpisów po inicjalizacji");
             toast({
               title: "Informacja",
-              description: "Brak wpisów w raporcie. Sumy ustawione na 0.",
+              description: "Nie znaleziono operacji do podsumowania.",
               variant: "default",
             });
             // Zapisz domyślne wartości
@@ -357,7 +377,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           console.log("Brak transakcji do wygenerowania wpisów");
           toast({
             title: "Informacja",
-            description: "Brak wpisów i transakcji. Sumy ustawione na 0.",
+            description: "Brak operacji w wybranym okresie.",
             variant: "default",
           });
           // Zapisz domyślne wartości
@@ -382,7 +402,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           return;
         }
         
-        console.log(`Analizuję wpis: ${entry.account_number} - ${entry.account_name}`, entry);
+        console.log(`Analizuję wpis: ${entry.account_number} - ${entry.account_name} (Przychód: ${entry.credit_turnover}, Koszt: ${entry.debit_turnover})`);
         
         // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
         if (entry.account_number && entry.account_number.startsWith('7')) {
@@ -437,7 +457,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       
       toast({
         title: "Sukces",
-        description: "Sumy raportu zostały przeliczone pomyślnie.",
+        description: "Sumy raportu zostały przeliczone poprawnie.",
         variant: "default",
       });
     } catch (err) {
@@ -464,12 +484,12 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         
       if (accountsError) {
         console.error('Błąd pobierania kont:', accountsError);
-        return;
+        throw accountsError;
       }
       
       if (!accounts || accounts.length === 0) {
         console.error('Brak kont w bazie danych');
-        return;
+        throw new Error('Brak kont w bazie danych');
       }
       
       console.log(`Znaleziono ${accounts.length} kont`);
@@ -482,7 +502,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         
       if (sectionsError) {
         console.error('Błąd pobierania sekcji:', sectionsError);
-        return;
+        throw sectionsError;
       }
       
       // Pobierz mapowania kont do sekcji
@@ -493,6 +513,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         
       if (mappingError) {
         console.error('Błąd pobierania mapowań kont:', mappingError);
+        throw mappingError;
       }
       
       // Utwórz mapę mapowań kont do sekcji
@@ -504,14 +525,15 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       }
       
       // Przygotuj agregaty dla każdego konta
+      const accountsMap = new Map(accounts.map(acc => [acc.id, acc]));
       const aggregates = {};
       
       // Przetwarzaj transakcje
       for (const transaction of transactions) {
         // Znajdź konto debetowe
-        const debitAccount = accounts.find(acc => acc.id === transaction.debit_account_id);
+        const debitAccount = accountsMap.get(transaction.debit_account_id);
         // Znajdź konto kredytowe
-        const creditAccount = accounts.find(acc => acc.id === transaction.credit_account_id);
+        const creditAccount = accountsMap.get(transaction.credit_account_id);
         
         if (!debitAccount || !creditAccount) {
           console.warn(`Nie znaleziono kont dla transakcji ${transaction.id}`);
@@ -548,13 +570,20 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         // Aktualizuj agregaty dla obu kont
         const amount = Number(transaction.amount);
         
-        // Debit account - add to debit turnover and closing
+        if (isNaN(amount)) {
+          console.warn(`Niepoprawna kwota transakcji ${transaction.id}: ${transaction.amount}`);
+          continue;
+        }
+        
+        console.log(`Przetwarzam transakcję ${transaction.id}: ${debitAccount.number} (Wn) -> ${creditAccount.number} (Ma), kwota: ${amount}`);
+        
+        // Konto debetowe - dodaj do obrotów Wn i salda końcowego Wn
         aggregates[debitAccount.number].debit_turnover += amount;
         if (debitAccount.type === 'bilansowe') {
           aggregates[debitAccount.number].debit_closing += amount;
         }
         
-        // Credit account - add to credit turnover and closing
+        // Konto kredytowe - dodaj do obrotów Ma i salda końcowego Ma
         aggregates[creditAccount.number].credit_turnover += amount;
         if (creditAccount.type === 'bilansowe') {
           aggregates[creditAccount.number].credit_closing += amount;
@@ -579,35 +608,54 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           }
         }
         
-        // Dodaj wpis
-        entriesToInsert.push({
-          report_id: reportId,
-          section_id: sectionId,
-          account_number: accountNumber,
-          account_name: aggregate.account_name,
-          debit_opening: aggregate.debit_opening,
-          credit_opening: aggregate.credit_opening,
-          debit_turnover: aggregate.debit_turnover,
-          credit_turnover: aggregate.credit_turnover,
-          debit_closing: aggregate.debit_closing,
-          credit_closing: aggregate.credit_closing
-        });
+        // Dodaj wpis tylko jeśli ma jakiś obrót (nie jest zerowy)
+        if (aggregate.debit_turnover > 0 || aggregate.credit_turnover > 0) {
+          entriesToInsert.push({
+            report_id: reportId,
+            section_id: sectionId,
+            account_number: accountNumber,
+            account_name: aggregate.account_name,
+            debit_opening: aggregate.debit_opening,
+            credit_opening: aggregate.credit_opening,
+            debit_turnover: aggregate.debit_turnover,
+            credit_turnover: aggregate.credit_turnover,
+            debit_closing: aggregate.debit_closing,
+            credit_closing: aggregate.credit_closing
+          });
+        }
       }
       
       console.log(`Przygotowano ${entriesToInsert.length} wpisów do zapisania`);
       
-      // Zapisuj wpisy pojedynczo, aby obejść ograniczenia RLS
-      for (const entry of entriesToInsert) {
+      if (entriesToInsert.length === 0) {
+        console.warn("Brak wpisów do zapisania po przetworzeniu transakcji");
+        return;
+      }
+      
+      // Usuń istniejące wpisy dla tego raportu, aby uniknąć duplikatów
+      const { error: deleteError } = await supabase
+        .from('report_entries')
+        .delete()
+        .eq('report_id', reportId);
+        
+      if (deleteError) {
+        console.error('Błąd podczas usuwania istniejących wpisów:', deleteError);
+      }
+      
+      // Zapisuj wpisy w paczkach po 50, aby obejść ograniczenia RLS
+      const batchSize = 50;
+      for (let i = 0; i < entriesToInsert.length; i += batchSize) {
+        const batch = entriesToInsert.slice(i, i + batchSize);
         try {
           const { error } = await supabase
             .from('report_entries')
-            .insert(entry);
+            .insert(batch);
             
           if (error) {
-            console.error(`Błąd zapisywania wpisu dla konta ${entry.account_number}:`, error);
+            console.error(`Błąd zapisywania paczki wpisów (${i} do ${i + batch.length})`, error);
           }
         } catch (error) {
-          console.error(`Wyjątek podczas zapisywania wpisu dla konta ${entry.account_number}:`, error);
+          console.error(`Wyjątek podczas zapisywania paczki wpisów (${i} do ${i + batch.length}):`, error);
         }
       }
       
@@ -615,6 +663,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       
     } catch (error) {
       console.error('Błąd podczas inicjalizacji wpisów raportu:', error);
+      throw error;
     }
   };
   

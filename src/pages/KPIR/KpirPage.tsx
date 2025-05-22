@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +13,7 @@ import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
+import KpirSummary from './components/KpirSummary';
 
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
@@ -28,6 +30,13 @@ const KpirPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     search: '',
+  });
+
+  // Podsumowanie miesięczne
+  const [monthlySummary, setMonthlySummary] = useState({
+    income: 0,
+    expense: 0,
+    balance: 0
   });
 
   // Sprawdź, czy jesteśmy na ścieżce /kpir/nowy i otwórz okno nowej operacji
@@ -104,6 +113,7 @@ const KpirPage: React.FC = () => {
       }));
 
       setTransactions(formattedTransactions);
+      calculateMonthlySummary(formattedTransactions, accountsMap);
     } catch (error) {
       console.error('Błąd podczas pobierania transakcji:', error);
       toast({
@@ -114,6 +124,38 @@ const KpirPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funkcja do obliczania podsumowania miesięcznego
+  const calculateMonthlySummary = (transactions: KpirTransaction[], accountsMap: Map<string, any>) => {
+    let income = 0;
+    let expense = 0;
+    
+    // Jeśli nie mamy transakcji, zwróć zerowe wartości
+    if (!transactions || transactions.length === 0) {
+      setMonthlySummary({ income: 0, expense: 0, balance: 0 });
+      return;
+    }
+    
+    transactions.forEach(transaction => {
+      const debitAccountNumber = accountsMap.get(transaction.debit_account_id)?.number || '';
+      const creditAccountNumber = accountsMap.get(transaction.credit_account_id)?.number || '';
+      
+      // Przychody - konta zaczynające się od 7
+      if (creditAccountNumber.startsWith('7')) {
+        income += transaction.amount;
+      }
+      
+      // Koszty - konta zaczynające się od 4
+      if (debitAccountNumber.startsWith('4')) {
+        expense += transaction.amount;
+      }
+    });
+    
+    // Oblicz bilans
+    const balance = income - expense;
+    
+    setMonthlySummary({ income, expense, balance });
   };
 
   useEffect(() => {
@@ -190,6 +232,13 @@ const KpirPage: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* Podsumowanie miesięczne */}
+        <KpirSummary 
+          income={monthlySummary.income}
+          expense={monthlySummary.expense}
+          balance={monthlySummary.balance}
+        />
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
           <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
