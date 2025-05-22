@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -42,7 +43,7 @@ const Dashboard = () => {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [operationCount, setOperationCount] = useState(0);
   const [reportStatus, setReportStatus] = useState({
-    status: 'error',
+    status: 'error' as 'success' | 'warning' | 'error' | 'neutral',
     text: 'Nie złożony'
   });
   const [balance, setBalance] = useState('0 PLN');
@@ -141,23 +142,23 @@ const Dashboard = () => {
           if (reportsError) throw reportsError;
           
           // Określenie statusu raportu
-          let reportStatusObj = {
-            status: 'error' as 'success' | 'error',
+          let currentReportStatus = {
+            status: 'error' as 'success' | 'error' | 'warning' | 'neutral',
             text: 'Nie złożony'
           };
           
           if (reportData && reportData.length > 0) {
             const status = reportData[0].status;
             if (status === 'submitted') {
-              reportStatusObj = { status: 'success', text: 'Złożony' };
+              currentReportStatus = { status: 'success', text: 'Złożony' };
             } else if (status === 'approved') {
-              reportStatusObj = { status: 'success', text: 'Zatwierdzony' };
+              currentReportStatus = { status: 'success', text: 'Zatwierdzony' };
             } else if (status === 'rejected') {
-              reportStatusObj = { status: 'error', text: 'Odrzucony' };
+              currentReportStatus = { status: 'error', text: 'Odrzucony' };
             }
           }
           
-          setReportStatus(reportStatusObj);
+          setReportStatus(currentReportStatus);
         } else {
           // Dla prowincjałów i adminów - pobierz liczbę złożonych raportów i liczbę lokalizacji
           const { count: submittedCount, error: submittedError } = await supabase
@@ -224,8 +225,8 @@ const Dashboard = () => {
               title: 'Status raportu za miesiąc',
               value: currentDate.toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
               icon: <FileText className="h-6 w-6 text-green-500" />,
-              status: reportStatusObj.status,
-              statusText: reportStatusObj.text
+              status: reportStatus.status,
+              statusText: reportStatus.text
             },
             {
               title: 'Saldo',
