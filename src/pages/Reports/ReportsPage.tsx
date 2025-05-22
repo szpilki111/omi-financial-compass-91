@@ -33,12 +33,6 @@ const ReportsPage = () => {
     setViewMode('view');
   };
 
-  const handleEditReport = () => {
-    if (selectedReportId) {
-      setViewMode('edit');
-    }
-  };
-
   const handleNewReport = () => {
     setIsCreatingReport(true);
     setSelectedReportId(null);
@@ -71,11 +65,6 @@ const ReportsPage = () => {
           <Button onClick={handleNewReport} className="flex items-center gap-2">
             <PlusCircle className="h-4 w-4" />
             Nowy raport
-          </Button>
-        )}
-        {viewMode === 'view' && (
-          <Button onClick={handleEditReport} className="flex items-center gap-2">
-            Edytuj raport
           </Button>
         )}
       </div>

@@ -9,6 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getReportFinancialDetails, calculateFinancialSummary } from '@/utils/financeUtils';
 import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import KpirSummary from '../KPIR/components/KpirSummary';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -20,6 +21,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
@@ -128,6 +130,47 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       setIsRefreshing(false);
     }
   };
+  
+  // Funkcja do składania raportu
+  const handleSubmitReport = async () => {
+    if (!reportId) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Najpierw odśwież sumy
+      await handleRefreshSums();
+      
+      // Zaktualizuj status raportu
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          submitted_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .eq('id', reportId);
+        
+      if (error) throw error;
+      
+      // Odśwież dane raportu
+      await refetchReport();
+      
+      toast({
+        title: "Raport złożony",
+        description: "Raport został złożony do sprawdzenia.",
+      });
+    } catch (error) {
+      console.error('Błąd podczas składania raportu:', error);
+      toast({
+        title: "Błąd",
+        description: "Wystąpił problem podczas składania raportu.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (isLoadingReport || isLoadingFinancial) {
     return (
@@ -198,8 +241,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
         <div className="flex gap-2">
           {report.status === 'draft' && (
-            <Button onClick={() => navigate(`/reports/edit/${reportId}`)}>
-              Edytuj raport
+            <Button onClick={handleSubmitReport} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+              Złóż raport
             </Button>
           )}
         </div>
@@ -263,53 +307,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold">Przychody</h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(financialDetails?.income || 0)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold">Rozchody</h3>
-                <p className="text-2xl font-bold text-red-600">
-                  {formatCurrency(financialDetails?.expense || 0)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold">Bilans</h3>
-                <p className={`text-2xl font-bold ${(financialDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(financialDetails?.balance || 0)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold">Rozrachunki</h3>
-                <p className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(financialDetails?.settlements || 0)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {financialDetails && (
+          <KpirSummary 
+            income={financialDetails.income}
+            expense={financialDetails.expense}
+            balance={financialDetails.balance}
+          />
+        )}
       </div>
 
       <div className="flex justify-between">

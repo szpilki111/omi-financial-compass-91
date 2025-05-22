@@ -327,90 +327,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   });
   
-  // Mutacja do składania raportu
-  const submitReportMutation = useMutation({
-    mutationFn: async (data: { month: number; year: number }) => {
-      try {
-        // Najpierw zapisz jako wersja robocza, aby utworzyć raport jeśli to nowy
-        const reportId = await saveDraftMutation.mutateAsync(data);
-        
-        // Teraz zaktualizuj status raportu na 'submitted'
-        const { error } = await supabase
-          .from('reports')
-          .update({
-            status: 'submitted',
-            submitted_at: new Date().toISOString(),
-            submitted_by: user.id
-          })
-          .eq('id', reportId);
-          
-        if (error) throw error;
-  
-        // Oblicz i zaktualizuj podsumowania raportu
-        await calculateAndUpdateReportSummary(reportId);
-        
-        // Wyślij powiadomienie do prowincjała
-        const { data: admins, error: adminsError } = await supabase
-          .from('profiles')
-          .select('id')
-          .in('role', ['admin', 'prowincjal']);
-          
-        if (!adminsError && admins) {
-          // Pobierz nazwę lokalizacji
-          const { data: location } = await supabase
-            .from('locations')
-            .select('name')
-            .eq('id', user.location)
-            .single();
-            
-          const monthName = format(new Date(data.year, data.month - 1, 1), 'LLLL', { locale: pl });
-          
-          for (const admin of admins) {
-            await supabase
-              .from('notifications')
-              .insert({
-                user_id: admin.id,
-                title: 'Złożono nowy raport',
-                message: `Raport za ${monthName} ${data.year} - ${location?.name} został złożony i oczekuje na sprawdzenie.`,
-                priority: 'medium',
-                action_label: 'Zobacz raport',
-                action_link: `/reports/${reportId}`
-              });
-          }
-        }
-        
-        return reportId;
-      } catch (error) {
-        console.error('Błąd przy składaniu raportu:', error);
-        throw error;
-      }
-    },
-    onSuccess: (newReportId) => {
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
-      toast({
-        title: "Raport złożony",
-        description: "Raport został złożony do zatwierdzenia",
-      });
-      
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        navigate(`/reports/${newReportId}`);
-      }
-      
-      setIsSubmitting(false);
-    },
-    onError: (error) => {
-      console.error('Błąd podczas składania raportu:', error);
-      toast({
-        title: "Błąd",
-        description: `Nie udało się złożyć raportu: ${error instanceof Error ? error.message : 'Nieznany błąd'}`,
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
-    }
-  });
-  
   // Funkcja do inicjalizacji wpisów raportu
   const initializeReportEntries = async (reportId: string, locationId: string, month: number, year: number) => {
     try {
@@ -716,8 +632,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     
     setIsSubmitting(true);
     
-    // Zmieniono: Zawsze używamy saveDraftMutation, niezależnie od przycisku
-    // Teraz przycisk "Utwórz i złóż raport" tworzy tylko raport bez składania
+    // Zmieniono: Zawsze używamy saveDraftMutation do zapisania raportu
     saveDraftMutation.mutate(formData);
   };
   
@@ -909,19 +824,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             )}
             <Button 
               type="submit" 
-              variant="outline" 
-              disabled={isSubmitting}
-            >
-              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              Zapisz jako wersję roboczą
-            </Button>
-            <Button 
-              type="submit" 
               variant="default" 
               disabled={isSubmitting}
             >
               {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              {reportId ? 'Utwórz raport' : 'Utwórz raport'}
+              {reportId ? 'Zapisz zmiany' : 'Utwórz raport'}
             </Button>
           </div>
         </form>
