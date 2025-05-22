@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,7 +62,7 @@ const formSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
   location_id: z.string().uuid(),
-  report_type: z.enum(['standard'])
+  report_type: z.literal('standard') // Zmiana z enum na literal, tylko 'standard'
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
@@ -128,7 +129,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         month: report.month,
         year: report.year,
         location_id: report.location_id,
-        report_type: report.report_type,
+        report_type: 'standard', // Zawsze ustawiamy 'standard', niezależnie od wartości w raporcie
       });
     }
   }, [report, form]);
@@ -227,7 +228,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   });
   
   // Funkcja do inicjalizacji wpisów raportu
-  const initializeReportEntries = async (reportId: string, reportType: 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza', locationId: string, month: number, year: number) => {
+  const initializeReportEntries = async (reportId: string, reportType: 'standard', locationId: string, month: number, year: number) => {
     try {
       // Pobierz sekcje dla danego typu raportu
       const { data: sections, error: sectionsError } = await supabase
@@ -486,11 +487,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <Select
                   value={field.value}
                   onValueChange={field.onChange as (value: string) => void}
-                  disabled={report?.status !== 'draft' && !!report || true}
+                  disabled={true}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Wybierz typ raportu" />
+                      <SelectValue placeholder="Standardowy" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
