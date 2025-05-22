@@ -160,24 +160,30 @@ const Dashboard = () => {
           
           setReportStatus(currentReportStatus);
         } else {
-          // Dla prowincjałów i adminów - pobierz liczbę złożonych raportów i liczbę lokalizacji
-          const { count: submittedCount, error: submittedError } = await supabase
+          // Dla prowincjałów i adminów - poprawnie pobierz liczbę złożonych i zatwierdzonych raportów i liczbę lokalizacji
+          const { data: submittedReports, error: submittedError } = await supabase
             .from('reports')
-            .select('id', { count: 'exact' })
+            .select('id')
             .in('status', ['submitted', 'approved'])
             .eq('month', currentMonth)
             .eq('year', currentYear);
           
           if (submittedError) throw submittedError;
           
-          const { count: locationsCount, error: locationsError } = await supabase
+          const { data: locationsData, error: locationsError } = await supabase
             .from('locations')
-            .select('id', { count: 'exact' });
+            .select('id');
           
           if (locationsError) throw locationsError;
           
-          setSubmittedReportsCount(submittedCount || 0);
-          setTotalLocations(locationsCount || 0);
+          const actualSubmittedCount = submittedReports?.length || 0;
+          const actualLocationsCount = locationsData?.length || 0;
+          
+          console.log('Złożone raporty:', actualSubmittedCount);
+          console.log('Liczba lokalizacji:', actualLocationsCount);
+          
+          setSubmittedReportsCount(actualSubmittedCount);
+          setTotalLocations(actualLocationsCount);
         }
         
         let balanceAmount = 0;
