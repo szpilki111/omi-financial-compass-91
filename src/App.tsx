@@ -50,14 +50,14 @@ const App = () => (
               </ProtectedRoute>
             } />
             
-            {/* KPIR routes */}
+            {/* KPIR routes - only for ekonom role */}
             <Route path="/kpir" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="ekonom">
                 <KpirPage />
               </ProtectedRoute>
             } />
             <Route path="/kpir/nowy" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="ekonom">
                 <KpirPage />
               </ProtectedRoute>
             } />

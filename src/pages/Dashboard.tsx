@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -7,7 +6,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import NotificationCard from '@/components/dashboard/NotificationCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
-import { FileText, BarChart3, Book, CreditCard } from 'lucide-react';
+import { FileText, BarChart3, Book, CreditCard, Building, FileCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,6 +46,8 @@ const Dashboard = () => {
     text: 'Nie złożony'
   });
   const [balance, setBalance] = useState('0 PLN');
+  const [submittedReportsCount, setSubmittedReportsCount] = useState(0);
+  const [totalLocations, setTotalLocations] = useState(0);
 
   const isLocalUser = user?.role === 'ekonom';
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
@@ -119,42 +120,64 @@ const Dashboard = () => {
         
         if (transactionError) throw transactionError;
         
-        // 2. Sprawdź status raportu za bieżący miesiąc
+        // 2. Sprawdź status raportu za bieżący miesiąc lub liczba złożonych raportów
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
-        
-        let reportsQuery = supabase
-          .from('reports')
-          .select('status')
-          .eq('month', currentMonth)
-          .eq('year', currentYear);
-        
-        if (isLocalUser && user.location) {
-          reportsQuery = reportsQuery.eq('location_id', user.location);
-        }
-        
-        const { data: reportData, error: reportsError } = await reportsQuery;
-        
-        if (reportsError) throw reportsError;
-        
-        // Określenie statusu raportu
-        let reportStatusObj = {
-          status: 'error' as 'success' | 'error',
-          text: 'Nie złożony'
-        };
-        
-        if (reportData && reportData.length > 0) {
-          const status = reportData[0].status;
-          if (status === 'submitted') {
-            reportStatusObj = { status: 'success', text: 'Złożony' };
-          } else if (status === 'approved') {
-            reportStatusObj = { status: 'success', text: 'Zatwierdzony' };
-          } else if (status === 'rejected') {
-            reportStatusObj = { status: 'error', text: 'Odrzucony' };
+
+        if (isLocalUser) {
+          // Dla ekonomów - sprawdź status raportu za bieżący miesiąc
+          let reportsQuery = supabase
+            .from('reports')
+            .select('status')
+            .eq('month', currentMonth)
+            .eq('year', currentYear);
+          
+          if (user.location) {
+            reportsQuery = reportsQuery.eq('location_id', user.location);
           }
+          
+          const { data: reportData, error: reportsError } = await reportsQuery;
+          
+          if (reportsError) throw reportsError;
+          
+          // Określenie statusu raportu
+          let reportStatusObj = {
+            status: 'error' as 'success' | 'error',
+            text: 'Nie złożony'
+          };
+          
+          if (reportData && reportData.length > 0) {
+            const status = reportData[0].status;
+            if (status === 'submitted') {
+              reportStatusObj = { status: 'success', text: 'Złożony' };
+            } else if (status === 'approved') {
+              reportStatusObj = { status: 'success', text: 'Zatwierdzony' };
+            } else if (status === 'rejected') {
+              reportStatusObj = { status: 'error', text: 'Odrzucony' };
+            }
+          }
+          
+          setReportStatus(reportStatusObj);
+        } else {
+          // Dla prowincjałów i adminów - pobierz liczbę złożonych raportów i liczbę lokalizacji
+          const { count: submittedCount, error: submittedError } = await supabase
+            .from('reports')
+            .select('id', { count: 'exact' })
+            .in('status', ['submitted', 'approved'])
+            .eq('month', currentMonth)
+            .eq('year', currentYear);
+          
+          if (submittedError) throw submittedError;
+          
+          const { count: locationsCount, error: locationsError } = await supabase
+            .from('locations')
+            .select('id', { count: 'exact' });
+          
+          if (locationsError) throw locationsError;
+          
+          setSubmittedReportsCount(submittedCount || 0);
+          setTotalLocations(locationsCount || 0);
         }
-        
-        setReportStatus(reportStatusObj);
         
         let balanceAmount = 0;
         try {
@@ -189,49 +212,95 @@ const Dashboard = () => {
         setOperationCount(transactionCount || 0);
         setBalance(`${balanceAmount.toLocaleString('pl-PL')} PLN`);
         
-        // Aktualizacja statystyk
-        setStatistics([
-          {
-            title: 'Operacje w tym miesiącu',
-            value: transactionCount || 0,
-            icon: <CreditCard className="h-6 w-6 text-blue-500" />
-          },
-          {
-            title: 'Status raportu za miesiąc',
-            value: currentDate.toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
-            icon: <FileText className="h-6 w-6 text-green-500" />,
-            status: reportStatusObj.status,
-            statusText: reportStatusObj.text
-          },
-          {
-            title: 'Saldo',
-            value: `${balanceAmount.toLocaleString('pl-PL')} PLN`,
-            change: 0, // W rzeczywistości tu by była zmiana procentowa
-            icon: <BarChart3 className="h-6 w-6 text-purple-500" />
-          },
-        ]);
+        // Aktualizacja statystyk w zależności od roli użytkownika
+        if (isLocalUser) {
+          setStatistics([
+            {
+              title: 'Operacje w tym miesiącu',
+              value: transactionCount || 0,
+              icon: <CreditCard className="h-6 w-6 text-blue-500" />
+            },
+            {
+              title: 'Status raportu za miesiąc',
+              value: currentDate.toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
+              icon: <FileText className="h-6 w-6 text-green-500" />,
+              status: reportStatusObj.status,
+              statusText: reportStatusObj.text
+            },
+            {
+              title: 'Saldo',
+              value: `${balanceAmount.toLocaleString('pl-PL')} PLN`,
+              change: 0, // W rzeczywistości tu by była zmiana procentowa
+              icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+            },
+          ]);
+        } else {
+          // Statystyki dla prowincjała i admina
+          setStatistics([
+            {
+              title: 'Operacje w tym miesiącu',
+              value: transactionCount || 0,
+              icon: <CreditCard className="h-6 w-6 text-blue-500" />
+            },
+            {
+              title: 'Liczba złożonych raportów w obecnym miesiącu',
+              value: `${submittedReportsCount}/${totalLocations}`,
+              icon: <FileCheck className="h-6 w-6 text-green-500" />,
+              status: submittedReportsCount === totalLocations ? 'success' : 'warning',
+              statusText: submittedReportsCount === totalLocations ? 'Komplet' : 'W trakcie'
+            },
+            {
+              title: 'Saldo',
+              value: `${balanceAmount.toLocaleString('pl-PL')} PLN`,
+              change: 0,
+              icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+            },
+          ]);
+        }
       } catch (error) {
         console.error('Błąd podczas pobierania statystyk:', error);
         // Ustaw domyślne statystyki w przypadku błędu
-        setStatistics([
-          {
-            title: 'Operacje w tym miesiącu',
-            value: '0',
-            icon: <CreditCard className="h-6 w-6 text-blue-500" />
-          },
-          {
-            title: 'Status raportu za miesiąc',
-            value: new Date().toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
-            icon: <FileText className="h-6 w-6 text-green-500" />,
-            status: 'error',
-            statusText: 'Nie złożony'
-          },
-          {
-            title: 'Saldo',
-            value: '0 PLN',
-            icon: <BarChart3 className="h-6 w-6 text-purple-500" />
-          },
-        ]);
+        if (isLocalUser) {
+          setStatistics([
+            {
+              title: 'Operacje w tym miesiącu',
+              value: '0',
+              icon: <CreditCard className="h-6 w-6 text-blue-500" />
+            },
+            {
+              title: 'Status raportu za miesiąc',
+              value: new Date().toLocaleString('pl-PL', { month: 'long', year: 'numeric' }),
+              icon: <FileText className="h-6 w-6 text-green-500" />,
+              status: 'error',
+              statusText: 'Nie złożony'
+            },
+            {
+              title: 'Saldo',
+              value: '0 PLN',
+              icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+            },
+          ]);
+        } else {
+          setStatistics([
+            {
+              title: 'Operacje w tym miesiącu',
+              value: '0',
+              icon: <CreditCard className="h-6 w-6 text-blue-500" />
+            },
+            {
+              title: 'Liczba złożonych raportów w obecnym miesiącu',
+              value: '0/0',
+              icon: <FileCheck className="h-6 w-6 text-green-500" />,
+              status: 'warning',
+              statusText: 'Brak danych'
+            },
+            {
+              title: 'Saldo',
+              value: '0 PLN',
+              icon: <BarChart3 className="h-6 w-6 text-purple-500" />
+            },
+          ]);
+        }
       } finally {
         setIsLoadingStats(false);
       }
@@ -270,45 +339,83 @@ const Dashboard = () => {
     }
   };
 
-  const QuickAccessSection = () => (
-    <div className="mt-8">
-      <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Button
-          onClick={() => navigate('/kpir')}
-          variant="outline"
-          className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
-        >
-          <CreditCard className="w-6 h-6 mb-2 text-omi-500" />
-          <span>Nowa operacja KPiR</span>
-        </Button>
-        <Button
-          onClick={() => navigate('/raporty/nowy')}
-          variant="outline"
-          className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
-        >
-          <FileText className="w-6 h-6 mb-2 text-omi-500" />
-          <span>Nowy raport</span>
-        </Button>
-        <Button
-          onClick={() => navigate('/wizualizacja')}
-          variant="outline"
-          className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
-        >
-          <BarChart3 className="w-6 h-6 mb-2 text-omi-500" />
-          <span>Wizualizacja danych</span>
-        </Button>
-        <Button
-          onClick={() => navigate('/baza-wiedzy')}
-          variant="outline"
-          className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
-        >
-          <Book className="w-6 h-6 mb-2 text-omi-500" />
-          <span>Baza wiedzy</span>
-        </Button>
+  const QuickAccessSection = () => {
+    // Dla prowincjałów i adminów nie pokazujemy przycisku KPiR
+    if (isAdmin) {
+      return (
+        <div className="mt-8">
+          <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Button
+              onClick={() => navigate('/raporty/nowy')}
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+            >
+              <FileText className="w-6 h-6 mb-2 text-omi-500" />
+              <span>Nowy raport</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/wizualizacja')}
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+            >
+              <BarChart3 className="w-6 h-6 mb-2 text-omi-500" />
+              <span>Wizualizacja danych</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/baza-wiedzy')}
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+            >
+              <Book className="w-6 h-6 mb-2 text-omi-500" />
+              <span>Baza wiedzy</span>
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Dla ekonomów pokazujemy wszystkie przyciski, włącznie z KPiR
+    return (
+      <div className="mt-8">
+        <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Button
+            onClick={() => navigate('/kpir')}
+            variant="outline"
+            className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+          >
+            <CreditCard className="w-6 h-6 mb-2 text-omi-500" />
+            <span>Nowa operacja KPiR</span>
+          </Button>
+          <Button
+            onClick={() => navigate('/raporty/nowy')}
+            variant="outline"
+            className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+          >
+            <FileText className="w-6 h-6 mb-2 text-omi-500" />
+            <span>Nowy raport</span>
+          </Button>
+          <Button
+            onClick={() => navigate('/wizualizacja')}
+            variant="outline"
+            className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+          >
+            <BarChart3 className="w-6 h-6 mb-2 text-omi-500" />
+            <span>Wizualizacja danych</span>
+          </Button>
+          <Button
+            onClick={() => navigate('/baza-wiedzy')}
+            variant="outline"
+            className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
+          >
+            <Book className="w-6 h-6 mb-2 text-omi-500" />
+            <span>Baza wiedzy</span>
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const StatisticsSection = () => {
     if (isLoadingStats) {
