@@ -50,7 +50,6 @@ interface ReportFormProps {
 const reportFormSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
-  location_id: z.string().uuid(),
   report_type: z.literal('standard') // Tylko 'standard'
 });
 
@@ -61,7 +60,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDraft, setIsDraft] = useState(true);
-  const isEkonom = user?.role === 'ekonom';
 
   // Inicjalizacja formularza
   const form = useForm<z.infer<typeof reportFormSchema>>({
@@ -69,8 +67,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     defaultValues: {
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
-      report_type: 'standard',
-      location_id: user?.location || '' // Ustaw domyślnie lokalizację użytkownika
+      report_type: 'standard', // Zawsze ustawiamy 'standard'
     }
   });
 
@@ -102,45 +99,31 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       form.reset({
         month: report.month,
         year: report.year,
-        location_id: report.location_id,
         report_type: 'standard', // Zawsze ustawiamy 'standard'
       });
     }
   }, [report, form]);
 
-  // Ustawienie lokalizacji dla ekonoma
-  useEffect(() => {
-    if (isEkonom && user?.location) {
-      form.setValue('location_id', user.location);
-    }
-  }, [isEkonom, user, form]);
-
-  // Pobieranie listy lokalizacji
-  const { data: locations, isLoading: loadingLocations } = useQuery({
-    queryKey: ['locations'],
+  // Pobieranie lokalizacji przypisanej do ekonoma
+  const { data: userLocation } = useQuery({
+    queryKey: ['userLocation', user?.id],
     queryFn: async () => {
-      // Jeśli użytkownik jest ekonomem, pobierz tylko jego lokalizację
-      if (user && user.role === 'ekonom' && user.location) {
-        const { data, error } = await supabase
-          .from('locations')
-          .select('*')
-          .eq('id', user.location);
-          
-        if (error) throw error;
-        return data;
-      }
-      
-      // Dla admina i prowincjała, pobierz wszystkie lokalizacje
+      if (!user?.id) return null;
+
+      // Pobierz lokalizację przypisaną do użytkownika
       const { data, error } = await supabase
-        .from('locations')
-        .select('*')
-        .order('name');
+        .from('profiles')
+        .select('location_id, locations(id, name)')
+        .eq('id', user.id)
+        .single();
         
       if (error) throw error;
-      return data;
-    }
+      
+      return data?.locations || null;
+    },
+    enabled: !!user?.id
   });
-  
+
   // Pobieranie wszystkich sekcji raportu
   const { data: reportSections } = useQuery({
     queryKey: ['reportSections', 'standard'],
@@ -159,7 +142,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Mutacja do zapisywania raportu jako wersja robocza
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReportFormData) => {
-      const { month, year, location_id } = data;
+      const { month, year } = data;
+      
+      // Użyj lokalizacji użytkownika
+      if (!user?.location) {
+        throw new Error('Brak przypisanej lokalizacji dla użytkownika');
+      }
+      
+      const location_id = user.location;
       
       // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
       const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
@@ -266,6 +256,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .eq('id', reportId);
         
       if (error) throw error;
+
+      // Oblicz i zaktualizuj podsumowania raportu
+      await calculateAndUpdateReportSummary(reportId);
       
       // Wyślij powiadomienie do prowincjała
       const { data: admins, error: adminsError } = await supabase
@@ -278,7 +271,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         const { data: location } = await supabase
           .from('locations')
           .select('name')
-          .eq('id', data.location_id)
+          .eq('id', user.location)
           .single();
           
         const monthName = format(new Date(data.year, data.month - 1, 1), 'LLLL', { locale: pl });
@@ -445,10 +438,93 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             
           if (insertError) throw insertError;
         }
+
+        // Po zainicjalizowaniu wpisów, oblicz i zapisz podsumowania
+        await calculateAndUpdateReportSummary(reportId);
       }
     } catch (error) {
       console.error('Błąd podczas inicjalizacji wpisów raportu:', error);
       throw new Error('Nie udało się zainicjalizować wpisów raportu');
+    }
+  };
+
+  // Nowa funkcja do obliczania i aktualizacji podsumowania raportu
+  const calculateAndUpdateReportSummary = async (reportId: string) => {
+    try {
+      // Pobierz wszystkie wpisy raportu
+      const { data: entries, error } = await supabase
+        .from('report_entries')
+        .select('*')
+        .eq('report_id', reportId);
+      
+      if (error) throw error;
+
+      if (!entries || entries.length === 0) {
+        console.warn('Brak wpisów w raporcie do obliczenia podsumowania');
+        return;
+      }
+
+      // Oblicz podsumowania
+      let incomeTotal = 0;
+      let expenseTotal = 0;
+      let settlementsTotal = 0;
+
+      entries.forEach(entry => {
+        // Konta przychodów zaczynające się od 7
+        if (entry.account_number.startsWith('7')) {
+          incomeTotal += Number(entry.credit_turnover || 0);
+        }
+        // Konta kosztów zaczynające się od 4
+        else if (entry.account_number.startsWith('4')) {
+          expenseTotal += Number(entry.debit_turnover || 0);
+        }
+        // Konta rozrachunków zaczynające się od 2
+        else if (entry.account_number.startsWith('2')) {
+          settlementsTotal += Number(entry.credit_closing || 0) - Number(entry.debit_closing || 0);
+        }
+      });
+
+      // Oblicz bilans (przychody - koszty)
+      const balance = incomeTotal - expenseTotal;
+
+      // Sprawdź, czy istnieje już rekord podsumowania
+      const { data: existingDetails } = await supabase
+        .from('report_details')
+        .select('id')
+        .eq('report_id', reportId)
+        .single();
+
+      if (existingDetails) {
+        // Aktualizuj istniejący rekord
+        const { error: updateError } = await supabase
+          .from('report_details')
+          .update({
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDetails.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Utwórz nowy rekord podsumowania
+        const { error: insertError } = await supabase
+          .from('report_details')
+          .insert({
+            report_id: reportId,
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal
+          });
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji podsumowania raportu:', error);
+      throw new Error('Nie udało się zaktualizować podsumowania raportu');
     }
   };
 
@@ -458,12 +534,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     const checkExistingReport = async () => {
       if (reportId) return false; // Jeśli edytujemy istniejący raport, pomijamy sprawdzenie
       
+      if (!user?.location) {
+        toast({
+          title: "Błąd",
+          description: "Nie masz przypisanej lokalizacji. Skontaktuj się z administratorem.",
+          variant: "destructive",
+        });
+        return true; // Zwracamy true, aby zatrzymać tworzenie raportu
+      }
+      
       const { data, error } = await supabase
         .from('reports')
         .select('id')
         .eq('month', values.month)
         .eq('year', values.year)
-        .eq('location_id', values.location_id);
+        .eq('location_id', user.location);
         
       if (error) {
         console.error('Błąd podczas sprawdzania istniejących raportów:', error);
@@ -492,7 +577,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   };
   
   // Wyświetlanie loadera podczas ładowania danych
-  if ((reportId && loadingReport) || loadingLocations) {
+  if ((reportId && loadingReport)) {
     return (
       <div className="flex justify-center p-8">
         <Spinner size="lg" />
@@ -508,6 +593,26 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           <h3 className="text-lg font-medium text-yellow-800">Raport nie może być edytowany</h3>
           <p className="text-yellow-700">
             Ten raport ma status <strong>{report.status}</strong> i nie może być już edytowany.
+          </p>
+        </div>
+        
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onCancel || (() => navigate('/raporty'))}>
+            Powrót do listy raportów
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sprawdź, czy użytkownik ma przypisaną lokalizację
+  if (!user?.location && !reportId) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-yellow-100 border border-yellow-400 p-4 rounded">
+          <h3 className="text-lg font-medium text-yellow-800">Brak przypisanej lokalizacji</h3>
+          <p className="text-yellow-700">
+            Nie masz przypisanej lokalizacji. Skontaktuj się z administratorem, aby przypisać Ci lokalizację.
           </p>
         </div>
         
@@ -602,52 +707,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 )}
               />
               
-              <FormField
-                control={form.control}
-                name="location_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Placówka</FormLabel>
-                    {isEkonom ? (
-                      // Dla ekonoma wyświetl tylko nazwę placówki, bez możliwości wyboru
-                      <div>
-                        <div className="w-full p-2 border border-omi-gray-300 bg-omi-gray-100 rounded-md">
-                          {locations?.find(loc => loc.id === user?.location)?.name || "Twoja placówka"}
-                        </div>
-                        <FormDescription>
-                          Placówka jest wybrana automatycznie na podstawie Twojego profilu
-                        </FormDescription>
-                      </div>
-                    ) : (
-                      // Dla admina/prowincjała lista rozwijana
-                      <>
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                          disabled={false}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Wybierz placówkę" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {locations?.map((location) => (
-                              <SelectItem key={location.id} value={location.id}>
-                                {location.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Wybierz placówkę, dla której tworzysz raport
-                        </FormDescription>
-                      </>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {userLocation && (
+                <div className="col-span-2">
+                  <FormLabel>Placówka</FormLabel>
+                  <div className="w-full p-2 border border-omi-gray-300 bg-omi-gray-100 rounded-md">
+                    {userLocation.name || "Twoja placówka"}
+                  </div>
+                  <FormDescription className="mt-1">
+                    Placówka jest wybrana automatycznie na podstawie Twojego profilu
+                  </FormDescription>
+                </div>
+              )}
               
               <FormField
                 control={form.control}

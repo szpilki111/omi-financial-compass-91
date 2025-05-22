@@ -20,7 +20,6 @@ export interface Report {
 export interface ReportFormData {
   month: number;
   year: number;
-  location_id: string;
   report_type: 'standard';
 }
 
