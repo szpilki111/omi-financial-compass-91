@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getReportFinancialDetails } from '@/utils/financeUtils';
+import { getReportFinancialDetails, calculateFinancialSummary } from '@/utils/financeUtils';
 import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const ReportDetails = () => {
-  const { reportId } = useParams<{ reportId: string }>();
+interface ReportDetailsProps {
+  reportId?: string;
+}
+
+const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId }) => {
+  const { reportId: paramReportId } = useParams<{ reportId: string }>();
+  const reportId = propReportId || paramReportId;
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);

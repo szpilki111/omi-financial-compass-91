@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -164,5 +163,64 @@ export const getReportFinancialDetails = async (reportId: string) => {
   } catch (error) {
     console.error('Błąd podczas pobierania szczegółów finansowych raportu:', error);
     return { income: 0, expense: 0, balance: 0, settlements: 0 };
+  }
+};
+
+/**
+ * Aktualizuje szczegóły finansowe raportu
+ */
+export const updateReportDetails = async (
+  reportId: string, 
+  financialSummary: { income: number, expense: number, balance: number }
+) => {
+  try {
+    console.log(`Aktualizacja szczegółów raportu ${reportId} z danymi:`, financialSummary);
+    
+    // Sprawdź, czy już istnieją szczegóły dla tego raportu
+    const { data: existingDetails } = await supabase
+      .from('report_details')
+      .select('id')
+      .eq('report_id', reportId);
+      
+    if (existingDetails && existingDetails.length > 0) {
+      // Aktualizuj istniejące szczegóły
+      const { data, error } = await supabase
+        .from('report_details')
+        .update({
+          income_total: financialSummary.income,
+          expense_total: financialSummary.expense,
+          balance: financialSummary.balance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('report_id', reportId);
+        
+      if (error) {
+        console.error('Błąd przy aktualizacji szczegółów raportu:', error);
+        throw error;
+      }
+      
+      return data;
+    } else {
+      // Utwórz nowe szczegóły
+      const { data, error } = await supabase
+        .from('report_details')
+        .insert({
+          report_id: reportId,
+          income_total: financialSummary.income,
+          expense_total: financialSummary.expense,
+          balance: financialSummary.balance,
+          settlements_total: 0
+        });
+        
+      if (error) {
+        console.error('Błąd przy tworzeniu szczegółów raportu:', error);
+        throw error;
+      }
+      
+      return data;
+    }
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji szczegółów raportu:', error);
+    throw error;
   }
 };
