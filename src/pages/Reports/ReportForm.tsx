@@ -239,6 +239,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             
           if (error) throw error;
           
+          // Zawsze aktualizuj podsumowanie finansowe, nawet dla istniejącego raportu
+          await updateReportDetails(reportId, financialSummary);
+          
           return reportId;
         } else {
           // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
@@ -279,15 +282,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             await initializeReportEntries(newReport.id, location_id, month, year);
             
             // Zapisz podsumowanie finansowe od razu
-            await supabase
-              .from('report_details')
-              .insert({
-                report_id: newReport.id,
-                income_total: financialSummary.income,
-                expense_total: financialSummary.expense,
-                balance: financialSummary.balance,
-                settlements_total: 0 // To jest obliczane w innym miejscu
-              });
+            await updateReportDetails(newReport.id, financialSummary);
               
             // Upewnij się, że raport ma status 'draft' po inicjalizacji
             await supabase

@@ -105,3 +105,64 @@ export const calculateFinancialSummary = async (
     return { income: 0, expense: 0, balance: 0, transactions: [] };
   }
 };
+
+/**
+ * Pobierz szczegóły finansowe dla konkretnego raportu
+ */
+export const getReportFinancialDetails = async (reportId: string) => {
+  try {
+    console.log(`Pobieranie szczegółów finansowych dla raportu: ${reportId}`);
+    
+    // Pobierz najpierw istniejące szczegóły z tabeli report_details
+    const { data: reportDetails, error: reportDetailsError } = await supabase
+      .from('report_details')
+      .select('*')
+      .eq('report_id', reportId)
+      .single();
+    
+    if (reportDetailsError) {
+      console.error('Błąd podczas pobierania szczegółów raportu:', reportDetailsError);
+      
+      // Jeśli nie znaleziono szczegółów raportu, pobierz dane raportu
+      const { data: report, error: reportError } = await supabase
+        .from('reports')
+        .select('month, year, location_id')
+        .eq('id', reportId)
+        .single();
+        
+      if (reportError) {
+        console.error('Błąd podczas pobierania danych raportu:', reportError);
+        return { income: 0, expense: 0, balance: 0, settlements: 0 };
+      }
+      
+      // Oblicz daty na podstawie miesiąca i roku
+      const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
+      const lastDayOfMonth = new Date(report.year, report.month, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      
+      // Oblicz finansowe podsumowanie
+      const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
+      
+      // Zwróć obliczone wartości
+      return { 
+        income: summary.income, 
+        expense: summary.expense,
+        balance: summary.balance,
+        settlements: 0 // Brak danych o rozrachunkach
+      };
+    }
+    
+    // Jeśli znaleziono szczegóły, zwróć je
+    return {
+      income: Number(reportDetails.income_total) || 0,
+      expense: Number(reportDetails.expense_total) || 0,
+      balance: Number(reportDetails.balance) || 0,
+      settlements: Number(reportDetails.settlements_total) || 0
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania szczegółów finansowych raportu:', error);
+    return { income: 0, expense: 0, balance: 0, settlements: 0 };
+  }
+};
