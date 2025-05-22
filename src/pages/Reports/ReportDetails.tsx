@@ -110,13 +110,13 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       const { data: sections, error: sectionsError } = await supabase
         .from('report_sections')
         .select('*')
-        .eq('report_type', report.report_type)
+        .eq('report_type', 'standard') // Zawsze używamy 'standard', ignorując wartość z bazy danych
         .order('section_order', { ascending: true });
         
       if (sectionsError) throw sectionsError;
       
       if (!sections || sections.length === 0) {
-        return [];
+        return [] as SectionWithEntries[];
       }
       
       // Pobierz wpisy raportu
@@ -129,16 +129,22 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       
       if (!entries) {
         return sections.map(section => ({
-          section,
+          section: {
+            ...section,
+            report_type: 'standard' as const // Wymuszenie typu 'standard'
+          },
           entries: []
-        }));
+        })) as SectionWithEntries[];
       }
       
       // Pogrupuj wpisy według sekcji
       const result: SectionWithEntries[] = sections.map(section => {
         const sectionEntries = entries.filter(entry => entry.section_id === section.id);
         return {
-          section,
+          section: {
+            ...section,
+            report_type: 'standard' as const // Wymuszenie typu 'standard'
+          },
           entries: sectionEntries
         };
       });
@@ -150,7 +156,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           section: {
             id: 'no-section',
             name: 'Pozycje bez przypisanej sekcji',
-            report_type: report.report_type,
+            report_type: 'standard' as const, // Wymuszenie typu 'standard'
             section_order: 999
           },
           entries: entriesWithoutSection
