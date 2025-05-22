@@ -51,7 +51,7 @@ const reportFormSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
   location_id: z.string().uuid(),
-  report_type: z.literal('standard') // Zmiana z enum na literal, tylko 'standard'
+  report_type: z.literal('standard') // Tylko 'standard'
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
@@ -101,7 +101,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         month: report.month,
         year: report.year,
         location_id: report.location_id,
-        report_type: 'standard', // Zawsze ustawiamy 'standard', niezależnie od wartości w raporcie
+        report_type: 'standard', // Zawsze ustawiamy 'standard'
       });
     }
   }, [report, form]);
@@ -132,14 +132,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   });
   
-  // Pobieranie wszystkich sekcji raportu
+  // Pobieranie wszystkich sekcji raportu - FIX: Usunięcie zagnieżdżenia typu
   const { data: reportSections } = useQuery({
-    queryKey: ['reportSections', form.watch('report_type')],
+    queryKey: ['reportSections', 'standard'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('report_sections')
         .select('*')
-        .eq('report_type', form.watch('report_type'))
+        .eq('report_type', 'standard')
         .order('section_order', { ascending: true });
         
       if (error) throw error;
@@ -205,7 +205,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
         // Inicjalizuj wpisy raportu na podstawie planu kont
         if (newReport?.id) {
-          await initializeReportEntries(newReport.id, report_type, location_id, month, year);
+          await initializeReportEntries(newReport.id, 'standard', location_id, month, year);
         }
         
         return newReport?.id;

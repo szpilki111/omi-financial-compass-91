@@ -14,20 +14,20 @@ export interface Report {
   comments: string | null;
   created_at: string;
   updated_at: string;
-  report_type: 'standard'; // Zmieniono typ z union na literal 'standard'
+  report_type: 'standard';
 }
 
 export interface ReportFormData {
   month: number;
   year: number;
   location_id: string;
-  report_type: 'standard'; // Zmieniono typ z union na literal 'standard'
+  report_type: 'standard';
 }
 
 export interface ReportSection {
   id: string;
   name: string;
-  report_type: 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza';
+  report_type: 'standard';
   section_order: number;
 }
 
