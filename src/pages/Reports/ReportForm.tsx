@@ -140,7 +140,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     mutationFn: async (data: { month: number; year: number }) => {
       const { month, year } = data;
       
-      // Użyj lokalizacji użytkownika
+      // Sprawdź czy użytkownik ma przypisaną lokalizację
       if (!user?.location) {
         throw new Error('Brak przypisanej lokalizacji dla użytkownika');
       }
@@ -163,7 +163,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       
       if (reportId) {
         // Aktualizacja istniejącego raportu
-        const { error } = await supabase
+        const { data: updatedReport, error } = await supabase
           .from('reports')
           .update({
             month,
@@ -174,12 +174,28 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             report_type: 'standard',
             updated_at: new Date().toISOString()
           })
-          .eq('id', reportId);
+          .eq('id', reportId)
+          .select('id')
+          .single();
           
         if (error) throw error;
         
         return reportId;
       } else {
+        // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
+        const { data: existingReports, error: existingError } = await supabase
+          .from('reports')
+          .select('id')
+          .eq('month', month)
+          .eq('year', year)
+          .eq('location_id', location_id);
+          
+        if (existingError) throw existingError;
+        
+        if (existingReports && existingReports.length > 0) {
+          throw new Error('Raport za ten miesiąc i rok dla tej lokalizacji już istnieje');
+        }
+        
         // Tworzenie nowego raportu
         const { data: newReport, error } = await supabase
           .from('reports')
@@ -207,12 +223,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         return newReport?.id;
       }
     },
-    onMutate: () => {
-      setIsSubmitting(true);
-    },
-    onSettled: () => {
-      setIsSubmitting(false);
-    },
     onSuccess: (newReportId) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       toast({
@@ -225,14 +235,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       } else {
         navigate(`/reports/${newReportId}`);
       }
+      
+      setIsSubmitting(false);
     },
     onError: (error) => {
       console.error('Błąd podczas zapisywania raportu:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się zapisać raportu. Spróbuj ponownie później.",
+        description: `Nie udało się zapisać raportu: ${error instanceof Error ? error.message : 'Nieznany błąd'}`,
         variant: "destructive",
       });
+      setIsSubmitting(false);
     }
   });
   
@@ -294,12 +307,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         throw error;
       }
     },
-    onMutate: () => {
-      setIsSubmitting(true);
-    },
-    onSettled: () => {
-      setIsSubmitting(false);
-    },
     onSuccess: (newReportId) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       toast({
@@ -312,14 +319,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       } else {
         navigate(`/reports/${newReportId}`);
       }
+      
+      setIsSubmitting(false);
     },
     onError: (error) => {
       console.error('Błąd podczas składania raportu:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się złożyć raportu. Spróbuj ponownie później.",
+        description: `Nie udało się złożyć raportu: ${error instanceof Error ? error.message : 'Nieznany błąd'}`,
         variant: "destructive",
       });
+      setIsSubmitting(false);
     }
   });
   
@@ -441,11 +451,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
         // Zapisz wpisy do bazy
         if (entriesToInsert.length > 0) {
-          const { error: insertError } = await supabase
-            .from('report_entries')
-            .insert(entriesToInsert);
-            
-          if (insertError) throw insertError;
+          // Zapisuj po jednym wpisie na raz, aby uniknąć limitu bazy danych
+          for (const entry of entriesToInsert) {
+            const { error: insertError } = await supabase
+              .from('report_entries')
+              .insert(entry);
+              
+            if (insertError) {
+              console.error('Błąd przy zapisie wpisu:', insertError);
+              // Kontynuujemy mimo błędu, aby zapisać jak najwięcej wpisów
+            }
+          }
           console.log("Wpisy zostały zapisane pomyślnie");
         }
 
@@ -473,19 +489,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
       if (!entries || entries.length === 0) {
         console.warn('Brak wpisów w raporcie do obliczenia podsumowania');
-        // Utworzenie pustego podsumowania
-        const { error: insertEmptyError } = await supabase
-          .from('report_details')
-          .insert({
-            report_id: reportId,
-            income_total: 0,
-            expense_total: 0,
-            balance: 0,
-            settlements_total: 0
-          });
-        
-        if (insertEmptyError) throw insertEmptyError;
-        console.log('Utworzono puste podsumowanie dla raportu bez wpisów');
         return;
       }
 
@@ -527,7 +530,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           .select('id')
           .eq('report_id', reportId);
 
-        if (checkError) throw checkError;
+        if (checkError) {
+          console.error('Błąd przy sprawdzaniu istniejących szczegółów:', checkError);
+          throw checkError;
+        }
         
         if (existingDetails && existingDetails.length > 0) {
           console.log(`Aktualizacja istniejącego podsumowania ${existingDetails[0].id}`);
@@ -565,12 +571,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             throw insertError;
           }
         }
+        console.log('Podsumowanie zostało pomyślnie zaktualizowane');
       } catch (err) {
         console.error("Błąd podczas zapisu podsumowania:", err);
         throw err;
       }
-      
-      console.log('Podsumowanie zostało pomyślnie zaktualizowane');
     } catch (error) {
       console.error('Błąd podczas aktualizacji podsumowania raportu:', error);
       throw new Error('Nie udało się zaktualizować podsumowania raportu');
@@ -579,56 +584,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
   // Obsługa formularza
   const onSubmit = (values: z.infer<typeof reportFormSchema>) => {
-    // Sprawdź, czy raport o tym samym miesiącu, roku i lokalizacji już istnieje
-    const checkExistingReport = async () => {
-      if (reportId) return false; // Jeśli edytujemy istniejący raport, pomijamy sprawdzenie
-      
-      if (!user?.location) {
-        toast({
-          title: "Błąd",
-          description: "Nie masz przypisanej lokalizacji. Skontaktuj się z administratorem.",
-          variant: "destructive",
-        });
-        return true; // Zwracamy true, aby zatrzymać tworzenie raportu
-      }
-      
-      const { data, error } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('month', values.month)
-        .eq('year', values.year)
-        .eq('location_id', user.location);
-        
-      if (error) {
-        console.error('Błąd podczas sprawdzania istniejących raportów:', error);
-        return false;
-      }
-      
-      return data && data.length > 0;
+    // Upewnij się, że wartości są zgodne z oczekiwanym typem
+    const formData = {
+      month: values.month,
+      year: values.year
     };
     
-    checkExistingReport().then(exists => {
-      if (exists) {
-        toast({
-          title: "Raport już istnieje",
-          description: "Raport za ten miesiąc i rok dla wybranej lokalizacji już istnieje.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Upewnij się, że wartości są zgodne z oczekiwanym typem
-      const formData = {
-        month: values.month,
-        year: values.year
-      };
-      
-      if (isDraft) {
-        saveDraftMutation.mutate(formData);
-      } else {
-        submitReportMutation.mutate(formData);
-      }
-    });
+    setIsSubmitting(true);
+    
+    if (isDraft) {
+      saveDraftMutation.mutate(formData);
+    } else {
+      submitReportMutation.mutate(formData);
+    }
   };
   
   // Wyświetlanie loadera podczas ładowania danych

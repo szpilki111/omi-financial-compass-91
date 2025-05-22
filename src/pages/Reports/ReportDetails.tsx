@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_API_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
-import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails } from '@/types/reports';
+import { supabase } from '@/integrations/supabase/client';
+import { Report, ReportSection, ReportEntry, SectionWithEntries } from '@/types/reports';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -73,22 +73,16 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     queryKey: ['reportDetails', reportId],
     queryFn: async () => {
       try {
-        // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
-        // nie jest jeszcze uwzględniona w typach Supabase
-        const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-        
-        const response = await fetch(apiUrl, {
-          headers: {
-            'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Nie udało się pobrać szczegółów raportu');
+        const { data, error } = await supabase
+          .from('report_details')
+          .select('*')
+          .eq('report_id', reportId);
+
+        if (error) {
+          console.error('Błąd podczas pobierania szczegółów raportu:', error);
+          return null;
         }
         
-        const data = await response.json();
         // Jeśli nie ma danych, zwróć domyślne wartości
         if (!data || data.length === 0) {
           return {
@@ -102,7 +96,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
             updated_at: new Date().toISOString()
           };
         }
-        return data[0] as ReportDetails;
+        
+        return data[0];
       } catch (error) {
         console.error('Błąd podczas pobierania szczegółów raportu:', error);
         // Zwróć domyślne wartości w przypadku błędu
@@ -249,43 +244,31 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     
     try {
       // Sprawdź czy istnieje już wpis w tabeli report_details
-      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-      const checkResponse = await fetch(apiUrl, {
-        headers: {
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
-        }
-      });
+      const { data: existingDetails, error: checkError } = await supabase
+        .from('report_details')
+        .select('id')
+        .eq('report_id', reportId);
       
-      if (!checkResponse.ok) {
-        throw new Error('Błąd podczas sprawdzania podsumowania raportu');
+      if (checkError) {
+        console.error('Błąd podczas sprawdzania podsumowania raportu:', checkError);
+        throw checkError;
       }
       
-      const details = await checkResponse.json();
-      
       // Zaktualizuj lub utwórz nowy wpis
-      if (details && details.length > 0) {
-        // Aktualizuj istniejący wpis
-        const updateUrl = `${SUPABASE_API_URL}/rest/v1/report_details?id=eq.${details[0].id}`;
-        const updateResponse = await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
+      if (existingDetails && existingDetails.length > 0) {
+        const { error: updateError } = await supabase
+          .from('report_details')
+          .update({
             income_total: incomeTotal,
             expense_total: expenseTotal,
             balance: balance,
             settlements_total: settlementsTotal,
             updated_at: new Date().toISOString()
           })
-        });
+          .eq('id', existingDetails[0].id);
         
-        if (!updateResponse.ok) {
-          console.error('Nie udało się zaktualizować szczegółów raportu');
+        if (updateError) {
+          console.error('Błąd podczas aktualizacji szczegółów raportu:', updateError);
           throw new Error('Błąd podczas aktualizacji podsumowania raportu');
         } else {
           console.log("Zaktualizowano szczegóły raportu");
@@ -293,27 +276,18 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
         }
       } else {
-        // Utwórz nowy wpis
-        const createUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
-        const createResponse = await fetch(createUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
+        const { error: insertError } = await supabase
+          .from('report_details')
+          .insert({
             report_id: reportId,
             income_total: incomeTotal,
             expense_total: expenseTotal,
             balance: balance,
             settlements_total: settlementsTotal
-          })
-        });
+          });
         
-        if (!createResponse.ok) {
-          console.error('Nie udało się utworzyć szczegółów raportu');
+        if (insertError) {
+          console.error('Błąd podczas tworzenia szczegółów raportu:', insertError);
           throw new Error('Błąd podczas tworzenia podsumowania raportu');
         } else {
           console.log("Utworzono nowy wpis szczegółów raportu");
@@ -377,13 +351,13 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     onError: (error) => {
       toast({
         title: "Błąd",
-        description: `Nie udało się zaakceptować raportu: ${error.message}`,
+        description: `Nie udało się zaakceptować raportu: ${error instanceof Error ? error.message : "Nieznany błąd"}`,
         variant: "destructive",
       });
     }
   });
   
-  // Mutacja do odrzucania raportu - Updated to use the proper type
+  // Mutacja do odrzucania raportu
   const rejectMutation = useMutation({
     mutationFn: async (data: RejectFormData) => {
       const { error } = await supabase
@@ -426,7 +400,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     onError: (error) => {
       toast({
         title: "Błąd",
-        description: `Nie udało się odrzucić raportu: ${error.message}`,
+        description: `Nie udało się odrzucić raportu: ${error instanceof Error ? error.message : "Nieznany błąd"}`,
         variant: "destructive",
       });
     }
@@ -452,9 +426,18 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   
   // Obsługa formularza odrzucenia raportu
   const onRejectSubmit = (values: z.infer<typeof rejectFormSchema>) => {
-    // Now we pass a properly typed object with required comments
     rejectMutation.mutate({ comments: values.comments });
   };
+  
+  // Jeśli nie ma szczegółów raportu, przelicz je teraz
+  useEffect(() => {
+    if (reportId && report && sectionsWithEntries && (!reportDetails || !reportDetails.id)) {
+      console.log("Brak szczegółów raportu, przeliczam ponownie");
+      calculateAndUpdateReportTotals(sectionsWithEntries).catch(error => {
+        console.error("Błąd przy przeliczaniu sum raportu:", error);
+      });
+    }
+  }, [reportId, report, sectionsWithEntries, reportDetails]);
   
   // Wyświetlanie loadera podczas ładowania danych
   if (loadingReport || loadingDetails || loadingSections) {
