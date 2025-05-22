@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -12,10 +13,13 @@ import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import AccountsImport from './components/AccountsImport';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<KpirTransaction[]>([]);
   const [showNewOperationDialog, setShowNewOperationDialog] = useState(false);
@@ -28,6 +32,13 @@ const KpirPage: React.FC = () => {
     dateTo: '',
     search: '',
   });
+
+  // Sprawdź, czy jesteśmy na ścieżce /kpir/nowy i otwórz okno nowej operacji
+  useEffect(() => {
+    if (location.pathname === '/kpir/nowy') {
+      setShowNewOperationDialog(true);
+    }
+  }, [location.pathname]);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -139,11 +150,23 @@ const KpirPage: React.FC = () => {
 
   const handleOperationAdded = () => {
     setShowNewOperationDialog(false);
+    // Jeśli byliśmy na ścieżce /kpir/nowy, wróć do głównej strony KPIR
+    if (location.pathname === '/kpir/nowy') {
+      navigate('/kpir');
+    }
     fetchTransactions();
     toast({
       title: "Sukces",
       description: "Operacja została dodana",
     });
+  };
+
+  const handleDialogClose = () => {
+    setShowNewOperationDialog(false);
+    // Jeśli byliśmy na ścieżce /kpir/nowy, wróć do głównej strony KPIR
+    if (location.pathname === '/kpir/nowy') {
+      navigate('/kpir');
+    }
   };
 
   const handleImportComplete = (count: number) => {
@@ -274,7 +297,7 @@ const KpirPage: React.FC = () => {
       {showNewOperationDialog && (
         <KpirOperationDialog 
           open={showNewOperationDialog}
-          onClose={() => setShowNewOperationDialog(false)}
+          onClose={handleDialogClose}
           onSave={handleOperationAdded}
         />
       )}

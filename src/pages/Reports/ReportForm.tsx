@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/form';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { useAuth } from '@/context/AuthContext';
 
 import {
   Select,
@@ -42,13 +43,9 @@ const months = [
   { value: 12, label: 'Grudzień' },
 ];
 
+// Zostawiamy tylko standardowy raport
 const reportTypes = [
-  { value: 'standard', label: 'Standardowy' },
-  { value: 'zos', label: 'Zestawienie Obrotów i Sald (ZOS)' },
-  { value: 'bilans', label: 'Bilans' },
-  { value: 'rzis', label: 'Rachunek Zysków i Strat (RZiS)' },
-  { value: 'jpk', label: 'Jednolity Plik Kontrolny (JPK)' },
-  { value: 'analiza', label: 'Analiza Kosztów i Przychodów' },
+  { value: 'standard', label: 'Standardowy' }
 ];
 
 const currentYear = new Date().getFullYear();
@@ -64,31 +61,31 @@ const formSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
   location_id: z.string().uuid(),
-  report_type: z.enum(['standard', 'zos', 'bilans', 'rzis', 'jpk', 'analiza'])
+  report_type: z.enum(['standard'])
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user } = useAuth();
 
   // Pobieranie placówek
   const { data: locations, isLoading: loadingLocations } = useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
-      const { data: userRole } = await supabase.rpc('get_user_role');
-      
-      if (userRole === 'admin' || userRole === 'provincial') {
-        // Admin i prowincjał widzą wszystkie placówki
-        const { data, error } = await supabase.from('locations').select('*');
+      // Ekonom widzi tylko swoją placówkę
+      if (user?.role === 'ekonom' && user.location) {
+        const { data, error } = await supabase
+          .from('locations')
+          .select('*')
+          .eq('id', user.location);
+        
         if (error) throw error;
         return data;
       } else {
-        // Ekonom widzi tylko swoją placówkę
-        const { data: locationId } = await supabase.rpc('get_user_location_id');
-        if (!locationId) throw new Error("Nie można określić lokalizacji użytkownika");
-        
-        const { data, error } = await supabase.from('locations').select('*').eq('id', locationId);
+        // Admin i prowincjał widzą wszystkie placówki
+        const { data, error } = await supabase.from('locations').select('*');
         if (error) throw error;
         return data;
       }
@@ -489,7 +486,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <Select
                   value={field.value}
                   onValueChange={field.onChange as (value: string) => void}
-                  disabled={report?.status !== 'draft' && !!report}
+                  disabled={report?.status !== 'draft' && !!report || true}
                 >
                   <FormControl>
                     <SelectTrigger>

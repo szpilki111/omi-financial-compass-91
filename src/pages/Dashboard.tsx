@@ -36,12 +36,12 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
-  const [statistics, setStatistics] = useState<Statistic[]>([]);
+  const [statistics, setStatistics] = useState([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [operationCount, setOperationCount] = useState(0);
-  const [reportStatus, setReportStatus] = useState<{status: 'success' | 'error'; text: string}>({
+  const [reportStatus, setReportStatus] = useState({
     status: 'error',
     text: 'Nie złożony'
   });
@@ -239,7 +239,7 @@ const Dashboard = () => {
     fetchStatistics();
   }, [user, isLocalUser, toast]);
 
-  const handleMarkAsRead = async (id: string) => {
+  const handleMarkAsRead = async (id) => {
     try {
       const { error } = await supabase
         .from('notifications')

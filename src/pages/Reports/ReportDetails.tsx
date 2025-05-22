@@ -6,7 +6,6 @@ import { Report, ReportSection, ReportEntry, SectionWithEntries, ReportDetails }
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -40,7 +39,6 @@ interface RejectFormData {
 const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('summary');
   
   // Formularz odrzucenia raportu
   const rejectForm = useForm<z.infer<typeof rejectFormSchema>>({
@@ -51,15 +49,15 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   });
 
   // Funkcja do przeliczania sum raportu
-  const calculateAndUpdateReportTotals = async (sections: SectionWithEntries[] | undefined) => {
-    if (!sections || !reportId) return;
+  const calculateAndUpdateReportTotals = async (sectionsWithEntries: SectionWithEntries[] | undefined) => {
+    if (!sectionsWithEntries || !reportId) return;
     
     // Sumowanie przychodów i rozchodów
     let incomeTotal = 0;
     let expenseTotal = 0;
     let settlementsTotal = 0;
     
-    sections.forEach(sectionWithEntries => {
+    sectionsWithEntries.forEach(sectionWithEntries => {
       sectionWithEntries.entries.forEach(entry => {
         // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
         if (entry.account_number && entry.account_number.startsWith('7')) {
@@ -268,7 +266,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         console.error("Błąd przy przeliczaniu sum raportu:", error);
       });
     }
-  }, [sectionsWithEntries, reportId]);
+  }, [sectionsWithEntries]);
   
   // Mutacja do akceptacji raportu
   const acceptMutation = useMutation({
@@ -361,48 +359,6 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
       toast({
         title: "Błąd",
         description: `Nie udało się odrzucić raportu: ${error.message}`,
-        variant: "destructive",
-      });
-    }
-  });
-  
-  // Mutacja do aktualizacji szczegółów raportu
-  const updateDetailsMutation = useMutation({
-    mutationFn: async (details: Partial<ReportDetails>) => {
-      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
-      // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-      
-      const response = await fetch(apiUrl, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          ...details,
-          updated_at: new Date().toISOString()
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Nie udało się zaktualizować szczegółów raportu');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
-      toast({
-        title: "Sukces",
-        description: "Szczegóły raportu zostały zaktualizowane.",
-        variant: "default",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Błąd",
-        description: `Nie udało się zaktualizować szczegółów: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -575,146 +531,54 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         </div>
       )}
       
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 md:w-[500px] mb-4">
-          <TabsTrigger value="summary">Podsumowanie</TabsTrigger>
-          <TabsTrigger value="details">Szczegóły</TabsTrigger>
-          <TabsTrigger value="entries">Zapisy</TabsTrigger>
-        </TabsList>
-        
-        {/* Zawartość zakładki Podsumowanie */}
-        <TabsContent value="summary" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Przychody</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-green-600">
-                  {reportDetails?.income_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Rozchody</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-red-600">
-                  {reportDetails?.expense_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Bilans</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={`text-3xl font-bold ${(reportDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {reportDetails?.balance?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Rozrachunki</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-blue-600">
-                  {reportDetails?.settlements_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
-        {/* Zawartość zakładki Szczegóły */}
-        <TabsContent value="details" className="mt-0">
+      {/* Sekcja podsumowania */}
+      <div className="mt-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Szczegółowe informacje</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Przychody</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">Ta sekcja będzie zawierać szczegółowe informacje o raporcie w zależności od jego typu.</p>
+              <p className="text-3xl font-bold text-green-600">
+                {reportDetails?.income_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+              </p>
             </CardContent>
           </Card>
-        </TabsContent>
-        
-        {/* Zawartość zakładki Zapisy */}
-        <TabsContent value="entries" className="mt-0">
-          {!sectionsWithEntries || sectionsWithEntries.length === 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Brak zapisów</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p>Ten raport nie zawiera żadnych zapisów księgowych.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {sectionsWithEntries.map((sectionWithEntries) => (
-                <Card key={sectionWithEntries.section.id}>
-                  <CardHeader>
-                    <CardTitle>{sectionWithEntries.section.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {sectionWithEntries.entries.length === 0 ? (
-                      <p className="text-gray-500">Brak zapisów w tej sekcji</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-2 px-4">Konto</th>
-                              <th className="text-left py-2 px-4">Nazwa</th>
-                              <th className="text-right py-2 px-4">B.O. Winien</th>
-                              <th className="text-right py-2 px-4">B.O. Ma</th>
-                              <th className="text-right py-2 px-4">Obroty Winien</th>
-                              <th className="text-right py-2 px-4">Obroty Ma</th>
-                              <th className="text-right py-2 px-4">Saldo Winien</th>
-                              <th className="text-right py-2 px-4">Saldo Ma</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sectionWithEntries.entries.map((entry) => (
-                              <tr key={entry.id} className="border-b">
-                                <td className="py-2 px-4">{entry.account_number}</td>
-                                <td className="py-2 px-4">{entry.account_name}</td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.debit_opening?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.credit_opening?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.debit_turnover?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.credit_turnover?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.debit_closing?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                                <td className="text-right py-2 px-4">
-                                  {entry.credit_closing?.toLocaleString('pl-PL', { minimumFractionDigits: 2 }) || '0,00'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Rozchody</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-red-600">
+                {reportDetails?.expense_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Bilans</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-3xl font-bold ${(reportDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {reportDetails?.balance?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Rozrachunki</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-blue-600">
+                {reportDetails?.settlements_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

@@ -8,8 +8,10 @@ import ReportDetails from './ReportDetails';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 const ReportsPage = () => {
+  const navigate = useNavigate();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');

@@ -42,8 +42,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
             <TableHead>Kwota</TableHead>
-            <TableHead>Konto Dt (Winien)</TableHead>
-            <TableHead>Konto Ct (Ma)</TableHead>
+            <TableHead>Konta</TableHead>
             <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
           </TableRow>
@@ -59,10 +58,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
                 {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
               </TableCell>
               <TableCell>
-                {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-              </TableCell>
-              <TableCell>
-                {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                {transaction.debitAccount?.number} → {transaction.creditAccount?.number}
               </TableCell>
               <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>
