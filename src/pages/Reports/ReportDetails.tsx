@@ -72,23 +72,51 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const { data: reportDetails, isLoading: loadingDetails } = useQuery({
     queryKey: ['reportDetails', reportId],
     queryFn: async () => {
-      // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
-      // nie jest jeszcze uwzględniona w typach Supabase
-      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-      
-      const response = await fetch(apiUrl, {
-        headers: {
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+      try {
+        // Używamy tradycyjnego fetch API zamiast supabase.from, ponieważ tabela report_details
+        // nie jest jeszcze uwzględniona w typach Supabase
+        const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Nie udało się pobrać szczegółów raportu');
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Nie udało się pobrać szczegółów raportu');
+        
+        const data = await response.json();
+        // Jeśli nie ma danych, zwróć domyślne wartości
+        if (!data || data.length === 0) {
+          return {
+            id: null,
+            report_id: reportId,
+            income_total: 0,
+            expense_total: 0,
+            balance: 0,
+            settlements_total: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        }
+        return data[0] as ReportDetails;
+      } catch (error) {
+        console.error('Błąd podczas pobierania szczegółów raportu:', error);
+        // Zwróć domyślne wartości w przypadku błędu
+        return {
+          id: null,
+          report_id: reportId,
+          income_total: 0,
+          expense_total: 0,
+          balance: 0,
+          settlements_total: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       }
-      
-      const data = await response.json();
-      return data[0] as ReportDetails;
     }
   });
 
@@ -96,74 +124,80 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const { data: sectionsWithEntries, isLoading: loadingSections } = useQuery({
     queryKey: ['reportSections', reportId],
     queryFn: async () => {
-      // Pobierz sekcje dla typu raportu
-      const { data: report } = await supabase
-        .from('reports')
-        .select('report_type')
-        .eq('id', reportId)
-        .single();
-      
-      if (!report) {
-        throw new Error("Nie można znaleźć raportu");
-      }
-      
-      const { data: sections, error: sectionsError } = await supabase
-        .from('report_sections')
-        .select('*')
-        .eq('report_type', 'standard') // Zawsze używamy 'standard', ignorując wartość z bazy danych
-        .order('section_order', { ascending: true });
+      try {
+        // Pobierz sekcje dla typu raportu
+        const { data: report } = await supabase
+          .from('reports')
+          .select('report_type')
+          .eq('id', reportId)
+          .single();
         
-      if (sectionsError) throw sectionsError;
-      
-      if (!sections || sections.length === 0) {
+        if (!report) {
+          throw new Error("Nie można znaleźć raportu");
+        }
+        
+        const { data: sections, error: sectionsError } = await supabase
+          .from('report_sections')
+          .select('*')
+          .eq('report_type', 'standard') // Zawsze używamy 'standard', ignorując wartość z bazy danych
+          .order('section_order', { ascending: true });
+          
+        if (sectionsError) throw sectionsError;
+        
+        if (!sections || sections.length === 0) {
+          return [] as SectionWithEntries[];
+        }
+        
+        // Pobierz wpisy raportu
+        const { data: entries, error: entriesError } = await supabase
+          .from('report_entries')
+          .select('*')
+          .eq('report_id', reportId);
+          
+        if (entriesError) throw entriesError;
+        
+        if (!entries) {
+          return sections.map(section => ({
+            section: {
+              ...section,
+              report_type: 'standard' as const // Wymuszenie typu 'standard'
+            },
+            entries: []
+          })) as SectionWithEntries[];
+        }
+        
+        // Pogrupuj wpisy według sekcji
+        const result: SectionWithEntries[] = sections.map(section => {
+          const sectionEntries = entries.filter(entry => entry.section_id === section.id);
+          return {
+            section: {
+              ...section,
+              report_type: 'standard' as const // Wymuszenie typu 'standard'
+            },
+            entries: sectionEntries
+          };
+        });
+        
+        // Dodaj wpisy bez sekcji jeśli istnieją
+        const entriesWithoutSection = entries.filter(entry => !entry.section_id);
+        if (entriesWithoutSection.length > 0) {
+          result.push({
+            section: {
+              id: 'no-section',
+              name: 'Pozycje bez przypisanej sekcji',
+              report_type: 'standard' as const, // Wymuszenie typu 'standard'
+              section_order: 999
+            },
+            entries: entriesWithoutSection
+          });
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych sekcji:', error);
+        // Zwróć pustą tablicę w przypadku błędu
         return [] as SectionWithEntries[];
       }
-      
-      // Pobierz wpisy raportu
-      const { data: entries, error: entriesError } = await supabase
-        .from('report_entries')
-        .select('*')
-        .eq('report_id', reportId);
-        
-      if (entriesError) throw entriesError;
-      
-      if (!entries) {
-        return sections.map(section => ({
-          section: {
-            ...section,
-            report_type: 'standard' as const // Wymuszenie typu 'standard'
-          },
-          entries: []
-        })) as SectionWithEntries[];
-      }
-      
-      // Pogrupuj wpisy według sekcji
-      const result: SectionWithEntries[] = sections.map(section => {
-        const sectionEntries = entries.filter(entry => entry.section_id === section.id);
-        return {
-          section: {
-            ...section,
-            report_type: 'standard' as const // Wymuszenie typu 'standard'
-          },
-          entries: sectionEntries
-        };
-      });
-      
-      // Dodaj wpisy bez sekcji jeśli istnieją
-      const entriesWithoutSection = entries.filter(entry => !entry.section_id);
-      if (entriesWithoutSection.length > 0) {
-        result.push({
-          section: {
-            id: 'no-section',
-            name: 'Pozycje bez przypisanej sekcji',
-            report_type: 'standard' as const, // Wymuszenie typu 'standard'
-            section_order: 999
-          },
-          entries: entriesWithoutSection
-        });
-      }
-      
-      return result;
     }
   });
 
@@ -187,14 +221,14 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
         if (entry.account_number && entry.account_number.startsWith('7')) {
           // Przychody są zwykle po stronie Ma (credit)
-          const value = Number(entry.credit_closing || 0);
+          const value = Number(entry.credit_turnover || 0);
           console.log(`Znaleziono przychód: ${value} (konto ${entry.account_number})`);
           incomeTotal += value;
         }
         // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
         else if (entry.account_number && entry.account_number.startsWith('4')) {
           // Koszty są zwykle po stronie Winien (debit)
-          const value = Number(entry.debit_closing || 0);
+          const value = Number(entry.debit_turnover || 0);
           console.log(`Znaleziono koszt: ${value} (konto ${entry.account_number})`);
           expenseTotal += value;
         }
@@ -213,71 +247,82 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     
     console.log("Obliczone sumy:", { incomeTotal, expenseTotal, balance, settlementsTotal });
     
-    // Sprawdź czy istnieje już wpis w tabeli report_details
-    const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
-    const checkResponse = await fetch(apiUrl, {
-      headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
-      }
-    });
-    
-    const details = await checkResponse.json();
-    
-    // Zaktualizuj lub utwórz nowy wpis
-    if (details && details.length > 0) {
-      // Aktualizuj istniejący wpis
-      const updateResponse = await fetch(apiUrl, {
-        method: 'PATCH',
+    try {
+      // Sprawdź czy istnieje już wpis w tabeli report_details
+      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details?report_id=eq.${reportId}`;
+      const checkResponse = await fetch(apiUrl, {
         headers: {
-          'Content-Type': 'application/json',
           'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          income_total: incomeTotal,
-          expense_total: expenseTotal,
-          balance: balance,
-          settlements_total: settlementsTotal,
-          updated_at: new Date().toISOString()
-        })
+          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+        }
       });
       
-      if (!updateResponse.ok) {
-        console.error('Nie udało się zaktualizować szczegółów raportu');
-      } else {
-        console.log("Zaktualizowano szczegóły raportu");
-        // Odśwież dane
-        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+      if (!checkResponse.ok) {
+        throw new Error('Błąd podczas sprawdzania podsumowania raportu');
       }
-    } else {
-      // Utwórz nowy wpis
-      const createUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
-      const createResponse = await fetch(createUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          report_id: reportId,
-          income_total: incomeTotal,
-          expense_total: expenseTotal,
-          balance: balance,
-          settlements_total: settlementsTotal
-        })
-      });
       
-      if (!createResponse.ok) {
-        console.error('Nie udało się utworzyć szczegółów raportu');
+      const details = await checkResponse.json();
+      
+      // Zaktualizuj lub utwórz nowy wpis
+      if (details && details.length > 0) {
+        // Aktualizuj istniejący wpis
+        const updateUrl = `${SUPABASE_API_URL}/rest/v1/report_details?id=eq.${details[0].id}`;
+        const updateResponse = await fetch(updateUrl, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal,
+            updated_at: new Date().toISOString()
+          })
+        });
+        
+        if (!updateResponse.ok) {
+          console.error('Nie udało się zaktualizować szczegółów raportu');
+          throw new Error('Błąd podczas aktualizacji podsumowania raportu');
+        } else {
+          console.log("Zaktualizowano szczegóły raportu");
+          // Odśwież dane
+          queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+        }
       } else {
-        console.log("Utworzono nowy wpis szczegółów raportu");
-        // Odśwież dane
-        queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+        // Utwórz nowy wpis
+        const createUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
+        const createResponse = await fetch(createUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            report_id: reportId,
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal
+          })
+        });
+        
+        if (!createResponse.ok) {
+          console.error('Nie udało się utworzyć szczegółów raportu');
+          throw new Error('Błąd podczas tworzenia podsumowania raportu');
+        } else {
+          console.log("Utworzono nowy wpis szczegółów raportu");
+          // Odśwież dane
+          queryClient.invalidateQueries({ queryKey: ['reportDetails', reportId] });
+        }
       }
+    } catch (err) {
+      console.error("Błąd podczas zapisu podsumowania:", err);
     }
   };
   

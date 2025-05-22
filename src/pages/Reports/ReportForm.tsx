@@ -473,6 +473,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
       if (!entries || entries.length === 0) {
         console.warn('Brak wpisów w raporcie do obliczenia podsumowania');
+        // Utworzenie pustego podsumowania
+        const { error: insertEmptyError } = await supabase
+          .from('report_details')
+          .insert({
+            report_id: reportId,
+            income_total: 0,
+            expense_total: 0,
+            balance: 0,
+            settlements_total: 0
+          });
+        
+        if (insertEmptyError) throw insertEmptyError;
+        console.log('Utworzono puste podsumowanie dla raportu bez wpisów');
         return;
       }
 
@@ -507,48 +520,54 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
       console.log(`Obliczone sumy: przychody=${incomeTotal}, koszty=${expenseTotal}, bilans=${balance}, rozrachunki=${settlementsTotal}`);
 
-      // Sprawdź, czy istnieje już rekord podsumowania
-      const { data: existingDetails } = await supabase
-        .from('report_details')
-        .select('id')
-        .eq('report_id', reportId)
-        .single();
-
-      if (existingDetails) {
-        console.log(`Aktualizacja istniejącego podsumowania ${existingDetails.id}`);
-        // Aktualizuj istniejący rekord
-        const { error: updateError } = await supabase
+      try {
+        // Sprawdź, czy istnieje już rekord podsumowania
+        const { data: existingDetails, error: checkError } = await supabase
           .from('report_details')
-          .update({
-            income_total: incomeTotal,
-            expense_total: expenseTotal,
-            balance: balance,
-            settlements_total: settlementsTotal,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingDetails.id);
+          .select('id')
+          .eq('report_id', reportId);
 
-        if (updateError) {
-          console.error('Błąd przy aktualizacji podsumowania:', updateError);
-          throw updateError;
-        }
-      } else {
-        console.log(`Tworzenie nowego podsumowania dla raportu ${reportId}`);
-        // Utwórz nowy rekord podsumowania
-        const { error: insertError } = await supabase
-          .from('report_details')
-          .insert({
-            report_id: reportId,
-            income_total: incomeTotal,
-            expense_total: expenseTotal,
-            balance: balance,
-            settlements_total: settlementsTotal
-          });
+        if (checkError) throw checkError;
+        
+        if (existingDetails && existingDetails.length > 0) {
+          console.log(`Aktualizacja istniejącego podsumowania ${existingDetails[0].id}`);
+          // Aktualizuj istniejący rekord
+          const { error: updateError } = await supabase
+            .from('report_details')
+            .update({
+              income_total: incomeTotal,
+              expense_total: expenseTotal,
+              balance: balance,
+              settlements_total: settlementsTotal,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingDetails[0].id);
 
-        if (insertError) {
-          console.error('Błąd przy tworzeniu podsumowania:', insertError);
-          throw insertError;
+          if (updateError) {
+            console.error('Błąd przy aktualizacji podsumowania:', updateError);
+            throw updateError;
+          }
+        } else {
+          console.log(`Tworzenie nowego podsumowania dla raportu ${reportId}`);
+          // Utwórz nowy rekord podsumowania
+          const { error: insertError } = await supabase
+            .from('report_details')
+            .insert({
+              report_id: reportId,
+              income_total: incomeTotal,
+              expense_total: expenseTotal,
+              balance: balance,
+              settlements_total: settlementsTotal
+            });
+
+          if (insertError) {
+            console.error('Błąd przy tworzeniu podsumowania:', insertError);
+            throw insertError;
+          }
         }
+      } catch (err) {
+        console.error("Błąd podczas zapisu podsumowania:", err);
+        throw err;
       }
       
       console.log('Podsumowanie zostało pomyślnie zaktualizowane');
