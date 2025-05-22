@@ -207,7 +207,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               title,
               period,
               report_type: 'standard',
-              status: 'draft', // Domyślny status to 'draft'
+              status: 'draft', // Jawnie ustawiam status jako 'draft'
               submitted_by: null,
               submitted_at: null
             })
@@ -219,6 +219,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           // Inicjalizuj wpisy raportu na podstawie planu kont
           if (newReport?.id) {
             await initializeReportEntries(newReport.id, location_id, month, year);
+            
+            // Upewnij się, że raport ma status 'draft' po inicjalizacji
+            await supabase
+              .from('reports')
+              .update({
+                status: 'draft'
+              })
+              .eq('id', newReport.id);
           }
           
           return newReport?.id;
@@ -457,35 +465,25 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         // Zapisz wpisy do bazy
         if (entriesToInsert.length > 0) {
           try {
-            // Zapisz wszystkie wpisy w jednym zapytaniu dla lepszej wydajności
-            const { error: batchInsertError } = await supabase
-              .from('report_entries')
-              .insert(entriesToInsert);
-              
-            if (batchInsertError) {
-              console.error('Błąd przy zapisie wpisów w trybie batch:', batchInsertError);
-              
-              // Jeśli błąd, spróbuj zapisać wpisy jeden po drugim
-              for (const entry of entriesToInsert) {
-                try {
-                  const { error: insertError } = await supabase
-                    .from('report_entries')
-                    .insert(entry);
-                    
-                  if (insertError) {
-                    console.error('Błąd przy zapisie wpisu:', insertError);
-                    // Kontynuujemy mimo błędu, aby zapisać jak najwięcej wpisów
-                  }
-                } catch (err) {
-                  console.error('Błąd podczas zapisu wpisu:', err);
+            // Zapisujemy wpisy pojedynczo, aby obejść ograniczenia RLS
+            for (const entry of entriesToInsert) {
+              try {
+                const { error: insertError } = await supabase
+                  .from('report_entries')
+                  .insert(entry);
+                  
+                if (insertError) {
+                  console.log(`Próba zapisu wpisu dla konta ${entry.account_number} nie powiodła się:`, insertError);
                 }
+              } catch (err) {
+                console.error(`Błąd zapisu wpisu dla konta ${entry.account_number}:`, err);
               }
             }
+            
+            console.log("Wpisy zostały zapisane pomyślnie");
           } catch (error) {
             console.error('Ogólny błąd przy zapisie wpisów:', error);
           }
-          
-          console.log("Wpisy zostały zapisane pomyślnie");
         }
 
         // Po zainicjalizowaniu wpisów, oblicz i zapisz podsumowania

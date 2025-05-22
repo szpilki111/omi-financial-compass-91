@@ -56,6 +56,11 @@ const App = () => (
                 <KpirPage />
               </ProtectedRoute>
             } />
+            <Route path="/kpir/nowy" element={
+              <ProtectedRoute>
+                <KpirPage />
+              </ProtectedRoute>
+            } />
             
             {/* Reports routes */}
             <Route path="/reports" element={
