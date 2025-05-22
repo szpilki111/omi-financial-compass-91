@@ -288,7 +288,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     
     try {
       // Pobierz wszystkie wpisy raportu bezpośrednio z bazy danych
-      const { data: entries, error: entriesError } = await supabase
+      let { data: entriesData, error: entriesError } = await supabase
         .from('report_entries')
         .select('*')
         .eq('report_id', reportId);
@@ -304,7 +304,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         return;
       }
       
-      if (!entries || entries.length === 0) {
+      if (!entriesData || entriesData.length === 0) {
         console.log("Brak wpisów do przeliczenia sum");
         
         // Jeśli nie ma wpisów, sprawdźmy czy nie ma powiązanych transakcji
@@ -352,7 +352,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           }
           
           // Kontynuuj z obliczeniami używając nowo utworzonych wpisów
-          entries = freshEntries;
+          entriesData = freshEntries;
         } else {
           console.log("Brak transakcji do wygenerowania wpisów");
           toast({
@@ -368,14 +368,14 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         }
       }
       
-      console.log(`Znaleziono ${entries.length} wpisów do przeliczenia sum`);
+      console.log(`Znaleziono ${entriesData.length} wpisów do przeliczenia sum`);
       
       // Sumowanie przychodów i rozchodów
       let incomeTotal = 0;
       let expenseTotal = 0;
       let settlementsTotal = 0;
       
-      entries.forEach(entry => {
+      entriesData.forEach(entry => {
         // Walidacja danych
         if (!entry.account_number) {
           console.warn(`Wpis bez numeru konta: ${entry.id}`);
