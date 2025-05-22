@@ -22,6 +22,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/context/AuthContext';
 
 interface ReportDetailsProps {
   reportId: string;
@@ -39,6 +40,8 @@ interface RejectFormData {
 const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, checkPermission } = useAuth();
+  const isReviewer = checkPermission(['prowincjal', 'admin']);
   
   // Formularz odrzucenia raportu
   const rejectForm = useForm<z.infer<typeof rejectFormSchema>>({
@@ -73,31 +76,113 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     queryKey: ['reportDetails', reportId],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        // Sprawdź, czy istnieje wpis w tabeli report_details
+        const { data: existingDetails, error: checkError } = await supabase
           .from('report_details')
           .select('*')
           .eq('report_id', reportId);
 
-        if (error) {
-          console.error('Błąd podczas pobierania szczegółów raportu:', error);
+        if (checkError) {
+          console.error('Błąd podczas sprawdzania szczegółów raportu:', checkError);
           return null;
         }
         
-        // Jeśli nie ma danych, zwróć domyślne wartości
-        if (!data || data.length === 0) {
-          return {
+        // Jeśli nie ma danych, spróbujmy obliczyć je teraz
+        if (!existingDetails || existingDetails.length === 0) {
+          console.log("Brak szczegółów raportu, obliczamy wartości...");
+          
+          // Pobierz wpisy raportu
+          const { data: entries, error: entriesError } = await supabase
+            .from('report_entries')
+            .select('*')
+            .eq('report_id', reportId);
+            
+          if (entriesError) {
+            console.error('Błąd podczas pobierania wpisów:', entriesError);
+            return null;
+          }
+          
+          if (!entries || entries.length === 0) {
+            console.log("Brak wpisów w raporcie");
+            // Zwróć domyślne wartości
+            return {
+              id: null,
+              report_id: reportId,
+              income_total: 0,
+              expense_total: 0,
+              balance: 0,
+              settlements_total: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          }
+          
+          // Jeśli są wpisy, oblicz sumy
+          let incomeTotal = 0;
+          let expenseTotal = 0;
+          let settlementsTotal = 0;
+          
+          entries.forEach(entry => {
+            // Konta przychodów zaczynające się od 7
+            if (entry.account_number && entry.account_number.startsWith('7')) {
+              incomeTotal += Number(entry.credit_turnover || 0);
+            }
+            // Konta kosztów zaczynające się od 4
+            else if (entry.account_number && entry.account_number.startsWith('4')) {
+              expenseTotal += Number(entry.debit_turnover || 0);
+            }
+            // Konta rozrachunków zaczynające się od 2
+            else if (entry.account_number && entry.account_number.startsWith('2')) {
+              const balance = Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
+              settlementsTotal += balance;
+            }
+          });
+          
+          // Oblicz bilans
+          const balance = incomeTotal - expenseTotal;
+          
+          console.log("Obliczone sumy:", { incomeTotal, expenseTotal, balance, settlementsTotal });
+          
+          // Utwórz nowy wpis w report_details
+          const { data: newDetails, error: insertError } = await supabase
+            .from('report_details')
+            .insert({
+              report_id: reportId,
+              income_total: incomeTotal,
+              expense_total: expenseTotal,
+              balance: balance,
+              settlements_total: settlementsTotal
+            })
+            .select();
+            
+          if (insertError) {
+            console.error('Błąd podczas tworzenia szczegółów raportu:', insertError);
+            // Mimo błędu zapisu, zwróć obliczone wartości
+            return {
+              id: null,
+              report_id: reportId,
+              income_total: incomeTotal,
+              expense_total: expenseTotal,
+              balance: balance,
+              settlements_total: settlementsTotal,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          }
+          
+          return newDetails?.[0] || {
             id: null,
             report_id: reportId,
-            income_total: 0,
-            expense_total: 0,
-            balance: 0,
-            settlements_total: 0,
+            income_total: incomeTotal,
+            expense_total: expenseTotal,
+            balance: balance,
+            settlements_total: settlementsTotal,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
         }
         
-        return data[0];
+        return existingDetails[0];
       } catch (error) {
         console.error('Błąd podczas pobierania szczegółów raportu:', error);
         // Zwróć domyślne wartości w przypadku błędu
@@ -202,39 +287,51 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     
     console.log("Przeliczanie sum raportu - dane sekcji:", sectionsWithEntries);
     
+    // Pobierz wszystkie wpisy raportu bezpośrednio (niezależnie od sekcji)
+    const { data: allEntries, error: entriesError } = await supabase
+      .from('report_entries')
+      .select('*')
+      .eq('report_id', reportId);
+      
+    if (entriesError) {
+      console.error('Błąd podczas pobierania wpisów raportu:', entriesError);
+      return;
+    }
+    
+    if (!allEntries || allEntries.length === 0) {
+      console.log("Brak wpisów do przeliczenia sum");
+      return;
+    }
+    
     // Sumowanie przychodów i rozchodów
     let incomeTotal = 0;
     let expenseTotal = 0;
     let settlementsTotal = 0;
     
-    sectionsWithEntries.forEach(sectionWithEntries => {
-      console.log(`Analizuję sekcję: ${sectionWithEntries.section.name}`, sectionWithEntries.entries);
+    allEntries.forEach(entry => {
+      console.log(`Analizuję wpis: ${entry.account_number} - ${entry.account_name}`, entry);
       
-      sectionWithEntries.entries.forEach(entry => {
-        console.log(`Analizuję wpis: ${entry.account_number} - ${entry.account_name}`, entry);
-        
-        // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
-        if (entry.account_number && entry.account_number.startsWith('7')) {
-          // Przychody są zwykle po stronie Ma (credit)
-          const value = Number(entry.credit_turnover || 0);
-          console.log(`Znaleziono przychód: ${value} (konto ${entry.account_number})`);
-          incomeTotal += value;
-        }
-        // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
-        else if (entry.account_number && entry.account_number.startsWith('4')) {
-          // Koszty są zwykle po stronie Winien (debit)
-          const value = Number(entry.debit_turnover || 0);
-          console.log(`Znaleziono koszt: ${value} (konto ${entry.account_number})`);
-          expenseTotal += value;
-        }
-        // Sprawdź czy konto zaczyna się od numeru rozrachunków (2xx)
-        else if (entry.account_number && entry.account_number.startsWith('2')) {
-          // Absolutna wartość salda
-          const value = Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
-          console.log(`Znaleziono rozrachunek: ${value} (konto ${entry.account_number})`);
-          settlementsTotal += value;
-        }
-      });
+      // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
+      if (entry.account_number && entry.account_number.startsWith('7')) {
+        // Przychody są zwykle po stronie Ma (credit)
+        const value = Number(entry.credit_turnover || 0);
+        console.log(`Znaleziono przychód: ${value} (konto ${entry.account_number})`);
+        incomeTotal += value;
+      }
+      // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
+      else if (entry.account_number && entry.account_number.startsWith('4')) {
+        // Koszty są zwykle po stronie Winien (debit)
+        const value = Number(entry.debit_turnover || 0);
+        console.log(`Znaleziono koszt: ${value} (konto ${entry.account_number})`);
+        expenseTotal += value;
+      }
+      // Sprawdź czy konto zaczyna się od numeru rozrachunków (2xx)
+      else if (entry.account_number && entry.account_number.startsWith('2')) {
+        // Absolutna wartość salda
+        const value = Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
+        console.log(`Znaleziono rozrachunek: ${value} (konto ${entry.account_number})`);
+        settlementsTotal += value;
+      }
     });
     
     // Oblicz bilans jako różnicę między przychodami a wydatkami
@@ -530,8 +627,8 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         )}
       </div>
       
-      {/* Jeśli raport ma status 'submitted', pokaż opcje akceptacji/odrzucenia */}
-      {report?.status === 'submitted' && (
+      {/* Jeśli raport ma status 'submitted' i użytkownik jest prowincjałem lub adminem, pokaż opcje akceptacji/odrzucenia */}
+      {report?.status === 'submitted' && isReviewer && (
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold mb-4">Decyzja</h3>
           <div className="flex gap-4 items-start">
