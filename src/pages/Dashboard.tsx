@@ -125,6 +125,9 @@ const Dashboard = () => {
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
 
+        let actualSubmittedCount = 0;
+        let actualLocationsCount = 0;
+
         if (isLocalUser) {
           // Dla ekonomów - sprawdź status raportu za bieżący miesiąc
           let reportsQuery = supabase
@@ -182,8 +185,8 @@ const Dashboard = () => {
             throw locationsError;
           }
           
-          const actualSubmittedCount = submittedReports?.length || 0;
-          const actualLocationsCount = locationsData?.length || 0;
+          actualSubmittedCount = submittedReports?.length || 0;
+          actualLocationsCount = locationsData?.length || 0;
           
           console.log('Złożone raporty:', actualSubmittedCount);
           console.log('Liczba lokalizacji:', actualLocationsCount);
@@ -249,7 +252,7 @@ const Dashboard = () => {
           ]);
         } else {
           // Statystyki dla prowincjała i admina
-          console.log('Ustawianie statystyk dla admina:', submittedReportsCount, totalLocations);
+          console.log('Ustawianie statystyk dla admina:', actualSubmittedCount, actualLocationsCount);
           
           setStatistics([
             {
