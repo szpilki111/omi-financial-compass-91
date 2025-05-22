@@ -168,13 +168,19 @@ const Dashboard = () => {
             .eq('month', currentMonth)
             .eq('year', currentYear);
           
-          if (submittedError) throw submittedError;
+          if (submittedError) {
+            console.error('Błąd podczas pobierania raportów:', submittedError);
+            throw submittedError;
+          }
           
           const { data: locationsData, error: locationsError } = await supabase
             .from('locations')
             .select('id');
           
-          if (locationsError) throw locationsError;
+          if (locationsError) {
+            console.error('Błąd podczas pobierania lokalizacji:', locationsError);
+            throw locationsError;
+          }
           
           const actualSubmittedCount = submittedReports?.length || 0;
           const actualLocationsCount = locationsData?.length || 0;
@@ -243,6 +249,8 @@ const Dashboard = () => {
           ]);
         } else {
           // Statystyki dla prowincjała i admina
+          console.log('Ustawianie statystyk dla admina:', submittedReportsCount, totalLocations);
+          
           setStatistics([
             {
               title: 'Operacje w tym miesiącu',
@@ -251,10 +259,10 @@ const Dashboard = () => {
             },
             {
               title: 'Liczba złożonych raportów w obecnym miesiącu',
-              value: `${submittedReportsCount}/${totalLocations}`,
+              value: `${actualSubmittedCount}/${actualLocationsCount}`,
               icon: <FileCheck className="h-6 w-6 text-green-500" />,
-              status: submittedReportsCount === totalLocations ? 'success' : 'warning',
-              statusText: submittedReportsCount === totalLocations ? 'Komplet' : 'W trakcie'
+              status: actualSubmittedCount === actualLocationsCount ? 'success' : 'warning',
+              statusText: actualSubmittedCount === actualLocationsCount ? 'Komplet' : 'W trakcie'
             },
             {
               title: 'Saldo',
