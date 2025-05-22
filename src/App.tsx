@@ -63,6 +63,11 @@ const App = () => (
                 <Reports />
               </ProtectedRoute>
             } />
+            <Route path="/reports/:reportId" element={
+              <ProtectedRoute>
+                <Reports />
+              </ProtectedRoute>
+            } />
             
             {/* Not found */}
             <Route path="*" element={<NotFound />} />

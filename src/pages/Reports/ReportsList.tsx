@@ -63,12 +63,15 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
     queryFn: async () => {
       // Sprawdzenie roli użytkownika
       const { data: userRole } = await supabase.rpc('get_user_role');
+      console.log('Rola użytkownika:', userRole);
       
       let query = supabase.from('reports').select('*');
       
-      // Jeśli użytkownik nie jest adminem ani prowincjałem, pobierz tylko raporty jego placówki
-      if (userRole !== 'admin' && userRole !== 'provincial') {
+      // Jeśli użytkownik jest ekonomem, pobierz tylko raporty jego placówki
+      if (userRole === 'ekonom') {
         const { data: locationId } = await supabase.rpc('get_user_location_id');
+        console.log('ID lokalizacji użytkownika:', locationId);
+        
         if (locationId) {
           query = query.eq('location_id', locationId);
         }
@@ -77,6 +80,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
       const { data, error } = await query.order('created_at', { ascending: false });
       
       if (error) throw error;
+      console.log('Pobrane raporty:', data);
       return data as Report[];
     }
   });

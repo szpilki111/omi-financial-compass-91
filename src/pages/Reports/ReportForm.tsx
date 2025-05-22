@@ -50,7 +50,6 @@ interface ReportFormProps {
 const reportFormSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
-  report_type: z.literal('standard') // Tylko 'standard'
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
@@ -67,7 +66,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     defaultValues: {
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
-      report_type: 'standard', // Zawsze ustawiamy 'standard'
     }
   });
 
@@ -99,7 +97,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       form.reset({
         month: report.month,
         year: report.year,
-        report_type: 'standard', // Zawsze ustawiamy 'standard'
       });
     }
   }, [report, form]);
@@ -141,7 +138,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
   // Mutacja do zapisywania raportu jako wersja robocza
   const saveDraftMutation = useMutation({
-    mutationFn: async (data: ReportFormData) => {
+    mutationFn: async (data: { month: number; year: number }) => {
       const { month, year } = data;
       
       // Użyj lokalizacji użytkownika
@@ -150,6 +147,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       }
       
       const location_id = user.location;
+      console.log("Używam lokalizacji użytkownika:", location_id);
       
       // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
       const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
@@ -161,7 +159,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .eq('id', location_id)
         .single();
         
-      const title = `Raport za ${monthName} ${year} - ${location?.name}`;
+      const title = `Raport za ${monthName} ${year} - ${location?.name || 'placówka'}`;
       const period = `${monthName} ${year}`;
       
       if (reportId) {
@@ -174,7 +172,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             location_id,
             title,
             period,
-            report_type: 'standard', // Zawsze używamy 'standard'
+            report_type: 'standard',
             updated_at: new Date().toISOString()
           })
           .eq('id', reportId);
@@ -192,7 +190,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             location_id,
             title,
             period,
-            report_type: 'standard', // Zawsze używamy 'standard'
+            report_type: 'standard',
             status: 'draft',
             submitted_by: null,
             submitted_at: null
@@ -226,7 +224,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate(`/raporty/${newReportId}`);
+        navigate(`/reports/${newReportId}`);
       }
     },
     onError: (error) => {
@@ -241,56 +239,61 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   
   // Mutacja do składania raportu
   const submitReportMutation = useMutation({
-    mutationFn: async (data: ReportFormData) => {
-      // Najpierw zapisz jako wersja robocza, aby utworzyć raport jeśli to nowy
-      const reportId = await saveDraftMutation.mutateAsync(data);
-      
-      // Teraz zaktualizuj status raportu na 'submitted'
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          status: 'submitted',
-          submitted_at: new Date().toISOString(),
-          submitted_by: user.id
-        })
-        .eq('id', reportId);
+    mutationFn: async (data: { month: number; year: number }) => {
+      try {
+        // Najpierw zapisz jako wersja robocza, aby utworzyć raport jeśli to nowy
+        const reportId = await saveDraftMutation.mutateAsync(data);
         
-      if (error) throw error;
-
-      // Oblicz i zaktualizuj podsumowania raportu
-      await calculateAndUpdateReportSummary(reportId);
-      
-      // Wyślij powiadomienie do prowincjała
-      const { data: admins, error: adminsError } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('role', ['admin', 'prowincjal']);
-        
-      if (!adminsError && admins) {
-        // Pobierz nazwę lokalizacji
-        const { data: location } = await supabase
-          .from('locations')
-          .select('name')
-          .eq('id', user.location)
-          .single();
+        // Teraz zaktualizuj status raportu na 'submitted'
+        const { error } = await supabase
+          .from('reports')
+          .update({
+            status: 'submitted',
+            submitted_at: new Date().toISOString(),
+            submitted_by: user.id
+          })
+          .eq('id', reportId);
           
-        const monthName = format(new Date(data.year, data.month - 1, 1), 'LLLL', { locale: pl });
+        if (error) throw error;
+  
+        // Oblicz i zaktualizuj podsumowania raportu
+        await calculateAndUpdateReportSummary(reportId);
         
-        for (const admin of admins) {
-          await supabase
-            .from('notifications')
-            .insert({
-              user_id: admin.id,
-              title: 'Złożono nowy raport',
-              message: `Raport za ${monthName} ${data.year} - ${location?.name} został złożony i oczekuje na sprawdzenie.`,
-              priority: 'medium',
-              action_label: 'Zobacz raport',
-              action_link: `/raporty/${reportId}`
-            });
+        // Wyślij powiadomienie do prowincjała
+        const { data: admins, error: adminsError } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('role', ['admin', 'prowincjal']);
+          
+        if (!adminsError && admins) {
+          // Pobierz nazwę lokalizacji
+          const { data: location } = await supabase
+            .from('locations')
+            .select('name')
+            .eq('id', user.location)
+            .single();
+            
+          const monthName = format(new Date(data.year, data.month - 1, 1), 'LLLL', { locale: pl });
+          
+          for (const admin of admins) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: admin.id,
+                title: 'Złożono nowy raport',
+                message: `Raport za ${monthName} ${data.year} - ${location?.name} został złożony i oczekuje na sprawdzenie.`,
+                priority: 'medium',
+                action_label: 'Zobacz raport',
+                action_link: `/reports/${reportId}`
+              });
+          }
         }
+        
+        return reportId;
+      } catch (error) {
+        console.error('Błąd przy składaniu raportu:', error);
+        throw error;
       }
-      
-      return reportId;
     },
     onMutate: () => {
       setIsSubmitting(true);
@@ -308,7 +311,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate(`/raporty/${newReportId}`);
+        navigate(`/reports/${newReportId}`);
       }
     },
     onError: (error) => {
@@ -324,6 +327,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Funkcja do inicjalizacji wpisów raportu
   const initializeReportEntries = async (reportId: string, locationId: string, month: number, year: number) => {
     try {
+      console.log(`Inicjalizacja wpisów dla raportu ${reportId}, lokalizacja ${locationId}, ${month}/${year}`);
+      
       // Pobierz sekcje dla standardowego typu raportu
       const { data: sections, error: sectionsError } = await supabase
         .from('report_sections')
@@ -332,6 +337,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .order('section_order', { ascending: true });
         
       if (sectionsError) throw sectionsError;
+      console.log("Pobrane sekcje:", sections);
       
       // Pobierz plan kont
       const { data: accounts, error: accountsError } = await supabase
@@ -340,6 +346,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .order('number');
         
       if (accountsError) throw accountsError;
+      console.log("Pobrane konta:", accounts?.length);
       
       // Pobierz mapowania kont do sekcji
       const { data: accountMappings, error: mappingsError } = await supabase
@@ -348,6 +355,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .eq('report_type', 'standard');
         
       if (mappingsError) throw mappingsError;
+      console.log("Pobrane mapowania:", accountMappings?.length);
       
       // Stwórz mapę sekcji dla każdego prefiksu konta
       const sectionMap = new Map();
@@ -430,6 +438,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           });
         }
         
+        console.log(`Przygotowano ${entriesToInsert.length} wpisów do zapisania`);
+        
         // Zapisz wpisy do bazy
         if (entriesToInsert.length > 0) {
           const { error: insertError } = await supabase
@@ -437,6 +447,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             .insert(entriesToInsert);
             
           if (insertError) throw insertError;
+          console.log("Wpisy zostały zapisane pomyślnie");
         }
 
         // Po zainicjalizowaniu wpisów, oblicz i zapisz podsumowania
@@ -448,9 +459,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   };
 
-  // Nowa funkcja do obliczania i aktualizacji podsumowania raportu
+  // Funkcja do obliczania i aktualizacji podsumowania raportu
   const calculateAndUpdateReportSummary = async (reportId: string) => {
     try {
+      console.log(`Obliczanie podsumowania dla raportu ${reportId}`);
+      
       // Pobierz wszystkie wpisy raportu
       const { data: entries, error } = await supabase
         .from('report_entries')
@@ -464,6 +477,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         return;
       }
 
+      console.log(`Znaleziono ${entries.length} wpisów do podsumowania`);
+
       // Oblicz podsumowania
       let incomeTotal = 0;
       let expenseTotal = 0;
@@ -473,19 +488,25 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         // Konta przychodów zaczynające się od 7
         if (entry.account_number.startsWith('7')) {
           incomeTotal += Number(entry.credit_turnover || 0);
+          console.log(`Konto przychodu ${entry.account_number}: ${entry.credit_turnover} - suma: ${incomeTotal}`);
         }
         // Konta kosztów zaczynające się od 4
         else if (entry.account_number.startsWith('4')) {
           expenseTotal += Number(entry.debit_turnover || 0);
+          console.log(`Konto kosztu ${entry.account_number}: ${entry.debit_turnover} - suma: ${expenseTotal}`);
         }
         // Konta rozrachunków zaczynające się od 2
         else if (entry.account_number.startsWith('2')) {
-          settlementsTotal += Number(entry.credit_closing || 0) - Number(entry.debit_closing || 0);
+          const balance = Number(entry.credit_closing || 0) - Number(entry.debit_closing || 0);
+          settlementsTotal += balance;
+          console.log(`Konto rozrachunku ${entry.account_number}: ${balance} - suma: ${settlementsTotal}`);
         }
       });
 
       // Oblicz bilans (przychody - koszty)
       const balance = incomeTotal - expenseTotal;
+
+      console.log(`Obliczone sumy: przychody=${incomeTotal}, koszty=${expenseTotal}, bilans=${balance}, rozrachunki=${settlementsTotal}`);
 
       // Sprawdź, czy istnieje już rekord podsumowania
       const { data: existingDetails } = await supabase
@@ -495,6 +516,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .single();
 
       if (existingDetails) {
+        console.log(`Aktualizacja istniejącego podsumowania ${existingDetails.id}`);
         // Aktualizuj istniejący rekord
         const { error: updateError } = await supabase
           .from('report_details')
@@ -507,8 +529,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           })
           .eq('id', existingDetails.id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('Błąd przy aktualizacji podsumowania:', updateError);
+          throw updateError;
+        }
       } else {
+        console.log(`Tworzenie nowego podsumowania dla raportu ${reportId}`);
         // Utwórz nowy rekord podsumowania
         const { error: insertError } = await supabase
           .from('report_details')
@@ -520,8 +546,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             settlements_total: settlementsTotal
           });
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('Błąd przy tworzeniu podsumowania:', insertError);
+          throw insertError;
+        }
       }
+      
+      console.log('Podsumowanie zostało pomyślnie zaktualizowane');
     } catch (error) {
       console.error('Błąd podczas aktualizacji podsumowania raportu:', error);
       throw new Error('Nie udało się zaktualizować podsumowania raportu');
@@ -569,9 +600,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       }
       
       if (isDraft) {
-        saveDraftMutation.mutate(values as ReportFormData);
+        saveDraftMutation.mutate(values);
       } else {
-        submitReportMutation.mutate(values as ReportFormData);
+        submitReportMutation.mutate(values);
       }
     });
   };
@@ -597,7 +628,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         </div>
         
         <div className="flex justify-end">
-          <Button variant="outline" onClick={onCancel || (() => navigate('/raporty'))}>
+          <Button variant="outline" onClick={onCancel || (() => navigate('/reports'))}>
             Powrót do listy raportów
           </Button>
         </div>
@@ -617,7 +648,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         </div>
         
         <div className="flex justify-end">
-          <Button variant="outline" onClick={onCancel || (() => navigate('/raporty'))}>
+          <Button variant="outline" onClick={onCancel || (() => navigate('/reports'))}>
             Powrót do listy raportów
           </Button>
         </div>
@@ -718,34 +749,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                   </FormDescription>
                 </div>
               )}
-              
-              <FormField
-                control={form.control}
-                name="report_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Typ raportu</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange as (value: string) => void}
-                      disabled={true}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Standardowy" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="standard">Standardowy</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Typ raportu określa jego strukturę i zawartość
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
           </div>
 
