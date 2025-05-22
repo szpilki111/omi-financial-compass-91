@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/AuthContext';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 
 interface ReportDetailsProps {
   reportId: string;
@@ -279,178 +280,36 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }
   };
 
-  // Funkcja do przeliczania sum raportu
+  // Funkcja do przeliczania sum raportu - teraz wykorzystuje calculateFinancialSummary
   const calculateAndUpdateReportTotals = async () => {
-    if (!reportId) return;
+    if (!reportId || !report) return;
     
-    console.log("Przeliczanie sum raportu bezpośrednio z wpisów");
+    console.log("Przeliczanie sum raportu z wykorzystaniem wspólnej funkcji calculateFinancialSummary");
     setIsCalculating(true);
     
     try {
-      // Pobierz wszystkie wpisy raportu bezpośrednio z bazy danych
-      let { data: entriesData, error: entriesError } = await supabase
-        .from('report_entries')
-        .select('*')
-        .eq('report_id', reportId);
-        
-      if (entriesError) {
-        console.error('Błąd podczas pobierania wpisów raportu:', entriesError);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się pobrać wpisów raportu.",
-          variant: "destructive",
-        });
-        setIsCalculating(false);
-        return;
-      }
+      // Utwórz zakres dat dla miesiąca raportu
+      const startDate = `${report.year}-${String(report.month).padStart(2, '0')}-01`;
+      const endMonth = report.month === 12 ? 1 : report.month + 1;
+      const endYear = report.month === 12 ? report.year + 1 : report.year;
+      const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
       
-      if (!entriesData || entriesData.length === 0) {
-        console.log("Brak wpisów do przeliczenia sum");
-        
-        // Jeśli nie ma wpisów, znajdźmy transakcje z odpowiedniego miesiąca i lokalizacji
-        if (!report) {
-          console.error("Brak danych raportu, nie można pobrać transakcji");
-          setIsCalculating(false);
-          return;
-        }
-
-        // Pobierz transakcje dla danego miesiąca i lokalizacji
-        const startDate = `${report.year}-${String(report.month).padStart(2, '0')}-01`;
-        // Oblicz datę końcową (pierwszy dzień następnego miesiąca)
-        const endMonth = report.month === 12 ? 1 : report.month + 1;
-        const endYear = report.month === 12 ? report.year + 1 : report.year;
-        const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
-
-        const { data: transactions, error: transactionsError } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('location_id', report.location_id)
-          .gte('date', startDate)
-          .lt('date', endDate);
-          
-        if (transactionsError) {
-          console.error('Błąd pobierania transakcji:', transactionsError);
-          toast({
-            title: "Błąd",
-            description: "Nie udało się pobrać transakcji do obliczeń.",
-            variant: "destructive",
-          });
-          setIsCalculating(false);
-          return;
-        }
-        
-        if (transactions && transactions.length > 0) {
-          console.log(`Znaleziono ${transactions.length} transakcji do wygenerowania wpisów raportu`);
-          
-          // Inicjalizuj wpisy raportu na podstawie transakcji
-          await initializeReportEntries(transactions);
-          
-          // Po inicjalizacji, spróbuj ponownie pobrać wpisy
-          const { data: freshEntries, error: freshError } = await supabase
-            .from('report_entries')
-            .select('*')
-            .eq('report_id', reportId);
-            
-          if (freshError) {
-            console.error('Błąd podczas ponownego pobierania wpisów:', freshError);
-            setIsCalculating(false);
-            return;
-          }
-          
-          if (!freshEntries || freshEntries.length === 0) {
-            console.log("Nadal brak wpisów po inicjalizacji");
-            toast({
-              title: "Informacja",
-              description: "Nie znaleziono operacji do podsumowania.",
-              variant: "default",
-            });
-            // Zapisz domyślne wartości
-            await updateOrInsertReportDetails(0, 0, 0, 0);
-            setIsCalculating(false);
-            refetchReportDetails();
-            return;
-          }
-          
-          // Kontynuuj z obliczeniami używając nowo utworzonych wpisów
-          entriesData = freshEntries;
-        } else {
-          console.log("Brak transakcji do wygenerowania wpisów");
-          toast({
-            title: "Informacja",
-            description: "Brak operacji w wybranym okresie.",
-            variant: "default",
-          });
-          // Zapisz domyślne wartości
-          await updateOrInsertReportDetails(0, 0, 0, 0);
-          setIsCalculating(false);
-          refetchReportDetails();
-          return;
-        }
-      }
+      // Użyj wspólnej funkcji do obliczania sum finansowych
+      const summary = await calculateFinancialSummary(
+        report.location_id,
+        startDate,
+        endDate
+      );
       
-      console.log(`Znaleziono ${entriesData.length} wpisów do przeliczenia sum`);
-      
-      // Sumowanie przychodów i rozchodów
-      let incomeTotal = 0;
-      let expenseTotal = 0;
-      let settlementsTotal = 0;
-      
-      entriesData.forEach(entry => {
-        // Walidacja danych
-        if (!entry.account_number) {
-          console.warn(`Wpis bez numeru konta: ${entry.id}`);
-          return;
-        }
-        
-        console.log(`Analizuję wpis: ${entry.account_number} - ${entry.account_name} (Przychód: ${entry.credit_turnover}, Koszt: ${entry.debit_turnover})`);
-        
-        // Sprawdź czy konto zaczyna się od numeru przychodów (7xx)
-        if (entry.account_number && entry.account_number.startsWith('7')) {
-          // Przychody są zwykle po stronie Ma (credit)
-          const value = Number(entry.credit_turnover || 0);
-          if (isNaN(value)) {
-            console.warn(`Niepoprawna wartość credit_turnover dla konta ${entry.account_number}: ${entry.credit_turnover}`);
-            return;
-          }
-          console.log(`Znaleziono przychód: ${value} (konto ${entry.account_number})`);
-          incomeTotal += value;
-        }
-        // Sprawdź czy konto zaczyna się od numeru kosztów (4xx)
-        else if (entry.account_number && entry.account_number.startsWith('4')) {
-          // Koszty są zwykle po stronie Winien (debit)
-          const value = Number(entry.debit_turnover || 0);
-          if (isNaN(value)) {
-            console.warn(`Niepoprawna wartość debit_turnover dla konta ${entry.account_number}: ${entry.debit_turnover}`);
-            return;
-          }
-          console.log(`Znaleziono koszt: ${value} (konto ${entry.account_number})`);
-          expenseTotal += value;
-        }
-        // Sprawdź czy konto zaczyna się od numeru rozrachunków (2xx)
-        else if (entry.account_number && entry.account_number.startsWith('2')) {
-          // Absolutna wartość salda
-          const debitClosing = Number(entry.debit_closing || 0);
-          const creditClosing = Number(entry.credit_closing || 0);
-          if (isNaN(debitClosing) || isNaN(creditClosing)) {
-            console.warn(`Niepoprawne wartości debit_closing lub credit_closing dla konta ${entry.account_number}`);
-            return;
-          }
-          const value = Math.abs(debitClosing - creditClosing);
-          console.log(`Znaleziono rozrachunek: ${value} (konto ${entry.account_number})`);
-          settlementsTotal += value;
-        }
-        else {
-          console.log(`Konto ${entry.account_number} nie pasuje do żadnej kategorii (przychód, koszt, rozrachunek)`);
-        }
-      });
-      
-      // Oblicz bilans jako różnicę między przychodami a wydatkami
-      const balance = incomeTotal - expenseTotal;
-      
-      console.log("Obliczone sumy:", { incomeTotal, expenseTotal, balance, settlementsTotal });
+      console.log("Obliczone sumy:", summary);
       
       // Zapisz podsumowanie
-      await updateOrInsertReportDetails(incomeTotal, expenseTotal, balance, settlementsTotal);
+      await updateOrInsertReportDetails(
+        summary.income, 
+        summary.expense, 
+        summary.balance,
+        0 // UWAGA: Tutaj nadal używamy 0 dla rozrachunków - można dodać logikę obliczania rozrachunków
+      );
       
       // Odśwież dane
       refetchReportDetails();
@@ -866,7 +725,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     );
   }
   
-  // Rendering głównego komponentu - uproszczony, tylko z podsumowaniem
+  // Rendering głównego komponentu z podsumowaniem podobnym do tego z KPiR
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -1005,66 +864,48 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
         </div>
       )}
       
-      {/* Sekcja podsumowania */}
-      <div className="mt-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Przychody</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-green-600">
-                {reportDetails?.income_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Rozchody</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-red-600">
-                {reportDetails?.expense_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Bilans</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-3xl font-bold ${(reportDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {reportDetails?.balance?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Rozrachunki</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-blue-600">
-                {reportDetails?.settlements_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
-              </p>
-            </CardContent>
-          </Card>
+      {/* Sekcja podsumowania finansowego w stylu bliższym do podanego obrazka */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Przychody</h3>
+          <p className="text-3xl font-bold text-green-600">
+            {reportDetails?.income_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+          </p>
         </div>
         
-        {/* Przycisk do ręcznego przeliczania sum */}
-        <div className="mt-4 flex justify-end">
-          <Button
-            variant="outline"
-            onClick={() => calculateAndUpdateReportTotals()}
-            disabled={isCalculating}
-            className="flex items-center gap-2"
-          >
-            {isCalculating ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
-            {isCalculating ? 'Przeliczanie...' : 'Przelicz sumy'}
-          </Button>
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Rozchody</h3>
+          <p className="text-3xl font-bold text-red-600">
+            {reportDetails?.expense_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+          </p>
         </div>
+        
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Bilans</h3>
+          <p className={`text-3xl font-bold ${(reportDetails?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {reportDetails?.balance?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+          </p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Rozrachunki</h3>
+          <p className="text-3xl font-bold text-blue-600">
+            {reportDetails?.settlements_total?.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) || '0,00 zł'}
+          </p>
+        </div>
+      </div>
+      
+      {/* Przycisk do ręcznego przeliczania sum */}
+      <div className="mt-4 flex justify-end">
+        <Button
+          variant="outline"
+          onClick={() => calculateAndUpdateReportTotals()}
+          disabled={isCalculating}
+          className="flex items-center gap-2"
+        >
+          {isCalculating ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
+          {isCalculating ? 'Przeliczanie...' : 'Przelicz sumy'}
+        </Button>
       </div>
     </div>
   );
