@@ -58,7 +58,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
                 {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
               </TableCell>
               <TableCell>
-                {transaction.debitAccount?.number} → {transaction.creditAccount?.number}
+                {transaction.debitAccount?.number || '?'}
               </TableCell>
               <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>

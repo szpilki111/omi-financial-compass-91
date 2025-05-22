@@ -3,24 +3,25 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_API_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
-import { Report, ReportDetailsInsert } from '@/types/reports';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
+import { ReportFormData } from '@/types/reports';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { useAuth } from '@/context/AuthContext';
-
 import {
   Select,
   SelectContent,
@@ -28,29 +29,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-const months = [
-  { value: 1, label: 'Styczeń' },
-  { value: 2, label: 'Luty' },
-  { value: 3, label: 'Marzec' },
-  { value: 4, label: 'Kwiecień' },
-  { value: 5, label: 'Maj' },
-  { value: 6, label: 'Czerwiec' },
-  { value: 7, label: 'Lipiec' },
-  { value: 8, label: 'Sierpień' },
-  { value: 9, label: 'Wrzesień' },
-  { value: 10, label: 'Październik' },
-  { value: 11, label: 'Listopad' },
-  { value: 12, label: 'Grudzień' },
-];
-
-// Zostawiamy tylko standardowy raport
-const reportTypes = [
-  { value: 'standard', label: 'Standardowy' }
-];
-
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 6 }, (_, i) => currentYear - 2 + i);
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Card,
+  CardContent,
+} from '@/components/ui/card';
 
 interface ReportFormProps {
   reportId?: string;
@@ -58,7 +46,8 @@ interface ReportFormProps {
   onCancel?: () => void;
 }
 
-const formSchema = z.object({
+// Schemat walidacji formularza
+const reportFormSchema = z.object({
   month: z.number().min(1).max(12),
   year: z.number().min(2000).max(2100),
   location_id: z.string().uuid(),
@@ -66,34 +55,24 @@ const formSchema = z.object({
 });
 
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDraft, setIsDraft] = useState(true);
 
-  // Pobieranie placówek
-  const { data: locations, isLoading: loadingLocations } = useQuery({
-    queryKey: ['locations'],
-    queryFn: async () => {
-      // Ekonom widzi tylko swoją placówkę
-      if (user?.role === 'ekonom' && user.location) {
-        const { data, error } = await supabase
-          .from('locations')
-          .select('*')
-          .eq('id', user.location);
-        
-        if (error) throw error;
-        return data;
-      } else {
-        // Admin i prowincjał widzą wszystkie placówki
-        const { data, error } = await supabase.from('locations').select('*');
-        if (error) throw error;
-        return data;
-      }
+  // Inicjalizacja formularza
+  const form = useForm<z.infer<typeof reportFormSchema>>({
+    resolver: zodResolver(reportFormSchema),
+    defaultValues: {
+      month: new Date().getMonth() + 1,
+      year: new Date().getFullYear(),
+      report_type: 'standard'
     }
   });
 
-  // Pobieranie danych raportu, jeśli edytujemy istniejący
+  // Pobieranie danych istniejącego raportu (jeśli podano ID)
   const { data: report, isLoading: loadingReport } = useQuery({
     queryKey: ['report', reportId],
     queryFn: async () => {
@@ -101,30 +80,23 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       
       const { data, error } = await supabase
         .from('reports')
-        .select('*')
+        .select(`
+          *,
+          location:locations(*)
+        `)
         .eq('id', reportId)
         .single();
         
       if (error) throw error;
-      return data as Report;
+      return data;
     },
     enabled: !!reportId
   });
-  
-  // Inicjalizacja formularza
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
-      location_id: '',
-      report_type: 'standard',
-    },
-  });
 
-  // Aktualizacja wartości formularza, gdy dane raportu są dostępne
+  // Ustawienie domyślnych wartości formularza na podstawie istniejącego raportu
   useEffect(() => {
     if (report) {
+      setIsDraft(report.status === 'draft');
       form.reset({
         month: report.month,
         year: report.year,
@@ -133,33 +105,64 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       });
     }
   }, [report, form]);
-  
-  // Sprawdzenie, czy mamy tylko jedną lokalizację (dla ekonoma)
-  useEffect(() => {
-    if (locations?.length === 1) {
-      form.setValue('location_id', locations[0].id);
-    }
-  }, [locations, form]);
 
-  // Mutacja do zapisywania/aktualizacji raportu
-  const mutation = useMutation({
-    mutationFn: async (values: z.infer<typeof formSchema>) => {
-      const { month, year, location_id, report_type } = values;
+  // Pobieranie listy lokalizacji
+  const { data: locations, isLoading: loadingLocations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      // Jeśli użytkownik jest ekonomem, pobierz tylko jego lokalizację
+      if (user && user.role === 'ekonom' && user.location) {
+        const { data, error } = await supabase
+          .from('locations')
+          .select('*')
+          .eq('id', user.location);
+          
+        if (error) throw error;
+        return data;
+      }
       
-      // Pobranie nazwy lokalizacji
-      const { data: locationData } = await supabase
+      // Dla admina i prowincjała, pobierz wszystkie lokalizacje
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+        
+      if (error) throw error;
+      return data;
+    }
+  });
+  
+  // Pobieranie wszystkich sekcji raportu
+  const { data: reportSections } = useQuery({
+    queryKey: ['reportSections', form.watch('report_type')],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('report_sections')
+        .select('*')
+        .eq('report_type', form.watch('report_type'))
+        .order('section_order', { ascending: true });
+        
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Mutacja do zapisywania raportu jako wersja robocza
+  const saveDraftMutation = useMutation({
+    mutationFn: async (data: ReportFormData) => {
+      const { month, year, location_id, report_type } = data;
+      
+      // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
+      const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
+      
+      // Pobierz nazwę lokalizacji
+      const { data: location } = await supabase
         .from('locations')
         .select('name')
         .eq('id', location_id)
         .single();
         
-      if (!locationData) {
-        throw new Error("Nie można znaleźć lokalizacji");
-      }
-      
-      const reportTypeLabel = reportTypes.find(t => t.value === report_type)?.label || '';
-      const monthName = months.find(m => m.value === month)?.label || '';
-      const title = `${reportTypeLabel} ${monthName} ${year} - ${locationData.name}`;
+      const title = `Raport za ${monthName} ${year} - ${location?.name}`;
       const period = `${monthName} ${year}`;
       
       if (reportId) {
@@ -170,58 +173,147 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             month,
             year,
             location_id,
-            report_type,
             title,
             period,
+            report_type,
             updated_at: new Date().toISOString()
           })
           .eq('id', reportId);
           
         if (error) throw error;
-        return { id: reportId };
+        
+        return reportId;
       } else {
         // Tworzenie nowego raportu
-        const { data, error } = await supabase
+        const { data: newReport, error } = await supabase
           .from('reports')
           .insert({
             month,
             year,
             location_id,
-            report_type,
             title,
             period,
-            status: 'draft'
+            report_type,
+            status: 'draft',
+            submitted_by: null,
+            submitted_at: null
           })
           .select('id')
           .single();
           
-        if (error) {
-          console.error('Błąd wstawiania raportu:', error);
-          throw error;
+        if (error) throw error;
+        
+        // Inicjalizuj wpisy raportu na podstawie planu kont
+        if (newReport?.id) {
+          await initializeReportEntries(newReport.id, report_type, location_id, month, year);
         }
         
-        // Inicjalizacja wpisów raportu zgodnie z typem
-        await initializeReportEntries(data.id, report_type, location_id, month, year);
-        
-        return data;
+        return newReport?.id;
       }
     },
-    onSuccess: () => {
+    onMutate: () => {
+      setIsSubmitting(true);
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
+    },
+    onSuccess: (newReportId) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       toast({
         title: reportId ? "Raport zaktualizowany" : "Raport utworzony",
-        description: reportId 
-          ? "Zmiany zostały zapisane pomyślnie." 
-          : "Nowy raport został utworzony pomyślnie.",
-        variant: "default",
+        description: "Raport został zapisany jako wersja robocza",
       });
-      if (onSuccess) onSuccess();
+      
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate(`/raporty/${newReportId}`);
+      }
     },
     onError: (error) => {
-      console.error('Błąd mutacji:', error);
+      console.error('Błąd podczas zapisywania raportu:', error);
       toast({
         title: "Błąd",
-        description: `Nie udało się ${reportId ? 'zaktualizować' : 'utworzyć'} raportu: ${error.message}`,
+        description: "Nie udało się zapisać raportu. Spróbuj ponownie później.",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Mutacja do składania raportu
+  const submitReportMutation = useMutation({
+    mutationFn: async (data: ReportFormData) => {
+      // Najpierw zapisz jako wersja robocza, aby utworzyć raport jeśli to nowy
+      const reportId = await saveDraftMutation.mutateAsync(data);
+      
+      // Teraz zaktualizuj status raportu na 'submitted'
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          submitted_by: user.id
+        })
+        .eq('id', reportId);
+        
+      if (error) throw error;
+      
+      // Wyślij powiadomienie do prowincjała
+      const { data: admins, error: adminsError } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['admin', 'prowincjal']);
+        
+      if (!adminsError && admins) {
+        // Pobierz nazwę lokalizacji
+        const { data: location } = await supabase
+          .from('locations')
+          .select('name')
+          .eq('id', data.location_id)
+          .single();
+          
+        const monthName = format(new Date(data.year, data.month - 1, 1), 'LLLL', { locale: pl });
+        
+        for (const admin of admins) {
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: admin.id,
+              title: 'Złożono nowy raport',
+              message: `Raport za ${monthName} ${data.year} - ${location?.name} został złożony i oczekuje na sprawdzenie.`,
+              priority: 'medium',
+              action_label: 'Zobacz raport',
+              action_link: `/raporty/${reportId}`
+            });
+        }
+      }
+      
+      return reportId;
+    },
+    onMutate: () => {
+      setIsSubmitting(true);
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
+    },
+    onSuccess: (newReportId) => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      toast({
+        title: "Raport złożony",
+        description: "Raport został złożony do zatwierdzenia",
+      });
+      
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate(`/raporty/${newReportId}`);
+      }
+    },
+    onError: (error) => {
+      console.error('Błąd podczas składania raportu:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się złożyć raportu. Spróbuj ponownie później.",
         variant: "destructive",
       });
     }
@@ -239,330 +331,350 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
       if (sectionsError) throw sectionsError;
       
-      if (!sections || sections.length === 0) return;
+      // Pobierz plan kont
+      const { data: accounts, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*')
+        .order('number');
+        
+      if (accountsError) throw accountsError;
       
       // Pobierz mapowania kont do sekcji
-      const { data: mappings, error: mappingsError } = await supabase
+      const { data: accountMappings, error: mappingsError } = await supabase
         .from('account_section_mappings')
         .select('*')
         .eq('report_type', reportType);
         
       if (mappingsError) throw mappingsError;
       
-      // Pobierz wszystkie konta
-      const { data: accounts, error: accountsError } = await supabase
-        .from('accounts')
-        .select('*');
+      // Stwórz mapę sekcji dla każdego prefiksu konta
+      const sectionMap = new Map();
+      
+      if (accountMappings) {
+        for (const mapping of accountMappings) {
+          sectionMap.set(mapping.account_prefix, mapping.section_id);
+        }
+      }
+      
+      // Przypisz konta do odpowiednich sekcji
+      if (sections && accounts) {
+        const entriesToInsert = [];
         
-      if (accountsError) throw accountsError;
-      
-      if (!accounts || accounts.length === 0) return;
-      
-      // Tworzenie wpisów dla raportu na podstawie kont i ich mapowań
-      const entries = [];
-      
-      for (const account of accounts) {
-        // Znajdź sekcję dla konta na podstawie prefiksu
-        let sectionId = null;
-        
-        if (mappings) {
-          const mapping = mappings.find(m => 
-            account.number.startsWith(m.account_prefix)
-          );
+        for (const account of accounts) {
+          // Znajdź sekcję dla konta na podstawie prefiksu
+          let sectionId = null;
           
-          if (mapping) {
-            sectionId = mapping.section_id;
+          // Sprawdź prefiksy od najdłuższych do najkrótszych
+          for (let i = account.number.length; i > 0; i--) {
+            const prefix = account.number.substring(0, i);
+            if (sectionMap.has(prefix)) {
+              sectionId = sectionMap.get(prefix);
+              break;
+            }
           }
+          
+          // Dodaj wpis dla konta
+          entriesToInsert.push({
+            report_id: reportId,
+            section_id: sectionId,
+            account_number: account.number,
+            account_name: account.name,
+            debit_opening: 0,
+            credit_opening: 0,
+            debit_turnover: 0,
+            credit_turnover: 0,
+            debit_closing: 0,
+            credit_closing: 0
+          });
         }
         
-        // Tworzenie wpisu raportu
-        entries.push({
-          report_id: reportId,
-          section_id: sectionId,
-          account_number: account.number,
-          account_name: account.name,
-          debit_opening: 0,
-          credit_opening: 0,
-          debit_turnover: 0,
-          credit_turnover: 0,
-          debit_closing: 0,
-          credit_closing: 0
-        });
+        // Zapisz wpisy do bazy
+        if (entriesToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('report_entries')
+            .insert(entriesToInsert);
+            
+          if (insertError) throw insertError;
+        }
       }
-      
-      // Zapisz wpisy do bazy danych
-      if (entries.length > 0) {
-        const { error: entriesError } = await supabase
-          .from('report_entries')
-          .insert(entries);
-          
-        if (entriesError) throw entriesError;
-      }
-      
-      // Inicjalizacja szczegółów raportu
-      const detailsData: ReportDetailsInsert = {
-        report_id: reportId,
-        income_total: 0,
-        expense_total: 0,
-        balance: 0,
-        settlements_total: 0
-      };
-      
-      // Użyj fetch API do inicjalizacji szczegółów
-      const apiUrl = `${SUPABASE_API_URL}/rest/v1/report_details`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify(detailsData)
-      });
-      
-      if (!response.ok) {
-        console.error('Błąd inicjalizacji szczegółów raportu:', await response.text());
-      }
-      
     } catch (error) {
-      console.error('Błąd inicjalizacji wpisów raportu:', error);
+      console.error('Błąd podczas inicjalizacji wpisów raportu:', error);
+      throw new Error('Nie udało się zainicjalizować wpisów raportu');
     }
   };
 
-  // Mutacja do zmiany statusu raportu na 'złożony'
-  const submitReportMutation = useMutation({
-    mutationFn: async () => {
-      if (!reportId) throw new Error("Brak ID raportu");
+  // Obsługa formularza
+  const onSubmit = (values: z.infer<typeof reportFormSchema>) => {
+    // Sprawdź, czy raport o tym samym miesiącu, roku i lokalizacji już istnieje
+    const checkExistingReport = async () => {
+      if (reportId) return false; // Jeśli edytujemy istniejący raport, pomijamy sprawdzenie
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('reports')
-        .update({
-          status: 'submitted',
-          submitted_at: new Date().toISOString(),
-          submitted_by: (await supabase.auth.getUser()).data.user?.id
-        })
-        .eq('id', reportId);
+        .select('id')
+        .eq('month', values.month)
+        .eq('year', values.year)
+        .eq('location_id', values.location_id);
         
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
-      queryClient.invalidateQueries({ queryKey: ['report', reportId] });
-      toast({
-        title: "Raport złożony",
-        description: "Raport został pomyślnie złożony do zatwierdzenia.",
-        variant: "default",
-      });
-      if (onSuccess) onSuccess();
-    },
-    onError: (error) => {
-      console.error('Błąd zmiany statusu:', error);
-      toast({
-        title: "Błąd",
-        description: `Nie udało się złożyć raportu: ${error.message}`,
-        variant: "destructive",
-      });
-    }
-  });
-
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsSubmitting(true);
-    try {
-      await mutation.mutateAsync(values);
-    } catch (error) {
-      console.error('Błąd podczas zapisywania:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
+      if (error) {
+        console.error('Błąd podczas sprawdzania istniejących raportów:', error);
+        return false;
+      }
+      
+      return data && data.length > 0;
+    };
+    
+    checkExistingReport().then(exists => {
+      if (exists) {
+        toast({
+          title: "Raport już istnieje",
+          description: "Raport za ten miesiąc i rok dla wybranej lokalizacji już istnieje.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (isDraft) {
+        saveDraftMutation.mutate(values as ReportFormData);
+      } else {
+        submitReportMutation.mutate(values as ReportFormData);
+      }
+    });
   };
-
-  const handleSubmitReport = async () => {
-    if (!reportId) return;
-    await submitReportMutation.mutateAsync();
-  };
-
-  // Pokazuj spinner podczas ładowania danych
+  
+  // Wyświetlanie loadera podczas ładowania danych
   if ((reportId && loadingReport) || loadingLocations) {
-    return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
+    return (
+      <div className="flex justify-center p-8">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+  
+  // Walidacja dostępu do istniejącego raportu
+  if (reportId && report && report.status !== 'draft') {
+    return (
+      <div className="space-y-4">
+        <div className="bg-yellow-100 border border-yellow-400 p-4 rounded">
+          <h3 className="text-lg font-medium text-yellow-800">Raport nie może być edytowany</h3>
+          <p className="text-yellow-700">
+            Ten raport ma status <strong>{report.status}</strong> i nie może być już edytowany.
+          </p>
+        </div>
+        
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onCancel || (() => navigate('/raporty'))}>
+            Powrót do listy raportów
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="month"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Miesiąc</FormLabel>
-                <Select
-                  value={field.value.toString()}
-                  onValueChange={value => field.onChange(parseInt(value))}
-                  disabled={report?.status !== 'draft' && !!report}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz miesiąc" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {months.map(month => (
-                      <SelectItem key={month.value} value={month.value.toString()}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="year"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Rok</FormLabel>
-                <Select
-                  value={field.value.toString()}
-                  onValueChange={value => field.onChange(parseInt(value))}
-                  disabled={report?.status !== 'draft' && !!report}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz rok" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {years.map(year => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="location_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Placówka</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={(locations?.length === 1) || (report?.status !== 'draft' && !!report)}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz placówkę" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {locations?.map(location => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="report_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Typ raportu</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange as (value: string) => void}
-                  disabled={true}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Standardowy" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {reportTypes.map(type => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {report && (
-          <div className="border-t pt-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-omi-gray-500">Status:</p>
-                <p className="font-medium">{
-                  report.status === 'draft' ? 'Roboczy' : 
-                  report.status === 'submitted' ? 'Złożony' : 
-                  report.status === 'accepted' ? 'Zaakceptowany' : 
-                  report.status === 'rejected' ? 'Odrzucony' : report.status
-                }</p>
-              </div>
-              {report.submitted_at && (
-                <div>
-                  <p className="text-omi-gray-500">Data złożenia:</p>
-                  <p className="font-medium">{format(new Date(report.submitted_at), 'PPP', { locale: pl })}</p>
-                </div>
-              )}
+    <div className="space-y-6">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200">
+            <h2 className="text-xl font-semibold mb-4">
+              {reportId ? 'Edycja raportu' : 'Nowy raport'}
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="month"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Miesiąc</FormLabel>
+                    <Select
+                      value={field.value.toString()}
+                      onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz miesiąc" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1">Styczeń</SelectItem>
+                        <SelectItem value="2">Luty</SelectItem>
+                        <SelectItem value="3">Marzec</SelectItem>
+                        <SelectItem value="4">Kwiecień</SelectItem>
+                        <SelectItem value="5">Maj</SelectItem>
+                        <SelectItem value="6">Czerwiec</SelectItem>
+                        <SelectItem value="7">Lipiec</SelectItem>
+                        <SelectItem value="8">Sierpień</SelectItem>
+                        <SelectItem value="9">Wrzesień</SelectItem>
+                        <SelectItem value="10">Październik</SelectItem>
+                        <SelectItem value="11">Listopad</SelectItem>
+                        <SelectItem value="12">Grudzień</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Wybierz miesiąc, za który tworzysz raport
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="year"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rok</FormLabel>
+                    <Select
+                      value={field.value.toString()}
+                      onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz rok" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {[...Array(5)].map((_, i) => {
+                          const year = new Date().getFullYear() - 2 + i;
+                          return (
+                            <SelectItem key={year} value={year.toString()}>
+                              {year}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Wybierz rok, za który tworzysz raport
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="location_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Placówka</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={user?.role === 'ekonom'}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz placówkę" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locations?.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {user?.role === 'ekonom' 
+                        ? 'Placówka jest wybrana automatycznie'
+                        : 'Wybierz placówkę, dla której tworzysz raport'}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="report_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Typ raportu</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange as (value: string) => void}
+                      disabled={true}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Standardowy" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="standard">Standardowy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Typ raportu określa jego strukturę i zawartość
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            {report.comments && (
-              <div className="mt-4">
-                <p className="text-omi-gray-500">Komentarz:</p>
-                <p className="bg-omi-gray-100 p-2 rounded mt-1">{report.comments}</p>
-              </div>
-            )}
           </div>
-        )}
 
-        <div className="flex justify-end space-x-3">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Anuluj
-            </Button>
+          {reportId && reportSections && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200">
+              <h2 className="text-xl font-semibold mb-4">
+                Zawartość raportu
+              </h2>
+              
+              <Accordion type="single" collapsible className="w-full">
+                {reportSections.map((section) => (
+                  <AccordionItem key={section.id} value={section.id}>
+                    <AccordionTrigger className="text-lg">
+                      {section.name}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <Card>
+                        <CardContent className="p-4">
+                          <p className="italic text-omi-gray-500">Wpisy tej sekcji będą dostępne po zapisaniu raportu.</p>
+                        </CardContent>
+                      </Card>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
           )}
           
-          {report && report.status === 'draft' && (
+          <div className="flex justify-end gap-2">
+            {onCancel && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onCancel}
+                disabled={isSubmitting}
+              >
+                Anuluj
+              </Button>
+            )}
             <Button 
-              type="button" 
-              onClick={handleSubmitReport}
-              disabled={submitReportMutation.isPending}
+              type="submit" 
+              variant="outline" 
+              onClick={() => setIsDraft(true)}
+              disabled={isSubmitting}
             >
-              {submitReportMutation.isPending && <Spinner className="mr-2 h-4 w-4" />}
-              Złóż raport
+              {isSubmitting && isDraft && <Spinner className="mr-2 h-4 w-4" />}
+              Zapisz jako wersję roboczą
             </Button>
-          )}
-          
-          {(!report || report.status === 'draft') && (
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              Zapisz
+            <Button 
+              type="submit" 
+              variant="default" 
+              onClick={() => setIsDraft(false)}
+              disabled={isSubmitting}
+            >
+              {isSubmitting && !isDraft && <Spinner className="mr-2 h-4 w-4" />}
+              {reportId ? 'Zapisz i złóż raport' : 'Utwórz i złóż raport'}
             </Button>
-          )}
-        </div>
-      </form>
-    </Form>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
 };
 
