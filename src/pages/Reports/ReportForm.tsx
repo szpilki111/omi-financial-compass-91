@@ -7,7 +7,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
-import { ReportFormData } from '@/types/reports';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -599,10 +598,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         return;
       }
       
+      // Upewnij się, że wartości są zgodne z oczekiwanym typem
+      const formData = {
+        month: values.month,
+        year: values.year
+      };
+      
       if (isDraft) {
-        saveDraftMutation.mutate(values);
+        saveDraftMutation.mutate(formData);
       } else {
-        submitReportMutation.mutate(values);
+        submitReportMutation.mutate(formData);
       }
     });
   };
@@ -737,18 +742,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                   </FormItem>
                 )}
               />
-              
-              {userLocation && (
-                <div className="col-span-2">
-                  <FormLabel>Placówka</FormLabel>
-                  <div className="w-full p-2 border border-omi-gray-300 bg-omi-gray-100 rounded-md">
-                    {userLocation.name || "Twoja placówka"}
-                  </div>
-                  <FormDescription className="mt-1">
-                    Placówka jest wybrana automatycznie na podstawie Twojego profilu
-                  </FormDescription>
-                </div>
-              )}
             </div>
           </div>
 
