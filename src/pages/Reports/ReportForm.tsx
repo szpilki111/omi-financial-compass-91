@@ -61,6 +61,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDraft, setIsDraft] = useState(true);
+  const isEkonom = user?.role === 'ekonom';
 
   // Inicjalizacja formularza
   const form = useForm<z.infer<typeof reportFormSchema>>({
@@ -68,7 +69,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     defaultValues: {
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
-      report_type: 'standard'
+      report_type: 'standard',
+      location_id: user?.location || '' // Ustaw domyślnie lokalizację użytkownika
     }
   });
 
@@ -106,6 +108,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   }, [report, form]);
 
+  // Ustawienie lokalizacji dla ekonoma
+  useEffect(() => {
+    if (isEkonom && user?.location) {
+      form.setValue('location_id', user.location);
+    }
+  }, [isEkonom, user, form]);
+
   // Pobieranie listy lokalizacji
   const { data: locations, isLoading: loadingLocations } = useQuery({
     queryKey: ['locations'],
@@ -132,7 +141,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   });
   
-  // Pobieranie wszystkich sekcji raportu - FIX: Usunięcie zagnieżdżenia typu
+  // Pobieranie wszystkich sekcji raportu
   const { data: reportSections } = useQuery({
     queryKey: ['reportSections', 'standard'],
     queryFn: async () => {
@@ -150,7 +159,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Mutacja do zapisywania raportu jako wersja robocza
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReportFormData) => {
-      const { month, year, location_id, report_type } = data;
+      const { month, year, location_id } = data;
       
       // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
       const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
@@ -175,7 +184,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             location_id,
             title,
             period,
-            report_type,
+            report_type: 'standard', // Zawsze używamy 'standard'
             updated_at: new Date().toISOString()
           })
           .eq('id', reportId);
@@ -193,7 +202,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             location_id,
             title,
             period,
-            report_type,
+            report_type: 'standard', // Zawsze używamy 'standard'
             status: 'draft',
             submitted_by: null,
             submitted_at: null
@@ -205,7 +214,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
         // Inicjalizuj wpisy raportu na podstawie planu kont
         if (newReport?.id) {
-          await initializeReportEntries(newReport.id, 'standard', location_id, month, year);
+          await initializeReportEntries(newReport.id, location_id, month, year);
         }
         
         return newReport?.id;
@@ -320,13 +329,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   });
   
   // Funkcja do inicjalizacji wpisów raportu
-  const initializeReportEntries = async (reportId: string, reportType: 'standard', locationId: string, month: number, year: number) => {
+  const initializeReportEntries = async (reportId: string, locationId: string, month: number, year: number) => {
     try {
-      // Pobierz sekcje dla danego typu raportu
+      // Pobierz sekcje dla standardowego typu raportu
       const { data: sections, error: sectionsError } = await supabase
         .from('report_sections')
         .select('*')
-        .eq('report_type', reportType)
+        .eq('report_type', 'standard')
         .order('section_order', { ascending: true });
         
       if (sectionsError) throw sectionsError;
@@ -343,7 +352,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       const { data: accountMappings, error: mappingsError } = await supabase
         .from('account_section_mappings')
         .select('*')
-        .eq('report_type', reportType);
+        .eq('report_type', 'standard');
         
       if (mappingsError) throw mappingsError;
       
@@ -372,6 +381,46 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               break;
             }
           }
+
+          // Pobierz sumę transakcji dla tego konta w danym miesiącu i roku
+          let debitTurnover = 0;
+          let creditTurnover = 0;
+
+          const startDate = new Date(year, month - 1, 1);
+          const endDate = new Date(year, month, 0);
+          
+          const startDateString = startDate.toISOString().split('T')[0];
+          const endDateString = endDate.toISOString().split('T')[0];
+          
+          // Pobierz transakcje debetowe
+          const { data: debitTransactions } = await supabase
+            .from('transactions')
+            .select('amount')
+            .eq('location_id', locationId)
+            .eq('debit_account_id', account.id)
+            .gte('date', startDateString)
+            .lte('date', endDateString);
+            
+          if (debitTransactions) {
+            debitTurnover = debitTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+          }
+          
+          // Pobierz transakcje kredytowe
+          const { data: creditTransactions } = await supabase
+            .from('transactions')
+            .select('amount')
+            .eq('location_id', locationId)
+            .eq('credit_account_id', account.id)
+            .gte('date', startDateString)
+            .lte('date', endDateString);
+            
+          if (creditTransactions) {
+            creditTurnover = creditTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+          }
+
+          // Oblicz salda zamknięcia
+          const debitClosing = account.type === 'bilansowe' ? debitTurnover : 0;
+          const creditClosing = account.type === 'bilansowe' ? creditTurnover : 0;
           
           // Dodaj wpis dla konta
           entriesToInsert.push({
@@ -379,12 +428,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             section_id: sectionId,
             account_number: account.number,
             account_name: account.name,
-            debit_opening: 0,
-            credit_opening: 0,
-            debit_turnover: 0,
-            credit_turnover: 0,
-            debit_closing: 0,
-            credit_closing: 0
+            debit_opening: 0, // Dla uproszczenia zakładamy 0
+            credit_opening: 0, // Dla uproszczenia zakładamy 0
+            debit_turnover: debitTurnover,
+            credit_turnover: creditTurnover,
+            debit_closing: debitClosing,
+            credit_closing: creditClosing
           });
         }
         
@@ -559,29 +608,42 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Placówka</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={user?.role === 'ekonom'}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz placówkę" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {locations?.map((location) => (
-                          <SelectItem key={location.id} value={location.id}>
-                            {location.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {user?.role === 'ekonom' 
-                        ? 'Placówka jest wybrana automatycznie'
-                        : 'Wybierz placówkę, dla której tworzysz raport'}
-                    </FormDescription>
+                    {isEkonom ? (
+                      // Dla ekonoma wyświetl tylko nazwę placówki, bez możliwości wyboru
+                      <div>
+                        <div className="w-full p-2 border border-omi-gray-300 bg-omi-gray-100 rounded-md">
+                          {locations?.find(loc => loc.id === user?.location)?.name || "Twoja placówka"}
+                        </div>
+                        <FormDescription>
+                          Placówka jest wybrana automatycznie na podstawie Twojego profilu
+                        </FormDescription>
+                      </div>
+                    ) : (
+                      // Dla admina/prowincjała lista rozwijana
+                      <>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={false}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Wybierz placówkę" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {locations?.map((location) => (
+                              <SelectItem key={location.id} value={location.id}>
+                                {location.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Wybierz placówkę, dla której tworzysz raport
+                        </FormDescription>
+                      </>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

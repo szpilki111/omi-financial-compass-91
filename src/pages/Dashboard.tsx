@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -274,7 +275,7 @@ const Dashboard = () => {
       <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Button
-          onClick={() => navigate('/kpir/nowy')}
+          onClick={() => navigate('/kpir')}
           variant="outline"
           className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
         >
