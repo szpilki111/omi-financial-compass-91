@@ -370,6 +370,9 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           console.log(`Znaleziono rozrachunek: ${value} (konto ${entry.account_number})`);
           settlementsTotal += value;
         }
+        else {
+          console.log(`Konto ${entry.account_number} nie pasuje do żadnej kategorii (przychód, koszt, rozrachunek)`);
+        }
       });
       
       // Oblicz bilans jako różnicę między przychodami a wydatkami
@@ -506,6 +509,61 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }
   });
   
+  // Mutacja do złożenia raportu
+  const submitReportMutation = useMutation({
+    mutationFn: async () => {
+      // Przelicz sumy przed złożeniem raportu
+      await calculateAndUpdateReportTotals();
+      
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          submitted_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .eq('id', reportId);
+        
+      if (error) throw error;
+      
+      // Wyślij powiadomienie do prowincjałów i adminów
+      const { data: admins, error: adminsError } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['admin', 'prowincjal']);
+        
+      if (!adminsError && admins && admins.length > 0) {
+        for (const admin of admins) {
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: admin.id,
+              title: 'Złożono nowy raport',
+              message: `Raport "${report?.title}" został złożony i oczekuje na sprawdzenie.`,
+              priority: 'medium',
+              action_label: 'Zobacz raport',
+              action_link: `/reports/${reportId}`
+            });
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report', reportId] });
+      toast({
+        title: "Sukces",
+        description: "Raport został złożony do zatwierdzenia.",
+        variant: "default",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Błąd",
+        description: `Nie udało się złożyć raportu: ${error instanceof Error ? error.message : "Nieznany błąd"}`,
+        variant: "destructive",
+      });
+    }
+  });
+  
   // Funkcja do eksportu raportu do PDF
   const handleExportToPDF = () => {
     toast({
@@ -555,7 +613,7 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
               Status: <span className={`font-medium ${
                 report?.status === 'accepted' ? 'text-green-600' : 
                 report?.status === 'rejected' ? 'text-red-600' : 
-                report?.status === 'submitted' ? 'text-blue-600' : ''
+                report?.status === 'submitted' ? 'text-blue-600' : 'text-yellow-600'
               }`}>
                 {report?.status === 'draft' ? 'Roboczy' : 
                  report?.status === 'submitted' ? 'Złożony' : 
@@ -566,6 +624,17 @@ const ReportDetailsComponent: React.FC<ReportDetailsProps> = ({ reportId }) => {
           </div>
           
           <div className="flex gap-2">
+            {report?.status === 'draft' && (
+              <Button 
+                onClick={() => submitReportMutation.mutate()}
+                disabled={submitReportMutation.isPending}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                {submitReportMutation.isPending && <Spinner className="h-4 w-4" />}
+                Złóż raport
+              </Button>
+            )}
+            
             <Button variant="outline" onClick={handleExportToPDF} className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Eksportuj do PDF

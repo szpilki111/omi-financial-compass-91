@@ -525,29 +525,46 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       let settlementsTotal = 0;
 
       entries.forEach(entry => {
+        // Walidacja danych
+        if (!entry.account_number) {
+          console.warn(`Wpis ${entry.id} nie ma numeru konta`);
+          return;
+        }
+
         // Konta przychodów zaczynające się od 7
         if (entry.account_number && entry.account_number.startsWith('7')) {
           const value = Number(entry.credit_turnover || 0);
-          if (!isNaN(value)) {
-            incomeTotal += value;
-            console.log(`Konto przychodu ${entry.account_number}: ${value} - suma: ${incomeTotal}`);
+          if (isNaN(value)) {
+            console.warn(`Niepoprawna wartość credit_turnover dla konta ${entry.account_number}: ${entry.credit_turnover}`);
+            return;
           }
+          incomeTotal += value;
+          console.log(`Konto przychodu ${entry.account_number}: ${value} - suma: ${incomeTotal}`);
         }
         // Konta kosztów zaczynające się od 4
         else if (entry.account_number && entry.account_number.startsWith('4')) {
           const value = Number(entry.debit_turnover || 0);
-          if (!isNaN(value)) {
-            expenseTotal += value;
-            console.log(`Konto kosztu ${entry.account_number}: ${value} - suma: ${expenseTotal}`);
+          if (isNaN(value)) {
+            console.warn(`Niepoprawna wartość debit_turnover dla konta ${entry.account_number}: ${entry.debit_turnover}`);
+            return;
           }
+          expenseTotal += value;
+          console.log(`Konto kosztu ${entry.account_number}: ${value} - suma: ${expenseTotal}`);
         }
         // Konta rozrachunków zaczynające się od 2
         else if (entry.account_number && entry.account_number.startsWith('2')) {
-          const balance = Math.abs(Number(entry.debit_closing || 0) - Number(entry.credit_closing || 0));
-          if (!isNaN(balance)) {
-            settlementsTotal += balance;
-            console.log(`Konto rozrachunku ${entry.account_number}: ${balance} - suma: ${settlementsTotal}`);
+          const debitClosing = Number(entry.debit_closing || 0);
+          const creditClosing = Number(entry.credit_closing || 0);
+          if (isNaN(debitClosing) || isNaN(creditClosing)) {
+            console.warn(`Niepoprawne wartości debit_closing lub credit_closing dla konta ${entry.account_number}`);
+            return;
           }
+          const balance = Math.abs(debitClosing - creditClosing);
+          settlementsTotal += balance;
+          console.log(`Konto rozrachunku ${entry.account_number}: ${balance} - suma: ${settlementsTotal}`);
+        }
+        else {
+          console.log(`Konto ${entry.account_number} nie pasuje do żadnej kategorii (przychód, koszt, rozrachunek)`);
         }
       });
 
@@ -634,11 +651,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     
     setIsSubmitting(true);
     
-    if (isDraft) {
-      saveDraftMutation.mutate(formData);
-    } else {
-      submitReportMutation.mutate(formData);
-    }
+    // Zmieniono: Zawsze używamy saveDraftMutation, niezależnie od przycisku
+    // Teraz przycisk "Utwórz i złóż raport" tworzy tylko raport bez składania
+    saveDraftMutation.mutate(formData);
   };
   
   // Wyświetlanie loadera podczas ładowania danych
@@ -813,20 +828,18 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             <Button 
               type="submit" 
               variant="outline" 
-              onClick={() => setIsDraft(true)}
               disabled={isSubmitting}
             >
-              {isSubmitting && isDraft && <Spinner className="mr-2 h-4 w-4" />}
+              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
               Zapisz jako wersję roboczą
             </Button>
             <Button 
               type="submit" 
               variant="default" 
-              onClick={() => setIsDraft(false)}
               disabled={isSubmitting}
             >
-              {isSubmitting && !isDraft && <Spinner className="mr-2 h-4 w-4" />}
-              {reportId ? 'Zapisz i złóż raport' : 'Utwórz i złóż raport'}
+              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+              {reportId ? 'Utwórz raport' : 'Utwórz raport'}
             </Button>
           </div>
         </form>
