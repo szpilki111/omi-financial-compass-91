@@ -26,7 +26,7 @@ const getStatusBadgeProps = (status: Report['status']) => {
   switch (status) {
     case 'submitted':
       return { variant: 'outline' as const, className: 'bg-blue-100 text-blue-800 border-blue-200' };
-    case 'accepted':
+    case 'approved':
       return { variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200' };
     case 'rejected':
       return { variant: 'outline' as const, className: 'bg-red-100 text-red-800 border-red-200' };
@@ -39,7 +39,7 @@ const getStatusLabel = (status: Report['status']) => {
   switch (status) {
     case 'draft': return 'Roboczy';
     case 'submitted': return 'Złożony';
-    case 'accepted': return 'Zaakceptowany';
+    case 'approved': return 'Zaakceptowany';
     case 'rejected': return 'Odrzucony';
     default: return status;
   }
@@ -61,13 +61,16 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      // Sprawdzenie roli użytkownika
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
       
-      let query = supabase.from('reports').select('*');
+      let query = supabase.from('reports').select(`
+        *,
+        location:locations(name),
+        submitted_by_profile:profiles!submitted_by(name),
+        reviewed_by_profile:profiles!reviewed_by(name)
+      `);
       
-      // Jeśli użytkownik jest ekonomem, pobierz tylko raporty jego placówki
       if (userRole === 'ekonom') {
         const { data: locationId } = await supabase.rpc('get_user_location_id');
         console.log('ID lokalizacji użytkownika:', locationId);
@@ -104,10 +107,12 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         <TableHeader>
           <TableRow>
             <TableHead>Tytuł</TableHead>
+            <TableHead>Placówka</TableHead>
             <TableHead>Typ</TableHead>
             <TableHead>Okres</TableHead>
             <TableHead>Data utworzenia</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Złożony przez</TableHead>
             <TableHead className="text-right">Akcje</TableHead>
           </TableRow>
         </TableHeader>
@@ -115,6 +120,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
           {reports.map((report) => (
             <TableRow key={report.id}>
               <TableCell>{report.title}</TableCell>
+              <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
               <TableCell>
                 <Badge variant="secondary">{getReportTypeLabel(report.report_type || 'standard')}</Badge>
               </TableCell>
@@ -126,6 +132,9 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                 <Badge {...getStatusBadgeProps(report.status)}>
                   {getStatusLabel(report.status)}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                {report.submitted_by_profile?.name || '-'}
               </TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" onClick={() => onReportSelect(report.id)}>

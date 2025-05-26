@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +8,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getReportFinancialDetails, calculateFinancialSummary } from '@/utils/financeUtils';
 import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import KpirSummary from '../KPIR/components/KpirSummary';
+import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -20,8 +21,12 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const reportId = propReportId || paramReportId;
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sprawdź, czy użytkownik może zatwierdzać raporty
+  const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
 
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
@@ -172,6 +177,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     }
   };
 
+  const handleApprovalComplete = () => {
+    refetchReport();
+  };
+
   if (isLoadingReport || isLoadingFinancial) {
     return (
       <div className="flex justify-center p-8">
@@ -240,7 +249,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
         
         <div className="flex gap-2">
-          {report.status === 'draft' && (
+          {report.status === 'draft' && user?.role === 'ekonom' && (
             <Button onClick={handleSubmitReport} disabled={isSubmitting}>
               {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
               Złóż raport
@@ -284,10 +293,25 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               
               <h2 className="text-lg font-semibold mt-4 mb-2">Zweryfikowany przez:</h2>
               <p>{report.reviewed_by_profile?.name || 'Nieznany'}</p>
+
+              {report.comments && (
+                <>
+                  <h2 className="text-lg font-semibold mt-4 mb-2">Komentarze:</h2>
+                  <p className="text-sm bg-gray-100 p-3 rounded">{report.comments}</p>
+                </>
+              )}
             </>
           ) : null}
         </div>
       </div>
+
+      {/* Sekcja zatwierdzania dla prowincjała */}
+      {canApproveReports && report.status === 'submitted' && (
+        <ReportApprovalActions 
+          reportId={reportId!} 
+          onApprovalComplete={handleApprovalComplete}
+        />
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
