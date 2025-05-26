@@ -9,13 +9,18 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 const ReportsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
   const { toast } = useToast();
+
+  // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może tworzyć raportów)
+  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
   const handleReportCreated = () => {
     setIsCreatingReport(false);
@@ -61,7 +66,8 @@ const ReportsPage = () => {
           )}
           <PageTitle title="Raportowanie" />
         </div>
-        {viewMode === 'list' && (
+        {/* Przycisk "Nowy raport" tylko dla ekonomów */}
+        {viewMode === 'list' && !isAdmin && (
           <Button onClick={handleNewReport} className="flex items-center gap-2">
             <PlusCircle className="h-4 w-4" />
             Nowy raport

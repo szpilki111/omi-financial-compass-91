@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -38,6 +39,9 @@ const KpirPage: React.FC = () => {
     expense: 0,
     balance: 0
   });
+
+  // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może dodawać operacji)
+  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
   // Sprawdź, czy jesteśmy na ścieżce /kpir/nowy i otwórz okno nowej operacji
   useEffect(() => {
@@ -143,12 +147,15 @@ const KpirPage: React.FC = () => {
             title="Księga Przychodów i Rozchodów"
             subtitle="Przeglądaj i zarządzaj operacjami finansowymi"
           />
-          <div className="flex gap-2">
-            <Button onClick={handleNewOperation} className="bg-omi-500">
-              <FilePlus2 className="mr-2 h-4 w-4" />
-              Nowa operacja
-            </Button>
-          </div>
+          {/* Przycisk "Nowa operacja" tylko dla ekonomów */}
+          {!isAdmin && (
+            <div className="flex gap-2">
+              <Button onClick={handleNewOperation} className="bg-omi-500">
+                <FilePlus2 className="mr-2 h-4 w-4" />
+                Nowa operacja
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Podsumowanie miesięczne */}
@@ -214,29 +221,31 @@ const KpirPage: React.FC = () => {
               </div>
             </form>
             
-            {/* Przyciski akcji */}
-            <div className="flex gap-2 items-end">
-              <Button variant="outline" onClick={handleImport}>
-                <FileUp className="mr-2 h-4 w-4" />
-                Importuj
-              </Button>
-              <Button variant="outline" onClick={() => handleExport('excel')}>
-                <FileDown className="mr-2 h-4 w-4" />
-                Excel
-              </Button>
-              <Button variant="outline" onClick={() => handleExport('pdf')}>
-                <Download className="mr-2 h-4 w-4" />
-                PDF
-              </Button>
-            </div>
+            {/* Przyciski akcji - Import i Eksport tylko dla ekonomów */}
+            {!isAdmin && (
+              <div className="flex gap-2 items-end">
+                <Button variant="outline" onClick={handleImport}>
+                  <FileUp className="mr-2 h-4 w-4" />
+                  Importuj
+                </Button>
+                <Button variant="outline" onClick={() => handleExport('excel')}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Excel
+                </Button>
+                <Button variant="outline" onClick={() => handleExport('pdf')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
+              </div>
+            )}
           </div>
           
           <KpirTable transactions={transactions} loading={loading} />
         </div>
       </div>
 
-      {/* Dialog do dodawania nowej operacji */}
-      {showNewOperationDialog && (
+      {/* Dialog do dodawania nowej operacji - tylko dla ekonomów */}
+      {!isAdmin && showNewOperationDialog && (
         <KpirOperationDialog 
           open={showNewOperationDialog}
           onClose={handleDialogClose}
@@ -244,8 +253,8 @@ const KpirPage: React.FC = () => {
         />
       )}
 
-      {/* Dialog do importowania operacji */}
-      {showImportDialog && (
+      {/* Dialog do importowania operacji - tylko dla ekonomów */}
+      {!isAdmin && showImportDialog && (
         <KpirImportDialog
           open={showImportDialog}
           onClose={() => setShowImportDialog(false)}
