@@ -1,10 +1,11 @@
+
 export interface Report {
   id: string;
   title: string;
   period: string;
   month: number;
   year: number;
-  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  status: 'draft' | 'submitted' | 'approved' | 'to_be_corrected';
   location_id: string;
   submitted_at: string | null;
   submitted_by: string | null;

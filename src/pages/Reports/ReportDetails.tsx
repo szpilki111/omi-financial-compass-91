@@ -27,6 +27,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
   // Sprawdź, czy użytkownik może zatwierdzać raporty
   const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
+  
+  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
+  const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
 
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
@@ -152,7 +155,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .update({
           status: 'submitted',
           submitted_at: new Date().toISOString(),
-          submitted_by: (await supabase.auth.getUser()).data.user?.id
+          submitted_by: (await supabase.auth.getUser()).data.user?.id,
+          // Wyczyść poprzednie komentarze przy ponownym złożeniu
+          comments: null,
+          reviewed_at: null,
+          reviewed_by: null
         })
         .eq('id', reportId);
         
@@ -215,8 +222,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         return 'Złożony';
       case 'approved':
         return 'Zatwierdzony';
-      case 'rejected':
-        return 'Odrzucony';
+      case 'to_be_corrected':
+        return 'Do poprawy';
       default:
         return status;
     }
@@ -231,8 +238,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         return 'text-blue-600';
       case 'approved':
         return 'text-green-600';
-      case 'rejected':
-        return 'text-red-600';
+      case 'to_be_corrected':
+        return 'text-orange-600';
       default:
         return '';
     }
@@ -249,10 +256,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
         
         <div className="flex gap-2">
-          {report.status === 'draft' && user?.role === 'ekonom' && (
+          {(report.status === 'draft' || canResubmit) && user?.role === 'ekonom' && (
             <Button onClick={handleSubmitReport} disabled={isSubmitting}>
               {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              Złóż raport
+              {report.status === 'to_be_corrected' ? 'Popraw i złóż ponownie' : 'Złóż raport'}
             </Button>
           )}
         </div>
@@ -311,6 +318,19 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           reportId={reportId!} 
           onApprovalComplete={handleApprovalComplete}
         />
+      )}
+      
+      {/* Wyświetlenie komentarzy dla raportów do poprawy */}
+      {report.status === 'to_be_corrected' && report.comments && (
+        <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-orange-800 mb-2">Komentarze do poprawek</h3>
+          <p className="text-orange-700">{report.comments}</p>
+          {report.reviewed_by_profile && (
+            <p className="text-sm text-orange-600 mt-2">
+              Autor komentarza: {report.reviewed_by_profile.name}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="bg-white p-6 rounded-lg shadow-sm border">

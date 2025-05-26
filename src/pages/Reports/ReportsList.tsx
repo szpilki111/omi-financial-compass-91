@@ -28,8 +28,8 @@ const getStatusBadgeProps = (status: Report['status']) => {
       return { variant: 'outline' as const, className: 'bg-blue-100 text-blue-800 border-blue-200' };
     case 'approved':
       return { variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200' };
-    case 'rejected':
-      return { variant: 'outline' as const, className: 'bg-red-100 text-red-800 border-red-200' };
+    case 'to_be_corrected':
+      return { variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200' };
     default:
       return { variant: 'outline' as const, className: 'bg-gray-100 text-gray-800 border-gray-200' };
   }
@@ -40,7 +40,7 @@ const getStatusLabel = (status: Report['status']) => {
     case 'draft': return 'Roboczy';
     case 'submitted': return 'Złożony';
     case 'approved': return 'Zaakceptowany';
-    case 'rejected': return 'Odrzucony';
+    case 'to_be_corrected': return 'Do poprawy';
     default: return status;
   }
 };

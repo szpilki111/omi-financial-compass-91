@@ -21,7 +21,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
-  const handleApproval = async (action: 'approved' | 'rejected') => {
+  const handleApproval = async (action: 'approved' | 'to_be_corrected') => {
     setIsProcessing(true);
     
     try {
@@ -44,8 +44,8 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       if (error) throw error;
 
       toast({
-        title: action === 'approved' ? "Raport zaakceptowany" : "Raport odrzucony",
-        description: `Raport został ${action === 'approved' ? 'zaakceptowany' : 'odrzucony'} pomyślnie.`,
+        title: action === 'approved' ? "Raport zaakceptowany" : "Raport wymaga poprawek",
+        description: `Raport został ${action === 'approved' ? 'zaakceptowany' : 'odesłany do poprawek'} pomyślnie.`,
       });
 
       onApprovalComplete();
@@ -94,7 +94,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
           </Button>
           
           <Button
-            onClick={() => handleApproval('rejected')}
+            onClick={() => handleApproval('to_be_corrected')}
             disabled={isProcessing}
             variant="destructive"
             className="flex items-center gap-2"
@@ -104,7 +104,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
             ) : (
               <XCircle size={16} />
             )}
-            Odrzuć
+            Do poprawy
           </Button>
         </div>
       </CardContent>
