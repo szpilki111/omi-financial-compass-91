@@ -358,19 +358,19 @@ const Dashboard = () => {
   };
 
   const QuickAccessSection = () => {
-    // Dla prowincjałów i adminów nie pokazujemy przycisku KPiR
+    // Dla prowincjałów i adminów - tylko przeglądanie danych, bez dodawania
     if (isAdmin) {
       return (
         <div className="mt-8">
           <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Button
-              onClick={() => navigate('/raporty/nowy')}
+              onClick={() => navigate('/reports')}
               variant="outline"
               className="h-24 flex flex-col items-center justify-center border-omi-gray-300 hover:bg-omi-100"
             >
               <FileText className="w-6 h-6 mb-2 text-omi-500" />
-              <span>Nowy raport</span>
+              <span>Przeglądaj raporty</span>
             </Button>
             <Button
               onClick={() => navigate('/wizualizacja')}
@@ -393,7 +393,7 @@ const Dashboard = () => {
       );
     }
     
-    // Dla ekonomów pokazujemy wszystkie przyciski, włącznie z KPiR
+    // Dla ekonomów pokazujemy wszystkie przyciski, włącznie z dodawaniem nowych operacji i raportów
     return (
       <div className="mt-8">
         <h2 className="text-lg font-medium text-omi-gray-800 mb-4">Szybki dostęp</h2>
