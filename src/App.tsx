@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
 import Reports from "./pages/Reports";
+import DataVisualization from "./pages/DataVisualization";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -71,6 +72,13 @@ const App = () => (
             <Route path="/reports/:reportId" element={
               <ProtectedRoute>
                 <Reports />
+              </ProtectedRoute>
+            } />
+            
+            {/* Data Visualization routes */}
+            <Route path="/wizualizacja" element={
+              <ProtectedRoute>
+                <DataVisualization />
               </ProtectedRoute>
             } />
             

@@ -21,6 +21,7 @@ const Header = () => {
     { name: 'Strona główna', path: '/dashboard' },
     { name: 'Księga KPiR', path: '/kpir' },
     { name: 'Raporty', path: '/reports' },
+    { name: 'Wizualizacja danych', path: '/wizualizacja' },
     // Można dodać więcej pozycji menu gdy będą potrzebne
   ];
 
