@@ -25,12 +25,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sprawdź, czy użytkownik może zatwierdzać raporty
-  const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
-  
-  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
-  const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
-
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
     queryKey: ['report', reportId],
@@ -63,6 +57,12 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     },
     enabled: !!reportId
   });
+
+  // Sprawdź, czy użytkownik może zatwierdzać raporty (move after report is defined)
+  const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
+  
+  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy (move after report is defined)
+  const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
 
   // Funkcja do odświeżania sum raportu
   const handleRefreshSums = async () => {
