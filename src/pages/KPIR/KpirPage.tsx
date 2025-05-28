@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { FilePlus2, Download, Upload, FileDown, FileUp, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import KpirOperationDialog from './KpirOperationDialog';
+import KpirEditDialog from './KpirEditDialog';
 import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
@@ -24,7 +24,9 @@ const KpirPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<KpirTransaction[]>([]);
   const [showNewOperationDialog, setShowNewOperationDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
   
   // Stan filtrów
   const [filters, setFilters] = useState({
@@ -88,6 +90,11 @@ const KpirPage: React.FC = () => {
     setShowNewOperationDialog(true);
   };
 
+  const handleEditTransaction = (transaction: KpirTransaction) => {
+    setSelectedTransaction(transaction);
+    setShowEditDialog(true);
+  };
+
   const handleImport = () => {
     setShowImportDialog(true);
   };
@@ -122,12 +129,27 @@ const KpirPage: React.FC = () => {
     });
   };
 
+  const handleOperationUpdated = () => {
+    setShowEditDialog(false);
+    setSelectedTransaction(null);
+    fetchTransactions();
+    toast({
+      title: "Sukces",
+      description: "Operacja została zaktualizowana",
+    });
+  };
+
   const handleDialogClose = () => {
     setShowNewOperationDialog(false);
     // Jeśli byliśmy na ścieżce /kpir/nowy, wróć do głównej strony KPIR
     if (location.pathname === '/kpir/nowy') {
       navigate('/kpir');
     }
+  };
+
+  const handleEditDialogClose = () => {
+    setShowEditDialog(false);
+    setSelectedTransaction(null);
   };
 
   const handleImportComplete = (count: number) => {
@@ -240,7 +262,11 @@ const KpirPage: React.FC = () => {
             )}
           </div>
           
-          <KpirTable transactions={transactions} loading={loading} />
+          <KpirTable 
+            transactions={transactions} 
+            loading={loading} 
+            onEditTransaction={handleEditTransaction}
+          />
         </div>
       </div>
 
@@ -250,6 +276,16 @@ const KpirPage: React.FC = () => {
           open={showNewOperationDialog}
           onClose={handleDialogClose}
           onSave={handleOperationAdded}
+        />
+      )}
+
+      {/* Dialog do edycji operacji - tylko dla ekonomów */}
+      {!isAdmin && showEditDialog && (
+        <KpirEditDialog
+          open={showEditDialog}
+          onClose={handleEditDialogClose}
+          onSave={handleOperationUpdated}
+          transaction={selectedTransaction}
         />
       )}
 

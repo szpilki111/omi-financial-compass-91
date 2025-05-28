@@ -8,15 +8,24 @@ import {
   TableHead, 
   TableCell 
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { KpirTransaction } from '@/types/kpir';
 import { Spinner } from '@/components/ui/Spinner';
+import { Pencil } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface KpirTableProps {
   transactions: KpirTransaction[];
   loading: boolean;
+  onEditTransaction?: (transaction: KpirTransaction) => void;
 }
 
-const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
+const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTransaction }) => {
+  const { user } = useAuth();
+  
+  // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może edytować operacji)
+  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-10">
@@ -45,6 +54,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
             <TableHead>Konta</TableHead>
             <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
+            {!isAdmin && <TableHead>Akcje</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -69,6 +79,18 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading }) => {
                   </span>
                 )}
               </TableCell>
+              {!isAdmin && (
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEditTransaction?.(transaction)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
