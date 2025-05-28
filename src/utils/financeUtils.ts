@@ -177,6 +177,7 @@ export const updateReportDetails = async (
         throw error;
       }
       
+      console.log('Pomyślnie zaktualizowano szczegóły raportu');
       return data;
     } else {
       // Utwórz nowe szczegóły
@@ -188,13 +189,16 @@ export const updateReportDetails = async (
           expense_total: financialSummary.expense,
           balance: financialSummary.balance,
           settlements_total: 0
-        });
+        })
+        .select()
+        .single();
         
       if (error) {
         console.error('Błąd przy tworzeniu szczegółów raportu:', error);
         throw error;
       }
       
+      console.log('Pomyślnie utworzono szczegóły raportu');
       return data;
     }
   } catch (error) {
