@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -116,7 +115,7 @@ const DataVisualizationPage = () => {
             balance
           )
         `)
-        .eq('status', 'accepted');
+        .eq('status', 'approved');
 
       // Jeśli użytkownik jest ekonomem, pobierz tylko dane jego placówki
       if (userRole === 'ekonom') {
