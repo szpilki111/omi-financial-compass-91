@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -98,6 +97,9 @@ const DataVisualizationPage = () => {
   const [selectedMetric, setSelectedMetric] = useState<'income' | 'expense' | 'balance'>('expense');
 
   const years = ['2024', '2025', '2026'];
+
+  // Sprawdź czy użytkownik to ekonom (widzi tylko swoją placówkę)
+  const isEkonom = user?.role === 'ekonom';
 
   const fetchFinancialData = async () => {
     setLoading(true);
@@ -382,7 +384,7 @@ const DataVisualizationPage = () => {
       <div className="space-y-6">
         <PageTitle 
           title="Wizualizacja danych" 
-          subtitle="Analiza finansowa z porównaniami między placówkami"
+          subtitle={isEkonom ? "Analiza finansowa z porównaniami między miesiącami" : "Analiza finansowa z porównaniami między placówkami"}
         />
 
         {/* Karty podsumowujące - podobne do obrazka */}
@@ -482,13 +484,22 @@ const DataVisualizationPage = () => {
         {/* Tabela porównawcza */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <Building2 className="h-5 w-5 mr-2" />
-            Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami
+            {isEkonom ? (
+              <>
+                <Calendar className="h-5 w-5 mr-2" />
+                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między miesiącami
+              </>
+            ) : (
+              <>
+                <Building2 className="h-5 w-5 mr-2" />
+                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami
+              </>
+            )}
           </h2>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Placówka</TableHead>
+                <TableHead>{isEkonom ? 'Miesiąc' : 'Placówka'}</TableHead>
                 <TableHead className="text-right">Okres bieżący</TableHead>
                 <TableHead className="text-right">Okres poprzedni</TableHead>
                 <TableHead className="text-right">Zmiana</TableHead>
@@ -515,7 +526,9 @@ const DataVisualizationPage = () => {
 
         {/* Wykres liniowy - Trendy czasowe dla wydatków */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Trendy wydatków w czasie według placówek</h2>
+          <h2 className="text-xl font-semibold mb-4">
+            {isEkonom ? 'Trendy wydatków w czasie' : 'Trendy wydatków w czasie według placówek'}
+          </h2>
           <ChartContainer config={chartConfig} className="h-96 w-full">
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -556,7 +569,9 @@ const DataVisualizationPage = () => {
 
         {/* Wykres słupkowy - Porównanie dochodów */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Porównanie dochodów między placówkami</h2>
+          <h2 className="text-xl font-semibold mb-4">
+            {isEkonom ? 'Porównanie dochodów między miesiącami' : 'Porównanie dochodów między placówkami'}
+          </h2>
           <ChartContainer config={chartConfig} className="h-96 w-full">
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
