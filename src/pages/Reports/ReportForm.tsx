@@ -243,7 +243,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           // Zawsze aktualizuj podsumowanie finansowe, nawet dla istniejącego raportu
           await updateReportDetails(reportId, financialSummary);
           
-          return reportId;
+          return { reportId, isNew: false };
         } else {
           // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
           const { data: existingReports, error: existingError } = await supabase
@@ -269,7 +269,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               title,
               period,
               report_type: 'standard',
-              status: 'draft', // Jawnie ustawiam status jako 'draft'
+              status: 'draft',
               submitted_by: null,
               submitted_at: null
             })
@@ -294,24 +294,33 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               .eq('id', newReport.id);
           }
           
-          return newReport?.id;
+          return { reportId: newReport?.id, isNew: true };
         }
       } catch (error) {
         console.error("Błąd podczas zapisywania raportu:", error);
         throw error;
       }
     },
-    onSuccess: (newReportId) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
-      toast({
-        title: reportId ? "Raport zaktualizowany" : "Raport utworzony",
-        description: "Raport został zapisany jako wersja robocza",
-      });
+      
+      // Poprawione komunikaty sukcesu
+      if (result.isNew) {
+        toast({
+          title: "Sukces",
+          description: "Pomyślnie stworzono roboczą wersję raportu",
+        });
+      } else {
+        toast({
+          title: "Sukces", 
+          description: "Raport został zaktualizowany",
+        });
+      }
       
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate(`/reports/${newReportId}`);
+        navigate(`/reports/${result.reportId}`);
       }
       
       setIsSubmitting(false);
@@ -632,7 +641,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     
     setIsSubmitting(true);
     
-    // Zmieniono: Zawsze używamy saveDraftMutation do zapisania raportu
+    // Zawsze używamy saveDraftMutation do zapisania raportu
     saveDraftMutation.mutate(formData);
   };
   
