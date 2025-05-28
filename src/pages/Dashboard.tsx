@@ -118,12 +118,16 @@ const Dashboard = () => {
                 notifications.map((notification) => (
                   <NotificationCard
                     key={notification.id}
-                    title={notification.title}
-                    message={notification.message}
-                    date={format(new Date(notification.date), 'PPP', { locale: pl })}
-                    priority={notification.priority as 'low' | 'medium' | 'high'}
-                    actionLink={notification.action_link}
-                    actionLabel={notification.action_label}
+                    notification={{
+                      id: notification.id,
+                      title: notification.title,
+                      message: notification.message,
+                      date: format(new Date(notification.date), 'PPP', { locale: pl }),
+                      priority: notification.priority as 'low' | 'medium' | 'high',
+                      read: notification.read,
+                      action_label: notification.action_label,
+                      action_link: notification.action_link
+                    }}
                   />
                 ))
               ) : (
