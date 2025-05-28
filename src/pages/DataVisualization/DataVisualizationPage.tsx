@@ -98,9 +98,57 @@ const DataVisualizationPage = () => {
   const fetchVisualizationData = async () => {
     setLoading(true);
     try {
-      // Sprawdź rolę użytkownika
-      const { data: userRole } = await supabase.rpc('get_user_role');
+      console.log('=== DEBUG: Rozpoczęcie pobierania danych wizualizacji ===');
       
+      // Sprawdź rolę użytkownika
+      const { data: userRole, error: roleError } = await supabase.rpc('get_user_role');
+      console.log('DEBUG: Rola użytkownika:', userRole, 'Błąd:', roleError);
+      
+      // Najpierw sprawdźmy, jakie raporty w ogóle istnieją
+      const { data: allReports, error: allReportsError } = await supabase
+        .from('reports')
+        .select('id, status, month, year, location_id, locations!inner(name)')
+        .order('year', { ascending: true })
+        .order('month', { ascending: true });
+
+      console.log('DEBUG: Wszystkie raporty w bazie:', allReports);
+      console.log('DEBUG: Błąd przy pobieraniu wszystkich raportów:', allReportsError);
+
+      if (allReports) {
+        const statusCount = allReports.reduce((acc, report) => {
+          acc[report.status] = (acc[report.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log('DEBUG: Liczba raportów wg statusu:', statusCount);
+      }
+
+      // Teraz sprawdźmy raporty z detalami
+      const { data: reportsWithDetails, error: detailsError } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          month,
+          year,
+          period,
+          status,
+          location_id,
+          locations!inner(name),
+          report_details!inner(
+            income_total,
+            expense_total,
+            balance
+          )
+        `)
+        .order('year', { ascending: true })
+        .order('month', { ascending: true });
+
+      console.log('DEBUG: Raporty z detalami:', reportsWithDetails);
+      console.log('DEBUG: Błąd przy pobieraniu raportów z detalami:', detailsError);
+
+      // Sprawdźmy tylko zaakceptowane raporty
+      const approvedReports = reportsWithDetails?.filter(report => report.status === 'approved') || [];
+      console.log('DEBUG: Zaakceptowane raporty:', approvedReports);
+
       let query = supabase
         .from('reports')
         .select(`
@@ -119,7 +167,8 @@ const DataVisualizationPage = () => {
 
       // Jeśli użytkownik jest ekonomem, pobierz tylko dane jego placówki
       if (userRole === 'ekonom') {
-        const { data: locationId } = await supabase.rpc('get_user_location_id');
+        const { data: locationId, error: locationError } = await supabase.rpc('get_user_location_id');
+        console.log('DEBUG: ID placówki ekonoma:', locationId, 'Błąd:', locationError);
         if (locationId) {
           query = query.eq('location_id', locationId);
         }
@@ -127,24 +176,34 @@ const DataVisualizationPage = () => {
 
       const { data: reports, error } = await query.order('year', { ascending: true }).order('month', { ascending: true });
 
+      console.log('DEBUG: Końcowe raporty po filtrach:', reports);
+      console.log('DEBUG: Błąd końcowego zapytania:', error);
+
       if (error) {
         throw error;
       }
 
-      console.log('Pobrane raporty:', reports);
+      // Sprawdźmy strukturę pierwszego raportu
+      if (reports && reports.length > 0) {
+        console.log('DEBUG: Struktura pierwszego raportu:', JSON.stringify(reports[0], null, 2));
+      }
 
       // Przetwórz dane dla tabeli lokalizacji
-      const processedLocationData: LocationData[] = reports?.map((report: any) => ({
-        location_id: report.location_id,
-        location_name: report.locations.name,
-        income_total: Number(report.report_details.income_total) || 0,
-        expense_total: Number(report.report_details.expense_total) || 0,
-        balance: Number(report.report_details.balance) || 0,
-        period: report.period,
-        year: report.year,
-        month: report.month
-      })) || [];
+      const processedLocationData: LocationData[] = reports?.map((report: any) => {
+        console.log('DEBUG: Przetwarzanie raportu:', report);
+        return {
+          location_id: report.location_id,
+          location_name: report.locations.name,
+          income_total: Number(report.report_details.income_total) || 0,
+          expense_total: Number(report.report_details.expense_total) || 0,
+          balance: Number(report.report_details.balance) || 0,
+          period: report.period,
+          year: report.year,
+          month: report.month
+        };
+      }) || [];
 
+      console.log('DEBUG: Przetworzone dane lokalizacji:', processedLocationData);
       setLocationData(processedLocationData);
 
       // Przygotuj dane do wykresów
@@ -178,7 +237,7 @@ const DataVisualizationPage = () => {
       generateComparisonData(processedLocationData);
 
     } catch (error) {
-      console.error('Błąd podczas pobierania danych wizualizacji:', error);
+      console.error('DEBUG: Błąd podczas pobierania danych wizualizacji:', error);
       toast({
         title: "Błąd",
         description: "Nie udało się pobrać danych do wizualizacji",
@@ -310,7 +369,20 @@ const DataVisualizationPage = () => {
           subtitle="Analiza finansowa na podstawie zaakceptowanych raportów"
         />
         <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-          <p className="text-omi-gray-500">Brak danych do wyświetlenia. Upewnij się, że istnieją zaakceptowane raporty.</p>
+          <div className="text-center space-y-4">
+            <p className="text-omi-gray-500">Brak danych do wyświetlenia.</p>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>Możliwe przyczyny:</p>
+              <ul className="list-disc list-inside text-left max-w-md mx-auto">
+                <li>Brak zaakceptowanych raportów w systemie</li>
+                <li>Raporty nie mają powiązanych szczegółów finansowych</li>
+                <li>Problem z uprawnieniami dostępu do danych</li>
+              </ul>
+              <p className="mt-4 text-xs text-gray-500">
+                Sprawdź konsolę przeglądarki (F12) po więcej informacji debugowania.
+              </p>
+            </div>
+          </div>
         </div>
       </MainLayout>
     );
