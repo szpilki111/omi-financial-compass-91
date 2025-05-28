@@ -375,11 +375,30 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
 
         {financialDetails && (
-          <KpirSummary 
-            income={financialDetails.income}
-            expense={financialDetails.expense}
-            balance={financialDetails.balance}
-          />
+          <>
+            {/* Sprawdź, czy sumy zostały już przeliczone */}
+            {financialDetails.income === 0 && financialDetails.expense === 0 && financialDetails.balance === 0 && !isReportLocked ? (
+              <div className="text-center py-8">
+                <p className="text-omi-gray-500 mb-4">
+                  Sumy nie zostały jeszcze przeliczone dla tego raportu.
+                </p>
+                <Button onClick={handleRefreshSums} disabled={isRefreshing}>
+                  {isRefreshing ? (
+                    <Spinner size="sm" className="mr-2" />
+                  ) : (
+                    <RefreshCcwIcon size={16} className="mr-2" />
+                  )}
+                  Przelicz sumy teraz
+                </Button>
+              </div>
+            ) : (
+              <KpirSummary 
+                income={financialDetails.income}
+                expense={financialDetails.expense}
+                balance={financialDetails.balance}
+              />
+            )}
+          </>
         )}
       </div>
 

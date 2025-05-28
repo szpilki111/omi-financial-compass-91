@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -108,12 +107,14 @@ export const calculateFinancialSummary = async (
 
 /**
  * Pobierz szczegóły finansowe dla konkretnego raportu
+ * WAŻNE: Ta funkcja zwraca tylko zapisane wartości z tabeli report_details
+ * i NIE oblicza automatycznie sum na podstawie transakcji
  */
 export const getReportFinancialDetails = async (reportId: string) => {
   try {
     console.log(`Pobieranie szczegółów finansowych dla raportu: ${reportId}`);
     
-    // Pobierz najpierw istniejące szczegóły z tabeli report_details
+    // Pobierz istniejące szczegóły z tabeli report_details
     const { data: reportDetails, error: reportDetailsError } = await supabase
       .from('report_details')
       .select('*')
@@ -121,37 +122,11 @@ export const getReportFinancialDetails = async (reportId: string) => {
       .single();
     
     if (reportDetailsError) {
-      console.error('Błąd podczas pobierania szczegółów raportu:', reportDetailsError);
+      console.log('Nie znaleziono szczegółów raportu w report_details, zwracam zerowe wartości');
       
-      // Jeśli nie znaleziono szczegółów raportu, pobierz dane raportu
-      const { data: report, error: reportError } = await supabase
-        .from('reports')
-        .select('month, year, location_id')
-        .eq('id', reportId)
-        .single();
-        
-      if (reportError) {
-        console.error('Błąd podczas pobierania danych raportu:', reportError);
-        return { income: 0, expense: 0, balance: 0, settlements: 0 };
-      }
-      
-      // Oblicz daty na podstawie miesiąca i roku
-      const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
-      const lastDayOfMonth = new Date(report.year, report.month, 0);
-      
-      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
-      
-      // Oblicz finansowe podsumowanie
-      const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
-      
-      // Zwróć obliczone wartości
-      return { 
-        income: summary.income, 
-        expense: summary.expense,
-        balance: summary.balance,
-        settlements: 0 // Brak danych o rozrachunkach
-      };
+      // Jeśli nie znaleziono szczegółów raportu, zwróć zerowe wartości
+      // NIE obliczaj automatycznie - sumy będą przeliczone tylko przez przycisk "Przelicz sumy"
+      return { income: 0, expense: 0, balance: 0, settlements: 0 };
     }
     
     // Jeśli znaleziono szczegóły, zwróć je
