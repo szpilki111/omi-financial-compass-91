@@ -3,13 +3,13 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
-import PageTitle from '@/components/ui/PageTitle';
-import StatCard from '@/components/dashboard/StatCard';
-import NotificationCard from '@/components/dashboard/NotificationCard';
-import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
 import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import FinancialCard from '@/components/dashboard/FinancialCard';
+import QuickAccessCard from '@/components/dashboard/QuickAccessCard';
+import NotificationCard from '@/components/dashboard/NotificationCard';
+import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -26,7 +26,7 @@ const Dashboard = () => {
         .eq('user_id', user.id)
         .eq('read', false)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(3);
 
       if (error) throw error;
       return data || [];
@@ -34,81 +34,190 @@ const Dashboard = () => {
     enabled: !!user?.id
   });
 
-  // Statystyki dla ekonoma
-  const { data: stats, isLoading: loadingStats } = useQuery({
-    queryKey: ['dashboard-stats', user?.location],
+  // Pobieranie danych finansowych
+  const { data: financialData, isLoading: loadingFinancial } = useQuery({
+    queryKey: ['financial-data', user?.location],
     queryFn: async () => {
       if (!user?.location) return null;
 
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
-      
-      // Statystyki transakcji
-      const { data: transactionStats, error: transactionError } = await supabase
-        .from('transactions')
-        .select('amount, settlement_type')
-        .eq('location_id', user.location)
-        .gte('date', `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`)
-        .lt('date', `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-01`);
-
-      if (transactionError) throw transactionError;
-
-      // Statystyki raportów
-      const { data: reportCount, error: reportError } = await supabase
+      // Pobierz najnowszy zaakceptowany raport dla placówki
+      const { data: latestReport, error: reportError } = await supabase
         .from('reports')
-        .select('status')
+        .select(`
+          *,
+          report_details (
+            income_total,
+            expense_total,
+            balance
+          )
+        `)
         .eq('location_id', user.location)
-        .eq('month', currentMonth)
-        .eq('year', currentYear);
+        .eq('status', 'approved')
+        .order('year', { ascending: false })
+        .order('month', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (reportError) throw reportError;
 
-      const totalTransactions = transactionStats?.length || 0;
-      const totalAmount = transactionStats?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const reportsThisMonth = reportCount?.length || 0;
-      
+      // Pobierz poprzedni raport do porównania
+      let previousReport = null;
+      if (latestReport) {
+        const { data: prevReport } = await supabase
+          .from('reports')
+          .select(`
+            *,
+            report_details (
+              income_total,
+              expense_total,
+              balance
+            )
+          `)
+          .eq('location_id', user.location)
+          .eq('status', 'approved')
+          .lt('year', latestReport.year)
+          .or(`year.eq.${latestReport.year},month.lt.${latestReport.month}`)
+          .order('year', { ascending: false })
+          .order('month', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        previousReport = prevReport;
+      }
+
       return {
-        totalTransactions,
-        totalAmount,
-        reportsThisMonth,
-        cashTransactions: transactionStats?.filter(t => t.settlement_type === 'Gotówka').length || 0
+        current: latestReport,
+        previous: previousReport
       };
     },
-    enabled: !!user?.location && user?.role === 'ekonom'
+    enabled: !!user?.location
   });
+
+  // Pobieranie informacji o placówce
+  const { data: locationInfo } = useQuery({
+    queryKey: ['location-info', user?.location],
+    queryFn: async () => {
+      if (!user?.location) return null;
+      
+      const { data, error } = await supabase
+        .from('locations')
+        .select('name')
+        .eq('id', user.location)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.location
+  });
+
+  const calculatePercentageChange = (current: number, previous: number) => {
+    if (!previous || previous === 0) return 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  const currentData = financialData?.current?.report_details;
+  const previousData = financialData?.previous?.report_details;
+
+  const incomeChange = currentData && previousData 
+    ? calculatePercentageChange(Number(currentData.income_total), Number(previousData.income_total))
+    : 0;
+
+  const expenseChange = currentData && previousData
+    ? calculatePercentageChange(Number(currentData.expense_total), Number(previousData.expense_total))
+    : 0;
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <PageTitle title="Panel główny" />
-        
-        {/* Statystyki */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ReportStatusCard />
-          
-          {user?.role === 'ekonom' && stats && (
-            <>
-              <StatCard
-                title="Transakcje w miesiącu"
-                value={stats.totalTransactions.toString()}
-                description="Łączna liczba operacji"
-              />
-              <StatCard
-                title="Suma operacji"
-                value={`${stats.totalAmount.toLocaleString('pl-PL')} PLN`}
-                description="Wartość wszystkich operacji"
-              />
-              <StatCard
-                title="Operacje gotówkowe"
-                value={stats.cashTransactions.toString()}
-                description="Liczba operacji gotówkowych"
-              />
-            </>
-          )}
+        {/* Nagłówek z powitaniem */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Witaj, {user?.name || 'Użytkowniku'}
+          </h1>
+          <p className="text-gray-600">
+            {locationInfo?.name} - Podsumowanie
+          </p>
         </div>
 
-        {/* Powiadomienia */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Karty finansowe */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <FinancialCard
+            title="Bilans bieżący"
+            amount={currentData ? Number(currentData.balance) : 0}
+            subtitle={`Stan na dzień ${format(new Date(), 'dd.MM.yyyy', { locale: pl })}`}
+            icon={<FileText className="h-6 w-6" />}
+            loading={loadingFinancial}
+          />
+
+          <FinancialCard
+            title="Przychody (kwiecień)"
+            amount={currentData ? Number(currentData.income_total) : 0}
+            subtitle={incomeChange !== 0 ? `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% w/w` : ''}
+            icon={<TrendingUp className="h-6 w-6" />}
+            trend={incomeChange > 0 ? 'up' : incomeChange < 0 ? 'down' : 'neutral'}
+            trendColor="green"
+            loading={loadingFinancial}
+          />
+
+          <FinancialCard
+            title="Rozchody (kwiecień)"
+            amount={currentData ? Number(currentData.expense_total) : 0}
+            subtitle={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(1)}% w/w` : ''}
+            icon={<TrendingDown className="h-6 w-6" />}
+            trend={expenseChange > 0 ? 'up' : expenseChange < 0 ? 'down' : 'neutral'}
+            trendColor="red"
+            loading={loadingFinancial}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Szybki dostęp */}
+          <div className="lg:col-span-2 space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Szybki dostęp</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <QuickAccessCard
+                  title="Nowa operacja KPiR"
+                  icon={<Plus className="h-6 w-6" />}
+                  onClick={() => window.location.href = '/kpir'}
+                />
+                <QuickAccessCard
+                  title="Nowy raport"
+                  icon={<FileText className="h-6 w-6" />}
+                  onClick={() => window.location.href = '/reports'}
+                />
+                <QuickAccessCard
+                  title="Wizualizacja danych"
+                  icon={<BarChart className="h-6 w-6" />}
+                  onClick={() => window.location.href = '/wizualizacja'}
+                />
+                <QuickAccessCard
+                  title="Baza wiedzy"
+                  icon={<BookOpen className="h-6 w-6" />}
+                  onClick={() => {/* Implement knowledge base navigation */}}
+                />
+              </div>
+            </div>
+
+            {/* Ostatnia aktywność */}
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Ostatnia aktywność</h2>
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <p className="text-gray-500 italic">Brak ostatniej aktywności.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Powiadomienia */}
           <div>
             <h2 className="text-lg font-semibold mb-4">Powiadomienia</h2>
             <div className="space-y-3">
@@ -131,35 +240,8 @@ const Dashboard = () => {
                   />
                 ))
               ) : (
-                <div className="text-center p-4 text-gray-500">Brak nowych powiadomień</div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-lg font-semibold mb-4">Szybkie działania</h2>
-            <div className="space-y-3">
-              <div className="bg-white p-4 rounded-lg shadow-sm border">
-                <h3 className="font-medium mb-2">Książka przychodów i rozchodów</h3>
-                <p className="text-sm text-gray-600 mb-3">Dodaj nową operację finansową</p>
-                <button 
-                  onClick={() => window.location.href = '/kpir'}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Przejdź do KPiR →
-                </button>
-              </div>
-              
-              {user?.role === 'ekonom' && (
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                  <h3 className="font-medium mb-2">Raporty</h3>
-                  <p className="text-sm text-gray-600 mb-3">Zarządzaj raportami miesięcznymi</p>
-                  <button 
-                    onClick={() => window.location.href = '/reports'}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Przejdź do raportów →
-                  </button>
+                <div className="bg-white p-4 rounded-lg shadow-sm text-center text-gray-500">
+                  Brak nowych powiadomień
                 </div>
               )}
             </div>
