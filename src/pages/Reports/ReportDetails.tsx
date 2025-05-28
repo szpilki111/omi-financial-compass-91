@@ -58,15 +58,27 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     enabled: !!reportId
   });
 
-  // Sprawdź, czy użytkownik może zatwierdzać raporty (move after report is defined)
+  // Sprawdź, czy użytkownik może zatwierdzać raporty
   const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
   
-  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy (move after report is defined)
+  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
   const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
+
+  // Sprawdź, czy raport jest zablokowany (złożony lub zatwierdzony)
+  const isReportLocked = report?.status === 'submitted' || report?.status === 'approved';
 
   // Funkcja do odświeżania sum raportu
   const handleRefreshSums = async () => {
-    if (!reportId) return;
+    if (!reportId || isReportLocked) {
+      if (isReportLocked) {
+        toast({
+          title: "Działanie zablokowane",
+          description: "Nie można przeliczać sum dla złożonych lub zatwierdzonych raportów.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
     
     setIsRefreshing(true);
     
@@ -146,8 +158,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsSubmitting(true);
     
     try {
-      // Najpierw odśwież sumy
-      await handleRefreshSums();
+      // Najpierw odśwież sumy tylko jeśli raport nie jest zablokowany
+      if (!isReportLocked) {
+        await handleRefreshSums();
+      }
       
       // Zaktualizuj status raportu
       const { error } = await supabase
@@ -336,19 +350,28 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefreshSums} 
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? (
-              <Spinner size="sm" className="mr-2" />
-            ) : (
-              <RefreshCcwIcon size={16} className="mr-2" />
-            )}
-            Przelicz sumy
-          </Button>
+          {/* Przycisk "Przelicz sumy" ukryty dla złożonych i zatwierdzonych raportów */}
+          {!isReportLocked && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshSums} 
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <Spinner size="sm" className="mr-2" />
+              ) : (
+                <RefreshCcwIcon size={16} className="mr-2" />
+              )}
+              Przelicz sumy
+            </Button>
+          )}
+          {/* Informacja o zablokowaniu dla złożonych/zatwierdzonych raportów */}
+          {isReportLocked && (
+            <p className="text-sm text-omi-gray-500 italic">
+              Sumy są zablokowane dla {report.status === 'submitted' ? 'złożonych' : 'zatwierdzonych'} raportów
+            </p>
+          )}
         </div>
 
         {financialDetails && (
