@@ -202,3 +202,37 @@ export const updateReportDetails = async (
     throw error;
   }
 };
+
+/**
+ * Oblicza i zapisuje automatycznie podsumowanie finansowe dla nowego raportu
+ */
+export const calculateAndSaveReportSummary = async (
+  reportId: string,
+  locationId: string,
+  month: number,
+  year: number
+) => {
+  try {
+    console.log(`Automatyczne obliczanie i zapisywanie podsumowania dla raportu ${reportId}`);
+    
+    // Oblicz daty na podstawie miesiąca i roku
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const lastDayOfMonth = new Date(year, month, 0);
+    
+    const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+    const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+    
+    // Oblicz finansowe podsumowanie
+    const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
+    
+    // Zapisz szczegóły raportu w bazie danych
+    await updateReportDetails(reportId, summary);
+    
+    console.log('Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
+    return summary;
+  } catch (error) {
+    console.error('Błąd podczas automatycznego obliczania podsumowania:', error);
+    // Nie rzucaj błędu, aby nie blokować tworzenia raportu
+    return { income: 0, expense: 0, balance: 0 };
+  }
+};

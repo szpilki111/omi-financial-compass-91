@@ -37,7 +37,7 @@ import {
   Card,
   CardContent,
 } from '@/components/ui/card';
-import { calculateFinancialSummary, updateReportDetails } from '@/utils/financeUtils';
+import { calculateFinancialSummary, calculateAndSaveReportSummary } from '@/utils/financeUtils';
 import KpirSummary from '../KPIR/components/KpirSummary';
 
 interface ReportFormProps {
@@ -243,12 +243,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           throw error;
         }
         
-        // Zawsze aktualizuj podsumowanie finansowe, nawet dla istniejącego raportu
+        // Automatycznie oblicz i zapisz podsumowanie finansowe
         try {
-          await updateReportDetails(reportId, financialSummary);
-          console.log("Podsumowanie finansowe zostało zaktualizowane");
+          await calculateAndSaveReportSummary(reportId, location_id, month, year);
+          console.log("Podsumowanie finansowe zostało automatycznie zaktualizowane");
         } catch (err) {
-          console.log("Błąd podczas aktualizacji podsumowania (nieblokujący):", err);
+          console.log("Błąd podczas automatycznej aktualizacji podsumowania (nieblokujący):", err);
         }
         
         return { reportId, isNew: false };
@@ -301,12 +301,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             console.log("Błąd podczas inicjalizacji wpisów (nieblokujący):", err);
           }
           
-          // Zapisz podsumowanie finansowe od razu - nie rzucaj błędów
+          // Automatycznie oblicz i zapisz podsumowanie finansowe od razu po utworzeniu
           try {
-            await updateReportDetails(newReport.id, financialSummary);
-            console.log("Podsumowanie finansowe zostało zapisane");
+            await calculateAndSaveReportSummary(newReport.id, location_id, month, year);
+            console.log("Podsumowanie finansowe zostało automatycznie obliczone i zapisane");
           } catch (err) {
-            console.log("Błąd podczas zapisu podsumowania (nieblokujący):", err);
+            console.log("Błąd podczas automatycznego obliczania podsumowania (nieblokujący):", err);
           }
             
           // Upewnij się, że raport ma status 'draft' po inicjalizacji
@@ -336,12 +336,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       if (result.isNew) {
         toast({
           title: "Sukces",
-          description: "Pomyślnie stworzono roboczą wersję raportu",
+          description: "Pomyślnie stworzono roboczą wersję raportu z obliczonymi sumami finansowymi",
         });
       } else {
         toast({
           title: "Sukces", 
-          description: "Raport został zaktualizowany",
+          description: "Raport został zaktualizowany z nowymi sumami finansowymi",
         });
       }
       
