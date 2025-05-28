@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getReportFinancialDetails, calculateFinancialSummary } from '@/utils/financeUtils';
+import { getReportFinancialDetails, calculateFinancialSummary, updateReportDetails } from '@/utils/financeUtils';
 import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -67,6 +67,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   // Sprawdź, czy raport jest zablokowany (złożony lub zatwierdzony)
   const isReportLocked = report?.status === 'submitted' || report?.status === 'approved';
 
+  // Sprawdź, czy sumy zostały już przeliczone (czy są inne niż wszystkie zerowe)
+  const hasCalculatedSums = financialDetails && (
+    financialDetails.income !== 0 || 
+    financialDetails.expense !== 0 || 
+    financialDetails.balance !== 0
+  );
+
   // Funkcja do odświeżania sum raportu
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
@@ -102,42 +109,15 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       // Oblicz finansowe podsumowanie
       const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
       
-      // Aktualizuj szczegóły raportu
-      const { data: existingDetails } = await supabase
-        .from('report_details')
-        .select('id')
-        .eq('report_id', reportId);
-        
-      if (existingDetails && existingDetails.length > 0) {
-        // Aktualizuj istniejące szczegóły
-        await supabase
-          .from('report_details')
-          .update({
-            income_total: summary.income,
-            expense_total: summary.expense,
-            balance: summary.balance,
-            updated_at: new Date().toISOString()
-          })
-          .eq('report_id', reportId);
-      } else {
-        // Utwórz nowe szczegóły
-        await supabase
-          .from('report_details')
-          .insert({
-            report_id: reportId,
-            income_total: summary.income,
-            expense_total: summary.expense,
-            balance: summary.balance,
-            settlements_total: 0
-          });
-      }
+      // Aktualizuj szczegóły raportu w bazie danych
+      await updateReportDetails(reportId, summary);
       
       // Odśwież dane
       await refetchFinancial();
       
       toast({
         title: "Sukces",
-        description: "Sumy raportu zostały przeliczone poprawnie.",
+        description: "Sumy raportu zostały przeliczone i zapisane.",
       });
     } catch (error) {
       console.error('Błąd podczas odświeżania sum:', error);
@@ -158,11 +138,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsSubmitting(true);
     
     try {
-      // Najpierw odśwież sumy tylko jeśli raport nie jest zablokowany
-      if (!isReportLocked) {
-        await handleRefreshSums();
-      }
-      
       // Zaktualizuj status raportu
       const { error } = await supabase
         .from('reports')
@@ -377,7 +352,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         {financialDetails && (
           <>
             {/* Sprawdź, czy sumy zostały już przeliczone */}
-            {financialDetails.income === 0 && financialDetails.expense === 0 && financialDetails.balance === 0 && !isReportLocked ? (
+            {!hasCalculatedSums && !isReportLocked ? (
               <div className="text-center py-8">
                 <p className="text-omi-gray-500 mb-4">
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.

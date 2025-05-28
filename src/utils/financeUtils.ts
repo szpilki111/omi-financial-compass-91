@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -107,8 +108,7 @@ export const calculateFinancialSummary = async (
 
 /**
  * Pobierz szczegóły finansowe dla konkretnego raportu
- * WAŻNE: Ta funkcja zwraca tylko zapisane wartości z tabeli report_details
- * i NIE oblicza automatycznie sum na podstawie transakcji
+ * Ta funkcja zwraca zapisane wartości z tabeli report_details lub zerowe wartości jeśli nie ma zapisanych danych
  */
 export const getReportFinancialDetails = async (reportId: string) => {
   try {
@@ -119,13 +119,15 @@ export const getReportFinancialDetails = async (reportId: string) => {
       .from('report_details')
       .select('*')
       .eq('report_id', reportId)
-      .single();
+      .maybeSingle();
     
     if (reportDetailsError) {
+      console.error('Błąd podczas pobierania szczegółów raportu:', reportDetailsError);
+      return { income: 0, expense: 0, balance: 0, settlements: 0 };
+    }
+    
+    if (!reportDetails) {
       console.log('Nie znaleziono szczegółów raportu w report_details, zwracam zerowe wartości');
-      
-      // Jeśli nie znaleziono szczegółów raportu, zwróć zerowe wartości
-      // NIE obliczaj automatycznie - sumy będą przeliczone tylko przez przycisk "Przelicz sumy"
       return { income: 0, expense: 0, balance: 0, settlements: 0 };
     }
     
