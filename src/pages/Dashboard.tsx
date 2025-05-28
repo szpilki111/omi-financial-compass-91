@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -289,14 +288,22 @@ const Dashboard = () => {
                   <QuickAccessCard
                     title="Nowa operacja KPiR"
                     icon={<Plus className="h-6 w-6" />}
-                    onClick={() => window.location.href = '/kpir'}
+                    onClick={() => window.location.href = '/kpir/nowy'}
                   />
                 )}
-                <QuickAccessCard
-                  title="Raporty"
-                  icon={<FileText className="h-6 w-6" />}
-                  onClick={() => window.location.href = '/reports'}
-                />
+                {user?.role === 'ekonom' ? (
+                  <QuickAccessCard
+                    title="Nowy raport"
+                    icon={<FileText className="h-6 w-6" />}
+                    onClick={() => window.location.href = '/reports?action=new'}
+                  />
+                ) : (
+                  <QuickAccessCard
+                    title="Raporty"
+                    icon={<FileText className="h-6 w-6" />}
+                    onClick={() => window.location.href = '/reports'}
+                  />
+                )}
                 <QuickAccessCard
                   title="Wizualizacja danych"
                   icon={<BarChart className="h-6 w-6" />}

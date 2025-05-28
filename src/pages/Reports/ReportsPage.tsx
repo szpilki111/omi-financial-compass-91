@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import ReportsList from './ReportsList';
@@ -8,12 +8,13 @@ import ReportDetails from './ReportDetails';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 const ReportsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
@@ -22,9 +23,19 @@ const ReportsPage = () => {
   // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może tworzyć raportów)
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
+  // Sprawdź parametr URL przy załadowaniu komponentu
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'new' && !isAdmin) {
+      handleNewReport();
+    }
+  }, [searchParams, isAdmin]);
+
   const handleReportCreated = () => {
     setIsCreatingReport(false);
     setViewMode('list');
+    // Usuń parametr z URL
+    navigate('/reports', { replace: true });
     toast({
       title: "Sukces",
       description: "Raport został utworzony pomyślnie.",
@@ -48,6 +59,8 @@ const ReportsPage = () => {
     setIsCreatingReport(false);
     setSelectedReportId(null);
     setViewMode('list');
+    // Usuń parametr z URL
+    navigate('/reports', { replace: true });
   };
 
   return (
