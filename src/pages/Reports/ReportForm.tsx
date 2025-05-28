@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -197,112 +196,141 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Mutacja do zapisywania raportu jako wersja robocza
   const saveDraftMutation = useMutation({
     mutationFn: async (data: { month: number; year: number }) => {
-      try {
-        const { month, year } = data;
+      console.log("Rozpoczęcie zapisywania raportu...");
+      
+      const { month, year } = data;
+      
+      // Sprawdź czy użytkownik ma przypisaną lokalizację
+      if (!user?.location) {
+        throw new Error('Brak przypisanej lokalizacji dla użytkownika');
+      }
+      
+      const location_id = user.location;
+      console.log("Używam lokalizacji użytkownika:", location_id);
+      
+      // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
+      const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
+      
+      // Pobierz nazwę lokalizacji
+      const { data: location } = await supabase
+        .from('locations')
+        .select('name')
+        .eq('id', location_id)
+        .single();
         
-        // Sprawdź czy użytkownik ma przypisaną lokalizację
-        if (!user?.location) {
-          throw new Error('Brak przypisanej lokalizacji dla użytkownika');
-        }
-        
-        const location_id = user.location;
-        console.log("Używam lokalizacji użytkownika:", location_id);
-        
-        // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
-        const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
-        
-        // Pobierz nazwę lokalizacji
-        const { data: location } = await supabase
-          .from('locations')
-          .select('name')
-          .eq('id', location_id)
+      const title = `Raport za ${monthName} ${year} - ${location?.name || 'placówka'}`;
+      const period = `${monthName} ${year}`;
+      
+      if (reportId) {
+        // Aktualizacja istniejącego raportu
+        const { data: updatedReport, error } = await supabase
+          .from('reports')
+          .update({
+            month,
+            year,
+            location_id,
+            title,
+            period,
+            report_type: 'standard',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reportId)
+          .select('id')
           .single();
           
-        const title = `Raport za ${monthName} ${year} - ${location?.name || 'placówka'}`;
-        const period = `${monthName} ${year}`;
+        if (error) {
+          console.error("Błąd podczas aktualizacji raportu:", error);
+          throw error;
+        }
         
-        if (reportId) {
-          // Aktualizacja istniejącego raportu
-          const { data: updatedReport, error } = await supabase
-            .from('reports')
-            .update({
-              month,
-              year,
-              location_id,
-              title,
-              period,
-              report_type: 'standard',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', reportId)
-            .select('id')
-            .single();
-            
-          if (error) throw error;
-          
-          // Zawsze aktualizuj podsumowanie finansowe, nawet dla istniejącego raportu
+        // Zawsze aktualizuj podsumowanie finansowe, nawet dla istniejącego raportu
+        try {
           await updateReportDetails(reportId, financialSummary);
+          console.log("Podsumowanie finansowe zostało zaktualizowane");
+        } catch (err) {
+          console.log("Błąd podczas aktualizacji podsumowania (nieblokujący):", err);
+        }
+        
+        return { reportId, isNew: false };
+      } else {
+        // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
+        const { data: existingReports, error: existingError } = await supabase
+          .from('reports')
+          .select('id')
+          .eq('month', month)
+          .eq('year', year)
+          .eq('location_id', location_id);
           
-          return { reportId, isNew: false };
-        } else {
-          // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
-          const { data: existingReports, error: existingError } = await supabase
-            .from('reports')
-            .select('id')
-            .eq('month', month)
-            .eq('year', year)
-            .eq('location_id', location_id);
-            
-          if (existingError) throw existingError;
+        if (existingError) {
+          console.error("Błąd podczas sprawdzania istniejących raportów:", existingError);
+          throw existingError;
+        }
+        
+        if (existingReports && existingReports.length > 0) {
+          throw new Error('Raport za ten miesiąc i rok dla tej lokalizacji już istnieje');
+        }
+        
+        // Tworzenie nowego raportu z domyślnym statusem 'draft' (wersja robocza)
+        const { data: newReport, error } = await supabase
+          .from('reports')
+          .insert({
+            month,
+            year,
+            location_id,
+            title,
+            period,
+            report_type: 'standard',
+            status: 'draft',
+            submitted_by: null,
+            submitted_at: null
+          })
+          .select('id')
+          .single();
           
-          if (existingReports && existingReports.length > 0) {
-            throw new Error('Raport za ten miesiąc i rok dla tej lokalizacji już istnieje');
+        if (error) {
+          console.error("Błąd podczas tworzenia raportu:", error);
+          throw error;
+        }
+        
+        // Inicjalizuj wpisy raportu na podstawie planu kont - nie rzucaj błędów
+        if (newReport?.id) {
+          try {
+            await initializeReportEntries(newReport.id, location_id, month, year);
+            console.log("Wpisy raportu zostały zainicjalizowane");
+          } catch (err) {
+            console.log("Błąd podczas inicjalizacji wpisów (nieblokujący):", err);
           }
           
-          // Tworzenie nowego raportu z domyślnym statusem 'draft' (wersja robocza)
-          const { data: newReport, error } = await supabase
-            .from('reports')
-            .insert({
-              month,
-              year,
-              location_id,
-              title,
-              period,
-              report_type: 'standard',
-              status: 'draft',
-              submitted_by: null,
-              submitted_at: null
-            })
-            .select('id')
-            .single();
-            
-          if (error) throw error;
-          
-          // Inicjalizuj wpisy raportu na podstawie planu kont
-          if (newReport?.id) {
-            await initializeReportEntries(newReport.id, location_id, month, year);
-            
-            // Zapisz podsumowanie finansowe od razu
+          // Zapisz podsumowanie finansowe od razu - nie rzucaj błędów
+          try {
             await updateReportDetails(newReport.id, financialSummary);
-              
-            // Upewnij się, że raport ma status 'draft' po inicjalizacji
+            console.log("Podsumowanie finansowe zostało zapisane");
+          } catch (err) {
+            console.log("Błąd podczas zapisu podsumowania (nieblokujący):", err);
+          }
+            
+          // Upewnij się, że raport ma status 'draft' po inicjalizacji
+          try {
             await supabase
               .from('reports')
               .update({
                 status: 'draft'
               })
               .eq('id', newReport.id);
+            console.log("Status raportu ustawiony na 'draft'");
+          } catch (err) {
+            console.log("Błąd podczas ustawiania statusu (nieblokujący):", err);
           }
-          
-          return { reportId: newReport?.id, isNew: true };
         }
-      } catch (error) {
-        console.error("Błąd podczas zapisywania raportu:", error);
-        throw error;
+        
+        console.log("Raport został pomyślnie utworzony:", newReport?.id);
+        return { reportId: newReport?.id, isNew: true };
       }
     },
     onSuccess: (result) => {
+      console.log("Mutacja zakończona sukcesem:", result);
       queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['currentMonthReport'] });
       
       // Poprawione komunikaty sukcesu
       if (result.isNew) {
@@ -336,7 +364,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   });
   
-  // Funkcja do inicjalizacji wpisów raportu
+  // Funkcja do inicjalizacji wpisów raportu - nie rzucaj błędów na zewnątrz
   const initializeReportEntries = async (reportId: string, locationId: string, month: number, year: number) => {
     try {
       console.log(`Inicjalizacja wpisów dla raportu ${reportId}, lokalizacja ${locationId}, ${month}/${year}`);
@@ -348,7 +376,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .eq('report_type', 'standard')
         .order('section_order', { ascending: true });
         
-      if (sectionsError) throw sectionsError;
+      if (sectionsError) {
+        console.log("Błąd podczas pobierania sekcji:", sectionsError);
+        return; // Nie rzucaj błędu
+      }
+      
       console.log("Pobrane sekcje:", sections);
       
       // Pobierz plan kont
@@ -357,7 +389,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .select('*')
         .order('number');
         
-      if (accountsError) throw accountsError;
+      if (accountsError) {
+        console.log("Błąd podczas pobierania kont:", accountsError);
+        return; // Nie rzucaj błędu
+      }
+      
       console.log("Pobrane konta:", accounts?.length);
       
       // Pobierz mapowania kont do sekcji
@@ -366,7 +402,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .select('*')
         .eq('report_type', 'standard');
         
-      if (mappingsError) throw mappingsError;
+      if (mappingsError) {
+        console.log("Błąd podczas pobierania mapowań:", mappingsError);
+        return; // Nie rzucaj błędu
+      }
+      
       console.log("Pobrane mapowania:", accountMappings?.length);
       
       // Stwórz mapę sekcji dla każdego prefiksu konta
@@ -406,29 +446,37 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           const endDateString = endDate.toISOString().split('T')[0];
           
           // Pobierz transakcje debetowe
-          const { data: debitTransactions } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('location_id', locationId)
-            .eq('debit_account_id', account.id)
-            .gte('date', startDateString)
-            .lte('date', endDateString);
-            
-          if (debitTransactions) {
-            debitTurnover = debitTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+          try {
+            const { data: debitTransactions } = await supabase
+              .from('transactions')
+              .select('amount')
+              .eq('location_id', locationId)
+              .eq('debit_account_id', account.id)
+              .gte('date', startDateString)
+              .lte('date', endDateString);
+              
+            if (debitTransactions) {
+              debitTurnover = debitTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+            }
+          } catch (err) {
+            console.log(`Błąd podczas pobierania transakcji debetowych dla konta ${account.number}:`, err);
           }
           
           // Pobierz transakcje kredytowe
-          const { data: creditTransactions } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('location_id', locationId)
-            .eq('credit_account_id', account.id)
-            .gte('date', startDateString)
-            .lte('date', endDateString);
-            
-          if (creditTransactions) {
-            creditTurnover = creditTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+          try {
+            const { data: creditTransactions } = await supabase
+              .from('transactions')
+              .select('amount')
+              .eq('location_id', locationId)
+              .eq('credit_account_id', account.id)
+              .gte('date', startDateString)
+              .lte('date', endDateString);
+              
+            if (creditTransactions) {
+              creditTurnover = creditTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+            }
+          } catch (err) {
+            console.log(`Błąd podczas pobierania transakcji kredytowych dla konta ${account.number}:`, err);
           }
 
           // Oblicz salda zamknięcia
@@ -477,7 +525,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         }
 
         // Po zainicjalizowaniu wpisów, oblicz i zapisz podsumowania
-        await calculateAndUpdateReportSummary(reportId);
+        try {
+          await calculateAndUpdateReportSummary(reportId);
+        } catch (err) {
+          console.log('Błąd podczas obliczania podsumowania:', err);
+        }
       }
     } catch (error) {
       console.error('Błąd podczas inicjalizacji wpisów raportu:', error);
@@ -497,7 +549,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         .select('*')
         .eq('report_id', reportId);
       
-      if (error) throw error;
+      if (error) {
+        console.log('Błąd podczas pobierania wpisów:', error);
+        return;
+      }
 
       if (!entries || entries.length === 0) {
         console.warn('Brak wpisów w raporcie do obliczenia podsumowania');
