@@ -9,7 +9,9 @@ import { pl } from 'date-fns/locale';
 import FinancialCard from '@/components/dashboard/FinancialCard';
 import QuickAccessCard from '@/components/dashboard/QuickAccessCard';
 import NotificationCard from '@/components/dashboard/NotificationCard';
-import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen } from 'lucide-react';
+import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
+import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen, Activity } from 'lucide-react';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -34,61 +36,61 @@ const Dashboard = () => {
     enabled: !!user?.id
   });
 
-  // Pobieranie danych finansowych
-  const { data: financialData, isLoading: loadingFinancial } = useQuery({
-    queryKey: ['financial-data', user?.location],
+  // Pobieranie danych finansowych z bieżącego miesiąca
+  const { data: currentMonthData, isLoading: loadingCurrentMonth } = useQuery({
+    queryKey: ['current-month-data', user?.location],
     queryFn: async () => {
       if (!user?.location) return null;
 
-      // Pobierz najnowszy zaakceptowany raport dla placówki
-      const { data: latestReport, error: reportError } = await supabase
-        .from('reports')
+      const currentDate = new Date();
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+
+      return await calculateFinancialSummary(user.location, dateFrom, dateTo);
+    },
+    enabled: !!user?.location
+  });
+
+  // Pobieranie danych z poprzedniego miesiąca do porównania
+  const { data: previousMonthData } = useQuery({
+    queryKey: ['previous-month-data', user?.location],
+    queryFn: async () => {
+      if (!user?.location) return null;
+
+      const currentDate = new Date();
+      const firstDayOfPrevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const lastDayOfPrevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+      
+      const dateFrom = firstDayOfPrevMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfPrevMonth.toISOString().split('T')[0];
+
+      return await calculateFinancialSummary(user.location, dateFrom, dateTo);
+    },
+    enabled: !!user?.location
+  });
+
+  // Pobieranie ostatnich transakcji
+  const { data: recentTransactions, isLoading: loadingTransactions } = useQuery({
+    queryKey: ['recent-transactions', user?.location],
+    queryFn: async () => {
+      if (!user?.location) return [];
+      
+      const { data, error } = await supabase
+        .from('transactions')
         .select(`
           *,
-          report_details (
-            income_total,
-            expense_total,
-            balance
-          )
+          debit_account:accounts!debit_account_id(number, name),
+          credit_account:accounts!credit_account_id(number, name)
         `)
         .eq('location_id', user.location)
-        .eq('status', 'approved')
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-      if (reportError) throw reportError;
-
-      // Pobierz poprzedni raport do porównania
-      let previousReport = null;
-      if (latestReport) {
-        const { data: prevReport } = await supabase
-          .from('reports')
-          .select(`
-            *,
-            report_details (
-              income_total,
-              expense_total,
-              balance
-            )
-          `)
-          .eq('location_id', user.location)
-          .eq('status', 'approved')
-          .lt('year', latestReport.year)
-          .or(`year.eq.${latestReport.year},month.lt.${latestReport.month}`)
-          .order('year', { ascending: false })
-          .order('month', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        previousReport = prevReport;
-      }
-
-      return {
-        current: latestReport,
-        previous: previousReport
-      };
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user?.location
   });
@@ -116,24 +118,17 @@ const Dashboard = () => {
     return ((current - previous) / Math.abs(previous)) * 100;
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: 'PLN',
-      minimumFractionDigits: 2
-    }).format(amount);
-  };
+  const currentIncome = currentMonthData?.income || 0;
+  const currentExpense = currentMonthData?.expense || 0;
+  const currentBalance = currentMonthData?.balance || 0;
 
-  const currentData = financialData?.current?.report_details;
-  const previousData = financialData?.previous?.report_details;
+  const previousIncome = previousMonthData?.income || 0;
+  const previousExpense = previousMonthData?.expense || 0;
 
-  const incomeChange = currentData && previousData 
-    ? calculatePercentageChange(Number(currentData.income_total), Number(previousData.income_total))
-    : 0;
+  const incomeChange = calculatePercentageChange(currentIncome, previousIncome);
+  const expenseChange = calculatePercentageChange(currentExpense, previousExpense);
 
-  const expenseChange = currentData && previousData
-    ? calculatePercentageChange(Number(currentData.expense_total), Number(previousData.expense_total))
-    : 0;
+  const currentMonth = format(new Date(), 'LLLL', { locale: pl });
 
   return (
     <MainLayout>
@@ -144,7 +139,7 @@ const Dashboard = () => {
             Witaj, {user?.name || 'Użytkowniku'}
           </h1>
           <p className="text-gray-600">
-            {locationInfo?.name} - Podsumowanie
+            {locationInfo?.name} - Podsumowanie finansowe
           </p>
         </div>
 
@@ -152,35 +147,36 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FinancialCard
             title="Bilans bieżący"
-            amount={currentData ? Number(currentData.balance) : 0}
+            amount={currentBalance}
             subtitle={`Stan na dzień ${format(new Date(), 'dd.MM.yyyy', { locale: pl })}`}
             icon={<FileText className="h-6 w-6" />}
-            loading={loadingFinancial}
+            loading={loadingCurrentMonth}
+            trend="neutral"
           />
 
           <FinancialCard
-            title="Przychody (kwiecień)"
-            amount={currentData ? Number(currentData.income_total) : 0}
-            subtitle={incomeChange !== 0 ? `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% w/w` : ''}
+            title={`Przychody (${currentMonth})`}
+            amount={currentIncome}
+            subtitle={incomeChange !== 0 ? `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% w/w poprz. miesiąc` : 'Brak danych porównawczych'}
             icon={<TrendingUp className="h-6 w-6" />}
             trend={incomeChange > 0 ? 'up' : incomeChange < 0 ? 'down' : 'neutral'}
             trendColor="green"
-            loading={loadingFinancial}
+            loading={loadingCurrentMonth}
           />
 
           <FinancialCard
-            title="Rozchody (kwiecień)"
-            amount={currentData ? Number(currentData.expense_total) : 0}
-            subtitle={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(1)}% w/w` : ''}
+            title={`Rozchody (${currentMonth})`}
+            amount={currentExpense}
+            subtitle={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(1)}% w/w poprz. miesiąc` : 'Brak danych porównawczych'}
             icon={<TrendingDown className="h-6 w-6" />}
             trend={expenseChange > 0 ? 'up' : expenseChange < 0 ? 'down' : 'neutral'}
             trendColor="red"
-            loading={loadingFinancial}
+            loading={loadingCurrentMonth}
           />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Szybki dostęp */}
+          {/* Szybki dostęp i ostatnia aktywność */}
           <div className="lg:col-span-2 space-y-6">
             <div>
               <h2 className="text-lg font-semibold mb-4">Szybki dostęp</h2>
@@ -208,11 +204,51 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {/* Status raportu */}
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Status raportu</h2>
+              <ReportStatusCard />
+            </div>
+
             {/* Ostatnia aktywność */}
             <div>
               <h2 className="text-lg font-semibold mb-4">Ostatnia aktywność</h2>
               <div className="bg-white p-6 rounded-lg shadow-sm">
-                <p className="text-gray-500 italic">Brak ostatniej aktywności.</p>
+                {loadingTransactions ? (
+                  <div className="text-center p-4 text-gray-500">Ładowanie aktywności...</div>
+                ) : recentTransactions && recentTransactions.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentTransactions.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <Activity className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{transaction.description}</p>
+                            <p className="text-xs text-gray-500">
+                              {format(new Date(transaction.date), 'dd.MM.yyyy', { locale: pl })} - 
+                              {transaction.debit_account?.number} → {transaction.credit_account?.number}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-sm">
+                            {new Intl.NumberFormat('pl-PL', {
+                              style: 'currency',
+                              currency: 'PLN'
+                            }).format(Number(transaction.amount))}
+                          </p>
+                          <p className="text-xs text-gray-500">{transaction.settlement_type}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-4 text-gray-500 italic">
+                    Brak ostatniej aktywności
+                  </div>
+                )}
               </div>
             </div>
           </div>
