@@ -35,16 +35,25 @@ const FinancialCard: React.FC<FinancialCardProps> = ({
   };
 
   const getTrendColor = () => {
-    if (!subtitle) return '';
-    
-    switch (trendColor) {
-      case 'green':
-        return 'text-green-600';
-      case 'red':
-        return 'text-red-600';
-      default:
-        return 'text-blue-600';
+    if (!subtitle || subtitle.includes('Brak danych')) {
+      return 'text-gray-500';
     }
+    
+    // Dla przychodów - zielony gdy wzrost, czerwony gdy spadek
+    if (trendColor === 'green') {
+      if (trend === 'up') return 'text-green-600';
+      if (trend === 'down') return 'text-red-600';
+      return 'text-gray-500';
+    }
+    
+    // Dla rozchodów - czerwony gdy wzrost (to źle), zielony gdy spadek (to dobrze)
+    if (trendColor === 'red') {
+      if (trend === 'up') return 'text-red-600';
+      if (trend === 'down') return 'text-green-600';
+      return 'text-gray-500';
+    }
+    
+    return 'text-blue-600';
   };
 
   if (loading) {
@@ -74,7 +83,7 @@ const FinancialCard: React.FC<FinancialCardProps> = ({
         
         {subtitle && (
           <p className={cn('text-sm flex items-center gap-1', getTrendColor())}>
-            {getTrendIcon() && <span>{getTrendIcon()}</span>}
+            {getTrendIcon() && <span className="font-bold">{getTrendIcon()}</span>}
             {subtitle}
           </p>
         )}

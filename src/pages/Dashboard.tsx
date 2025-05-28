@@ -10,6 +10,7 @@ import FinancialCard from '@/components/dashboard/FinancialCard';
 import QuickAccessCard from '@/components/dashboard/QuickAccessCard';
 import NotificationCard from '@/components/dashboard/NotificationCard';
 import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen, Activity, CheckCircle, Clock } from 'lucide-react';
 
 const Dashboard = () => {
@@ -66,102 +67,49 @@ const Dashboard = () => {
     enabled: !!user?.id
   });
 
-  // Pobieranie danych finansowych z podsumowań raportów
+  // Pobieranie danych finansowych z bieżącego miesiąca
   const { data: currentMonthData, isLoading: loadingCurrentMonth } = useQuery({
-    queryKey: ['current-month-reports-data', user?.location, user?.role],
+    queryKey: ['current-month-financial-data', user?.location, user?.role],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user) return { income: 0, expense: 0, balance: 0 };
 
       const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1;
-      const currentYear = currentDate.getFullYear();
-
-      let query = supabase
-        .from('reports')
-        .select(`
-          id,
-          report_details!inner(
-            income_total,
-            expense_total,
-            balance
-          )
-        `)
-        .eq('month', currentMonth)
-        .eq('year', currentYear)
-        .eq('status', 'approved');
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
       // Dla lokalnych ekonomów - tylko ich lokalizacja
-      if (user.role === 'ekonom' && user.location) {
-        query = query.eq('location_id', user.location);
-      }
+      const locationId = user.role === 'ekonom' ? user.location : null;
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
-        return { income: 0, expense: 0, balance: 0 };
-      }
-
-      // Sumowanie danych z wszystkich raportów
-      const totals = data.reduce((acc, report) => {
-        const details = report.report_details;
-        return {
-          income: acc.income + Number(details.income_total || 0),
-          expense: acc.expense + Number(details.expense_total || 0),
-          balance: acc.balance + Number(details.balance || 0)
-        };
-      }, { income: 0, expense: 0, balance: 0 });
-
-      return totals;
+      const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
+      return summary;
     },
     enabled: !!user
   });
 
   // Pobieranie danych z poprzedniego miesiąca do porównania
   const { data: previousMonthData } = useQuery({
-    queryKey: ['previous-month-reports-data', user?.location, user?.role],
+    queryKey: ['previous-month-financial-data', user?.location, user?.role],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user) return { income: 0, expense: 0, balance: 0 };
 
       const currentDate = new Date();
-      const previousMonth = currentDate.getMonth() === 0 ? 12 : currentDate.getMonth();
+      const previousMonth = currentDate.getMonth() === 0 ? 11 : currentDate.getMonth() - 1;
       const previousYear = currentDate.getMonth() === 0 ? currentDate.getFullYear() - 1 : currentDate.getFullYear();
 
-      let query = supabase
-        .from('reports')
-        .select(`
-          id,
-          report_details!inner(
-            income_total,
-            expense_total
-          )
-        `)
-        .eq('month', previousMonth)
-        .eq('year', previousYear)
-        .eq('status', 'approved');
+      const firstDayOfPrevMonth = new Date(previousYear, previousMonth, 1);
+      const lastDayOfPrevMonth = new Date(previousYear, previousMonth + 1, 0);
+      
+      const dateFrom = firstDayOfPrevMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfPrevMonth.toISOString().split('T')[0];
 
       // Dla lokalnych ekonomów - tylko ich lokalizacja
-      if (user.role === 'ekonom' && user.location) {
-        query = query.eq('location_id', user.location);
-      }
+      const locationId = user.role === 'ekonom' ? user.location : null;
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
-        return { income: 0, expense: 0 };
-      }
-
-      // Sumowanie danych z wszystkich raportów
-      const totals = data.reduce((acc, report) => {
-        const details = report.report_details;
-        return {
-          income: acc.income + Number(details.income_total || 0),
-          expense: acc.expense + Number(details.expense_total || 0)
-        };
-      }, { income: 0, expense: 0 });
-
-      return totals;
+      const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
+      return summary;
     },
     enabled: !!user
   });
@@ -244,6 +192,15 @@ const Dashboard = () => {
     return ((current - previous) / Math.abs(previous)) * 100;
   };
 
+  const formatChangeText = (change: number, type: 'income' | 'expense') => {
+    if (change === 0) return 'Brak danych porównawczych';
+    
+    const direction = change > 0 ? '+' : '';
+    const changeText = `${direction}${change.toFixed(1)}% w/w poprz. miesiąc`;
+    
+    return changeText;
+  };
+
   const currentIncome = currentMonthData?.income || 0;
   const currentExpense = currentMonthData?.expense || 0;
   const currentBalance = currentMonthData?.balance || 0;
@@ -268,9 +225,9 @@ const Dashboard = () => {
 
   const getDataSource = () => {
     if (user?.role === 'ekonom') {
-      return 'Na podstawie zaakceptowanych raportów z placówki';
+      return 'Na podstawie transakcji KPiR z placówki';
     } else {
-      return 'Na podstawie zaakceptowanych raportów ze wszystkich placówek';
+      return 'Na podstawie transakcji KPiR ze wszystkich placówek';
     }
   };
 
@@ -304,7 +261,7 @@ const Dashboard = () => {
           <FinancialCard
             title={`Przychody (${currentMonth})`}
             amount={currentIncome}
-            subtitle={incomeChange !== 0 ? `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% w/w poprz. miesiąc` : 'Brak danych porównawczych'}
+            subtitle={formatChangeText(incomeChange, 'income')}
             icon={<TrendingUp className="h-6 w-6" />}
             trend={incomeChange > 0 ? 'up' : incomeChange < 0 ? 'down' : 'neutral'}
             trendColor="green"
@@ -314,7 +271,7 @@ const Dashboard = () => {
           <FinancialCard
             title={`Rozchody (${currentMonth})`}
             amount={currentExpense}
-            subtitle={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(1)}% w/w poprz. miesiąc` : 'Brak danych porównawczych'}
+            subtitle={formatChangeText(expenseChange, 'expense')}
             icon={<TrendingDown className="h-6 w-6" />}
             trend={expenseChange > 0 ? 'up' : expenseChange < 0 ? 'down' : 'neutral'}
             trendColor="red"
