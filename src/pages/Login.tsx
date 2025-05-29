@@ -467,6 +467,8 @@ const Login = () => {
             <p>Dane testowe:</p>
             <p>Admin: <strong>crmoblaci@gmail.com</strong> | Prowincjał: <strong>prowincjal@omi.pl</strong></p>
             <p>Hasło: <strong>password123</strong></p>
+            <p>Ekonom: <strong>email@tak.pl</strong></p>
+            <p>Hasło: <strong>123123</strong></p>
           </div>
         </form>
       </div>
