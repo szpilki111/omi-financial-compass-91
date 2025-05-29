@@ -82,22 +82,43 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika z użyciem funkcji bazodanowej
+  // Mutacja do tworzenia użytkownika używając Supabase Auth (jak w rejestracji)
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       const locationId = userData.location_id === 'no-location' ? null : userData.location_id;
       
-      // Używamy bezpiecznej funkcji bazodanowej create_user_admin
-      const { data, error } = await supabase.rpc('create_user_admin', {
-        user_email: userData.email,
-        user_password: userData.password,
-        user_name: userData.name,
-        user_role: userData.role,
-        user_location_id: locationId,
+      // Krok 1: Utwórz użytkownika w Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            name: userData.name,
+            role: userData.role,
+          }
+        }
       });
 
-      if (error) throw error;
-      return data;
+      if (authError) throw authError;
+
+      // Krok 2: Jeśli użytkownik został utworzony, zaktualizuj profil
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            name: userData.name,
+            role: userData.role,
+            location_id: locationId,
+          })
+          .eq('id', authData.user.id);
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
+          // Nie rzucamy błędem, bo użytkownik został utworzony
+        }
+      }
+
+      return authData;
     },
     onSuccess: () => {
       toast({
@@ -112,13 +133,15 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
       
-      // Mapowanie błędów na bardziej przyjazne komunikaty
-      if (error.message?.includes('Only admins can create users')) {
-        errorMessage = 'Tylko administratorzy mogą tworzyć użytkowników';
-      } else if (error.message?.includes('duplicate key value')) {
+      // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
+      if (error.message?.includes('User already registered')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
       } else if (error.message?.includes('invalid email')) {
         errorMessage = 'Nieprawidłowy adres email';
+      } else if (error.message?.includes('weak password')) {
+        errorMessage = 'Hasło jest zbyt słabe';
+      } else if (error.message?.includes('signup_disabled')) {
+        errorMessage = 'Rejestracja jest wyłączona';
       }
       
       toast({
