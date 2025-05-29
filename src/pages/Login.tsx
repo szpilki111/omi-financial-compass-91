@@ -463,18 +463,6 @@ const Login = () => {
             {isLoading ? <Spinner size="sm" /> : (isSigningUp ? 'Zarejestruj się' : 'Zaloguj się')}
           </Button>
 
-          <div className="text-center mt-4">
-            <button
-              type="button"
-              onClick={() => setIsSigningUp(!isSigningUp)}
-              className="text-sm text-omi-500 hover:text-omi-600"
-            >
-              {isSigningUp 
-                ? 'Masz już konto? Zaloguj się' 
-                : 'Nie masz konta? Zarejestruj się jako ekonom'}
-            </button>
-          </div>
-
           <div className="text-center mt-4 text-xs text-omi-gray-500">
             <p>Dane testowe:</p>
             <p>Admin: <strong>crmoblaci@gmail.com</strong> | Prowincjał: <strong>prowincjal@omi.pl</strong></p>
