@@ -85,7 +85,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika używając logiki z Login
+  // Mutacja do tworzenia użytkownika używając database function
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       console.log("Rozpoczynanie procesu tworzenia użytkownika przez administratora...");
@@ -96,106 +96,58 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
         throw new Error('Brak sesji administratora');
       }
 
-      // Zapisz aktualną sesję
-      const adminSession = currentSession;
-      console.log("Sesja administratora zapisana:", adminSession.user.email);
+      console.log("Sesja administratora potwierdzona:", currentSession.user.email);
 
-      // Wyloguj administratora tymczasowo, żeby móc utworzyć nowego użytkownika
-      await supabase.auth.signOut();
-      console.log("Administrator tymczasowo wylogowany");
+      // Utwórz nową lokalizację jeśli wybrano taką opcję
+      let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
+      
+      if (isCreatingNewLocation && userData.new_location_name?.trim()) {
+        console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
+        
+        const { data: locationData, error: locationError } = await supabase
+          .from('locations')
+          .insert({
+            name: userData.new_location_name.trim(),
+          })
+          .select('id')
+          .single();
 
+        if (locationError) {
+          console.error("Error creating location:", locationError);
+          throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
+        }
+        
+        if (locationData) {
+          selectedLocationId = locationData.id;
+          console.log("Lokalizacja utworzona:", selectedLocationId);
+        }
+      }
+
+      // Użyj database function do tworzenia użytkownika
       try {
-        // Utwórz nowego użytkownika
-        const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
-          email: userData.email,
-          password: userData.password,
-          options: {
-            data: {
-              full_name: userData.name,
-              role: userData.role
-            }
-          }
-        });
+        console.log("Wywołanie funkcji create_user_admin...");
+        const { data: newUserId, error: createError } = await supabase
+          .rpc('create_user_admin', {
+            user_email: userData.email,
+            user_password: userData.password,
+            user_name: userData.name,
+            user_role: userData.role,
+            user_location_id: selectedLocationId
+          });
 
-        if (signUpError) {
-          console.error("Signup error:", signUpError);
-          throw new Error(signUpError.message);
+        if (createError) {
+          console.error("Error calling create_user_admin:", createError);
+          throw new Error(createError.message);
         }
 
-        if (!newUserData.user) {
+        if (!newUserId) {
           throw new Error("Nie udało się utworzyć użytkownika");
         }
 
-        console.log("Nowy użytkownik utworzony:", newUserData.user.id);
-
-        // Utwórz nową lokalizację jeśli wybrano taką opcję
-        let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
-        
-        if (isCreatingNewLocation && userData.new_location_name?.trim()) {
-          console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
-          
-          // Przywróć sesję administratora żeby móc utworzyć lokalizację
-          await supabase.auth.setSession(adminSession);
-          
-          const { data: locationData, error: locationError } = await supabase
-            .from('locations')
-            .insert({
-              name: userData.new_location_name.trim(),
-            })
-            .select('id')
-            .single();
-
-          if (locationError) {
-            console.error("Error creating location:", locationError);
-            throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
-          }
-          
-          if (locationData) {
-            selectedLocationId = locationData.id;
-            console.log("Lokalizacja utworzona:", selectedLocationId);
-          }
-          
-          // Wyloguj administratora ponownie
-          await supabase.auth.signOut();
-        }
-
-        // Utwórz profil użytkownika
-        try {
-          console.log("Tworzenie profilu użytkownika...");
-          const { error: directProfileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: newUserData.user.id,
-              name: userData.name,
-              role: userData.role,
-              email: userData.email,
-              location_id: selectedLocationId
-            });
-
-          if (directProfileError) {
-            console.error("Error creating profile directly:", directProfileError);
-            throw new Error("Nie udało się utworzyć profilu użytkownika");
-          }
-
-          console.log("Profil użytkownika utworzony pomyślnie");
-        } catch (profileErr) {
-          console.error("Profile creation error:", profileErr);
-          throw new Error("Nie udało się utworzyć profilu użytkownika");
-        }
-
-        // Przywróć sesję administratora
-        await supabase.auth.setSession(adminSession);
-        console.log("Sesja administratora przywrócona");
-
-        return newUserData;
+        console.log("Użytkownik utworzony pomyślnie:", newUserId);
+        return { user: { id: newUserId } };
       } catch (error) {
-        // W przypadku błędu, zawsze przywróć sesję administratora
-        try {
-          await supabase.auth.setSession(adminSession);
-          console.log("Sesja administratora przywrócona po błędzie");
-        } catch (restoreError) {
-          console.error("Nie udało się przywrócić sesji administratora:", restoreError);
-        }
+        console.error("Database function error:", error);
         throw error;
       }
     },
@@ -213,7 +165,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
       
-      if (error.message?.includes('User already registered')) {
+      if (error.message?.includes('duplicate key value')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
       } else if (error.message?.includes('invalid email')) {
         errorMessage = 'Nieprawidłowy adres email';
