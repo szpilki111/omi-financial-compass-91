@@ -10,7 +10,7 @@ const AccessDenied = () => {
         <p className="text-omi-gray-600 mb-6">
           Akcja wykonana pomyślnie!
         </p>
-        <Link to="/Administration" className="omi-btn omi-btn-primary">
+        <Link to="/administracja" className="omi-btn omi-btn-primary">
           Powrót do strony głównej
         </Link>
       </div>
