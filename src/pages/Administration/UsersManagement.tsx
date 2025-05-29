@@ -83,47 +83,79 @@ const UsersManagement = () => {
     }
   });
 
-  // Mutacja do usuwania użytkownika używając Supabase Auth
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      // Najpierw usuń profil
-      const { error: profileError } = await supabase
+// Mutacja do usuwania użytkownika używając logiki z Login
+const deleteUserMutation = useMutation({
+  mutationFn: async (userId: string) => {
+    console.log("Rozpoczynanie procesu usuwania użytkownika przez administratora...");
+
+    // Sprawdź, czy administrator jest zalogowany
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (!currentSession) {
+      throw new Error('Brak sesji administratora');
+    }
+
+    // Zapisz aktualną sesję
+    const adminSession = currentSession;
+    console.log("Sesja administratora zapisana:", adminSession.user.email);
+
+    try {
+      // Najpierw usuń profil użytkownika
+      const { error: profileDeleteError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
 
-      if (profileError) throw profileError;
+      if (profileDeleteError) {
+        console.error("Error deleting profile:", profileDeleteError);
+        throw new Error("Nie udało się usunąć profilu użytkownika");
+      }
+
+      console.log("Profil użytkownika usunięty pomyślnie");
 
       // Następnie usuń użytkownika z Supabase Auth
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
 
-      if (authError) throw authError;
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Sukces',
-        description: 'Użytkownik został usunięty pomyślnie',
-      });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-    onError: (error: any) => {
-      console.error('Error deleting user:', error);
-      
-      let errorMessage = 'Nie udało się usunąć użytkownika';
-      
-      if (error.message?.includes('insufficient_privileges')) {
-        errorMessage = 'Brak uprawnień do usunięcia użytkownika';
-      } else if (error.message?.includes('User not found')) {
-        errorMessage = 'Użytkownik nie został znaleziony';
+      if (authDeleteError) {
+        console.error("Error deleting user from Auth:", authDeleteError);
+        throw new Error("Nie udało się usunąć użytkownika z systemu autoryzacji");
       }
-      
-      toast({
-        title: 'Błąd',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    },
-  });
+
+      console.log("Użytkownik usunięty pomyślnie");
+    } catch (error) {
+      // W przypadku błędu, zawsze przywróć sesję administratora
+      try {
+        await supabase.auth.setSession(adminSession);
+        console.log("Sesja administratora przywrócona po błędzie");
+      } catch (restoreError) {
+        console.error("Nie udało się przywrócić sesji administratora:", restoreError);
+      }
+      throw error;
+    }
+  },
+  onSuccess: () => {
+    toast({
+      title: 'Sukces',
+      description: 'Użytkownik został usunięty pomyślnie',
+    });
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+  },
+  onError: (error: any) => {
+    console.error('Error deleting user:', error);
+    let errorMessage = 'Nie udało się usunąć użytkownika';
+
+    if (error.message?.includes('User not found')) {
+      errorMessage = 'Użytkownik nie został znaleziony';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    toast({
+      title: 'Błąd',
+      description: errorMessage,
+      variant: 'destructive',
+    });
+  },
+});
 
   const handleDeleteUser = (userId: string) => {
     deleteUserMutation.mutate(userId);
