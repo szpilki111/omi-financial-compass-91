@@ -15,6 +15,7 @@ import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
 import Reports from "./pages/Reports";
 import DataVisualization from "./pages/DataVisualization";
+import { AdministrationPage } from "./pages/Administration";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -79,6 +80,13 @@ const App = () => (
             <Route path="/wizualizacja" element={
               <ProtectedRoute>
                 <DataVisualization />
+              </ProtectedRoute>
+            } />
+            
+            {/* Administration routes - dla prowincjała i admina */}
+            <Route path="/administracja" element={
+              <ProtectedRoute requiredRole={["prowincjal", "admin"]}>
+                <AdministrationPage />
               </ProtectedRoute>
             } />
             

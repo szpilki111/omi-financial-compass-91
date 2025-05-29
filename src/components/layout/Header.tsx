@@ -34,6 +34,11 @@ const Header = () => {
       { name: 'Wizualizacja danych', path: '/wizualizacja' }
     );
 
+    // Administracja dla prowincjała i admina
+    if (user?.role === 'prowincjal' || user?.role === 'admin') {
+      baseItems.push({ name: 'Administracja', path: '/administracja' });
+    }
+
     return baseItems;
   };
 
