@@ -64,7 +64,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       email: '',
       password: '',
       role: 'ekonom',
-      location_id: '',
+      location_id: 'no-location',
     },
   });
 
@@ -85,12 +85,14 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   // Mutacja do tworzenia użytkownika
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
+      const locationId = userData.location_id === 'no-location' ? null : userData.location_id;
+      
       const { data, error } = await supabase.rpc('create_user_admin', {
         user_email: userData.email,
         user_password: userData.password,
         user_name: userData.name,
         user_role: userData.role,
-        user_location_id: userData.location_id || null,
+        user_location_id: locationId,
       });
 
       if (error) throw error;
@@ -219,7 +221,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Brak przypisania</SelectItem>
+                      <SelectItem value="no-location">Brak przypisania</SelectItem>
                       {locations?.map((location) => (
                         <SelectItem key={location.id} value={location.id}>
                           {location.name}
