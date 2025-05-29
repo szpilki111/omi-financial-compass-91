@@ -39,6 +39,7 @@ const userSchema = z.object({
     required_error: 'Wybierz rolę użytkownika',
   }),
   location_id: z.string().optional(),
+  new_location_name: z.string().optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -56,6 +57,7 @@ interface Location {
 const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isCreatingNewLocation, setIsCreatingNewLocation] = useState(false);
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -65,6 +67,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       password: '',
       role: 'ekonom',
       location_id: 'no-location',
+      new_location_name: '',
     },
   });
 
@@ -82,43 +85,119 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika używając Supabase Auth (jak w rejestracji)
+  // Mutacja do tworzenia użytkownika używając logiki z Login
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
-      const locationId = userData.location_id === 'no-location' ? null : userData.location_id;
+      console.log("Rozpoczynanie procesu tworzenia użytkownika przez administratora...");
       
-      // Krok 1: Utwórz użytkownika w Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-          data: {
-            name: userData.name,
-            role: userData.role,
-          }
-        }
-      });
-
-      if (authError) throw authError;
-
-      // Krok 2: Jeśli użytkownik został utworzony, zaktualizuj profil
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            name: userData.name,
-            role: userData.role,
-            location_id: locationId,
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) {
-          console.error('Error updating profile:', profileError);
-          // Nie rzucamy błędem, bo użytkownik został utworzony
-        }
+      // Sprawdź czy administrator jest zalogowany
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) {
+        throw new Error('Brak sesji administratora');
       }
 
-      return authData;
+      // Zapisz aktualną sesję
+      const adminSession = currentSession;
+      console.log("Sesja administratora zapisana:", adminSession.user.email);
+
+      // Wyloguj administratora tymczasowo, żeby móc utworzyć nowego użytkownika
+      await supabase.auth.signOut();
+      console.log("Administrator tymczasowo wylogowany");
+
+      try {
+        // Utwórz nowego użytkownika
+        const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
+          email: userData.email,
+          password: userData.password,
+          options: {
+            data: {
+              full_name: userData.name,
+              role: userData.role
+            }
+          }
+        });
+
+        if (signUpError) {
+          console.error("Signup error:", signUpError);
+          throw new Error(signUpError.message);
+        }
+
+        if (!newUserData.user) {
+          throw new Error("Nie udało się utworzyć użytkownika");
+        }
+
+        console.log("Nowy użytkownik utworzony:", newUserData.user.id);
+
+        // Utwórz nową lokalizację jeśli wybrano taką opcję
+        let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
+        
+        if (isCreatingNewLocation && userData.new_location_name?.trim()) {
+          console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
+          
+          // Przywróć sesję administratora żeby móc utworzyć lokalizację
+          await supabase.auth.setSession(adminSession);
+          
+          const { data: locationData, error: locationError } = await supabase
+            .from('locations')
+            .insert({
+              name: userData.new_location_name.trim(),
+            })
+            .select('id')
+            .single();
+
+          if (locationError) {
+            console.error("Error creating location:", locationError);
+            throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
+          }
+          
+          if (locationData) {
+            selectedLocationId = locationData.id;
+            console.log("Lokalizacja utworzona:", selectedLocationId);
+          }
+          
+          // Wyloguj administratora ponownie
+          await supabase.auth.signOut();
+        }
+
+        // Utwórz profil użytkownika
+        try {
+          console.log("Tworzenie profilu użytkownika...");
+          const { error: directProfileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: newUserData.user.id,
+              name: userData.name,
+              role: userData.role,
+              email: userData.email,
+              location_id: selectedLocationId
+            });
+
+          if (directProfileError) {
+            console.error("Error creating profile directly:", directProfileError);
+            throw new Error("Nie udało się utworzyć profilu użytkownika");
+          }
+
+          console.log("Profil użytkownika utworzony pomyślnie");
+        } catch (profileErr) {
+          console.error("Profile creation error:", profileErr);
+          throw new Error("Nie udało się utworzyć profilu użytkownika");
+        }
+
+        // Przywróć sesję administratora
+        await supabase.auth.setSession(adminSession);
+        console.log("Sesja administratora przywrócona");
+
+        return newUserData;
+      } catch (error) {
+        // W przypadku błędu, zawsze przywróć sesję administratora
+        try {
+          await supabase.auth.setSession(adminSession);
+          console.log("Sesja administratora przywrócona po błędzie");
+        } catch (restoreError) {
+          console.error("Nie udało się przywrócić sesji administratora:", restoreError);
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       toast({
@@ -127,21 +206,21 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       form.reset();
+      setIsCreatingNewLocation(false);
       onOpenChange(false);
     },
     onError: (error: any) => {
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
       
-      // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
       if (error.message?.includes('User already registered')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
       } else if (error.message?.includes('invalid email')) {
         errorMessage = 'Nieprawidłowy adres email';
       } else if (error.message?.includes('weak password')) {
         errorMessage = 'Hasło jest zbyt słabe';
-      } else if (error.message?.includes('signup_disabled')) {
-        errorMessage = 'Rejestracja jest wyłączona';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       toast({
@@ -153,11 +232,13 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   });
 
   const onSubmit = (data: UserFormData) => {
+    console.log("Dane formularza:", data);
     createUserMutation.mutate(data);
   };
 
   const handleClose = () => {
     form.reset();
+    setIsCreatingNewLocation(false);
     onOpenChange(false);
   };
 
@@ -211,7 +292,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                   <FormControl>
                     <Input 
                       type="password" 
-                      placeholder="Wprowadź hasło" 
+                      placeholder="Wprowadź hasło (min. 6 znaków)" 
                       {...field} 
                     />
                   </FormControl>
@@ -243,31 +324,63 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="location_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Placówka (opcjonalnie)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Wybierz placówkę" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="no-location">Brak przypisania</SelectItem>
-                      {locations?.map((location) => (
-                        <SelectItem key={location.id} value={location.id}>
-                          {location.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <FormLabel>Placówka (opcjonalnie)</FormLabel>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm"
+                  className="text-xs text-blue-600 h-6 px-2"
+                  onClick={() => setIsCreatingNewLocation(!isCreatingNewLocation)}
+                >
+                  {isCreatingNewLocation ? "Wybierz istniejącą" : "Utwórz nową"}
+                </Button>
+              </div>
+              
+              {isCreatingNewLocation ? (
+                <FormField
+                  control={form.control}
+                  name="new_location_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          placeholder="Nazwa nowej placówki" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="location_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wybierz placówkę" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="no-location">Brak przypisania</SelectItem>
+                          {locations?.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                              {location.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
+            </div>
 
             <DialogFooter>
               <Button 
