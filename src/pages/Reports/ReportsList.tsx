@@ -45,18 +45,6 @@ const getStatusLabel = (status: Report['status']) => {
   }
 };
 
-const getReportTypeLabel = (type: string) => {
-  switch (type) {
-    case 'standard': return 'Standardowy';
-    case 'zos': return 'ZOS';
-    case 'bilans': return 'Bilans';
-    case 'rzis': return 'RZiS';
-    case 'jpk': return 'JPK';
-    case 'analiza': return 'Analiza';
-    default: return type;
-  }
-};
-
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined) {
     return 'Brak danych';
@@ -155,14 +143,11 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         <TableCaption>Lista raportów z danymi finansowymi</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead>Tytuł</TableHead>
             <TableHead>Placówka</TableHead>
-            <TableHead>Typ</TableHead>
             <TableHead>Okres</TableHead>
             <TableHead className="text-right">Przychody</TableHead>
             <TableHead className="text-right">Rozchody</TableHead>
             <TableHead className="text-right">Bilans</TableHead>
-            <TableHead>Data utworzenia</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Złożony przez</TableHead>
             <TableHead className="text-right">Akcje</TableHead>
@@ -171,11 +156,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         <TableBody>
           {reports.map((report) => (
             <TableRow key={report.id}>
-              <TableCell>{report.title}</TableCell>
               <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">{getReportTypeLabel(report.report_type || 'standard')}</Badge>
-              </TableCell>
               <TableCell>{report.period}</TableCell>
               <TableCell className="text-right font-mono">
                 <span className="text-green-700">
@@ -191,9 +172,6 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                 <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
                   {formatCurrency(report.report_details?.balance)}
                 </span>
-              </TableCell>
-              <TableCell>
-                {report.created_at ? format(new Date(report.created_at), 'PPP', { locale: pl }) : '-'}
               </TableCell>
               <TableCell>
                 <Badge {...getStatusBadgeProps(report.status)}>

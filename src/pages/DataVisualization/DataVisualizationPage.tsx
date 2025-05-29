@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -109,44 +108,40 @@ const DataVisualizationPage = () => {
     try {
       console.log('=== DEBUG: Rozpoczęcie pobierania danych z raportów ===');
       
-      // Pobierz wszystkie raporty z danymi finansowymi - tylko zatwierdzone i złożone
-      let reportsQuery = supabase
-        .from('reports')
-        .select(`
-          id,
-          title,
-          period,
-          month,
-          year,
-          status,
-          location_id,
-          locations!inner(name),
-          report_details!inner(
-            income_total,
-            expense_total,
-            balance,
-            settlements_total
-          )
-        `)
-        .in('status', ['submitted', 'approved'])
-        .order('year', { ascending: true })
-        .order('month', { ascending: true });
+      // Używamy tej samej logiki co w ReportsList - najpierw pobieramy raporty
+      const { data: userRole } = await supabase.rpc('get_user_role');
+      console.log('Rola użytkownika:', userRole);
+      
+      let query = supabase.from('reports').select(`
+        *,
+        location:locations(name),
+        submitted_by_profile:profiles!submitted_by(name),
+        reviewed_by_profile:profiles!reviewed_by(name)
+      `)
+      .in('status', ['submitted', 'approved'])
+      .order('year', { ascending: true })
+      .order('month', { ascending: true });
 
       // Filtruj według uprawnień użytkownika
-      if (user?.role === 'ekonom' && user?.location) {
-        reportsQuery = reportsQuery.eq('location_id', user.location);
+      if (userRole === 'ekonom') {
+        const { data: locationId } = await supabase.rpc('get_user_location_id');
+        console.log('ID lokalizacji użytkownika:', locationId);
+        
+        if (locationId) {
+          query = query.eq('location_id', locationId);
+        }
       }
 
-      const { data: reports, error: reportsError } = await reportsQuery;
+      const { data: reportsData, error: reportsError } = await query;
 
-      console.log('DEBUG: Pobrane raporty:', reports);
+      console.log('DEBUG: Pobrane raporty:', reportsData);
       console.log('DEBUG: Błąd raportów:', reportsError);
 
       if (reportsError) {
         throw reportsError;
       }
 
-      if (!reports || reports.length === 0) {
+      if (!reportsData || reportsData.length === 0) {
         console.log('DEBUG: Brak raportów w systemie');
         setReportData([]);
         setChartData([]);
@@ -154,19 +149,54 @@ const DataVisualizationPage = () => {
         return;
       }
 
-      // Przekształć dane raportów
-      const transformedReportData: ReportFinancialData[] = reports.map((report: any) => ({
-        location_id: report.location_id,
-        location_name: report.locations.name,
-        income_total: Number(report.report_details[0]?.income_total) || 0,
-        expense_total: Number(report.report_details[0]?.expense_total) || 0,
-        balance: Number(report.report_details[0]?.balance) || 0,
-        period: report.period,
-        year: report.year,
-        month: report.month,
-        report_id: report.id,
-        status: report.status
-      }));
+      // Pobierz szczegóły finansowe dla wszystkich raportów w osobnym zapytaniu
+      const reportIds = reportsData.map(report => report.id);
+      const { data: reportDetails, error: detailsError } = await supabase
+        .from('report_details')
+        .select('*')
+        .in('report_id', reportIds);
+
+      if (detailsError) {
+        console.error('Błąd pobierania szczegółów raportów:', detailsError);
+        throw detailsError;
+      }
+
+      console.log('DEBUG: Pobrane szczegóły raportów:', reportDetails);
+
+      if (!reportDetails || reportDetails.length === 0) {
+        console.log('DEBUG: Brak szczegółów finansowych dla raportów');
+        setReportData([]);
+        setChartData([]);
+        setComparisonData([]);
+        return;
+      }
+
+      // Stwórz mapę szczegółów według report_id
+      const detailsMap = new Map();
+      reportDetails.forEach(detail => {
+        detailsMap.set(detail.report_id, detail);
+      });
+
+      // Połącz raporty ze szczegółami i przekształć dane
+      const transformedReportData: ReportFinancialData[] = [];
+      
+      reportsData.forEach((report: any) => {
+        const details = detailsMap.get(report.id);
+        if (details) {
+          transformedReportData.push({
+            location_id: report.location_id,
+            location_name: report.location?.name || 'Nieznana',
+            income_total: Number(details.income_total) || 0,
+            expense_total: Number(details.expense_total) || 0,
+            balance: Number(details.balance) || 0,
+            period: report.period,
+            year: report.year,
+            month: report.month,
+            report_id: report.id,
+            status: report.status
+          });
+        }
+      });
 
       console.log('DEBUG: Przetworzone dane raportów:', transformedReportData);
       setReportData(transformedReportData);
