@@ -80,13 +80,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         *,
         location:locations(name),
         submitted_by_profile:profiles!submitted_by(name),
-        reviewed_by_profile:profiles!reviewed_by(name),
-        report_details(
-          income_total,
-          expense_total,
-          balance,
-          settlements_total
-        )
+        reviewed_by_profile:profiles!reviewed_by(name)
       `);
       
       if (userRole === 'ekonom') {
@@ -98,17 +92,47 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         }
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data: reportsData, error: reportsError } = await query.order('created_at', { ascending: false });
       
-      if (error) throw error;
-      console.log('Pobrane raporty:', data);
+      if (reportsError) throw reportsError;
+      console.log('Pobrane raporty:', reportsData);
+
+      // Jeśli nie ma raportów, zwróć pustą tablicę
+      if (!reportsData || reportsData.length === 0) {
+        return [];
+      }
+
+      // Pobierz szczegóły finansowe dla wszystkich raportów w osobnym zapytaniu
+      const reportIds = reportsData.map(report => report.id);
+      const { data: reportDetails, error: detailsError } = await supabase
+        .from('report_details')
+        .select('*')
+        .in('report_id', reportIds);
+
+      if (detailsError) {
+        console.error('Błąd pobierania szczegółów raportów:', detailsError);
+      }
+
+      console.log('Pobrane szczegóły raportów:', reportDetails);
+
+      // Stwórz mapę szczegółów według report_id
+      const detailsMap = new Map();
+      if (reportDetails) {
+        reportDetails.forEach(detail => {
+          detailsMap.set(detail.report_id, detail);
+        });
+      }
+
+      // Połącz raporty ze szczegółami
+      const transformedData = reportsData.map((report: any) => {
+        const details = detailsMap.get(report.id);
+        return {
+          ...report,
+          report_details: details || null
+        };
+      }) as Report[];
       
-      // Przekształć dane, aby report_details był pojedynczym obiektem zamiast tablicy
-      const transformedData = data?.map((report: any) => ({
-        ...report,
-        report_details: report.report_details?.[0] || null
-      })) as Report[];
-      
+      console.log('Przekształcone dane raportów:', transformedData);
       return transformedData;
     }
   });
