@@ -112,15 +112,6 @@ const deleteUserMutation = useMutation({
 
       console.log("Profil użytkownika usunięty pomyślnie");
 
-      // Następnie usuń użytkownika z Supabase Auth
-      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (authDeleteError) {
-        console.error("Error deleting user from Auth:", authDeleteError);
-        throw new Error("Nie udało się usunąć użytkownika z systemu autoryzacji");
-      }
-
-      console.log("Użytkownik usunięty pomyślnie");
     } catch (error) {
       // W przypadku błędu, zawsze przywróć sesję administratora
       try {
