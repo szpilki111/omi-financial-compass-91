@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +28,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Imię i nazwisko musi mieć co najmniej 2 znaki'),
@@ -83,76 +83,41 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     },
   });
 
-  // Mutacja do tworzenia użytkownika
+  // Mutacja do tworzenia użytkownika poprzez Edge Function
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       console.log('Rozpoczynanie procesu tworzenia użytkownika przez administratora...');
 
-      // Utwórz nowego użytkownika za pomocą admin API (bez wylogowywania admina)
-      const { data: newUserData, error: createUserError } = await supabase.auth.admin.createUser({
-        email: userData.email,
-        password: userData.password,
-        user_metadata: {
-          full_name: userData.name,
-          role: userData.role,
+      // Pobierz token użytkownika (admina) do autoryzacji żądania
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Brak sesji administratora');
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        email_confirm: true, // Opcjonalne: automatyczne potwierdzenie emaila
+        body: JSON.stringify({
+          name: userData.name,
+          email: userData.email,
+          password: userData.password,
+          role: userData.role,
+          location_id: userData.location_id,
+          new_location_name: userData.new_location_name,
+          is_creating_new_location: isCreatingNewLocation,
+        }),
       });
 
-      if (createUserError) {
-        console.error('Error creating user:', createUserError);
-        throw new Error(createUserError.message);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Nie udało się utworzyć użytkownika');
       }
 
-      if (!newUserData.user) {
-        throw new Error('Nie udało się utworzyć użytkownika');
-      }
-
-      console.log('Nowy użytkownik utworzony:', newUserData.user.id);
-
-      // Utwórz nową lokalizację jeśli wybrano taką opcję
-      let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
-
-      if (isCreatingNewLocation && userData.new_location_name?.trim()) {
-        console.log('Tworzenie nowej lokalizacji:', userData.new_location_name);
-        const { data: locationData, error: locationError } = await supabase
-          .from('locations')
-          .insert({
-            name: userData.new_location_name.trim(),
-          })
-          .select('id')
-          .single();
-
-        if (locationError) {
-          console.error('Error creating location:', locationError);
-          throw new Error('Nie udało się utworzyć lokalizacji: ' + locationError.message);
-        }
-
-        if (locationData) {
-          selectedLocationId = locationData.id;
-          console.log('Lokalizacja utworzona:', selectedLocationId);
-        }
-      }
-
-      // Utwórz profil użytkownika
-      console.log('Tworzenie profilu użytkownika...');
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserData.user.id,
-          name: userData.name,
-          role: userData.role,
-          email: userData.email,
-          location_id: selectedLocationId,
-        });
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-        throw new Error('Nie udało się utworzyć profilu użytkownika');
-      }
-
-      console.log('Profil użytkownika utworzony pomyślnie');
-      return newUserData;
+      return result;
     },
     onSuccess: () => {
       toast({
@@ -165,6 +130,8 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       onOpenChange(false);
     },
     onError: (error: any) => {
+     []
+
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
 
