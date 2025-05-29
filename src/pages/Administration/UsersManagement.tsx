@@ -83,14 +83,21 @@ const UsersManagement = () => {
     }
   });
 
-  // Mutacja do usuwania użytkownika
+  // Mutacja do usuwania użytkownika z użyciem Supabase Auth
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase.rpc('delete_user_admin', {
-        user_id_to_delete: userId
-      });
+      // Najpierw usuń profil z tabeli profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Następnie usuń użytkownika z Supabase Auth
+      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+
+      if (authError) throw authError;
     },
     onSuccess: () => {
       toast({

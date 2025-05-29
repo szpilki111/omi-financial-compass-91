@@ -82,21 +82,40 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika
+  // Mutacja do tworzenia użytkownika z użyciem Supabase Auth
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       const locationId = userData.location_id === 'no-location' ? null : userData.location_id;
       
-      const { data, error } = await supabase.rpc('create_user_admin', {
-        user_email: userData.email,
-        user_password: userData.password,
-        user_name: userData.name,
-        user_role: userData.role,
-        user_location_id: locationId,
+      // Użyj Supabase Auth do utworzenia użytkownika
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: userData.email,
+        password: userData.password,
+        user_metadata: {
+          name: userData.name,
+          role: userData.role,
+        },
+        email_confirm: true, // Potwierdź email od razu
       });
 
-      if (error) throw error;
-      return data;
+      if (authError) throw authError;
+
+      // Utworz profil użytkownika w tabeli profiles
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            location_id: locationId,
+          });
+
+        if (profileError) throw profileError;
+      }
+
+      return authData;
     },
     onSuccess: () => {
       toast({
@@ -109,9 +128,22 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     },
     onError: (error: any) => {
       console.error('Error creating user:', error);
+      let errorMessage = 'Nie udało się utworzyć użytkownika';
+      
+      // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
+      if (error.message?.includes('email_address_invalid')) {
+        errorMessage = 'Nieprawidłowy adres email';
+      } else if (error.message?.includes('signup_disabled')) {
+        errorMessage = 'Rejestracja jest wyłączona';
+      } else if (error.message?.includes('email_address_not_authorized')) {
+        errorMessage = 'Ten adres email nie jest autoryzowany';
+      } else if (error.message?.includes('User already registered')) {
+        errorMessage = 'Użytkownik z tym adresem email już istnieje';
+      }
+      
       toast({
         title: 'Błąd',
-        description: error.message || 'Nie udało się utworzyć użytkownika',
+        description: errorMessage,
         variant: 'destructive',
       });
     },
