@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -328,6 +327,58 @@ const DataVisualizationPage = () => {
     }).format(value);
   };
 
+  // Nowa funkcja do formatowania osi Y z lepszą skalą
+  const formatYAxisCurrency = (value: number) => {
+    if (Math.abs(value) >= 1000000) {
+      // Dla milionów - pokazuj z dokładnością do 0.1M
+      return `${(value / 1000000).toFixed(1)}M zł`;
+    } else if (Math.abs(value) >= 1000) {
+      // Dla tysięcy - pokazuj z dokładnością do 0.1K
+      return `${(value / 1000).toFixed(1)}K zł`;
+    } else {
+      // Dla mniejszych wartości - pokazuj pełną kwotę
+      return `${value.toFixed(0)} zł`;
+    }
+  };
+
+  // Funkcja do obliczania odpowiednich ticków dla osi Y
+  const generateYAxisTicks = (data: ChartData[], metric: string) => {
+    if (!data.length) return [];
+    
+    // Znajdź min i max wartości dla danej metryki
+    let min = Infinity;
+    let max = -Infinity;
+    
+    data.forEach(item => {
+      uniqueLocations.forEach(location => {
+        const key = getSafeKey(location, metric);
+        const value = item[key] as number;
+        if (typeof value === 'number') {
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+        }
+      });
+    });
+
+    if (min === Infinity || max === -Infinity) return [];
+
+    // Dodaj margines 10% z każdej strony
+    const margin = (max - min) * 0.1;
+    const adjustedMin = Math.max(0, min - margin); // Nie pokazuj wartości ujemnych jeśli min > 0
+    const adjustedMax = max + margin;
+
+    // Generuj 5-6 równomiernie rozłożonych ticków
+    const tickCount = 6;
+    const step = (adjustedMax - adjustedMin) / (tickCount - 1);
+    
+    const ticks = [];
+    for (let i = 0; i < tickCount; i++) {
+      ticks.push(adjustedMin + (step * i));
+    }
+    
+    return ticks;
+  };
+
   const getChangeColor = (change: number, metric: string) => {
     if (change === 0) return 'text-gray-500';
     if (metric === 'expense') {
@@ -388,6 +439,10 @@ const DataVisualizationPage = () => {
     const capitalizedMetric = metric.charAt(0).toUpperCase() + metric.slice(1);
     return `${safeLocationName}${capitalizedMetric}`;
   };
+
+  // Oblicz ticki dla wykresów
+  const expenseYAxisTicks = generateYAxisTicks(chartData, 'expense');
+  const incomeYAxisTicks = generateYAxisTicks(chartData, 'income');
 
   return (
     <MainLayout>
@@ -534,7 +589,7 @@ const DataVisualizationPage = () => {
           </Table>
         </div>
 
-        {/* Wykres liniowy - Trendy czasowe dla wydatków - POPRAWKA */}
+        {/* Wykres liniowy - Trendy czasowe dla wydatków - POPRAWKA z lepszą skalą osi Y */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
             {isEkonom ? 'Trendy wydatków w czasie' : 'Trendy wydatków w czasie według placówek'}
@@ -550,8 +605,11 @@ const DataVisualizationPage = () => {
                 fontSize={12}
               />
               <YAxis 
-                tickFormatter={formatCurrency}
+                tickFormatter={formatYAxisCurrency}
                 fontSize={12}
+                domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
+                ticks={expenseYAxisTicks}
+                type="number"
               />
               <ChartTooltip 
                 content={<ChartTooltipContent 
@@ -581,7 +639,7 @@ const DataVisualizationPage = () => {
           </ChartContainer>
         </div>
 
-        {/* Wykres słupkowy - Porównanie dochodów - POPRAWKA */}
+        {/* Wykres słupkowy - Porównanie dochodów - POPRAWKA z lepszą skalą osi Y */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
             {isEkonom ? 'Porównanie dochodów między miesiącami' : 'Porównanie dochodów między placówkami'}
@@ -597,8 +655,11 @@ const DataVisualizationPage = () => {
                 fontSize={12}
               />
               <YAxis 
-                tickFormatter={formatCurrency}
+                tickFormatter={formatYAxisCurrency}
                 fontSize={12}
+                domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
+                ticks={incomeYAxisTicks}
+                type="number"
               />
               <ChartTooltip 
                 content={<ChartTooltipContent 
