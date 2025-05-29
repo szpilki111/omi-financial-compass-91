@@ -83,21 +83,14 @@ const UsersManagement = () => {
     }
   });
 
-  // Mutacja do usuwania użytkownika z użyciem Supabase Auth
+  // Mutacja do usuwania użytkownika z użyciem funkcji bazodanowej
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      // Najpierw usuń profil z tabeli profiles
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
+      const { error } = await supabase.rpc('delete_user_admin', {
+        user_id_to_delete: userId
+      });
 
-      if (profileError) throw profileError;
-
-      // Następnie usuń użytkownika z Supabase Auth
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (authError) throw authError;
+      if (error) throw error;
     },
     onSuccess: () => {
       toast({
@@ -108,9 +101,18 @@ const UsersManagement = () => {
     },
     onError: (error: any) => {
       console.error('Error deleting user:', error);
+      
+      let errorMessage = 'Nie udało się usunąć użytkownika';
+      
+      if (error.message?.includes('Only admins can delete users')) {
+        errorMessage = 'Tylko administratorzy mogą usuwać użytkowników';
+      } else if (error.message?.includes('Cannot delete your own account')) {
+        errorMessage = 'Nie możesz usunąć własnego konta';
+      }
+      
       toast({
         title: 'Błąd',
-        description: error.message || 'Nie udało się usunąć użytkownika',
+        description: errorMessage,
         variant: 'destructive',
       });
     },

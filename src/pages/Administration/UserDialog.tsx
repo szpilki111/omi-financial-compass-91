@@ -82,40 +82,22 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika z użyciem Supabase Auth
+  // Mutacja do tworzenia użytkownika z użyciem funkcji bazodanowej
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       const locationId = userData.location_id === 'no-location' ? null : userData.location_id;
       
-      // Użyj Supabase Auth do utworzenia użytkownika
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: userData.email,
-        password: userData.password,
-        user_metadata: {
-          name: userData.name,
-          role: userData.role,
-        },
-        email_confirm: true, // Potwierdź email od razu
+      // Używamy bezpiecznej funkcji bazodanowej create_user_admin
+      const { data, error } = await supabase.rpc('create_user_admin', {
+        user_email: userData.email,
+        user_password: userData.password,
+        user_name: userData.name,
+        user_role: userData.role,
+        user_location_id: locationId,
       });
 
-      if (authError) throw authError;
-
-      // Utworz profil użytkownika w tabeli profiles
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role,
-            location_id: locationId,
-          });
-
-        if (profileError) throw profileError;
-      }
-
-      return authData;
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       toast({
@@ -130,15 +112,13 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
       
-      // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
-      if (error.message?.includes('email_address_invalid')) {
-        errorMessage = 'Nieprawidłowy adres email';
-      } else if (error.message?.includes('signup_disabled')) {
-        errorMessage = 'Rejestracja jest wyłączona';
-      } else if (error.message?.includes('email_address_not_authorized')) {
-        errorMessage = 'Ten adres email nie jest autoryzowany';
-      } else if (error.message?.includes('User already registered')) {
+      // Mapowanie błędów na bardziej przyjazne komunikaty
+      if (error.message?.includes('Only admins can create users')) {
+        errorMessage = 'Tylko administratorzy mogą tworzyć użytkowników';
+      } else if (error.message?.includes('duplicate key value')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
+      } else if (error.message?.includes('invalid email')) {
+        errorMessage = 'Nieprawidłowy adres email';
       }
       
       toast({
