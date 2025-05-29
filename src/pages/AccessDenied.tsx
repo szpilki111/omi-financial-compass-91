@@ -11,7 +11,7 @@ const AccessDenied = () => {
           Akcja wykonana pomyślnie!
         </p>
         <Link to="/administracja" className="omi-btn omi-btn-primary">
-          Powrót do strony głównej
+          Fantastycznie
         </Link>
       </div>
     </div>
