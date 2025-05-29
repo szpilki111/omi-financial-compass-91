@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -190,7 +191,7 @@ const DataVisualizationPage = () => {
       console.log('DEBUG: Przetworzone dane finansowe:', processedFinancialData);
       setFinancialData(processedFinancialData);
 
-      // Przygotuj dane do wykresów
+      // Przygotuj dane do wykresów - POPRAWKA: używamy prostszego klucza bez podkreślnika
       const chartDataMap = new Map<string, any>();
       processedFinancialData.forEach(item => {
         const key = `${item.year}-${item.month.toString().padStart(2, '0')}`;
@@ -205,9 +206,11 @@ const DataVisualizationPage = () => {
         }
         
         const existing = chartDataMap.get(key);
-        existing[`${item.location_name}_income`] = item.income_total;
-        existing[`${item.location_name}_expense`] = item.expense_total;
-        existing[`${item.location_name}_balance`] = item.balance;
+        // POPRAWKA: używamy bezpiecznego klucza bez spacji i podkreślników
+        const locationKey = item.location_name.replace(/[^a-zA-Z0-9]/g, '');
+        existing[`${locationKey}Income`] = item.income_total;
+        existing[`${locationKey}Expense`] = item.expense_total;
+        existing[`${locationKey}Balance`] = item.balance;
       });
 
       const sortedChartData = Array.from(chartDataMap.values()).sort((a, b) => {
@@ -215,7 +218,7 @@ const DataVisualizationPage = () => {
         return a.month - b.month;
       });
 
-      console.log('DEBUG: Dane do wykresów:', sortedChartData);
+      console.log('DEBUG: Dane do wykresów po poprawce:', sortedChartData);
       setChartData(sortedChartData);
 
       // Przygotuj dane porównawcze
@@ -375,9 +378,16 @@ const DataVisualizationPage = () => {
     );
   }
 
-  // Przygotuj unikalne lokalizacje dla wykresów
+  // Przygotuj unikalne lokalizacje dla wykresów - POPRAWKA: używamy bezpiecznych kluczy
   const uniqueLocations = Array.from(new Set(financialData.map(item => item.location_name)));
   const colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#c2410c'];
+
+  // POPRAWKA: Funkcja do generowania bezpiecznych kluczy dla wykresów
+  const getSafeKey = (locationName: string, metric: string) => {
+    const safeLocationName = locationName.replace(/[^a-zA-Z0-9]/g, '');
+    const capitalizedMetric = metric.charAt(0).toUpperCase() + metric.slice(1);
+    return `${safeLocationName}${capitalizedMetric}`;
+  };
 
   return (
     <MainLayout>
@@ -524,7 +534,7 @@ const DataVisualizationPage = () => {
           </Table>
         </div>
 
-        {/* Wykres liniowy - Trendy czasowe dla wydatków */}
+        {/* Wykres liniowy - Trendy czasowe dla wydatków - POPRAWKA */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
             {isEkonom ? 'Trendy wydatków w czasie' : 'Trendy wydatków w czasie według placówek'}
@@ -547,27 +557,31 @@ const DataVisualizationPage = () => {
                 content={<ChartTooltipContent 
                   formatter={(value: number, name: string) => [
                     formatCurrency(value), 
-                    name.replace('_expense', '')
+                    name.replace(/([A-Z])/g, ' $1').replace('Expense', ' (wydatki)')
                   ]}
                 />} 
               />
               <Legend />
-              {uniqueLocations.map((location, index) => (
-                <Line 
-                  key={location}
-                  type="monotone" 
-                  dataKey={`${location}_expense`} 
-                  stroke={colors[index % colors.length]} 
-                  strokeWidth={3}
-                  name={location}
-                  dot={{ r: 4 }}
-                />
-              ))}
+              {uniqueLocations.map((location, index) => {
+                const expenseKey = getSafeKey(location, 'expense');
+                console.log(`DEBUG: Klucz dla lokalizacji ${location}: ${expenseKey}`);
+                return (
+                  <Line 
+                    key={location}
+                    type="monotone" 
+                    dataKey={expenseKey}
+                    stroke={colors[index % colors.length]} 
+                    strokeWidth={3}
+                    name={location}
+                    dot={{ r: 4 }}
+                  />
+                );
+              })}
             </LineChart>
           </ChartContainer>
         </div>
 
-        {/* Wykres słupkowy - Porównanie dochodów */}
+        {/* Wykres słupkowy - Porównanie dochodów - POPRAWKA */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
             {isEkonom ? 'Porównanie dochodów między miesiącami' : 'Porównanie dochodów między placówkami'}
@@ -590,19 +604,22 @@ const DataVisualizationPage = () => {
                 content={<ChartTooltipContent 
                   formatter={(value: number, name: string) => [
                     formatCurrency(value), 
-                    name.replace('_income', '')
+                    name.replace(/([A-Z])/g, ' $1').replace('Income', ' (dochody)')
                   ]}
                 />} 
               />
               <Legend />
-              {uniqueLocations.map((location, index) => (
-                <Bar 
-                  key={location}
-                  dataKey={`${location}_income`} 
-                  fill={colors[index % colors.length]} 
-                  name={location}
-                />
-              ))}
+              {uniqueLocations.map((location, index) => {
+                const incomeKey = getSafeKey(location, 'income');
+                return (
+                  <Bar 
+                    key={location}
+                    dataKey={incomeKey}
+                    fill={colors[index % colors.length]} 
+                    name={location}
+                  />
+                );
+              })}
             </BarChart>
           </ChartContainer>
         </div>
