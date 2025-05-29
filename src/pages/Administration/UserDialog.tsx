@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Imię i nazwisko musi mieć co najmniej 2 znaki'),
@@ -78,46 +78,122 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
         .from('locations')
         .select('id, name')
         .order('name');
+      
       if (error) throw error;
       return data as Location[];
-    },
+    }
   });
 
-  // Mutacja do tworzenia użytkownika poprzez Edge Function
+  // Mutacja do tworzenia użytkownika używając logiki z Login
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
-      console.log('Rozpoczynanie procesu tworzenia użytkownika przez administratora...');
-
-      // Pobierz token użytkownika (admina) do autoryzacji żądania
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      console.log("Rozpoczynanie procesu tworzenia użytkownika przez administratora...");
+      
+      // Sprawdź czy administrator jest zalogowany
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) {
         throw new Error('Brak sesji administratora');
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          name: userData.name,
+      // Zapisz aktualną sesję
+      const adminSession = currentSession;
+      console.log("Sesja administratora zapisana:", adminSession.user.email);
+
+
+      try {
+        // Utwórz nowego użytkownika
+        const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
           email: userData.email,
           password: userData.password,
-          role: userData.role,
-          location_id: userData.location_id,
-          new_location_name: userData.new_location_name,
-          is_creating_new_location: isCreatingNewLocation,
-        }),
-      });
+          options: {
+            data: {
+              full_name: userData.name,
+              role: userData.role
+            }
+          }
+        });
 
-      const result = await response.json();
+        if (signUpError) {
+          console.error("Signup error:", signUpError);
+          throw new Error(signUpError.message);
+        }
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Nie udało się utworzyć użytkownika');
+        if (!newUserData.user) {
+          throw new Error("Nie udało się utworzyć użytkownika");
+        }
+
+        console.log("Nowy użytkownik utworzony:", newUserData.user.id);
+
+        // Utwórz nową lokalizację jeśli wybrano taką opcję
+        let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
+        
+        if (isCreatingNewLocation && userData.new_location_name?.trim()) {
+          console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
+          
+          // Przywróć sesję administratora żeby móc utworzyć lokalizację
+          await supabase.auth.setSession(adminSession);
+          
+          const { data: locationData, error: locationError } = await supabase
+            .from('locations')
+            .insert({
+              name: userData.new_location_name.trim(),
+            })
+            .select('id')
+            .single();
+
+          if (locationError) {
+            console.error("Error creating location:", locationError);
+            throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
+          }
+          
+          if (locationData) {
+            selectedLocationId = locationData.id;
+            console.log("Lokalizacja utworzona:", selectedLocationId);
+          }
+          
+          // Wyloguj administratora ponownie
+          await supabase.auth.signOut();
+        }
+
+        // Utwórz profil użytkownika
+        try {
+          console.log("Tworzenie profilu użytkownika...");
+          const { error: directProfileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: newUserData.user.id,
+              name: userData.name,
+              role: userData.role,
+              email: userData.email,
+              location_id: selectedLocationId
+            });
+
+          if (directProfileError) {
+            console.error("Error creating profile directly:", directProfileError);
+            throw new Error("Nie udało się utworzyć profilu użytkownika");
+          }
+
+          console.log("Profil użytkownika utworzony pomyślnie");
+        } catch (profileErr) {
+          console.error("Profile creation error:", profileErr);
+          throw new Error("Nie udało się utworzyć profilu użytkownika");
+        }
+
+        // Przywróć sesję administratora
+        await supabase.auth.setSession(adminSession);
+        console.log("Sesja administratora przywrócona");
+
+        return newUserData;
+      } catch (error) {
+        // W przypadku błędu, zawsze przywróć sesję administratora
+        try {
+          await supabase.auth.setSession(adminSession);
+          console.log("Sesja administratora przywrócona po błędzie");
+        } catch (restoreError) {
+          console.error("Nie udało się przywrócić sesji administratora:", restoreError);
+        }
+        throw error;
       }
-
-      return result;
     },
     onSuccess: () => {
       toast({
@@ -130,11 +206,9 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       onOpenChange(false);
     },
     onError: (error: any) => {
-     []
-
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
-
+      
       if (error.message?.includes('User already registered')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
       } else if (error.message?.includes('invalid email')) {
@@ -144,7 +218,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
       } else if (error.message) {
         errorMessage = error.message;
       }
-
+      
       toast({
         title: 'Błąd',
         description: errorMessage,
@@ -154,7 +228,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   });
 
   const onSubmit = (data: UserFormData) => {
-    console.log('Dane formularza:', data);
+    console.log("Dane formularza:", data);
     createUserMutation.mutate(data);
   };
 
@@ -194,7 +268,11 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                 <FormItem>
                   <FormLabel>Adres email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="jan.kowalski@example.com" {...field} />
+                    <Input 
+                      type="email" 
+                      placeholder="jan.kowalski@example.com" 
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -208,7 +286,11 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                 <FormItem>
                   <FormLabel>Hasło</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Wprowadź hasło (min. 6 znaków)" {...field} />
+                    <Input 
+                      type="password" 
+                      placeholder="Wprowadź hasło (min. 6 znaków)" 
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -241,17 +323,17 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <FormLabel>Placówka (opcjonalnie)</FormLabel>
-                <Button
-                  type="button"
-                  variant="ghost"
+                <Button 
+                  type="button" 
+                  variant="ghost" 
                   size="sm"
                   className="text-xs text-blue-600 h-6 px-2"
                   onClick={() => setIsCreatingNewLocation(!isCreatingNewLocation)}
                 >
-                  {isCreatingNewLocation ? 'Wybierz istniejącą' : 'Utwórz nową'}
+                  {isCreatingNewLocation ? "Wybierz istniejącą" : "Utwórz nową"}
                 </Button>
               </div>
-
+              
               {isCreatingNewLocation ? (
                 <FormField
                   control={form.control}
@@ -259,7 +341,10 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <Input placeholder="Nazwa nowej placówki" {...field} />
+                        <Input 
+                          placeholder="Nazwa nowej placówki" 
+                          {...field} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -294,10 +379,18 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose} disabled={createUserMutation.isPending}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleClose}
+                disabled={createUserMutation.isPending}
+              >
                 Anuluj
               </Button>
-              <Button type="submit" disabled={createUserMutation.isPending}>
+              <Button 
+                type="submit" 
+                disabled={createUserMutation.isPending}
+              >
                 {createUserMutation.isPending ? 'Tworzenie...' : 'Utwórz użytkownika'}
               </Button>
             </DialogFooter>
