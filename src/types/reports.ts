@@ -24,6 +24,13 @@ export interface Report {
   reviewed_by_profile?: {
     name: string;
   };
+  // Dodaj informacje finansowe z report_details
+  report_details?: {
+    income_total: number;
+    expense_total: number;
+    balance: number;
+    settlements_total: number;
+  };
 }
 
 export interface ReportFormData {

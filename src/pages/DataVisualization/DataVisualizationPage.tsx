@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,7 +42,7 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Calendar, TrendingUp, Building2, DollarSign, TrendingDown, BarChart3 } from 'lucide-react';
 
-interface LocationFinancialData {
+interface ReportFinancialData {
   location_id: string;
   location_name: string;
   income_total: number;
@@ -50,6 +51,8 @@ interface LocationFinancialData {
   period: string;
   year: number;
   month: number;
+  report_id: string;
+  status: string;
 }
 
 interface ComparisonData {
@@ -86,7 +89,7 @@ const DataVisualizationPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [financialData, setFinancialData] = useState<LocationFinancialData[]>([]);
+  const [reportData, setReportData] = useState<ReportFinancialData[]>([]);
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [comparisonData, setComparisonData] = useState<ComparisonData[]>([]);
   
@@ -101,98 +104,76 @@ const DataVisualizationPage = () => {
   // Sprawdź czy użytkownik to ekonom (widzi tylko swoją placówkę)
   const isEkonom = user?.role === 'ekonom';
 
-  const fetchFinancialData = async () => {
+  const fetchReportData = async () => {
     setLoading(true);
     try {
-      console.log('=== DEBUG: Rozpoczęcie pobierania danych finansowych z transakcji ===');
+      console.log('=== DEBUG: Rozpoczęcie pobierania danych z raportów ===');
       
-      // Pobierz wszystkie transakcje z podstawowymi danymi
-      let transactionsQuery = supabase
-        .from('transactions')
+      // Pobierz wszystkie raporty z danymi finansowymi - tylko zatwierdzone i złożone
+      let reportsQuery = supabase
+        .from('reports')
         .select(`
           id,
-          date,
-          amount,
-          currency,
+          title,
+          period,
+          month,
+          year,
+          status,
           location_id,
-          debit_account_id,
-          credit_account_id,
-          debit_account:debit_account_id(number, name, type),
-          credit_account:credit_account_id(number, name, type),
-          locations!inner(name)
+          locations!inner(name),
+          report_details!inner(
+            income_total,
+            expense_total,
+            balance,
+            settlements_total
+          )
         `)
-        .order('date', { ascending: true });
+        .in('status', ['submitted', 'approved'])
+        .order('year', { ascending: true })
+        .order('month', { ascending: true });
 
       // Filtruj według uprawnień użytkownika
       if (user?.role === 'ekonom' && user?.location) {
-        transactionsQuery = transactionsQuery.eq('location_id', user.location);
+        reportsQuery = reportsQuery.eq('location_id', user.location);
       }
 
-      const { data: transactions, error: transactionsError } = await transactionsQuery;
+      const { data: reports, error: reportsError } = await reportsQuery;
 
-      console.log('DEBUG: Pobrane transakcje:', transactions);
-      console.log('DEBUG: Błąd transakcji:', transactionsError);
+      console.log('DEBUG: Pobrane raporty:', reports);
+      console.log('DEBUG: Błąd raportów:', reportsError);
 
-      if (transactionsError) {
-        throw transactionsError;
+      if (reportsError) {
+        throw reportsError;
       }
 
-      if (!transactions || transactions.length === 0) {
-        console.log('DEBUG: Brak transakcji w systemie');
-        setFinancialData([]);
+      if (!reports || reports.length === 0) {
+        console.log('DEBUG: Brak raportów w systemie');
+        setReportData([]);
         setChartData([]);
         setComparisonData([]);
         return;
       }
 
-      // Grupuj transakcje według lokalizacji i okresów
-      const financialDataMap = new Map<string, LocationFinancialData>();
+      // Przekształć dane raportów
+      const transformedReportData: ReportFinancialData[] = reports.map((report: any) => ({
+        location_id: report.location_id,
+        location_name: report.locations.name,
+        income_total: Number(report.report_details[0]?.income_total) || 0,
+        expense_total: Number(report.report_details[0]?.expense_total) || 0,
+        balance: Number(report.report_details[0]?.balance) || 0,
+        period: report.period,
+        year: report.year,
+        month: report.month,
+        report_id: report.id,
+        status: report.status
+      }));
 
-      transactions.forEach((transaction: any) => {
-        const transactionDate = new Date(transaction.date);
-        const year = transactionDate.getFullYear();
-        const month = transactionDate.getMonth() + 1;
-        const key = `${transaction.location_id}-${year}-${month}`;
-        
-        if (!financialDataMap.has(key)) {
-          financialDataMap.set(key, {
-            location_id: transaction.location_id,
-            location_name: transaction.locations.name,
-            income_total: 0,
-            expense_total: 0,
-            balance: 0,
-            period: format(transactionDate, 'MMM yyyy', { locale: pl }),
-            year: year,
-            month: month
-          });
-        }
+      console.log('DEBUG: Przetworzone dane raportów:', transformedReportData);
+      setReportData(transformedReportData);
 
-        const locationData = financialDataMap.get(key)!;
-        const amount = Number(transaction.amount) || 0;
-
-        // Klasyfikuj jako przychody lub koszty na podstawie kont
-        // Konta 7xx to przychody, 4xx to koszty
-        const debitAccountNumber = transaction.debit_account?.number || '';
-        const creditAccountNumber = transaction.credit_account?.number || '';
-
-        if (creditAccountNumber.startsWith('7')) {
-          // Kredyt na koncie 7xx = przychód
-          locationData.income_total += amount;
-        } else if (debitAccountNumber.startsWith('4')) {
-          // Debet na koncie 4xx = koszt
-          locationData.expense_total += amount;
-        }
-
-        locationData.balance = locationData.income_total - locationData.expense_total;
-      });
-
-      const processedFinancialData = Array.from(financialDataMap.values());
-      console.log('DEBUG: Przetworzone dane finansowe:', processedFinancialData);
-      setFinancialData(processedFinancialData);
-
-      // Przygotuj dane do wykresów - POPRAWKA: używamy prostszego klucza bez podkreślnika
+      // Przygotuj dane do wykresów
       const chartDataMap = new Map<string, any>();
-      processedFinancialData.forEach(item => {
+      transformedReportData.forEach(item => {
         const key = `${item.year}-${item.month.toString().padStart(2, '0')}`;
         const monthName = format(new Date(item.year, item.month - 1, 1), 'MMM yyyy', { locale: pl });
         
@@ -205,7 +186,6 @@ const DataVisualizationPage = () => {
         }
         
         const existing = chartDataMap.get(key);
-        // POPRAWKA: używamy bezpiecznego klucza bez spacji i podkreślników
         const locationKey = item.location_name.replace(/[^a-zA-Z0-9]/g, '');
         existing[`${locationKey}Income`] = item.income_total;
         existing[`${locationKey}Expense`] = item.expense_total;
@@ -217,17 +197,17 @@ const DataVisualizationPage = () => {
         return a.month - b.month;
       });
 
-      console.log('DEBUG: Dane do wykresów po poprawce:', sortedChartData);
+      console.log('DEBUG: Dane do wykresów:', sortedChartData);
       setChartData(sortedChartData);
 
       // Przygotuj dane porównawcze
-      generateComparisonData(processedFinancialData);
+      generateComparisonData(transformedReportData);
 
     } catch (error) {
-      console.error('DEBUG: Błąd podczas pobierania danych finansowych:', error);
+      console.error('DEBUG: Błąd podczas pobierania danych raportów:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się pobrać danych finansowych",
+        description: "Nie udało się pobrać danych z raportów",
         variant: "destructive",
       });
     } finally {
@@ -235,12 +215,12 @@ const DataVisualizationPage = () => {
     }
   };
 
-  const generateComparisonData = (data: LocationFinancialData[]) => {
+  const generateComparisonData = (data: ReportFinancialData[]) => {
     const currentYear = parseInt(selectedYear);
     const currentMonth = new Date().getMonth() + 1;
     
     // Grupuj dane według lokalizacji
-    const locationMap = new Map<string, LocationFinancialData[]>();
+    const locationMap = new Map<string, ReportFinancialData[]>();
     data.forEach(item => {
       if (!locationMap.has(item.location_name)) {
         locationMap.set(item.location_name, []);
@@ -290,7 +270,7 @@ const DataVisualizationPage = () => {
     setComparisonData(comparison);
   };
 
-  const getMetricValue = (data: LocationFinancialData, metric: 'income' | 'expense' | 'balance'): number => {
+  const getMetricValue = (data: ReportFinancialData, metric: 'income' | 'expense' | 'balance'): number => {
     switch (metric) {
       case 'income': return data.income_total;
       case 'expense': return data.expense_total;
@@ -309,14 +289,14 @@ const DataVisualizationPage = () => {
   };
 
   useEffect(() => {
-    fetchFinancialData();
+    fetchReportData();
   }, [user]);
 
   useEffect(() => {
-    if (financialData.length > 0) {
-      generateComparisonData(financialData);
+    if (reportData.length > 0) {
+      generateComparisonData(reportData);
     }
-  }, [selectedComparison, selectedMetric, selectedYear, financialData]);
+  }, [selectedComparison, selectedMetric, selectedYear, reportData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pl-PL', {
@@ -327,25 +307,19 @@ const DataVisualizationPage = () => {
     }).format(value);
   };
 
-  // Nowa funkcja do formatowania osi Y z lepszą skalą
   const formatYAxisCurrency = (value: number) => {
     if (Math.abs(value) >= 1000000) {
-      // Dla milionów - pokazuj z dokładnością do 0.1M
       return `${(value / 1000000).toFixed(1)}M zł`;
     } else if (Math.abs(value) >= 1000) {
-      // Dla tysięcy - pokazuj z dokładnością do 0.1K
       return `${(value / 1000).toFixed(1)}K zł`;
     } else {
-      // Dla mniejszych wartości - pokazuj pełną kwotę
       return `${value.toFixed(0)} zł`;
     }
   };
 
-  // Funkcja do obliczania odpowiednich ticków dla osi Y
   const generateYAxisTicks = (data: ChartData[], metric: string) => {
     if (!data.length) return [];
     
-    // Znajdź min i max wartości dla danej metryki
     let min = Infinity;
     let max = -Infinity;
     
@@ -362,12 +336,10 @@ const DataVisualizationPage = () => {
 
     if (min === Infinity || max === -Infinity) return [];
 
-    // Dodaj margines 10% z każdej strony
     const margin = (max - min) * 0.1;
-    const adjustedMin = Math.max(0, min - margin); // Nie pokazuj wartości ujemnych jeśli min > 0
+    const adjustedMin = Math.max(0, min - margin);
     const adjustedMax = max + margin;
 
-    // Generuj 5-6 równomiernie rozłożonych ticków
     const tickCount = 6;
     const step = (adjustedMax - adjustedMin) / (tickCount - 1);
     
@@ -382,18 +354,22 @@ const DataVisualizationPage = () => {
   const getChangeColor = (change: number, metric: string) => {
     if (change === 0) return 'text-gray-500';
     if (metric === 'expense') {
-      // Dla wydatków: wzrost = źle (czerwony), spadek = dobrze (zielony)
       return change > 0 ? 'text-red-600' : 'text-green-600';
     } else {
-      // Dla dochodów i bilansu: wzrost = dobrze (zielony), spadek = źle (czerwony)
       return change > 0 ? 'text-green-600' : 'text-red-600';
     }
   };
 
   // Oblicz łączne sumy dla kart podsumowujących
-  const totalIncome = financialData.reduce((sum, item) => sum + item.income_total, 0);
-  const totalExpense = financialData.reduce((sum, item) => sum + item.expense_total, 0);
+  const totalIncome = reportData.reduce((sum, item) => sum + item.income_total, 0);
+  const totalExpense = reportData.reduce((sum, item) => sum + item.expense_total, 0);
   const totalBalance = totalIncome - totalExpense;
+
+  const getSafeKey = (locationName: string, metric: string) => {
+    const safeLocationName = locationName.replace(/[^a-zA-Z0-9]/g, '');
+    const capitalizedMetric = metric.charAt(0).toUpperCase() + metric.slice(1);
+    return `${safeLocationName}${capitalizedMetric}`;
+  };
 
   if (loading) {
     return (
@@ -405,21 +381,21 @@ const DataVisualizationPage = () => {
     );
   }
 
-  if (!financialData.length) {
+  if (!reportData.length) {
     return (
       <MainLayout>
         <PageTitle 
           title="Wizualizacja danych" 
-          subtitle="Analiza finansowa na podstawie transakcji"
+          subtitle="Analiza finansowa na podstawie zatwierdzonych raportów"
         />
         <div className="bg-white p-8 rounded-lg shadow-sm text-center">
           <div className="text-center space-y-4">
-            <p className="text-omi-gray-500">Brak danych transakcji do wyświetlenia.</p>
+            <p className="text-omi-gray-500">Brak zatwierdzonych raportów do wyświetlenia.</p>
             <div className="text-sm text-gray-600 space-y-2">
               <p>Możliwe przyczyny:</p>
               <ul className="list-disc list-inside text-left max-w-md mx-auto">
-                <li>Brak transakcji w systemie</li>
-                <li>Transakcje nie mają poprawnie przypisanych kont</li>
+                <li>Brak złożonych lub zatwierdzonych raportów w systemie</li>
+                <li>Raporty nie mają obliczonych danych finansowych</li>
                 <li>Problem z uprawnieniami dostępu do danych</li>
               </ul>
             </div>
@@ -429,18 +405,9 @@ const DataVisualizationPage = () => {
     );
   }
 
-  // Przygotuj unikalne lokalizacje dla wykresów - POPRAWKA: używamy bezpiecznych kluczy
-  const uniqueLocations = Array.from(new Set(financialData.map(item => item.location_name)));
+  const uniqueLocations = Array.from(new Set(reportData.map(item => item.location_name)));
   const colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#c2410c'];
 
-  // POPRAWKA: Funkcja do generowania bezpiecznych kluczy dla wykresów
-  const getSafeKey = (locationName: string, metric: string) => {
-    const safeLocationName = locationName.replace(/[^a-zA-Z0-9]/g, '');
-    const capitalizedMetric = metric.charAt(0).toUpperCase() + metric.slice(1);
-    return `${safeLocationName}${capitalizedMetric}`;
-  };
-
-  // Oblicz ticki dla wykresów
   const expenseYAxisTicks = generateYAxisTicks(chartData, 'expense');
   const incomeYAxisTicks = generateYAxisTicks(chartData, 'income');
 
@@ -449,31 +416,31 @@ const DataVisualizationPage = () => {
       <div className="space-y-6">
         <PageTitle 
           title="Wizualizacja danych" 
-          subtitle={isEkonom ? "Analiza finansowa z porównaniami między miesiącami" : "Analiza finansowa z porównaniami między placówkami"}
+          subtitle={isEkonom ? "Analiza finansowa na podstawie raportów z porównaniami między miesiącami" : "Analiza finansowa na podstawie raportów z porównaniami między placówkami"}
         />
 
-        {/* Karty podsumowujące - podobne do obrazka */}
+        {/* Karty podsumowujące */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FinancialCard
-            title="Przychody"
+            title="Przychody (raporty)"
             amount={totalIncome}
-            subtitle="Suma wszystkich przychodów (konta 7xx)"
+            subtitle="Suma wszystkich przychodów z zatwierdzonych raportów"
             icon={<DollarSign className="h-6 w-6" />}
             trend="up"
             trendColor="green"
           />
           <FinancialCard
-            title="Rozchody"
+            title="Rozchody (raporty)"
             amount={totalExpense}
-            subtitle="Suma wszystkich kosztów (konta 4xx)"
+            subtitle="Suma wszystkich kosztów z zatwierdzonych raportów"
             icon={<TrendingDown className="h-6 w-6" />}
             trend="down"
             trendColor="red"
           />
           <FinancialCard
-            title="Bilans"
+            title="Bilans (raporty)"
             amount={totalBalance}
-            subtitle="Przychody - Rozchody"
+            subtitle="Przychody - Rozchody z raportów"
             icon={<BarChart3 className="h-6 w-6" />}
             trend={totalBalance >= 0 ? "up" : "down"}
             trendColor={totalBalance >= 0 ? "green" : "red"}
@@ -552,12 +519,12 @@ const DataVisualizationPage = () => {
             {isEkonom ? (
               <>
                 <Calendar className="h-5 w-5 mr-2" />
-                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między miesiącami
+                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między miesiącami (na podstawie raportów)
               </>
             ) : (
               <>
                 <Building2 className="h-5 w-5 mr-2" />
-                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami
+                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami (na podstawie raportów)
               </>
             )}
           </h2>
@@ -589,10 +556,10 @@ const DataVisualizationPage = () => {
           </Table>
         </div>
 
-        {/* Wykres liniowy - Trendy czasowe dla wydatków - POPRAWKA z lepszą skalą osi Y */}
+        {/* Wykres liniowy - Trendy czasowe dla wydatków */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
-            {isEkonom ? 'Trendy wydatków w czasie' : 'Trendy wydatków w czasie według placówek'}
+            {isEkonom ? 'Trendy wydatków w czasie (z raportów)' : 'Trendy wydatków w czasie według placówek (z raportów)'}
           </h2>
           <ChartContainer config={chartConfig} className="h-96 w-full">
             <LineChart data={chartData}>
@@ -622,7 +589,6 @@ const DataVisualizationPage = () => {
               <Legend />
               {uniqueLocations.map((location, index) => {
                 const expenseKey = getSafeKey(location, 'expense');
-                console.log(`DEBUG: Klucz dla lokalizacji ${location}: ${expenseKey}`);
                 return (
                   <Line 
                     key={location}
@@ -639,10 +605,10 @@ const DataVisualizationPage = () => {
           </ChartContainer>
         </div>
 
-        {/* Wykres słupkowy - Porównanie dochodów - POPRAWKA z lepszą skalą osi Y */}
+        {/* Wykres słupkowy - Porównanie dochodów */}
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
-            {isEkonom ? 'Porównanie dochodów między miesiącami' : 'Porównanie dochodów między placówkami'}
+            {isEkonom ? 'Porównanie dochodów między miesiącami (z raportów)' : 'Porównanie dochodów między placówkami (z raportów)'}
           </h2>
           <ChartContainer config={chartConfig} className="h-96 w-full">
             <BarChart data={chartData}>

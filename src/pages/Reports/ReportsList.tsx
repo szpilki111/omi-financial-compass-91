@@ -57,6 +57,18 @@ const getReportTypeLabel = (type: string) => {
   }
 };
 
+const formatCurrency = (value: number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return 'Brak danych';
+  }
+  return new Intl.NumberFormat('pl-PL', {
+    style: 'currency',
+    currency: 'PLN',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports'],
@@ -68,7 +80,13 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
         *,
         location:locations(name),
         submitted_by_profile:profiles!submitted_by(name),
-        reviewed_by_profile:profiles!reviewed_by(name)
+        reviewed_by_profile:profiles!reviewed_by(name),
+        report_details(
+          income_total,
+          expense_total,
+          balance,
+          settlements_total
+        )
       `);
       
       if (userRole === 'ekonom') {
@@ -84,7 +102,14 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
       
       if (error) throw error;
       console.log('Pobrane raporty:', data);
-      return data as Report[];
+      
+      // Przekształć dane, aby report_details był pojedynczym obiektem zamiast tablicy
+      const transformedData = data?.map((report: any) => ({
+        ...report,
+        report_details: report.report_details?.[0] || null
+      })) as Report[];
+      
+      return transformedData;
     }
   });
 
@@ -103,13 +128,16 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <Table>
-        <TableCaption>Lista raportów</TableCaption>
+        <TableCaption>Lista raportów z danymi finansowymi</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Tytuł</TableHead>
             <TableHead>Placówka</TableHead>
             <TableHead>Typ</TableHead>
             <TableHead>Okres</TableHead>
+            <TableHead className="text-right">Przychody</TableHead>
+            <TableHead className="text-right">Rozchody</TableHead>
+            <TableHead className="text-right">Bilans</TableHead>
             <TableHead>Data utworzenia</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Złożony przez</TableHead>
@@ -125,6 +153,21 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                 <Badge variant="secondary">{getReportTypeLabel(report.report_type || 'standard')}</Badge>
               </TableCell>
               <TableCell>{report.period}</TableCell>
+              <TableCell className="text-right font-mono">
+                <span className="text-green-700">
+                  {formatCurrency(report.report_details?.income_total)}
+                </span>
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                <span className="text-red-700">
+                  {formatCurrency(report.report_details?.expense_total)}
+                </span>
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold">
+                <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
+                  {formatCurrency(report.report_details?.balance)}
+                </span>
+              </TableCell>
               <TableCell>
                 {report.created_at ? format(new Date(report.created_at), 'PPP', { locale: pl }) : '-'}
               </TableCell>
