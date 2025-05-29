@@ -51,7 +51,7 @@ const App = () => (
               </ProtectedRoute>
             } />
             
-            {/* KPIR routes - only for ekonom role */}
+            {/* KPIR routes - TYLKO dla ekonomów */}
             <Route path="/kpir" element={
               <ProtectedRoute requiredRole="ekonom">
                 <KpirPage />

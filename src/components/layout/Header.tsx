@@ -17,13 +17,27 @@ const Header = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  const navItems = [
-    { name: 'Strona główna', path: '/dashboard' },
-    { name: 'Księga KPiR', path: '/kpir' },
-    { name: 'Raporty', path: '/reports' },
-    { name: 'Wizualizacja danych', path: '/wizualizacja' },
-    // Można dodać więcej pozycji menu gdy będą potrzebne
-  ];
+  // Filtruj pozycje menu na podstawie roli użytkownika
+  const getNavItems = () => {
+    const baseItems = [
+      { name: 'Strona główna', path: '/dashboard' },
+    ];
+
+    // Księga KPiR tylko dla ekonomów
+    if (user?.role === 'ekonom') {
+      baseItems.push({ name: 'Księga KPiR', path: '/kpir' });
+    }
+
+    // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
+    baseItems.push(
+      { name: 'Raporty', path: '/reports' },
+      { name: 'Wizualizacja danych', path: '/wizualizacja' }
+    );
+
+    return baseItems;
+  };
+
+  const navItems = getNavItems();
 
   // Zwracanie inicjału imienia użytkownika
   const getInitial = () => {
