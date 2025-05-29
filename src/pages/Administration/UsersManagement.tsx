@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,6 +12,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Plus, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import UserDialog from './UserDialog';
 
 interface UserProfile {
   id: string;
@@ -48,6 +63,10 @@ const getRoleLabel = (role: string) => {
 };
 
 const UsersManagement = () => {
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
@@ -64,6 +83,36 @@ const UsersManagement = () => {
     }
   });
 
+  // Mutacja do usuwania użytkownika
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.rpc('delete_user_admin', {
+        user_id_to_delete: userId
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Sukces',
+        description: 'Użytkownik został usunięty pomyślnie',
+      });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      console.error('Error deleting user:', error);
+      toast({
+        title: 'Błąd',
+        description: error.message || 'Nie udało się usunąć użytkownika',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleDeleteUser = (userId: string) => {
+    deleteUserMutation.mutate(userId);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -75,47 +124,91 @@ const UsersManagement = () => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Zarządzanie użytkownikami</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!users?.length ? (
-          <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Imię i nazwisko</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rola</TableHead>
-                <TableHead>Placówka</TableHead>
-                <TableHead>Data utworzenia</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Badge {...getRoleBadgeProps(user.role)}>
-                      {getRoleLabel(user.role)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {user.location?.name || '-'}
-                  </TableCell>
-                  <TableCell>
-                    {new Date(user.created_at).toLocaleDateString('pl-PL')}
-                  </TableCell>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Zarządzanie użytkownikami</CardTitle>
+          <Button onClick={() => setIsUserDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Dodaj użytkownika
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {!users?.length ? (
+            <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Imię i nazwisko</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rola</TableHead>
+                  <TableHead>Placówka</TableHead>
+                  <TableHead>Data utworzenia</TableHead>
+                  <TableHead className="text-right">Akcje</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge {...getRoleBadgeProps(user.role)}>
+                        {getRoleLabel(user.role)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.location?.name || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(user.created_at).toLocaleDateString('pl-PL')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            disabled={deleteUserMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Usuń użytkownika</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Czy na pewno chcesz usunąć użytkownika <strong>{user.name}</strong>? 
+                              Ta operacja jest nieodwracalna i usunie wszystkie dane związane z tym użytkownikiem.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Usuń użytkownika
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <UserDialog 
+        open={isUserDialogOpen} 
+        onOpenChange={setIsUserDialogOpen} 
+      />
+    </>
   );
 };
 

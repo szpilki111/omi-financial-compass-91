@@ -478,6 +478,20 @@ export type Database = {
           | { user_id: string; new_password: string }
         Returns: boolean
       }
+      create_user_admin: {
+        Args: {
+          user_email: string
+          user_password: string
+          user_name: string
+          user_role: string
+          user_location_id?: string
+        }
+        Returns: string
+      }
+      delete_user_admin: {
+        Args: { user_id_to_delete: string }
+        Returns: undefined
+      }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
