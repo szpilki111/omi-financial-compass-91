@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -18,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { KpirOperationFormData, Account, KpirTransaction } from '@/types/kpir';
+import { KpirTransaction, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
 
 interface KpirEditDialogProps {
@@ -33,43 +32,20 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [accountTypes, setAccountTypes] = useState<string[]>([]);
-  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
   
-  const [formData, setFormData] = useState<KpirOperationFormData>({
+  const [formData, setFormData] = useState({
     date: '',
     document_number: '',
     description: '',
     amount: 0,
     debit_account_id: '',
     credit_account_id: '',
-    settlement_type: 'Bank',
+    settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
     currency: 'PLN',
     exchange_rate: 1,
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (transaction && open) {
-      setFormData({
-        date: transaction.date,
-        document_number: transaction.document_number || '',
-        description: transaction.description,
-        amount: transaction.amount,
-        debit_account_id: transaction.debit_account_id,
-        credit_account_id: transaction.credit_account_id,
-        settlement_type: transaction.settlement_type,
-        currency: transaction.currency,
-        exchange_rate: transaction.exchange_rate || 1,
-      });
-
-      // Ustaw wybrany typ konta na podstawie istniejącej transakcji
-      if (transaction.debitAccount) {
-        setSelectedAccountType(transaction.debitAccount.name);
-      }
-    }
-  }, [transaction, open]);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -84,10 +60,6 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         }
         
         setAccounts(data);
-        
-        // Zbieranie unikalnych typów kont
-        const types = Array.from(new Set(data.map((account: Account) => account.name)));
-        setAccountTypes(types);
       } catch (error) {
         console.error('Błąd podczas pobierania kont:', error);
         toast({
@@ -98,21 +70,37 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
       }
     };
 
-    if (open) {
-      fetchAccounts();
+    fetchAccounts();
+  }, [user]);
+
+  useEffect(() => {
+    if (transaction) {
+      setFormData({
+        date: transaction.date,
+        document_number: transaction.document_number || '',
+        description: transaction.description || '',
+        amount: transaction.amount,
+        debit_account_id: transaction.debit_account_id,
+        credit_account_id: transaction.credit_account_id,
+        settlement_type: transaction.settlement_type,
+        currency: transaction.currency,
+        exchange_rate: transaction.exchange_rate || 1,
+      });
     }
-  }, [open]);
+  }, [transaction]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
     if (name === 'amount') {
       const numericValue = parseFloat(value) || 0;
-      // Sprawdź czy wartość nie jest za duża (powyżej 999999999.99)
-      if (numericValue > 999999999.99) {
-        setErrors({ ...errors, [name]: 'Za duża liczba w polu kwota' });
+      
+      // Sprawdzenie czy wartość nie jest za duża (maksymalnie 10 cyfr przed przecinkiem)
+      if (value && value.length > 10) {
+        setErrors({ ...errors, amount: 'za dużo cyfr w polu' });
         return;
       }
+      
       setFormData({ ...formData, [name]: numericValue });
     } else if (name === 'exchange_rate') {
       setFormData({ ...formData, [name]: parseFloat(value) || 1 });
@@ -126,26 +114,12 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
     }
   };
 
-  const handleAccountTypeChange = (value: string) => {
-    setSelectedAccountType(value);
-    // Znajdź pierwsze konto tego typu
-    const accountOfType = accounts.find(account => account.name === value);
-    if (accountOfType) {
-      setFormData({
-        ...formData,
-        debit_account_id: accountOfType.id,
-        credit_account_id: accountOfType.id
-      });
-    }
-  };
-
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     
     if (!formData.date) newErrors.date = 'Data jest wymagana';
     if (!formData.description) newErrors.description = 'Opis jest wymagany';
     if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
-    if (formData.amount > 999999999.99) newErrors.amount = 'Za duża liczba w polu kwota';
     if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
     if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
     if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
@@ -159,13 +133,17 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm() || !transaction) {
+    if (!validateForm()) {
       return;
     }
     
     setLoading(true);
     
     try {
+      if (!transaction?.id) {
+        throw new Error("Brak ID transakcji");
+      }
+      
       const { error } = await supabase
         .from('transactions')
         .update({
@@ -202,9 +180,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
       setLoading(false);
     }
   };
-
-  if (!transaction) return null;
-
+  
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -277,8 +253,8 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 value={formData.amount}
                 onChange={handleChange}
                 min="0"
-                max="999999999.99"
                 step="0.01"
+                max="9999999999"
                 className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
               />
               {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
@@ -327,23 +303,6 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
             </div>
           </div>
           
-          {/* Typ konta */}
-          <div className="space-y-1">
-            <Label htmlFor="account_type" className="text-sm font-medium">
-              Rodzaj konta *
-            </Label>
-            <Select value={selectedAccountType} onValueChange={handleAccountTypeChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Wybierz rodzaj konta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accountTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
           {/* Forma rozrachunku */}
           <div className="space-y-1">
             <Label htmlFor="settlement_type" className="text-sm font-medium">
@@ -372,7 +331,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
               Anuluj
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Zapisywanie...' : 'Zapisz zmiany'}
+              {loading ? 'Zapisywanie...' : 'Zapisz operację'}
             </Button>
           </DialogFooter>
         </form>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -115,8 +114,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (name === 'amount') {
       const numericValue = parseFloat(value) || 0;
       
-      // Sprawdzenie czy wartość nie jest za duża (maksymalnie 15 cyfr przed przecinkiem)
-      if (value && value.length > 15) {
+      // Sprawdzenie czy wartość nie jest za duża (maksymalnie 10 cyfr przed przecinkiem)
+      if (value && value.length > 10) {
         setErrors({ ...errors, amount: 'za dużo cyfr w polu' });
         return;
       }
@@ -325,6 +324,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 onChange={handleChange}
                 min="0"
                 step="0.01"
+                max="9999999999"
                 className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
               />
               {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
