@@ -22,8 +22,48 @@ const AccountsImport: React.FC = () => {
         description: "Trwa importowanie kont do bazy danych...",
       });
 
-      // Przykładowa lista kont do importu (w prawdziwej implementacji powinna być pełna lista)
+      // Zaktualizowany plan kont zgodnie z wymaganiami
       const accounts = [
+        // Środki pieniężne (100-199)
+        { number: '100', name: 'Kasa (środki pieniężne w kasie)', type: 'bilansowe zwykłe' },
+        { number: '101', name: 'Kasa walutowa EUR', type: 'bilansowe zwykłe - walutowe' },
+        { number: '110', name: 'Bank [PLN]', type: 'bilansowe zwykłe' },
+        { number: '117', name: 'Lokaty bankowe', type: 'bilansowe zwykłe' },
+        { number: '149', name: 'Pieniądze w drodze', type: 'bilansowe zwykłe' },
+        
+        // Rachunki bankowe (200-299)
+        { number: '200', name: 'Rachunki bankowe (środki na kontach bankowych)', type: 'bilansowe rozrachunkowe' },
+        { number: '201', name: 'Rozliczenia z domami', type: 'bilansowe rozrachunkowe' },
+        { number: '202', name: 'Rozrachunki z podmiotami zewnętrznymi', type: 'bilansowe rozrachunkowe - walutowe' },
+        { number: '208', name: 'Rozliczenie ZUS', type: 'bilansowe rozrachunkowe' },
+        { number: '210', name: 'Fundusz intencji', type: 'bilansowe zwykłe' },
+        
+        // Rozrachunki z odbiorcami i dostawcami (300-399)
+        { number: '300', name: 'Rozrachunki z odbiorcami i dostawcami', type: 'bilansowe rozrachunkowe' },
+        { number: '301', name: 'Magazyn', type: 'bilansowe zwykłe' },
+        
+        // Koszty według rodzaju (400-499)
+        { number: '400', name: 'Koszty według rodzaju (np. zużycie materiałów, usługi obce)', type: 'wynikowe zwykłe' },
+        { number: '401', name: 'Biurowe', type: 'wynikowe zwykłe' },
+        { number: '402', name: 'Poczta', type: 'wynikowe zwykłe' },
+        { number: '403', name: 'Telefon', type: 'wynikowe zwykłe' },
+        { number: '405', name: 'Prowizje bankowe', type: 'wynikowe zwykłe' },
+        { number: '412', name: 'Utrzymanie samochodu', type: 'wynikowe zwykłe' },
+        { number: '420', name: 'Pensje zatrudnionych', type: 'wynikowe zwykłe' },
+        { number: '440', name: 'Kuchnia, żywność', type: 'wynikowe zwykłe' },
+        { number: '444', name: 'Energia, woda', type: 'wynikowe zwykłe' },
+        { number: '450', name: 'Inne', type: 'wynikowe zwykłe' },
+        
+        // Koszty według typów działalności (500-599)
+        { number: '500', name: 'Koszty według typów działalności (np. działalność statutowa)', type: 'wynikowe zwykłe' },
+        
+        // Przychody (700-799)
+        { number: '700', name: 'Przychody (np. darowizny, składki)', type: 'wynikowe zwykłe' },
+        
+        // Fundusze własne (800-899)
+        { number: '800', name: 'Fundusze własne (np. fundusz statutowy)', type: 'bilansowe zwykłe' },
+        
+        // Aktywa trwałe
         { number: '011', name: 'Grunty', type: 'bilansowe zwykłe' },
         { number: '011-1', name: 'Prowincja', type: 'bilansowe zwykłe' },
         { number: '011-1-1', name: 'Wrocław', type: 'bilansowe zwykłe' },
@@ -35,32 +75,9 @@ const AccountsImport: React.FC = () => {
         { number: '015', name: 'Samochody', type: 'bilansowe zwykłe' },
         { number: '020', name: 'Wartości niematerialne i prawne', type: 'bilansowe zwykłe' },
         { number: '030', name: 'Długoterminowe aktywa finansowe', type: 'bilansowe zwykłe' },
-        { number: '100', name: 'Kasa gotówkowa PLN', type: 'bilansowe zwykłe' },
-        { number: '101', name: 'Kasa gotówkowa EUR', type: 'bilansowe zwykłe - walutowe' },
-        { number: '110', name: 'Bank [PLN]', type: 'bilansowe zwykłe' },
-        { number: '117', name: 'Lokaty bankowe', type: 'bilansowe zwykłe' },
-        { number: '149', name: 'Pieniądze w drodze', type: 'bilansowe zwykłe' },
-        { number: '200', name: 'Prowincja - rozliczenia', type: 'bilansowe rozrachunkowe' },
-        { number: '201', name: 'Rozliczenia z domami', type: 'bilansowe rozrachunkowe' },
-        { number: '202', name: 'Rozrachunki z podmiotami zewnętrznymi', type: 'bilansowe rozrachunkowe - walutowe' },
-        { number: '208', name: 'Rozliczenie ZUS', type: 'bilansowe rozrachunkowe' },
-        { number: '210', name: 'Fundusz intencji', type: 'bilansowe zwykłe' },
-        { number: '301', name: 'Magazyn', type: 'bilansowe zwykłe' },
-        { number: '401', name: 'Biurowe', type: 'wynikowe zwykłe' },
-        { number: '402', name: 'Poczta', type: 'wynikowe zwykłe' },
-        { number: '403', name: 'Telefon', type: 'wynikowe zwykłe' },
-        { number: '405', name: 'Prowizje bankowe', type: 'wynikowe zwykłe' },
-        { number: '412', name: 'Utrzymanie samochodu', type: 'wynikowe zwykłe' },
-        { number: '420', name: 'Pensje zatrudnionych', type: 'wynikowe zwykłe' },
-        { number: '440', name: 'Kuchnia, żywność', type: 'wynikowe zwykłe' },
-        { number: '444', name: 'Energia, woda', type: 'wynikowe zwykłe' },
-        { number: '450', name: 'Inne', type: 'wynikowe zwykłe' },
-        { number: '700', name: 'Przychody', type: 'wynikowe zwykłe' },
-        { number: '800', name: 'Majątek', type: 'bilansowe zwykłe' },
-        // Dodaj tutaj więcej kont według potrzeb
       ];
 
-      // Wykonanie importu w mniejszych porcjach, aby uniknąć potencjalnych problemów
+      // Wykonanie importu w mniejszych porcjach
       const batchSize = 10;
       let importedCount = 0;
       let failedCount = 0;
@@ -98,7 +115,7 @@ const AccountsImport: React.FC = () => {
           title: "Sukces",
           description: `Wszystkie ${importedCount} kont zostało zaimportowanych do bazy danych`,
         });
-        setImportStatus(`Zaimportowano ${importedCount} kont.`);
+        setImportStatus(`Zaimportowano ${importedCount} kont zgodnie z nowym planem kont.`);
       } else {
         toast({
           title: "Import częściowy",
@@ -123,7 +140,8 @@ const AccountsImport: React.FC = () => {
   return (
     <div className="flex flex-col items-center">
       <p className="mb-4 text-sm text-omi-gray-600">
-        Kliknij przycisk poniżej, aby zaimportować plan kont do bazy danych.
+        Kliknij przycisk poniżej, aby zaimportować zaktualizowany plan kont do bazy danych.
+        Plan kont został dostosowany zgodnie z wymaganiami systemu.
       </p>
       
       {importStatus && (
@@ -143,9 +161,22 @@ const AccountsImport: React.FC = () => {
             Importowanie...
           </>
         ) : (
-          'Importuj plan kont'
+          'Importuj zaktualizowany plan kont'
         )}
       </Button>
+      
+      <div className="mt-4 text-xs text-omi-gray-500 max-w-md">
+        <p><strong>Nowy plan kont obejmuje:</strong></p>
+        <ul className="list-disc list-inside mt-2 space-y-1">
+          <li>100 – Kasa (środki pieniężne w kasie)</li>
+          <li>200 – Rachunki bankowe (środki na kontach bankowych)</li>
+          <li>300 – Rozrachunki z odbiorcami i dostawcami</li>
+          <li>400 – Koszty według rodzaju</li>
+          <li>500 – Koszty według typów działalności</li>
+          <li>700 – Przychody (np. darowizny, składki)</li>
+          <li>800 – Fundusze własne (np. fundusz statutowy)</li>
+        </ul>
+      </div>
     </div>
   );
 };

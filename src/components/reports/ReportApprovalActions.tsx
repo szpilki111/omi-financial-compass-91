@@ -22,38 +22,112 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
   const { toast } = useToast();
 
   const handleApproval = async (action: 'approved' | 'to_be_corrected') => {
+    if (!reportId) {
+      toast({
+        title: "Błąd",
+        description: "Brak ID raportu",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
-      const { data: user } = await supabase.auth.getUser();
+      console.log('Rozpoczynanie procesu zatwierdzania raportu:', reportId, 'akcja:', action);
       
-      if (!user.user) {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
         throw new Error('Użytkownik nie jest zalogowany');
       }
 
-      const { error } = await supabase
+      console.log('Użytkownik zalogowany:', user.id);
+
+      // Sprawdź uprawnienia użytkownika
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Błąd pobierania profilu:', profileError);
+        throw new Error('Nie udało się sprawdzić uprawnień użytkownika');
+      }
+
+      console.log('Rola użytkownika:', profile.role);
+
+      if (profile.role !== 'prowincjal' && profile.role !== 'admin') {
+        throw new Error('Brak uprawnień do zatwierdzania raportów');
+      }
+
+      // Sprawdź czy raport istnieje i ma status 'submitted'
+      const { data: report, error: reportCheckError } = await supabase
         .from('reports')
-        .update({
-          status: action,
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: user.user.id,
-          comments: comments || null
-        })
+        .select('status')
+        .eq('id', reportId)
+        .single();
+
+      if (reportCheckError) {
+        console.error('Błąd sprawdzania raportu:', reportCheckError);
+        throw new Error('Nie udało się znaleźć raportu');
+      }
+
+      if (report.status !== 'submitted') {
+        throw new Error('Raport nie jest w stanie umożliwiającym zatwierdzenie');
+      }
+
+      console.log('Aktualizowanie raportu w bazie danych...');
+      
+      const updateData = {
+        status: action,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user.id,
+        comments: comments.trim() || null
+      };
+
+      console.log('Dane do aktualizacji:', updateData);
+
+      const { error: updateError } = await supabase
+        .from('reports')
+        .update(updateData)
         .eq('id', reportId);
 
-      if (error) throw error;
+      if (updateError) {
+        console.error('Błąd aktualizacji raportu:', updateError);
+        throw updateError;
+      }
+
+      console.log('Raport zaktualizowany pomyślnie');
+
+      const successMessage = action === 'approved' 
+        ? "Raport został zaakceptowany pomyślnie" 
+        : "Raport został odesłany do poprawek";
 
       toast({
         title: action === 'approved' ? "Raport zaakceptowany" : "Raport wymaga poprawek",
-        description: `Raport został ${action === 'approved' ? 'zaakceptowany' : 'odesłany do poprawek'} pomyślnie.`,
+        description: successMessage,
       });
 
+      // Wyczyść komentarze po pomyślnej akcji
+      setComments('');
+      
+      // Wywołaj callback
       onApprovalComplete();
+      
     } catch (error) {
       console.error('Błąd podczas zatwierdzania raportu:', error);
+      
+      let errorMessage = "Wystąpił problem podczas przetwarzania raportu.";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Błąd",
-        description: "Wystąpił problem podczas przetwarzania raportu.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -76,6 +150,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
             onChange={(e) => setComments(e.target.value)}
             placeholder="Dodaj komentarz do raportu..."
             rows={3}
+            disabled={isProcessing}
           />
         </div>
         

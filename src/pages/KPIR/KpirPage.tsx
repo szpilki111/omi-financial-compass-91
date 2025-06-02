@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -55,7 +56,73 @@ const KpirPage: React.FC = () => {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      // Użyj nowej funkcji do obliczania podsumowania finansowego
+      let query = supabase
+        .from('transactions')
+        .select(`
+          *,
+          debitAccount:accounts!debit_account_id(number, name),
+          creditAccount:accounts!credit_account_id(number, name),
+          location:locations(name)
+        `)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      // Filtrowanie według uprawnień użytkownika
+      if (user?.role === 'ekonom' && user.location) {
+        query = query.eq('location_id', user.location);
+      }
+
+      // Filtrowanie według dat
+      if (filters.dateFrom) {
+        query = query.gte('date', filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        query = query.lte('date', filters.dateTo);
+      }
+
+      const { data: transactionsData, error } = await query;
+
+      if (error) {
+        console.error('Error fetching transactions:', error);
+        throw error;
+      }
+
+      let filteredTransactions = transactionsData || [];
+
+      // Filtrowanie według wyszukiwanej frazy
+      if (filters.search.trim()) {
+        const searchTerm = filters.search.trim().toLowerCase();
+        filteredTransactions = filteredTransactions.filter(transaction => 
+          transaction.description?.toLowerCase().includes(searchTerm) ||
+          transaction.document_number?.toLowerCase().includes(searchTerm) ||
+          transaction.debitAccount?.name?.toLowerCase().includes(searchTerm) ||
+          transaction.creditAccount?.name?.toLowerCase().includes(searchTerm) ||
+          transaction.debitAccount?.number?.toLowerCase().includes(searchTerm) ||
+          transaction.creditAccount?.number?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Mapowanie danych do odpowiedniego formatu
+      const mappedTransactions = filteredTransactions.map(transaction => ({
+        id: transaction.id,
+        date: transaction.date,
+        formattedDate: new Date(transaction.date).toLocaleDateString('pl-PL'),
+        document_number: transaction.document_number,
+        description: transaction.description,
+        amount: parseFloat(transaction.amount.toString()),
+        debitAccount: transaction.debitAccount,
+        creditAccount: transaction.creditAccount,
+        settlement_type: transaction.settlement_type,
+        currency: transaction.currency,
+        exchange_rate: transaction.exchange_rate ? parseFloat(transaction.exchange_rate.toString()) : undefined,
+        location: transaction.location,
+        user_id: transaction.user_id,
+        location_id: transaction.location_id
+      }));
+
+      setTransactions(mappedTransactions);
+
+      // Oblicz podsumowanie finansowe
       const locationId = user?.location || undefined;
       const summary = await calculateFinancialSummary(
         locationId,
@@ -63,7 +130,6 @@ const KpirPage: React.FC = () => {
         filters.dateTo
       );
 
-      setTransactions(summary.transactions);
       setMonthlySummary({
         income: summary.income,
         expense: summary.expense,
@@ -113,7 +179,7 @@ const KpirPage: React.FC = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchTransactions();
+    // Wyszukiwanie jest teraz automatyczne poprzez useEffect
   };
 
   const handleOperationAdded = () => {
@@ -230,15 +296,12 @@ const KpirPage: React.FC = () => {
                     name="search"
                     value={filters.search}
                     onChange={handleFilterChange}
-                    placeholder="Numer dokumentu, opis..."
+                    placeholder="Numer dokumentu, opis, konto..."
                     className="w-full p-2 border border-omi-gray-300 rounded-md pr-10"
                   />
-                  <button 
-                    type="submit" 
-                    className="absolute right-2 bottom-2 text-omi-gray-500 hover:text-omi-500"
-                  >
+                  <div className="absolute right-2 bottom-2 text-omi-gray-500">
                     <Search className="h-5 w-5" />
-                  </button>
+                  </div>
                 </div>
               </div>
             </form>

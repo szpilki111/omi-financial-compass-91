@@ -195,11 +195,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      navigate('/login');
+      
       toast({
         title: "Wylogowano",
         description: "Zostałeś pomyślnie wylogowany",
       });
+      
+      // Odśwież stronę po wylogowaniu
+      window.location.href = '/login';
+      
     } catch (error) {
       console.error('Logout error:', error);
       toast({
@@ -207,6 +211,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Wystąpił problem podczas wylogowania",
         variant: "destructive",
       });
+      
+      // Mimo błędu, spróbuj przekierować do strony logowania
+      navigate('/login');
     }
   };
 
