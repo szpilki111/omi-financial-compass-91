@@ -58,7 +58,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     enabled: !!reportId
   });
 
-  // Sprawdź, czy użytkownik może zatwierdzać raporty - dodano prowincjala
+  // Sprawdź, czy użytkownik może zatwierdzać raporty - prowincjał i admin mają takie same uprawnienia
   const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
   
   // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
@@ -278,7 +278,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
             </>
           )}
           
-          {report.status === 'approved' || report.status === 'rejected' ? (
+          {(report.status === 'approved' || report.status === 'to_be_corrected') && (
             <>
               <h2 className="text-lg font-semibold mt-4 mb-2">Data weryfikacji:</h2>
               <p>
@@ -297,11 +297,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                 </>
               )}
             </>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {/* Sekcja zatwierdzania dla prowincjała i admina */}
+      {/* Sekcja zatwierdzania dla prowincjała i admina - upewnij się że jest widoczna */}
       {canApproveReports && report?.status === 'submitted' && (
         <ReportApprovalActions 
           reportId={reportId!} 
@@ -325,7 +325,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {/* Przycisk "Przelicz sumy" ukryty dla złożonych i zatwierdzonych raportów */}
           {!isReportLocked && (
             <Button 
               variant="outline" 
@@ -341,7 +340,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               Przelicz sumy
             </Button>
           )}
-          {/* Informacja o zablokowaniu dla złożonych/zatwierdzonych raportów */}
           {isReportLocked && (
             <p className="text-sm text-omi-gray-500 italic">
               Sumy są zablokowane dla {report.status === 'submitted' ? 'złożonych' : 'zatwierdzonych'} raportów
@@ -351,7 +349,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
         {financialDetails && (
           <>
-            {/* Sprawdź, czy sumy zostały już przeliczone */}
             {!hasCalculatedSums && !isReportLocked ? (
               <div className="text-center py-8">
                 <p className="text-omi-gray-500 mb-4">
