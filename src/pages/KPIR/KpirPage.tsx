@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -110,6 +109,8 @@ const KpirPage: React.FC = () => {
         document_number: transaction.document_number,
         description: transaction.description,
         amount: parseFloat(transaction.amount.toString()),
+        debit_account_id: transaction.debit_account_id,
+        credit_account_id: transaction.credit_account_id,
         debitAccount: transaction.debitAccount,
         creditAccount: transaction.creditAccount,
         settlement_type: transaction.settlement_type,
