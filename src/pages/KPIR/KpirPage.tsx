@@ -113,7 +113,7 @@ const KpirPage: React.FC = () => {
         credit_account_id: transaction.credit_account_id,
         debitAccount: transaction.debitAccount,
         creditAccount: transaction.creditAccount,
-        settlement_type: transaction.settlement_type,
+        settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
         currency: transaction.currency,
         exchange_rate: transaction.exchange_rate ? parseFloat(transaction.exchange_rate.toString()) : undefined,
         location: transaction.location,
