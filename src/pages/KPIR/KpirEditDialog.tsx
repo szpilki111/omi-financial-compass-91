@@ -107,7 +107,13 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
     const { name, value } = e.target;
     
     if (name === 'amount') {
-      setFormData({ ...formData, [name]: parseFloat(value) || 0 });
+      const numericValue = parseFloat(value) || 0;
+      // Sprawdź czy wartość nie jest za duża (powyżej 999999999.99)
+      if (numericValue > 999999999.99) {
+        setErrors({ ...errors, [name]: 'Za duża liczba w polu kwota' });
+        return;
+      }
+      setFormData({ ...formData, [name]: numericValue });
     } else if (name === 'exchange_rate') {
       setFormData({ ...formData, [name]: parseFloat(value) || 1 });
     } else {
@@ -139,6 +145,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
     if (!formData.date) newErrors.date = 'Data jest wymagana';
     if (!formData.description) newErrors.description = 'Opis jest wymagany';
     if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
+    if (formData.amount > 999999999.99) newErrors.amount = 'Za duża liczba w polu kwota';
     if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
     if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
     if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
@@ -270,6 +277,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 value={formData.amount}
                 onChange={handleChange}
                 min="0"
+                max="999999999.99"
                 step="0.01"
                 className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
               />

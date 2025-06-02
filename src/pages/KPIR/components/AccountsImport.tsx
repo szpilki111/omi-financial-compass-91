@@ -24,25 +24,29 @@ const AccountsImport: React.FC = () => {
 
       // Zaktualizowany plan kont zgodnie z wymaganiami
       const accounts = [
-        // Środki pieniężne (100-199)
+        // 100 – Kasa (środki pieniężne w kasie)
         { number: '100', name: 'Kasa (środki pieniężne w kasie)', type: 'bilansowe zwykłe' },
         { number: '101', name: 'Kasa walutowa EUR', type: 'bilansowe zwykłe - walutowe' },
-        { number: '110', name: 'Bank [PLN]', type: 'bilansowe zwykłe' },
+        { number: '102', name: 'Kasa walutowa USD', type: 'bilansowe zwykłe - walutowe' },
+        { number: '103', name: 'Kasa walutowa GBP', type: 'bilansowe zwykłe - walutowe' },
+        { number: '110', name: 'Gotówka w banku PLN', type: 'bilansowe zwykłe' },
         { number: '117', name: 'Lokaty bankowe', type: 'bilansowe zwykłe' },
         { number: '149', name: 'Pieniądze w drodze', type: 'bilansowe zwykłe' },
         
-        // Rachunki bankowe (200-299)
+        // 200 – Rachunki bankowe (środki na kontach bankowych)
         { number: '200', name: 'Rachunki bankowe (środki na kontach bankowych)', type: 'bilansowe rozrachunkowe' },
         { number: '201', name: 'Rozliczenia z domami', type: 'bilansowe rozrachunkowe' },
         { number: '202', name: 'Rozrachunki z podmiotami zewnętrznymi', type: 'bilansowe rozrachunkowe - walutowe' },
         { number: '208', name: 'Rozliczenie ZUS', type: 'bilansowe rozrachunkowe' },
         { number: '210', name: 'Fundusz intencji', type: 'bilansowe zwykłe' },
         
-        // Rozrachunki z odbiorcami i dostawcami (300-399)
+        // 300 – Rozrachunki z odbiorcami i dostawcami
         { number: '300', name: 'Rozrachunki z odbiorcami i dostawcami', type: 'bilansowe rozrachunkowe' },
         { number: '301', name: 'Magazyn', type: 'bilansowe zwykłe' },
+        { number: '310', name: 'Należności krótkoterminowe', type: 'bilansowe rozrachunkowe' },
+        { number: '320', name: 'Zobowiązania krótkoterminowe', type: 'bilansowe rozrachunkowe' },
         
-        // Koszty według rodzaju (400-499)
+        // 400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)
         { number: '400', name: 'Koszty według rodzaju (np. zużycie materiałów, usługi obce)', type: 'wynikowe zwykłe' },
         { number: '401', name: 'Biurowe', type: 'wynikowe zwykłe' },
         { number: '402', name: 'Poczta', type: 'wynikowe zwykłe' },
@@ -52,25 +56,32 @@ const AccountsImport: React.FC = () => {
         { number: '420', name: 'Pensje zatrudnionych', type: 'wynikowe zwykłe' },
         { number: '440', name: 'Kuchnia, żywność', type: 'wynikowe zwykłe' },
         { number: '444', name: 'Energia, woda', type: 'wynikowe zwykłe' },
-        { number: '450', name: 'Inne', type: 'wynikowe zwykłe' },
+        { number: '450', name: 'Inne koszty według rodzaju', type: 'wynikowe zwykłe' },
         
-        // Koszty według typów działalności (500-599)
+        // 500 – Koszty według typów działalności (np. działalność statutowa)
         { number: '500', name: 'Koszty według typów działalności (np. działalność statutowa)', type: 'wynikowe zwykłe' },
+        { number: '501', name: 'Działalność statutowa', type: 'wynikowe zwykłe' },
+        { number: '502', name: 'Działalność gospodarcza', type: 'wynikowe zwykłe' },
+        { number: '503', name: 'Działalność charytatywna', type: 'wynikowe zwykłe' },
         
-        // Przychody (700-799)
+        // 700 – Przychody (np. darowizny, składki)
         { number: '700', name: 'Przychody (np. darowizny, składki)', type: 'wynikowe zwykłe' },
+        { number: '701', name: 'Taca', type: 'wynikowe zwykłe' },
+        { number: '702', name: 'Darowizny', type: 'wynikowe zwykłe' },
+        { number: '703', name: 'Składki członkowskie', type: 'wynikowe zwykłe' },
+        { number: '704', name: 'Przychody z najmu', type: 'wynikowe zwykłe' },
+        { number: '705', name: 'Intencje mszalne', type: 'wynikowe zwykłe' },
+        { number: '710', name: 'Inne przychody', type: 'wynikowe zwykłe' },
         
-        // Fundusze własne (800-899)
+        // 800 – Fundusze własne (np. fundusz statutowy)
         { number: '800', name: 'Fundusze własne (np. fundusz statutowy)', type: 'bilansowe zwykłe' },
+        { number: '801', name: 'Fundusz statutowy', type: 'bilansowe zwykłe' },
+        { number: '802', name: 'Fundusz zapasowy', type: 'bilansowe zwykłe' },
+        { number: '803', name: 'Fundusz celowy', type: 'bilansowe zwykłe' },
         
-        // Aktywa trwałe
+        // Aktywa trwałe (dodatkowe konta)
         { number: '011', name: 'Grunty', type: 'bilansowe zwykłe' },
-        { number: '011-1', name: 'Prowincja', type: 'bilansowe zwykłe' },
-        { number: '011-1-1', name: 'Wrocław', type: 'bilansowe zwykłe' },
-        { number: '011-2', name: 'Domy Prowincji', type: 'bilansowe zwykłe' },
         { number: '012', name: 'Budynki', type: 'bilansowe zwykłe' },
-        { number: '012-1', name: 'Prowincja', type: 'bilansowe zwykłe' },
-        { number: '012-2', name: 'Domy Prowincji', type: 'bilansowe zwykłe' },
         { number: '013', name: 'Wyposażenie i umeblowanie', type: 'bilansowe zwykłe' },
         { number: '015', name: 'Samochody', type: 'bilansowe zwykłe' },
         { number: '020', name: 'Wartości niematerialne i prawne', type: 'bilansowe zwykłe' },
@@ -171,8 +182,8 @@ const AccountsImport: React.FC = () => {
           <li>100 – Kasa (środki pieniężne w kasie)</li>
           <li>200 – Rachunki bankowe (środki na kontach bankowych)</li>
           <li>300 – Rozrachunki z odbiorcami i dostawcami</li>
-          <li>400 – Koszty według rodzaju</li>
-          <li>500 – Koszty według typów działalności</li>
+          <li>400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)</li>
+          <li>500 – Koszty według typów działalności (np. działalność statutowa)</li>
           <li>700 – Przychody (np. darowizny, składki)</li>
           <li>800 – Fundusze własne (np. fundusz statutowy)</li>
         </ul>
