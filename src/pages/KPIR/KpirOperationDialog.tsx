@@ -36,7 +36,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [accountTypes, setAccountTypes] = useState<string[]>([]);
   const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
@@ -55,6 +54,17 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedAccountType, setSelectedAccountType] = useState<string>('');
+
+  // Prawidłowe kategorie kont zgodnie z planem kont
+  const accountCategories = [
+    { value: '100', label: '100 – Kasa (środki pieniężne w kasie)' },
+    { value: '200', label: '200 – Rachunki bankowe (środki na kontach bankowych)' },
+    { value: '300', label: '300 – Rozrachunki z odbiorcami i dostawcami' },
+    { value: '400', label: '400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)' },
+    { value: '500', label: '500 – Koszty według typów działalności (np. działalność statutowa)' },
+    { value: '700', label: '700 – Przychody (np. darowizny, składki)' },
+    { value: '800', label: '800 – Fundusze własne (np. fundusz statutowy)' },
+  ];
 
   useEffect(() => {
     // Sprawdzenie czy użytkownik ma przypisaną lokalizację
@@ -76,10 +86,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         }
         
         setAccounts(data);
-        
-        // Zbieranie unikalnych typów kont
-        const types = Array.from(new Set(data.map((account: Account) => account.name)));
-        setAccountTypes(types);
       } catch (error) {
         console.error('Błąd podczas pobierania kont:', error);
         toast({
@@ -96,7 +102,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   useEffect(() => {
     // Filtrowanie kont na podstawie wybranego typu
     if (selectedAccountType) {
-      const filtered = accounts.filter(account => account.name === selectedAccountType);
+      const filtered = accounts.filter(account => account.number.startsWith(selectedAccountType));
       setFilteredAccounts(filtered);
     } else {
       setFilteredAccounts(accounts);
@@ -107,7 +113,15 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     const { name, value } = e.target;
     
     if (name === 'amount') {
-      setFormData({ ...formData, [name]: parseFloat(value) || 0 });
+      const numericValue = parseFloat(value) || 0;
+      
+      // Sprawdzenie czy wartość nie jest za duża (maksymalnie 15 cyfr przed przecinkiem)
+      if (value && value.length > 15) {
+        setErrors({ ...errors, amount: 'za dużo cyfr w polu' });
+        return;
+      }
+      
+      setFormData({ ...formData, [name]: numericValue });
     } else if (name === 'exchange_rate') {
       setFormData({ ...formData, [name]: parseFloat(value) || 1 });
     } else {
@@ -369,8 +383,10 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 <SelectValue placeholder="Wybierz rodzaj konta" />
               </SelectTrigger>
               <SelectContent>
-                {accountTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                {accountCategories.map((category) => (
+                  <SelectItem key={category.value} value={category.value}>
+                    {category.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
