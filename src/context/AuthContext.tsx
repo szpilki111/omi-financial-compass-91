@@ -194,7 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = async () => {
+const logout = async () => {
     try {
       console.log('Starting logout process');
       setIsLoading(true);
@@ -219,12 +219,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: "Wylogowano",
           description: "Zostałeś pomyślnie wylogowany",
         });
-        window.location.href = '/login';
-        console.log('zmieniono na login');
-        window.location.reload();
       }
       
-      // Przekieruj do strony logowania bez odświeżania strony
+      // Przekieruj do strony logowania
       navigate('/login', { replace: true });
       
     } catch (error) {
