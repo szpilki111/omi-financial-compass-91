@@ -111,7 +111,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       // Wyczyść komentarze po pomyślnej akcji
       setComments('');
       
-      // Wywołaj callback
+      // Wywołaj callback - to powinno odświeżyć dane bez pełnego reload strony
       onApprovalComplete();
       
     } catch (error) {

@@ -221,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
       
-      // Przekieruj do strony logowania bez odświeżania
+      // Przekieruj do strony logowania bez odświeżania strony
       navigate('/login', { replace: true });
       
     } catch (error) {

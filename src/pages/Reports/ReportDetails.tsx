@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -109,7 +110,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       // Aktualizuj szczegóły raportu w bazie danych
       await updateReportDetails(reportId, summary);
       
-      // Odśwież dane
+      // Odśwież dane bez reload strony
       await refetchFinancial();
       
       toast({
@@ -151,7 +152,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
       if (error) throw error;
       
-      // Odśwież dane raportu
+      // Odśwież dane raportu bez reload strony
       await refetchReport();
       
       toast({
@@ -170,8 +171,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     }
   };
 
-  const handleApprovalComplete = () => {
-    refetchReport();
+  const handleApprovalComplete = async () => {
+    // Odśwież dane raportu bez reload całej strony
+    await refetchReport();
   };
 
   if (isLoadingReport || isLoadingFinancial) {
