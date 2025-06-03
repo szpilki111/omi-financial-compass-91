@@ -196,28 +196,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      console.log('Starting logout process');
+      setIsLoading(true);
+      
+      // Wyczyść stan lokalnie przed wywołaniem Supabase
       setUser(null);
       setSession(null);
       
-      toast({
-        title: "Wylogowano",
-        description: "Zostałeś pomyślnie wylogowany",
-      });
+      // Wyloguj z Supabase
+      const { error } = await supabase.auth.signOut();
       
-      // Odśwież stronę po wylogowaniu
-      window.location.href = '/login';
+      if (error) {
+        console.error('Logout error:', error);
+        toast({
+          title: "Błąd wylogowania",
+          description: "Wystąpił problem podczas wylogowania",
+          variant: "destructive",
+        });
+      } else {
+        console.log('Successfully logged out');
+        toast({
+          title: "Wylogowano",
+          description: "Zostałeś pomyślnie wylogowany",
+        });
+      }
+      
+      // Przekieruj do strony logowania bez odświeżania
+      navigate('/login', { replace: true });
       
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Unexpected logout error:', error);
       toast({
         title: "Błąd wylogowania",
-        description: "Wystąpił problem podczas wylogowania",
+        description: "Wystąpił nieoczekiwany problem podczas wylogowania",
         variant: "destructive",
       });
       
       // Mimo błędu, spróbuj przekierować do strony logowania
-      navigate('/login');
+      navigate('/login', { replace: true });
+    } finally {
+      setIsLoading(false);
     }
   };
 

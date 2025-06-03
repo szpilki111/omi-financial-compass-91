@@ -11,19 +11,15 @@ const Index = () => {
   useEffect(() => {
     console.log("Index page - isAuthenticated:", isAuthenticated, "isLoading:", isLoading, "user:", user);
     
-    const redirectTimeout = setTimeout(() => {
-      if (!isLoading) {
-        if (isAuthenticated) {
-          console.log("User is authenticated, redirecting to dashboard");
-          navigate('/dashboard');
-        } else {
-          console.log("User is not authenticated, redirecting to login");
-          navigate('/login');
-        }
+    if (!isLoading) {
+      if (isAuthenticated) {
+        console.log("User is authenticated, redirecting to dashboard");
+        navigate('/dashboard', { replace: true });
+      } else {
+        console.log("User is not authenticated, redirecting to login");
+        navigate('/login', { replace: true });
       }
-    }, 100); // Dodajemy małe opóźnienie, aby dać czas na pełne załadowanie kontekstu auth
-    
-    return () => clearTimeout(redirectTimeout);
+    }
   }, [navigate, isAuthenticated, isLoading, user]);
 
   return (
