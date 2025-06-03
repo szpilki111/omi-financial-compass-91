@@ -159,6 +159,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         title: "Raport złożony",
         description: "Raport został złożony do sprawdzenia.",
       });
+      window.location.reload();
     } catch (error) {
       console.error('Błąd podczas składania raportu:', error);
       toast({
