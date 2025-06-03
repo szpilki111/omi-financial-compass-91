@@ -44,7 +44,6 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
       console.log('Użytkownik zalogowany:', user.id);
 
-      // Sprawdź uprawnienia użytkownika - admin i prowincjał mają identyczne uprawnienia
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -58,12 +57,10 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
       console.log('Rola użytkownika:', profile.role);
 
-      // NAPRAWIONE: Tylko admin i prowincjał mogą zatwierdzać raporty - prowincjał ma identyczne uprawnienia co admin
       if (profile.role !== 'admin' && profile.role !== 'prowincjal') {
         throw new Error('Brak uprawnień do zatwierdzania raportów. Tylko admin i prowincjał mogą zatwierdzać raporty.');
       }
 
-      // Sprawdź czy raport istnieje i ma status 'submitted'
       const { data: report, error: reportCheckError } = await supabase
         .from('reports')
         .select('status')
