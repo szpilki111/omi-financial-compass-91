@@ -223,7 +223,7 @@ const logout = async () => {
       
       // Przekieruj do strony logowania
       navigate('/login', { replace: true });
-      
+      window.location.reload();
     } catch (error) {
       console.error('Unexpected logout error:', error);
       toast({
