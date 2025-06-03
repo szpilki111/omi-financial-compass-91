@@ -220,6 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "Zostałeś pomyślnie wylogowany",
         });
         window.location.href = '/login';
+        console.log('zmieniono na login');
         window.location.reload();
       }
       
