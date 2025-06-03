@@ -58,7 +58,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
       console.log('Rola użytkownika:', profile.role);
 
-      // Tylko admin i prowincjał mogą zatwierdzać raporty
+      // NAPRAWIONE: Tylko admin i prowincjał mogą zatwierdzać raporty - prowincjał ma identyczne uprawnienia co admin
       if (profile.role !== 'admin' && profile.role !== 'prowincjal') {
         throw new Error('Brak uprawnień do zatwierdzania raportów. Tylko admin i prowincjał mogą zatwierdzać raporty.');
       }
