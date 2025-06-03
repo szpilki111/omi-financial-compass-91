@@ -375,10 +375,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       </div>
 
       <div className="flex justify-between">
-        <Button variant="outline" onClick={() => navigate('/reports')}>
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Powrót do listy raportów
-        </Button>
         
         <div className="space-x-2">
           <Button variant="outline" onClick={() => {}}>
