@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -12,15 +13,12 @@ import { useAuth } from '@/context/AuthContext';
 
 const ReportsPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { canCreateReports } = useAuth();
   const [searchParams] = useSearchParams();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
   const { toast } = useToast();
-
-  // Admin i prowincjał mają identyczne uprawnienia - nie mogą tworzyć raportów (tylko ekonomowie)
-  const canCreateReports = user?.role === 'ekonom';
 
   // Sprawdź parametr URL przy załadowaniu komponentu
   useEffect(() => {

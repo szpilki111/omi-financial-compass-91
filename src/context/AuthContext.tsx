@@ -22,6 +22,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   checkPermission: (requiredRole: Role | Role[]) => boolean;
+  canApproveReports: boolean;
+  canCreateReports: boolean;
 }
 
 // Create a context with default values
@@ -32,6 +34,8 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => false,
   logout: () => {},
   checkPermission: () => false,
+  canApproveReports: false,
+  canCreateReports: false,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -225,10 +229,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return requiredRole.includes(user.role);
     }
     
-    return user.role === requiredRole || 
-           (requiredRole === 'ekonom' && (user.role === 'prowincjal' || user.role === 'admin')) || 
-           (requiredRole === 'prowincjal' && user.role === 'admin');
+    // Uproszczona logika uprawnień:
+    // - admin ma wszystkie uprawnienia
+    // - prowincjal ma identyczne uprawnienia co admin 
+    // - ekonom ma tylko swoje uprawnienia
+    switch (requiredRole) {
+      case 'admin':
+        return user.role === 'admin' || user.role === 'prowincjal';
+      case 'prowincjal':
+        return user.role === 'admin' || user.role === 'prowincjal';
+      case 'ekonom':
+        return user.role === 'ekonom' || user.role === 'prowincjal' || user.role === 'admin';
+      default:
+        return false;
+    }
   };
+
+  // Definicje uprawnień jako computed values
+  const canApproveReports = user?.role === 'admin' || user?.role === 'prowincjal';
+  const canCreateReports = user?.role === 'ekonom';
 
   return (
     <AuthContext.Provider
@@ -239,6 +258,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         checkPermission,
+        canApproveReports,
+        canCreateReports,
       }}
     >
       {children}
