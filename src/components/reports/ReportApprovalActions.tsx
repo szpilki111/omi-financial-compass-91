@@ -113,7 +113,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       
       // Wywołaj callback - to powinno odświeżyć dane bez pełnego reload strony
       onApprovalComplete();
-      
+      window.location.reload();
     } catch (error) {
       console.error('Błąd podczas zatwierdzania raportu:', error);
       
