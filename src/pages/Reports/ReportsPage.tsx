@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -20,16 +19,16 @@ const ReportsPage = () => {
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
   const { toast } = useToast();
 
-  // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może tworzyć raportów)
-  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
+  // Admin i prowincjał mają identyczne uprawnienia - nie mogą tworzyć raportów (tylko ekonomowie)
+  const canCreateReports = user?.role === 'ekonom';
 
   // Sprawdź parametr URL przy załadowaniu komponentu
   useEffect(() => {
     const action = searchParams.get('action');
-    if (action === 'new' && !isAdmin) {
+    if (action === 'new' && canCreateReports) {
       handleNewReport();
     }
-  }, [searchParams, isAdmin]);
+  }, [searchParams, canCreateReports]);
 
   const handleReportCreated = () => {
     setIsCreatingReport(false);
@@ -80,7 +79,7 @@ const ReportsPage = () => {
           <PageTitle title="Raportowanie" />
         </div>
         {/* Przycisk "Nowy raport" tylko dla ekonomów */}
-        {viewMode === 'list' && !isAdmin && (
+        {viewMode === 'list' && canCreateReports && (
           <Button onClick={handleNewReport} className="flex items-center gap-2">
             <PlusCircle className="h-4 w-4" />
             Nowy raport

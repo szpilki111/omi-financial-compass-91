@@ -58,8 +58,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     enabled: !!reportId
   });
 
-  // Sprawdź, czy użytkownik może zatwierdzać raporty - prowincjał i admin mają takie same uprawnienia
-  const canApproveReports = user?.role === 'prowincjal' || user?.role === 'admin';
+  // Admin i prowincjał mają identyczne uprawnienia do zatwierdzania raportów
+  const canApproveReports = user?.role === 'admin' || user?.role === 'prowincjal';
   
   // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
   const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
@@ -301,7 +301,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
       </div>
 
-      {/* Sekcja zatwierdzania dla prowincjała i admina - upewnij się że jest widoczna */}
+      {/* Sekcja zatwierdzania dla admina i prowincjała - identyczne uprawnienia */}
       {canApproveReports && report?.status === 'submitted' && (
         <ReportApprovalActions 
           reportId={reportId!} 
