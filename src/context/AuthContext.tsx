@@ -222,7 +222,7 @@ const logout = async () => {
       }
       
       // Przekieruj do strony logowania
-      navigate('/login', { replace: true });
+      navigate('/', { replace: true });
       window.location.reload();
     } catch (error) {
       console.error('Unexpected logout error:', error);
@@ -233,7 +233,7 @@ const logout = async () => {
       });
       
       // Mimo błędu, spróbuj przekierować do strony logowania
-      navigate('/login', { replace: true });
+      navigate('/', { replace: true });
     } finally {
       setIsLoading(false);
     }
