@@ -10,20 +10,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirOperationFormData, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface KpirOperationDialogProps {
   open: boolean;
@@ -36,6 +41,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
+  const [accountSelectOpen, setAccountSelectOpen] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
   
@@ -122,6 +128,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (errors.debit_account_id) {
       setErrors({ ...errors, debit_account_id: '' });
     }
+    
+    setAccountSelectOpen(false);
   };
 
   const validateForm = (): boolean => {
@@ -200,6 +208,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       setLoading(false);
     }
   };
+
+  const selectedAccount = accounts.find(account => account.id === formData.debit_account_id);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -332,23 +342,52 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </div>
           </div>
           
-          {/* Rodzaj konta */}
+          {/* Rodzaj konta z wyszukiwarką */}
           <div className="space-y-1">
             <Label htmlFor="account_type" className="text-sm font-medium">
               Rodzaj konta *
             </Label>
-            <Select value={formData.debit_account_id} onValueChange={handleAccountChange}>
-              <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : ''}`}>
-                <SelectValue placeholder="Wybierz konto" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto bg-white border border-gray-200 shadow-lg z-50">
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.number} - {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={accountSelectOpen} onOpenChange={setAccountSelectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={accountSelectOpen}
+                  className={`w-full justify-between ${errors.debit_account_id ? 'border-red-500' : ''}`}
+                >
+                  {selectedAccount ? 
+                    `${selectedAccount.number} - ${selectedAccount.name}` : 
+                    "Wybierz konto..."
+                  }
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                <Command>
+                  <CommandInput placeholder="Wyszukaj konto..." />
+                  <CommandList>
+                    <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                    <CommandGroup>
+                      {accounts.map((account) => (
+                        <CommandItem
+                          key={account.id}
+                          value={`${account.number} ${account.name}`}
+                          onSelect={() => handleAccountChange(account.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {account.number} - {account.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
           </div>
           
