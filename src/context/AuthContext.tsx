@@ -191,6 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setIsLoading(false);
       return false;
+    } finally {
+      window.location.reload();
     }
   };
 
@@ -223,7 +225,6 @@ const logout = async () => {
       
       // Przekieruj do strony logowania
       navigate('/', { replace: true });
-      window.location.reload();
     } catch (error) {
       console.error('Unexpected logout error:', error);
       toast({
