@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -79,13 +80,12 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = accountsMap.get(transaction.debit_account_id)?.number || '';
       const creditAccountNumber = accountsMap.get(transaction.credit_account_id)?.number || '';
       
-      // Przychody - tylko konta zaczynające się od "700"
+      // Przychody - sprawdź czy którekolwiek z kont (debit lub credit) zaczyna się od "700"
       if (debitAccountNumber.startsWith('700') || creditAccountNumber.startsWith('700')) {
         income += transaction.amount;
       }
-      
-      // Rozchody - tylko konta zaczynające się od "400"  
-      if (debitAccountNumber.startsWith('400') || creditAccountNumber.startsWith('400')) {
+      // Rozchody - sprawdź czy którekolwiek z kont (debit lub credit) zaczyna się od "400"
+      else if (debitAccountNumber.startsWith('400') || creditAccountNumber.startsWith('400')) {
         expense += transaction.amount;
       }
     });

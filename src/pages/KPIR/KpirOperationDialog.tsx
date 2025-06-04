@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -85,7 +86,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         .select('id, number, name, type')
         .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
         .order('number', { ascending: true })
-        .limit(50); // Ograniczamy wyniki do 50, aby nie przeciążać UI
+        .limit(50);
         
       if (error) {
         console.error('Błąd podczas wyszukiwania kont:', error);
@@ -122,6 +123,19 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (!open) {
       setSearchQuery('');
       setAccounts([]);
+      // Resetuj formularz
+      setFormData({
+        date: today,
+        document_number: '',
+        description: '',
+        amount: 0,
+        debit_account_id: '',
+        credit_account_id: '',
+        settlement_type: 'Bank',
+        currency: 'PLN',
+        exchange_rate: 1,
+      });
+      setErrors({});
     }
   }, [open]);
 
@@ -151,11 +165,18 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   };
 
   const handleAccountChange = (accountId: string) => {
+    const selectedAccount = accounts.find(acc => acc.id === accountId);
+    
     setFormData({
       ...formData,
       debit_account_id: accountId,
       credit_account_id: accountId
     });
+    
+    // Ustaw wyszukiwanie na wybraną wartość, aby wyświetlała się w polu
+    if (selectedAccount) {
+      setSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
+    }
     
     // Usuń błąd dla pola konta, jeśli istnieje
     if (errors.debit_account_id) {
@@ -163,11 +184,22 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
     
     setAccountSelectOpen(false);
-    setSearchQuery(''); // Wyczyść wyszukiwanie po wyborze
   };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    
+    // Jeśli użytkownik zmieni tekst wyszukiwania, wyczyść wybrane konto
+    if (formData.debit_account_id) {
+      const selectedAccount = accounts.find(acc => acc.id === formData.debit_account_id);
+      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+        setFormData({
+          ...formData,
+          debit_account_id: '',
+          credit_account_id: ''
+        });
+      }
+    }
   };
 
   const validateForm = (): boolean => {
@@ -400,7 +432,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 >
                   {selectedAccount ? 
                     `${selectedAccount.number} - ${selectedAccount.name}` : 
-                    "Wybierz konto..."
+                    searchQuery || "Wybierz konto..."
                   }
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
