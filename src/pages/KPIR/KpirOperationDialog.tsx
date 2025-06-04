@@ -41,6 +41,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [accountSelectOpen, setAccountSelectOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
   
@@ -65,39 +67,63 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     } else {
       setShowLocationWarning(false);
     }
-
-    const fetchAccounts = async () => {
-      try {
-        console.log('Pobieranie wszystkich kont z tabeli accounts...');
-        
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .order('number', { ascending: true });
-          
-        if (error) {
-          console.error('Błąd podczas pobierania kont:', error);
-          throw error;
-        }
-        
-        console.log('Pobrane konta:', data);
-        console.log('Liczba pobranych kont:', data?.length || 0);
-        
-        setAccounts(data || []);
-      } catch (error) {
-        console.error('Błąd podczas pobierania kont:', error);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się pobrać listy kont",
-          variant: "destructive",
-        });
-      }
-    };
-
-    if (open) {
-      fetchAccounts();
-    }
   }, [user, open]);
+
+  // Funkcja do wyszukiwania kont na podstawie zapytania
+  const searchAccounts = async (query: string) => {
+    if (!query || query.length < 2) {
+      setAccounts([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      console.log('Wyszukiwanie kont dla zapytania:', query);
+      
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, number, name, type')
+        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
+        .order('number', { ascending: true })
+        .limit(50); // Ograniczamy wyniki do 50, aby nie przeciążać UI
+        
+      if (error) {
+        console.error('Błąd podczas wyszukiwania kont:', error);
+        throw error;
+      }
+      
+      console.log('Znalezione konta:', data);
+      console.log('Liczba znalezionych kont:', data?.length || 0);
+      
+      setAccounts(data || []);
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania kont:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się wyszukać kont",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Effect do obsługi wyszukiwania z debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchAccounts(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Resetuj wyszukiwanie gdy dialog się zamyka
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery('');
+      setAccounts([]);
+    }
+  }, [open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -137,6 +163,11 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
     
     setAccountSelectOpen(false);
+    setSearchQuery(''); // Wyczyść wyszukiwanie po wyborze
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
   };
 
   const validateForm = (): boolean => {
@@ -352,7 +383,12 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           {/* Rodzaj konta z wyszukiwarką */}
           <div className="space-y-1">
             <Label htmlFor="account_type" className="text-sm font-medium">
-              Rodzaj konta * ({accounts.length} dostępnych kont)
+              Rodzaj konta * 
+              {searchQuery.length >= 2 && (
+                <span className="text-gray-500">
+                  ({isSearching ? 'Wyszukiwanie...' : `${accounts.length} znalezionych kont`})
+                </span>
+              )}
             </Label>
             <Popover open={accountSelectOpen} onOpenChange={setAccountSelectOpen}>
               <PopoverTrigger asChild>
@@ -371,27 +407,42 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
               </PopoverTrigger>
               <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
                 <Command>
-                  <CommandInput placeholder="Wyszukaj konto..." />
+                  <CommandInput 
+                    placeholder="Wpisz numer lub nazwę konta..."
+                    value={searchQuery}
+                    onValueChange={handleSearchChange}
+                  />
                   <CommandList className="max-h-60 overflow-y-auto">
-                    <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
-                    <CommandGroup>
-                      {accounts.map((account) => (
-                        <CommandItem
-                          key={account.id}
-                          value={`${account.number} ${account.name}`}
-                          onSelect={() => handleAccountChange(account.id)}
-                          className="cursor-pointer hover:bg-gray-100"
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedAccount?.id === account.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {account.number} - {account.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                    {searchQuery.length < 2 ? (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                      </div>
+                    ) : isSearching ? (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        Wyszukiwanie...
+                      </div>
+                    ) : accounts.length === 0 ? (
+                      <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {accounts.map((account) => (
+                          <CommandItem
+                            key={account.id}
+                            value={`${account.number} ${account.name}`}
+                            onSelect={() => handleAccountChange(account.id)}
+                            className="cursor-pointer hover:bg-gray-100"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {account.number} - {account.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
                   </CommandList>
                 </Command>
               </PopoverContent>
