@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -9,20 +10,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirOperationFormData, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface KpirOperationDialogProps {
   open: boolean;
@@ -35,7 +41,9 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]);
+  const [accountSelectOpen, setAccountSelectOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
   
@@ -52,18 +60,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
-
-  // Prawidłowe kategorie kont zgodnie z planem kont
-  const accountCategories = [
-    { value: '100', label: '100 – Kasa (środki pieniężne w kasie)' },
-    { value: '200', label: '200 – Rachunki bankowe (środki na kontach bankowych)' },
-    { value: '300', label: '300 – Rozrachunki z odbiorcami i dostawcami' },
-    { value: '400', label: '400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)' },
-    { value: '500', label: '500 – Koszty według typów działalności (np. działalność statutowa)' },
-    { value: '700', label: '700 – Przychody (np. darowizny, składki)' },
-    { value: '800', label: '800 – Fundusze własne (np. fundusz statutowy)' },
-  ];
 
   useEffect(() => {
     // Sprawdzenie czy użytkownik ma przypisaną lokalizację
@@ -72,41 +68,76 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     } else {
       setShowLocationWarning(false);
     }
+  }, [user, open]);
 
-    const fetchAccounts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .order('number', { ascending: true });
-          
-        if (error) {
-          throw error;
-        }
-        
-        setAccounts(data);
-      } catch (error) {
-        console.error('Błąd podczas pobierania kont:', error);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się pobrać listy kont",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchAccounts();
-  }, [user]);
-
-  useEffect(() => {
-    // Filtrowanie kont na podstawie wybranego typu
-    if (selectedAccountType) {
-      const filtered = accounts.filter(account => account.number.startsWith(selectedAccountType));
-      setFilteredAccounts(filtered);
-    } else {
-      setFilteredAccounts(accounts);
+  // Funkcja do wyszukiwania kont na podstawie zapytania
+  const searchAccounts = async (query: string) => {
+    if (!query || query.length < 2) {
+      setAccounts([]);
+      return;
     }
-  }, [selectedAccountType, accounts]);
+
+    try {
+      setIsSearching(true);
+      console.log('Wyszukiwanie kont dla zapytania:', query);
+      
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, number, name, type')
+        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
+        .order('number', { ascending: true })
+        .limit(50);
+        
+      if (error) {
+        console.error('Błąd podczas wyszukiwania kont:', error);
+        throw error;
+      }
+      
+      console.log('Znalezione konta:', data);
+      console.log('Liczba znalezionych kont:', data?.length || 0);
+      
+      setAccounts(data || []);
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania kont:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się wyszukać kont",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Effect do obsługi wyszukiwania z debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchAccounts(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Resetuj wyszukiwanie gdy dialog się zamyka
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery('');
+      setAccounts([]);
+      // Resetuj formularz
+      setFormData({
+        date: today,
+        document_number: '',
+        description: '',
+        amount: 0,
+        debit_account_id: '',
+        credit_account_id: '',
+        settlement_type: 'Bank',
+        currency: 'PLN',
+        exchange_rate: 1,
+      });
+      setErrors({});
+    }
+  }, [open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -133,25 +164,41 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
   };
 
-  const handleAccountTypeChange = (value: string) => {
-    setSelectedAccountType(value);
-    // Resetowanie wybranego konta po zmianie typu
+  const handleAccountChange = (accountId: string) => {
+    const selectedAccount = accounts.find(acc => acc.id === accountId);
+    
     setFormData({
       ...formData,
-      debit_account_id: '',
-      credit_account_id: ''
-    });
-  };
-
-  const handleAccountChange = (fieldName: string, accountId: string) => {
-    setFormData({
-      ...formData,
-      [fieldName]: accountId
+      debit_account_id: accountId,
+      credit_account_id: accountId
     });
     
-    // Usuń błąd dla danego pola, jeśli istnieje
-    if (errors[fieldName]) {
-      setErrors({ ...errors, [fieldName]: '' });
+    // Ustaw wyszukiwanie na wybraną wartość, aby wyświetlała się w polu
+    if (selectedAccount) {
+      setSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
+    }
+    
+    // Usuń błąd dla pola konta, jeśli istnieje
+    if (errors.debit_account_id) {
+      setErrors({ ...errors, debit_account_id: '' });
+    }
+    
+    setAccountSelectOpen(false);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    
+    // Jeśli użytkownik zmieni tekst wyszukiwania, wyczyść wybrane konto
+    if (formData.debit_account_id) {
+      const selectedAccount = accounts.find(acc => acc.id === formData.debit_account_id);
+      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+        setFormData({
+          ...formData,
+          debit_account_id: '',
+          credit_account_id: ''
+        });
+      }
     }
   };
 
@@ -161,6 +208,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (!formData.date) newErrors.date = 'Data jest wymagana';
     if (!formData.description) newErrors.description = 'Opis jest wymagany';
     if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
+    if (!formData.debit_account_id) newErrors.debit_account_id = 'Rodzaj konta jest wymagany';
     if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
     if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
     if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
@@ -178,8 +226,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       return;
     }
     
-    // Ustawiamy domyślną lokalizację jeśli nie ma przypisanej
-    // W przyszłości można dodać pole wyboru lokalizacji w formularzu
     if (!user) {
       toast({
         title: "Błąd",
@@ -195,15 +241,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       // Używamy domyślnej lokalizacji lub null jeśli nie ma przypisanej
       const locationId = user.location || null;
       
-      // Przypisujemy takie samo konto do debetu i kredytu dla uproszczenia
-      // W przyszłości można dodać ponownie wybór obu kont
-      const selectedAccountId = selectedAccountType ? 
-        filteredAccounts.length > 0 ? filteredAccounts[0].id : null : null;
-      
-      if (!selectedAccountId) {
-        throw new Error("Nie wybrano konta");
-      }
-      
       const { error } = await supabase
         .from('transactions')
         .insert({
@@ -211,8 +248,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           document_number: formData.document_number,
           description: formData.description,
           amount: formData.amount,
-          debit_account_id: selectedAccountId,
-          credit_account_id: selectedAccountId,
+          debit_account_id: formData.debit_account_id,
+          credit_account_id: formData.credit_account_id,
           settlement_type: formData.settlement_type,
           currency: formData.currency,
           exchange_rate: formData.exchange_rate,
@@ -241,6 +278,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       setLoading(false);
     }
   };
+
+  const selectedAccount = accounts.find(account => account.id === formData.debit_account_id);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -373,23 +412,74 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </div>
           </div>
           
-          {/* Typ konta */}
+          {/* Rodzaj konta z wyszukiwarką */}
           <div className="space-y-1">
             <Label htmlFor="account_type" className="text-sm font-medium">
-              Rodzaj konta *
+              Rodzaj konta * 
+              {searchQuery.length >= 2 && (
+                <span className="text-gray-500">
+                  ({isSearching ? 'Wyszukiwanie...' : `${accounts.length} znalezionych kont`})
+                </span>
+              )}
             </Label>
-            <Select value={selectedAccountType} onValueChange={handleAccountTypeChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Wybierz rodzaj konta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accountCategories.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={accountSelectOpen} onOpenChange={setAccountSelectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={accountSelectOpen}
+                  className={`w-full justify-between ${errors.debit_account_id ? 'border-red-500' : ''}`}
+                >
+                  {selectedAccount ? 
+                    `${selectedAccount.number} - ${selectedAccount.name}` : 
+                    searchQuery || "Wybierz konto..."
+                  }
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                <Command>
+                  <CommandInput 
+                    placeholder="Wpisz numer lub nazwę konta..."
+                    value={searchQuery}
+                    onValueChange={handleSearchChange}
+                  />
+                  <CommandList className="max-h-60 overflow-y-auto">
+                    {searchQuery.length < 2 ? (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                      </div>
+                    ) : isSearching ? (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        Wyszukiwanie...
+                      </div>
+                    ) : accounts.length === 0 ? (
+                      <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {accounts.map((account) => (
+                          <CommandItem
+                            key={account.id}
+                            value={`${account.number} ${account.name}`}
+                            onSelect={() => handleAccountChange(account.id)}
+                            className="cursor-pointer hover:bg-gray-100"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {account.number} - {account.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
           </div>
           
           {/* Forma rozrachunku */}
