@@ -181,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setIsLoading(false);
-      window.location.reload();
       return false;
     } catch (error: any) {
       console.error('Unexpected login error:', error);
@@ -192,6 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setIsLoading(false);
       return false;
+    } finally {
+      window.location.reload();
     }
   };
 
