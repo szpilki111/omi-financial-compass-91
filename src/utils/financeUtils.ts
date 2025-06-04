@@ -80,17 +80,18 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = accountsMap.get(transaction.debit_account_id)?.number || '';
       const creditAccountNumber = accountsMap.get(transaction.credit_account_id)?.number || '';
       
-      // Przychody - sprawdź czy którekolwiek z kont (debit lub credit) zaczyna się od "700"
-      if (debitAccountNumber.startsWith('700') || creditAccountNumber.startsWith('700')) {
+      // Przychody - konta zaczynające się od 7
+      if (creditAccountNumber.startsWith('7')) {
         income += transaction.amount;
       }
-      // Rozchody - sprawdź czy którekolwiek z kont (debit lub credit) zaczyna się od "400"
-      else if (debitAccountNumber.startsWith('400') || creditAccountNumber.startsWith('400')) {
+      
+      // Koszty - konta zaczynające się od 4
+      if (debitAccountNumber.startsWith('4')) {
         expense += transaction.amount;
       }
     });
     
-    // Oblicz bilans (przychody - rozchody)
+    // Oblicz bilans
     const balance = income - expense;
     
     return {
