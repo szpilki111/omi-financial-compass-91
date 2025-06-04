@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -35,7 +36,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
   
@@ -52,18 +52,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
-
-  // Prawidłowe kategorie kont zgodnie z planem kont
-  const accountCategories = [
-    { value: '100', label: '100 – Kasa (środki pieniężne w kasie)' },
-    { value: '200', label: '200 – Rachunki bankowe (środki na kontach bankowych)' },
-    { value: '300', label: '300 – Rozrachunki z odbiorcami i dostawcami' },
-    { value: '400', label: '400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)' },
-    { value: '500', label: '500 – Koszty według typów działalności (np. działalność statutowa)' },
-    { value: '700', label: '700 – Przychody (np. darowizny, składki)' },
-    { value: '800', label: '800 – Fundusze własne (np. fundusz statutowy)' },
-  ];
 
   useEffect(() => {
     // Sprawdzenie czy użytkownik ma przypisaną lokalizację
@@ -98,16 +86,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     fetchAccounts();
   }, [user]);
 
-  useEffect(() => {
-    // Filtrowanie kont na podstawie wybranego typu
-    if (selectedAccountType) {
-      const filtered = accounts.filter(account => account.number.startsWith(selectedAccountType));
-      setFilteredAccounts(filtered);
-    } else {
-      setFilteredAccounts(accounts);
-    }
-  }, [selectedAccountType, accounts]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
@@ -133,25 +111,16 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
   };
 
-  const handleAccountTypeChange = (value: string) => {
-    setSelectedAccountType(value);
-    // Resetowanie wybranego konta po zmianie typu
+  const handleAccountChange = (accountId: string) => {
     setFormData({
       ...formData,
-      debit_account_id: '',
-      credit_account_id: ''
-    });
-  };
-
-  const handleAccountChange = (fieldName: string, accountId: string) => {
-    setFormData({
-      ...formData,
-      [fieldName]: accountId
+      debit_account_id: accountId,
+      credit_account_id: accountId
     });
     
-    // Usuń błąd dla danego pola, jeśli istnieje
-    if (errors[fieldName]) {
-      setErrors({ ...errors, [fieldName]: '' });
+    // Usuń błąd dla pola konta, jeśli istnieje
+    if (errors.debit_account_id) {
+      setErrors({ ...errors, debit_account_id: '' });
     }
   };
 
@@ -161,6 +130,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     if (!formData.date) newErrors.date = 'Data jest wymagana';
     if (!formData.description) newErrors.description = 'Opis jest wymagany';
     if (formData.amount <= 0) newErrors.amount = 'Kwota musi być większa od zera';
+    if (!formData.debit_account_id) newErrors.debit_account_id = 'Rodzaj konta jest wymagany';
     if (!formData.settlement_type) newErrors.settlement_type = 'Forma rozrachunku jest wymagana';
     if (!formData.currency) newErrors.currency = 'Waluta jest wymagana';
     if (formData.currency !== 'PLN' && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
@@ -178,8 +148,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       return;
     }
     
-    // Ustawiamy domyślną lokalizację jeśli nie ma przypisanej
-    // W przyszłości można dodać pole wyboru lokalizacji w formularzu
     if (!user) {
       toast({
         title: "Błąd",
@@ -195,15 +163,6 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       // Używamy domyślnej lokalizacji lub null jeśli nie ma przypisanej
       const locationId = user.location || null;
       
-      // Przypisujemy takie samo konto do debetu i kredytu dla uproszczenia
-      // W przyszłości można dodać ponownie wybór obu kont
-      const selectedAccountId = selectedAccountType ? 
-        filteredAccounts.length > 0 ? filteredAccounts[0].id : null : null;
-      
-      if (!selectedAccountId) {
-        throw new Error("Nie wybrano konta");
-      }
-      
       const { error } = await supabase
         .from('transactions')
         .insert({
@@ -211,8 +170,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           document_number: formData.document_number,
           description: formData.description,
           amount: formData.amount,
-          debit_account_id: selectedAccountId,
-          credit_account_id: selectedAccountId,
+          debit_account_id: formData.debit_account_id,
+          credit_account_id: formData.credit_account_id,
           settlement_type: formData.settlement_type,
           currency: formData.currency,
           exchange_rate: formData.exchange_rate,
@@ -373,23 +332,24 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </div>
           </div>
           
-          {/* Typ konta */}
+          {/* Rodzaj konta */}
           <div className="space-y-1">
             <Label htmlFor="account_type" className="text-sm font-medium">
               Rodzaj konta *
             </Label>
-            <Select value={selectedAccountType} onValueChange={handleAccountTypeChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Wybierz rodzaj konta" />
+            <Select value={formData.debit_account_id} onValueChange={handleAccountChange}>
+              <SelectTrigger className={`w-full ${errors.debit_account_id ? 'border-red-500' : ''}`}>
+                <SelectValue placeholder="Wybierz konto" />
               </SelectTrigger>
-              <SelectContent>
-                {accountCategories.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
+              <SelectContent className="max-h-60 overflow-y-auto bg-white border border-gray-200 shadow-lg z-50">
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.number} - {account.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {errors.debit_account_id && <p className="text-red-500 text-xs">{errors.debit_account_id}</p>}
           </div>
           
           {/* Forma rozrachunku */}
