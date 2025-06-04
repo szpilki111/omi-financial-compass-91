@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -69,16 +68,22 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 
     const fetchAccounts = async () => {
       try {
+        console.log('Pobieranie wszystkich kont z tabeli accounts...');
+        
         const { data, error } = await supabase
           .from('accounts')
           .select('id, number, name, type')
           .order('number', { ascending: true });
           
         if (error) {
+          console.error('Błąd podczas pobierania kont:', error);
           throw error;
         }
         
-        setAccounts(data);
+        console.log('Pobrane konta:', data);
+        console.log('Liczba pobranych kont:', data?.length || 0);
+        
+        setAccounts(data || []);
       } catch (error) {
         console.error('Błąd podczas pobierania kont:', error);
         toast({
@@ -89,8 +94,10 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       }
     };
 
-    fetchAccounts();
-  }, [user]);
+    if (open) {
+      fetchAccounts();
+    }
+  }, [user, open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -345,7 +352,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           {/* Rodzaj konta z wyszukiwarką */}
           <div className="space-y-1">
             <Label htmlFor="account_type" className="text-sm font-medium">
-              Rodzaj konta *
+              Rodzaj konta * ({accounts.length} dostępnych kont)
             </Label>
             <Popover open={accountSelectOpen} onOpenChange={setAccountSelectOpen}>
               <PopoverTrigger asChild>
@@ -362,10 +369,10 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-full p-0" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+              <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
                 <Command>
                   <CommandInput placeholder="Wyszukaj konto..." />
-                  <CommandList>
+                  <CommandList className="max-h-60 overflow-y-auto">
                     <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
                     <CommandGroup>
                       {accounts.map((account) => (
@@ -373,6 +380,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                           key={account.id}
                           value={`${account.number} ${account.name}`}
                           onSelect={() => handleAccountChange(account.id)}
+                          className="cursor-pointer hover:bg-gray-100"
                         >
                           <Check
                             className={cn(
