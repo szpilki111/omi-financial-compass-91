@@ -235,15 +235,6 @@ const KpirPage: React.FC = () => {
             title="Księga Przychodów i Rozchodów"
             subtitle="Przeglądaj i zarządzaj operacjami finansowymi"
           />
-          {/* Przycisk "Nowa operacja" tylko dla ekonomów */}
-          {!isAdmin && (
-            <div className="flex gap-2">
-              <Button onClick={handleNewOperation} className="bg-omi-500">
-                <FilePlus2 className="mr-2 h-4 w-4" />
-                Nowa operacja
-              </Button>
-            </div>
-          )}
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
@@ -299,23 +290,6 @@ const KpirPage: React.FC = () => {
               </div>
             </form>
             
-            {/* Przyciski akcji - Import i Eksport tylko dla ekonomów */}
-            {!isAdmin && (
-              <div className="flex gap-2 items-end">
-                <Button variant="outline" onClick={handleImport}>
-                  <FileUp className="mr-2 h-4 w-4" />
-                  Importuj
-                </Button>
-                <Button variant="outline" onClick={() => handleExport('excel')}>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Excel
-                </Button>
-                <Button variant="outline" onClick={() => handleExport('pdf')}>
-                  <Download className="mr-2 h-4 w-4" />
-                  PDF
-                </Button>
-              </div>
-            )}
           </div>
           
           <KpirTable 
