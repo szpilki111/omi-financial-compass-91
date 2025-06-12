@@ -24,10 +24,10 @@ interface Document {
   updated_at: string;
   locations?: {
     name: string;
-  };
+  } | null;
   profiles?: {
     name: string;
-  };
+  } | null;
   transaction_count?: number;
 }
 
@@ -68,6 +68,8 @@ const DocumentsPage = () => {
           
           return {
             ...doc,
+            // Handle the profiles array by taking the first element or null
+            profiles: Array.isArray(doc.profiles) && doc.profiles.length > 0 ? doc.profiles[0] : null,
             transaction_count: count || 0
           };
         })
