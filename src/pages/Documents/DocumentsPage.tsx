@@ -49,7 +49,7 @@ const DocumentsPage = () => {
         .select(`
           *,
           locations(name),
-          profiles:user_id(name)
+          profiles!documents_user_id_fkey(name)
         `)
         .order('document_date', { ascending: false });
 
