@@ -27,11 +27,11 @@ interface TransactionFormProps {
 }
 
 interface TransactionFormData {
+  description: string;
   debit_account_id: string;
   credit_account_id: string;
-  amount: number;
-  description: string;
-  settlement_type: string;
+  debit_amount: number;
+  credit_amount: number;
 }
 
 interface Account {
@@ -47,11 +47,11 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
 
   const form = useForm<TransactionFormData>({
     defaultValues: {
+      description: '',
       debit_account_id: '',
       credit_account_id: '',
-      amount: 0,
-      description: '',
-      settlement_type: 'gotówka',
+      debit_amount: 0,
+      credit_amount: 0,
     },
   });
 
@@ -77,8 +77,13 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
 
   const onSubmit = (data: TransactionFormData) => {
     onAdd({
-      ...data,
-      amount: Number(data.amount),
+      debit_account_id: data.debit_account_id,
+      credit_account_id: data.credit_account_id,
+      amount: Number(data.debit_amount), // Using debit amount as main amount for compatibility
+      description: data.description,
+      settlement_type: 'gotówka', // Default value for compatibility
+      debit_amount: Number(data.debit_amount),
+      credit_amount: Number(data.credit_amount),
     });
     form.reset();
   };
@@ -101,17 +106,31 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Opis transakcji</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Opis operacji księgowej" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="debit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Konto debetowe (Wn)</FormLabel>
+                    <FormLabel>Konto Winien</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Wybierz konto debetowe" />
+                          <SelectValue placeholder="Wybierz konto winien" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -132,11 +151,11 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 name="credit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Konto kredytowe (Ma)</FormLabel>
+                    <FormLabel>Konto Ma</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Wybierz konto kredytowe" />
+                          <SelectValue placeholder="Wybierz konto ma" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -156,10 +175,10 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="amount"
+                name="debit_amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Kwota (PLN)</FormLabel>
+                    <FormLabel>Kwota Winien</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -176,43 +195,24 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
 
               <FormField
                 control={form.control}
-                name="settlement_type"
+                name="credit_amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sposób rozliczenia</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="gotówka">Gotówka</SelectItem>
-                        <SelectItem value="przelew">Przelew</SelectItem>
-                        <SelectItem value="karta">Karta</SelectItem>
-                        <SelectItem value="czek">Czek</SelectItem>
-                        <SelectItem value="inne">Inne</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Kwota Ma</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Opis transakcji</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Opis operacji księgowej" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onCancel}>
