@@ -6,11 +6,10 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, FileText, Calendar, MapPin } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
 import DocumentDialog from './DocumentDialog';
+import DocumentTable from './DocumentTable';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,7 +43,7 @@ const DocumentsPage = () => {
   const { data: documents, isLoading, refetch } = useQuery({
     queryKey: ['documents'],
     queryFn: async () => {
-      console.log('Fetching documents...');
+      console.log('Fetching documents for user:', user?.id);
       
       const { data, error } = await supabase
         .from('documents')
@@ -59,6 +58,8 @@ const DocumentsPage = () => {
         console.error('Error fetching documents:', error);
         throw error;
       }
+
+      console.log('Raw documents data:', data);
 
       // Get transaction counts for each document
       const documentsWithCounts = await Promise.all(
@@ -77,7 +78,7 @@ const DocumentsPage = () => {
         })
       );
 
-      console.log('Documents fetched:', documentsWithCounts);
+      console.log('Documents with counts:', documentsWithCounts);
       return documentsWithCounts;
     },
   });
@@ -153,57 +154,20 @@ const DocumentsPage = () => {
           />
         </div>
 
-        {/* Documents grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredDocuments.map((document) => (
-            <Card 
-              key={document.id} 
-              className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => handleDocumentClick(document)}
-            >
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  {document.document_number}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="font-medium text-gray-900">{document.document_name}</p>
-                
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Calendar className="h-4 w-4" />
-                  {format(new Date(document.document_date), 'dd MMMM yyyy', { locale: pl })}
-                </div>
-                
-                {document.locations && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4" />
-                    {document.locations.name}
-                  </div>
-                )}
-                
-                <div className="flex justify-between items-center text-sm text-gray-500 pt-2 border-t">
-                  <span>Transakcje: {document.transaction_count}</span>
-                  <span>
-                    {format(new Date(document.created_at), 'dd.MM.yyyy')}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Documents table */}
+        <DocumentTable
+          documents={filteredDocuments}
+          onDocumentClick={handleDocumentClick}
+          isLoading={isLoading}
+        />
 
-        {filteredDocuments.length === 0 && !isLoading && (
+        {filteredDocuments.length === 0 && !isLoading && searchTerm && (
           <div className="text-center py-12">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'Nie znaleziono dokumentów' : 'Brak dokumentów'}
+              Nie znaleziono dokumentów
             </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm 
-                ? 'Spróbuj zmienić kryteria wyszukiwania' 
-                : 'Utwórz pierwszy dokument, aby rozpocząć'
-              }
+              Spróbuj zmienić kryteria wyszukiwania
             </p>
           </div>
         )}

@@ -101,10 +101,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const onSubmit = async (data: DocumentFormData) => {
-    if (!user?.location) {
+    if (!user?.location || !user?.id) {
       toast({
         title: "Błąd",
-        description: "Nie można określić lokalizacji użytkownika",
+        description: "Nie można określić lokalizacji lub ID użytkownika",
         variant: "destructive",
       });
       return;
@@ -113,6 +113,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setIsLoading(true);
     try {
       let documentId = document?.id;
+
+      console.log('Creating/updating document with user_id:', user.id);
 
       if (document) {
         // Update existing document
@@ -127,7 +129,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
         if (error) throw error;
       } else {
-        // Create new document
+        // Create new document - ensure user_id is set correctly
         const { data: newDocument, error } = await supabase
           .from('documents')
           .insert({
@@ -135,12 +137,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_name: data.document_name,
             document_date: format(data.document_date, 'yyyy-MM-dd'),
             location_id: user.location,
-            user_id: user.id,
+            user_id: user.id, // Explicitly set the user_id
           })
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error creating document:', error);
+          throw error;
+        }
+        
+        console.log('Document created successfully:', newDocument);
         documentId = newDocument.id;
       }
 
@@ -164,7 +171,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           settlement_type: t.settlement_type,
           date: format(data.document_date, 'yyyy-MM-dd'),
           location_id: user.location,
-          user_id: user.id,
+          user_id: user.id, // Ensure user_id is set for transactions too
         }));
 
         const { error: transactionError } = await supabase
