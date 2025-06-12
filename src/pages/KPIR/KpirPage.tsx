@@ -232,8 +232,8 @@ const KpirPage: React.FC = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <PageTitle 
-            title="Księga Przychodów i Rozchodów"
-            subtitle="Przeglądaj i zarządzaj operacjami finansowymi"
+            title="Lista operacji"
+            subtitle="Przeglądaj operacje"
           />
         </div>
 
