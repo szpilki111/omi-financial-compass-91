@@ -17,11 +17,12 @@ const Header = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Filtruj pozycje menu na podstawie roli użytkownika
+  // Updated navigation items for document-based approach
   const getNavItems = () => {
-    const baseItems = [
-      { name: 'Strona główna', path: '/dashboard' },
-    ];
+    const baseItems = [];
+
+    // Dokumenty - dla wszystkich zalogowanych użytkowników
+    baseItems.push({ name: 'Dokumenty', path: '/dokumenty' });
 
     // Księga KPiR tylko dla ekonomów
     if (user?.role === 'ekonom') {

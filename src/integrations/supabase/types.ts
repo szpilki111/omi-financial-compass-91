@@ -71,6 +71,79 @@ export type Database = {
         }
         Relationships: []
       }
+      documents: {
+        Row: {
+          created_at: string
+          document_date: string
+          document_name: string
+          document_number: string
+          id: string
+          location_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_date: string
+          document_name: string
+          document_number: string
+          id?: string
+          location_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          document_date?: string
+          document_name?: string
+          document_number?: string
+          id?: string
+          location_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_settings: {
+        Row: {
+          created_at: string
+          house_abbreviation: string
+          id: string
+          location_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          house_abbreviation: string
+          id?: string
+          location_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          house_abbreviation?: string
+          id?: string
+          location_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
@@ -396,6 +469,7 @@ export type Database = {
           date: string
           debit_account_id: string
           description: string
+          document_id: string | null
           document_number: string | null
           exchange_rate: number | null
           id: string
@@ -412,6 +486,7 @@ export type Database = {
           date: string
           debit_account_id: string
           description: string
+          document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
@@ -428,6 +503,7 @@ export type Database = {
           date?: string
           debit_account_id?: string
           description?: string
+          document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
@@ -449,6 +525,13 @@ export type Database = {
             columns: ["debit_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
             referencedColumns: ["id"]
           },
           {
