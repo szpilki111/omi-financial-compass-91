@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import DocumentDialog from './DocumentDialog';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface Document {
   id: string;
@@ -34,6 +35,7 @@ interface Document {
 const DocumentsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -109,6 +111,10 @@ const DocumentsPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleSearchOperations = () => {
+    navigate('/kpir');
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -124,10 +130,16 @@ const DocumentsPage = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
-          <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Nowy dokument
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleSearchOperations} variant="outline" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Wyszukaj operacje
+            </Button>
+            <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nowy dokument
+            </Button>
+          </div>
         </div>
 
         {/* Search bar */}
@@ -193,12 +205,6 @@ const DocumentsPage = () => {
                 : 'Utwórz pierwszy dokument, aby rozpocząć'
               }
             </p>
-            {!searchTerm && (
-              <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Utwórz dokument
-              </Button>
-            )}
           </div>
         )}
       </div>

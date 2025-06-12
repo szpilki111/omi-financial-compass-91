@@ -17,17 +17,12 @@ const Header = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Updated navigation items for document-based approach
+  // Updated navigation items - removed KPiR from menu
   const getNavItems = () => {
     const baseItems = [];
 
     // Dokumenty - dla wszystkich zalogowanych użytkowników
     baseItems.push({ name: 'Dokumenty', path: '/dokumenty' });
-
-    // Księga KPiR tylko dla ekonomów
-    if (user?.role === 'ekonom') {
-      baseItems.push({ name: 'Księga KPiR', path: '/kpir' });
-    }
 
     // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
     baseItems.push(

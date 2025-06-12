@@ -282,62 +282,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               )}
             />
 
-            {/* Transactions section */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Transakcje</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowTransactionForm(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Dodaj transakcję
-                </Button>
-              </div>
-
-              {transactions.length > 0 && (
-                <div className="space-y-2">
-                  {transactions.map((transaction, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-gray-600">
-                          Kwota: {transaction.amount.toLocaleString('pl-PL', { 
-                            style: 'currency', 
-                            currency: 'PLN' 
-                          })}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTransaction(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <div className="text-right font-medium text-lg">
-                    Suma: {totalAmount.toLocaleString('pl-PL', { 
-                      style: 'currency', 
-                      currency: 'PLN' 
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {showTransactionForm && (
-                <TransactionForm
-                  onAdd={addTransaction}
-                  onCancel={() => setShowTransactionForm(false)}
-                />
-              )}
-            </div>
-
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Anuluj
@@ -348,6 +292,62 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </div>
           </form>
         </Form>
+
+        {/* Transactions section - outside the main form to prevent nesting */}
+        <div className="space-y-4 border-t pt-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Transakcje</h3>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowTransactionForm(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Dodaj transakcję
+            </Button>
+          </div>
+
+          {transactions.length > 0 && (
+            <div className="space-y-2">
+              {transactions.map((transaction, index) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium">{transaction.description}</p>
+                    <p className="text-sm text-gray-600">
+                      Kwota: {transaction.amount.toLocaleString('pl-PL', { 
+                        style: 'currency', 
+                        currency: 'PLN' 
+                      })}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeTransaction(index)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <div className="text-right font-medium text-lg">
+                Suma: {totalAmount.toLocaleString('pl-PL', { 
+                  style: 'currency', 
+                  currency: 'PLN' 
+                })}
+              </div>
+            </div>
+          )}
+
+          {showTransactionForm && (
+            <TransactionForm
+              onAdd={addTransaction}
+              onCancel={() => setShowTransactionForm(false)}
+            />
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
