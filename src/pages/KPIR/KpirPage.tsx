@@ -13,7 +13,6 @@ import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
-import KpirSummary from './components/KpirSummary';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 
 const KpirPage: React.FC = () => {
@@ -246,13 +245,6 @@ const KpirPage: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* Podsumowanie miesięczne */}
-        <KpirSummary 
-          income={monthlySummary.income}
-          expense={monthlySummary.expense}
-          balance={monthlySummary.balance}
-        />
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
           <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
