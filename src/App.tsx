@@ -15,6 +15,7 @@ import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
 import Reports from "./pages/Reports";
 import DataVisualization from "./pages/DataVisualization";
+import DocumentsPage from "./pages/Documents/DocumentsPage";
 import { AdministrationPage } from "./pages/Administration";
 
 // Protected Route Component
@@ -49,6 +50,13 @@ const App = () => (
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Documents route - dla wszystkich zalogowanych użytkowników */}
+            <Route path="/dokumenty" element={
+              <ProtectedRoute>
+                <DocumentsPage />
               </ProtectedRoute>
             } />
             

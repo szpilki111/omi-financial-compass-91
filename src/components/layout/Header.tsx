@@ -17,21 +17,17 @@ const Header = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Filtruj pozycje menu na podstawie roli użytkownika
+  // Updated navigation items - removed KPiR from menu
   const getNavItems = () => {
-    const baseItems = [
-      { name: 'Strona główna', path: '/dashboard' },
-    ];
+    const baseItems = [];
 
-    // Księga KPiR tylko dla ekonomów
-    if (user?.role === 'ekonom') {
-      baseItems.push({ name: 'Księga KPiR', path: '/kpir' });
-    }
+    // Dokumenty - dla wszystkich zalogowanych użytkowników
+    baseItems.push({ name: 'Dokumenty', path: '/dokumenty' });
 
     // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
     baseItems.push(
       { name: 'Raporty', path: '/reports' },
-      { name: 'Wizualizacja danych', path: '/wizualizacja' }
+      { name: 'Ustawienia', path: '/settings' }
     );
 
     // Administracja dla prowincjała i admina

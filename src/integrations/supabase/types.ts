@@ -71,6 +71,125 @@ export type Database = {
         }
         Relationships: []
       }
+      documents: {
+        Row: {
+          created_at: string
+          document_date: string
+          document_name: string
+          document_number: string
+          id: string
+          location_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_date: string
+          document_name: string
+          document_number: string
+          id?: string
+          location_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          document_date?: string
+          document_name?: string
+          document_number?: string
+          id?: string
+          location_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_accounts: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          location_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          location_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          location_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_accounts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_settings: {
+        Row: {
+          created_at: string
+          house_abbreviation: string
+          id: string
+          location_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          house_abbreviation: string
+          id?: string
+          location_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          house_abbreviation?: string
+          id?: string
+          location_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
@@ -392,14 +511,19 @@ export type Database = {
           amount: number
           created_at: string
           credit_account_id: string
+          credit_amount: number | null
           currency: string
           date: string
           debit_account_id: string
+          debit_amount: number | null
           description: string
+          document_id: string | null
           document_number: string | null
           exchange_rate: number | null
           id: string
+          is_split_transaction: boolean | null
           location_id: string
+          parent_transaction_id: string | null
           settlement_type: string
           updated_at: string
           user_id: string
@@ -408,14 +532,19 @@ export type Database = {
           amount: number
           created_at?: string
           credit_account_id: string
+          credit_amount?: number | null
           currency?: string
           date: string
           debit_account_id: string
+          debit_amount?: number | null
           description: string
+          document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_split_transaction?: boolean | null
           location_id: string
+          parent_transaction_id?: string | null
           settlement_type: string
           updated_at?: string
           user_id: string
@@ -424,14 +553,19 @@ export type Database = {
           amount?: number
           created_at?: string
           credit_account_id?: string
+          credit_amount?: number | null
           currency?: string
           date?: string
           debit_account_id?: string
+          debit_amount?: number | null
           description?: string
+          document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_split_transaction?: boolean | null
           location_id?: string
+          parent_transaction_id?: string | null
           settlement_type?: string
           updated_at?: string
           user_id?: string
@@ -452,10 +586,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transactions_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_parent_transaction_id_fkey"
+            columns: ["parent_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
           {
@@ -491,6 +639,10 @@ export type Database = {
       delete_user_admin: {
         Args: { user_id_to_delete: string }
         Returns: undefined
+      }
+      generate_document_number: {
+        Args: { p_location_id: string; p_year: number; p_month: number }
+        Returns: string
       }
       get_current_user_id: {
         Args: Record<PropertyKey, never>

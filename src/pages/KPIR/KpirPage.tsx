@@ -13,7 +13,6 @@ import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
-import KpirSummary from './components/KpirSummary';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 
 const KpirPage: React.FC = () => {
@@ -61,7 +60,8 @@ const KpirPage: React.FC = () => {
           *,
           debitAccount:accounts!debit_account_id(number, name),
           creditAccount:accounts!credit_account_id(number, name),
-          location:locations(name)
+          location:locations(name),
+          parentTransaction:transactions!parent_transaction_id(id, description, document_number)
         `)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
@@ -118,7 +118,9 @@ const KpirPage: React.FC = () => {
         exchange_rate: transaction.exchange_rate ? parseFloat(transaction.exchange_rate.toString()) : undefined,
         location: transaction.location,
         user_id: transaction.user_id,
-        location_id: transaction.location_id
+        location_id: transaction.location_id,
+        parent_transaction_id: transaction.parent_transaction_id,
+        is_split_transaction: transaction.is_split_transaction || false
       }));
 
       setTransactions(mappedTransactions);
@@ -233,26 +235,10 @@ const KpirPage: React.FC = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <PageTitle 
-            title="Księga Przychodów i Rozchodów"
-            subtitle="Przeglądaj i zarządzaj operacjami finansowymi"
+            title="Lista operacji"
+            subtitle="Przeglądaj operacje"
           />
-          {/* Przycisk "Nowa operacja" tylko dla ekonomów */}
-          {!isAdmin && (
-            <div className="flex gap-2">
-              <Button onClick={handleNewOperation} className="bg-omi-500">
-                <FilePlus2 className="mr-2 h-4 w-4" />
-                Nowa operacja
-              </Button>
-            </div>
-          )}
         </div>
-
-        {/* Podsumowanie miesięczne */}
-        <KpirSummary 
-          income={monthlySummary.income}
-          expense={monthlySummary.expense}
-          balance={monthlySummary.balance}
-        />
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
           <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
@@ -307,23 +293,6 @@ const KpirPage: React.FC = () => {
               </div>
             </form>
             
-            {/* Przyciski akcji - Import i Eksport tylko dla ekonomów */}
-            {!isAdmin && (
-              <div className="flex gap-2 items-end">
-                <Button variant="outline" onClick={handleImport}>
-                  <FileUp className="mr-2 h-4 w-4" />
-                  Importuj
-                </Button>
-                <Button variant="outline" onClick={() => handleExport('excel')}>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Excel
-                </Button>
-                <Button variant="outline" onClick={() => handleExport('pdf')}>
-                  <Download className="mr-2 h-4 w-4" />
-                  PDF
-                </Button>
-              </div>
-            )}
           </div>
           
           <KpirTable 

@@ -19,6 +19,10 @@ export interface KpirTransaction {
   location_id?: string;
   debitAccount?: AccountInfo;
   creditAccount?: AccountInfo;
+  parent_transaction_id?: string;
+  is_split_transaction?: boolean;
+  user_id?: string;
+  location?: { name: string };
 }
 
 export interface Account {

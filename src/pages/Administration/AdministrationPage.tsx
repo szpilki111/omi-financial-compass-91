@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MainLayout from '@/components/layout/MainLayout';
 import LocationsManagement from './LocationsManagement';
+import LocationAccountsManagement from './LocationAccountsManagement';
 import UsersManagement from './UsersManagement';
 
 const AdministrationPage = () => {
@@ -38,8 +39,9 @@ const AdministrationPage = () => {
         </div>
 
         <Tabs defaultValue="locations" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="locations">Placówki</TabsTrigger>
+            <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
             {user.role === 'admin' && (
               <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             )}
@@ -47,6 +49,10 @@ const AdministrationPage = () => {
 
           <TabsContent value="locations" className="space-y-4">
             <LocationsManagement />
+          </TabsContent>
+
+          <TabsContent value="accounts" className="space-y-4">
+            <LocationAccountsManagement />
           </TabsContent>
 
           {user.role === 'admin' && (
