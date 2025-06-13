@@ -12,10 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
-import LocationSettingsDialog from './LocationSettingsDialog';
 
 interface Location {
   id: string;
@@ -30,9 +29,7 @@ interface LocationWithSettings extends Location {
 
 const LocationsManagement = () => {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [selectedLocationForSettings, setSelectedLocationForSettings] = useState<Location | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -133,11 +130,6 @@ const LocationsManagement = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSettings = (location: Location) => {
-    setSelectedLocationForSettings(location);
-    setIsSettingsDialogOpen(true);
-  };
-
   const handleDelete = (location: Location) => {
     if (confirm(`Czy na pewno chcesz usunąć placówkę "${location.name}"?`)) {
       deleteMutation.mutate(location.id);
@@ -147,14 +139,6 @@ const LocationsManagement = () => {
   const handleDialogClose = (saved: boolean) => {
     setIsDialogOpen(false);
     setSelectedLocation(null);
-    if (saved) {
-      queryClient.invalidateQueries({ queryKey: ['locations'] });
-    }
-  };
-
-  const handleSettingsDialogClose = (saved: boolean) => {
-    setIsSettingsDialogOpen(false);
-    setSelectedLocationForSettings(null);
     if (saved) {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     }
@@ -218,14 +202,6 @@ const LocationsManagement = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleSettings(location)}
-                          title="Ustawienia placówki"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
                           onClick={() => handleEdit(location)}
                           title="Edytuj placówkę"
                         >
@@ -254,12 +230,6 @@ const LocationsManagement = () => {
         location={selectedLocation}
         isOpen={isDialogOpen}
         onClose={handleDialogClose}
-      />
-
-      <LocationSettingsDialog
-        location={selectedLocationForSettings}
-        isOpen={isSettingsDialogOpen}
-        onClose={handleSettingsDialogClose}
       />
     </div>
   );
