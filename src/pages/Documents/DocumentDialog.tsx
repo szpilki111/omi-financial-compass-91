@@ -297,16 +297,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(true);
   };
 
-  const handleTransactionUpdated = () => {
+  const handleTransactionUpdated = (updatedTransaction: Transaction) => {
     // Reload transactions if editing existing document
     if (document?.id) {
       loadTransactions(document.id);
     } else {
       // For new documents, update the local transactions array
-      if (editingTransactionIndex !== null && editingTransaction) {
+      if (editingTransactionIndex !== null) {
         setTransactions(prev => {
           const updated = [...prev];
-          updated[editingTransactionIndex] = editingTransaction;
+          updated[editingTransactionIndex] = updatedTransaction;
           return updated;
         });
       }
@@ -504,6 +504,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }}
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
+        isNewDocument={!document}
       />
     </Dialog>
   );

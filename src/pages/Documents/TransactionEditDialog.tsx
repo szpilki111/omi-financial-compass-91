@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,8 +38,9 @@ import { cn } from '@/lib/utils';
 interface TransactionEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (updatedTransaction: any) => void;
   transaction: any;
+  isNewDocument?: boolean;
 }
 
 interface TransactionFormData {
@@ -58,7 +58,7 @@ interface Account {
   type: string;
 }
 
-const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction }: TransactionEditDialogProps) => {
+const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction, isNewDocument = false }: TransactionEditDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -289,24 +289,39 @@ const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction }: Transac
   };
 
   const onSubmit = async (data: TransactionFormData) => {
-    if (!transaction?.id) {
-      toast({
-        title: "Błąd",
-        description: "Brak ID transakcji do aktualizacji",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
     try {
+      // Create updated transaction object
+      const updatedTransaction = {
+        ...transaction,
+        description: data.description,
+        debit_account_id: data.debit_account_id,
+        credit_account_id: data.credit_account_id,
+        amount: Number(data.debit_amount),
+        debit_amount: Number(data.debit_amount),
+        credit_amount: Number(data.credit_amount),
+      };
+
+      // If this is a new document or transaction doesn't have ID, just update locally
+      if (isNewDocument || !transaction?.id) {
+        console.log('Updating transaction locally for new document');
+        onSave(updatedTransaction);
+        toast({
+          title: "Sukces",
+          description: "Transakcja została zaktualizowana",
+        });
+        onClose();
+        return;
+      }
+
+      // If transaction has ID, update in database
       const { error } = await supabase
         .from('transactions')
         .update({
           description: data.description,
           debit_account_id: data.debit_account_id,
           credit_account_id: data.credit_account_id,
-          amount: Number(data.debit_amount), // Using debit amount as main amount
+          amount: Number(data.debit_amount),
           debit_amount: Number(data.debit_amount),
           credit_amount: Number(data.credit_amount),
         })
@@ -319,7 +334,7 @@ const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction }: Transac
         description: "Transakcja została zaktualizowana",
       });
 
-      onSave();
+      onSave(updatedTransaction);
       onClose();
     } catch (error: any) {
       console.error('Error updating transaction:', error);
