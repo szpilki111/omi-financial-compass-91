@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -616,28 +617,33 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => duplicateDebitSide(index)}
-                      className="text-green-600 hover:text-green-700"
-                      title="Powiel stronę Winien"
-                    >
-                      <Copy className="h-4 w-4" />
-                      W
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => duplicateCreditSide(index)}
-                      className="text-blue-600 hover:text-blue-700"
-                      title="Powiel stronę Ma"
-                    >
-                      <Copy className="h-4 w-4" />
-                      M
-                    </Button>
+                    {/* Show duplication buttons based on cloned type restrictions */}
+                    {(!transaction.isCloned || transaction.clonedType === 'debit') && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => duplicateDebitSide(index)}
+                        className="text-green-600 hover:text-green-700"
+                        title="Powiel stronę Winien"
+                      >
+                        <Copy className="h-4 w-4" />
+                        W
+                      </Button>
+                    )}
+                    {(!transaction.isCloned || transaction.clonedType === 'credit') && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => duplicateCreditSide(index)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Powiel stronę Ma"
+                      >
+                        <Copy className="h-4 w-4" />
+                        M
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
