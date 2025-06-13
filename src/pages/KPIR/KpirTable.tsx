@@ -80,7 +80,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
       <TableCell>
         <div className="flex items-center">
           {transaction.is_split_transaction && (
-            <Split className="h-4 w-4 text-orange-500 mr-2" title="Transakcja podzielona" />
+            <Split className="h-4 w-4 text-orange-500 mr-2" />
           )}
           {transaction.description}
         </div>
