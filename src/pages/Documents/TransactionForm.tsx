@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,7 +68,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
     },
   });
 
-  // Function to search accounts based on query
+  // Function to search accounts based on query with filtering
   const searchAccounts = async (query: string, isDebit: boolean) => {
     if (!query || query.length < 2) {
       if (isDebit) {
@@ -101,13 +100,32 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
         throw error;
       }
       
-      console.log('Znalezione konta:', data);
-      console.log('Liczba znalezionych kont:', data?.length || 0);
+      console.log('Znalezione konta przed filtrowaniem:', data);
+      
+      // Filter accounts based on debit/credit type
+      let filteredData = data || [];
       
       if (isDebit) {
-        setDebitAccounts(data || []);
+        // For debit accounts, exclude accounts in 700-799 range
+        filteredData = filteredData.filter(account => {
+          const accountNumber = parseInt(account.number);
+          return !(accountNumber >= 700 && accountNumber <= 799);
+        });
       } else {
-        setCreditAccounts(data || []);
+        // For credit accounts, exclude accounts in 400-499 range
+        filteredData = filteredData.filter(account => {
+          const accountNumber = parseInt(account.number);
+          return !(accountNumber >= 400 && accountNumber <= 499);
+        });
+      }
+      
+      console.log('Znalezione konta po filtrowaniu:', filteredData);
+      console.log('Liczba znalezionych kont po filtrowaniu:', filteredData.length);
+      
+      if (isDebit) {
+        setDebitAccounts(filteredData);
+      } else {
+        setCreditAccounts(filteredData);
       }
     } catch (error) {
       console.error('Błąd podczas wyszukiwania kont:', error);
@@ -235,7 +253,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Konto Winien
+                      Konto Winien (bez kont 700-799)
                       {debitSearchQuery.length >= 2 && (
                         <span className="text-gray-500 ml-2">
                           ({isDebitSearching ? 'Wyszukiwanie...' : `${debitAccounts.length} znalezionych kont`})
@@ -312,7 +330,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Konto Ma
+                      Konto Ma (bez kont 400-499)
                       {creditSearchQuery.length >= 2 && (
                         <span className="text-gray-500 ml-2">
                           ({isCreditSearching ? 'Wyszukiwanie...' : `${creditAccounts.length} znalezionych kont`})
