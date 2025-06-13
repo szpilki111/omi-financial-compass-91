@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +32,7 @@ import { cn } from '@/lib/utils';
 interface TransactionFormProps {
   onAdd: (transaction: any) => void;
   onCancel: () => void;
+  parentTransactionId?: string;
 }
 
 interface TransactionFormData {
@@ -50,7 +50,7 @@ interface Account {
   type: string;
 }
 
-const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
+const TransactionForm = ({ onAdd, onCancel, parentTransactionId }: TransactionFormProps) => {
   const { user } = useAuth();
   const [debitAccounts, setDebitAccounts] = useState<Account[]>([]);
   const [creditAccounts, setCreditAccounts] = useState<Account[]>([]);
@@ -246,6 +246,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       settlement_type: 'gotówka', // Default value for compatibility
       debit_amount: Number(data.debit_amount),
       credit_amount: Number(data.credit_amount),
+      parent_transaction_id: parentTransactionId || null, // Include parent transaction ID for split transactions
     });
     form.reset();
     setDebitSearchQuery('');
@@ -260,7 +261,14 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Nowa transakcja</CardTitle>
+        <CardTitle className="text-lg">
+          {parentTransactionId ? 'Nowa sub-transakcja' : 'Nowa transakcja'}
+        </CardTitle>
+        {parentTransactionId && (
+          <p className="text-sm text-blue-600">
+            Ta transakcja będzie powiązana z transakcją nadrzędną
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -468,7 +476,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 Anuluj
               </Button>
               <Button type="submit">
-                Dodaj transakcję
+                {parentTransactionId ? 'Dodaj sub-transakcję' : 'Dodaj transakcję'}
               </Button>
             </div>
           </form>

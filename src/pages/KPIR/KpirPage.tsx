@@ -60,7 +60,8 @@ const KpirPage: React.FC = () => {
           *,
           debitAccount:accounts!debit_account_id(number, name),
           creditAccount:accounts!credit_account_id(number, name),
-          location:locations(name)
+          location:locations(name),
+          parentTransaction:transactions!parent_transaction_id(id, description, document_number)
         `)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
@@ -117,7 +118,9 @@ const KpirPage: React.FC = () => {
         exchange_rate: transaction.exchange_rate ? parseFloat(transaction.exchange_rate.toString()) : undefined,
         location: transaction.location,
         user_id: transaction.user_id,
-        location_id: transaction.location_id
+        location_id: transaction.location_id,
+        parent_transaction_id: transaction.parent_transaction_id,
+        is_split_transaction: transaction.is_split_transaction || false
       }));
 
       setTransactions(mappedTransactions);

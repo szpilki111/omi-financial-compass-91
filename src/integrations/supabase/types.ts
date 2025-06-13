@@ -521,7 +521,9 @@ export type Database = {
           document_number: string | null
           exchange_rate: number | null
           id: string
+          is_split_transaction: boolean | null
           location_id: string
+          parent_transaction_id: string | null
           settlement_type: string
           updated_at: string
           user_id: string
@@ -540,7 +542,9 @@ export type Database = {
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_split_transaction?: boolean | null
           location_id: string
+          parent_transaction_id?: string | null
           settlement_type: string
           updated_at?: string
           user_id: string
@@ -559,7 +563,9 @@ export type Database = {
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_split_transaction?: boolean | null
           location_id?: string
+          parent_transaction_id?: string | null
           settlement_type?: string
           updated_at?: string
           user_id?: string
@@ -591,6 +597,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_parent_transaction_id_fkey"
+            columns: ["parent_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
           {
