@@ -62,6 +62,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [hiddenFieldsInEdit, setHiddenFieldsInEdit] = useState<{debit?: boolean, credit?: boolean}>({});
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -304,6 +305,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   const duplicateDebitSide = (index: number) => {
     const originalTransaction = transactions[index];
+    
+    // Update original transaction - remove debit amount
+    const updatedOriginal = {
+      ...originalTransaction,
+      debit_amount: 0,
+      amount: originalTransaction.credit_amount || originalTransaction.amount,
+    };
+    
+    // Create duplicated transaction with only debit side
     const duplicatedTransaction = {
       ...originalTransaction,
       description: '', // Clear description for editing
@@ -315,6 +325,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     
     setTransactions(prev => {
       const updated = [...prev];
+      // Update the original transaction
+      updated[index] = updatedOriginal;
       // Insert the duplicated transaction right after the original one
       updated.splice(index + 1, 0, duplicatedTransaction);
       return updated;
@@ -328,6 +340,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   const duplicateCreditSide = (index: number) => {
     const originalTransaction = transactions[index];
+    
+    // Update original transaction - remove credit amount
+    const updatedOriginal = {
+      ...originalTransaction,
+      credit_amount: 0,
+      amount: originalTransaction.debit_amount || originalTransaction.amount,
+    };
+    
+    // Create duplicated transaction with only credit side
     const duplicatedTransaction = {
       ...originalTransaction,
       description: '', // Clear description for editing
@@ -339,6 +360,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     
     setTransactions(prev => {
       const updated = [...prev];
+      // Update the original transaction
+      updated[index] = updatedOriginal;
       // Insert the duplicated transaction right after the original one
       updated.splice(index + 1, 0, duplicatedTransaction);
       return updated;
@@ -351,6 +374,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleEditTransaction = (transaction: Transaction, index: number) => {
+    // Determine which fields to hide based on transaction amounts
+    const hideFields = {
+      debit: transaction.debit_amount === 0,
+      credit: transaction.credit_amount === 0,
+    };
+    
+    setHiddenFieldsInEdit(hideFields);
     setEditingTransaction(transaction);
     setEditingTransactionIndex(index);
     setShowEditDialog(true);
@@ -373,6 +403,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(false);
     setEditingTransaction(null);
     setEditingTransactionIndex(null);
+    setHiddenFieldsInEdit({});
   };
 
   // Calculate separate sums for debit and credit using the new columns
@@ -520,7 +551,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   <div className="flex-1">
                     <p className="font-medium">{transaction.description}</p>
                     <p className="text-sm text-gray-600">
-                      {transaction.debit_amount !== undefined && (
+                      {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
                         <span className="ml-2 text-green-600">
                           Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
                             style: 'currency', 
@@ -528,7 +559,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           })}
                         </span>
                       )}
-                      {transaction.credit_amount !== undefined && (
+                      {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
                         <span className="ml-2 text-blue-600">
                           Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
                             style: 'currency', 
@@ -634,10 +665,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           setShowEditDialog(false);
           setEditingTransaction(null);
           setEditingTransactionIndex(null);
+          setHiddenFieldsInEdit({});
         }}
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
         isNewDocument={!document}
+        hiddenFields={hiddenFieldsInEdit}
       />
     </Dialog>
   );

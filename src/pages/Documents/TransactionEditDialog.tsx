@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +42,10 @@ interface TransactionEditDialogProps {
   onSave: (updatedTransaction: any) => void;
   transaction: any;
   isNewDocument?: boolean;
+  hiddenFields?: {
+    debit?: boolean;
+    credit?: boolean;
+  };
 }
 
 interface TransactionFormData {
@@ -58,7 +63,14 @@ interface Account {
   type: string;
 }
 
-const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction, isNewDocument = false }: TransactionEditDialogProps) => {
+const TransactionEditDialog = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  transaction, 
+  isNewDocument = false,
+  hiddenFields = {} 
+}: TransactionEditDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -360,202 +372,217 @@ const TransactionEditDialog = ({ isOpen, onClose, onSave, transaction, isNewDocu
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Opis transakcji</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Opis operacji księgowej" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Hide description field for duplicated transactions */}
+            {!hiddenFields.debit && !hiddenFields.credit && (
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opis transakcji</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Opis operacji księgowej" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="debit_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Konto Winien</FormLabel>
-                    <Popover open={debitSelectOpen} onOpenChange={setDebitSelectOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={debitSelectOpen}
-                            className="w-full justify-between"
-                          >
-                            {selectedDebitAccount ? 
-                              `${selectedDebitAccount.number} - ${selectedDebitAccount.name}` : 
-                              debitSearchQuery || "Wybierz konto winien..."
-                            }
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                        <Command>
-                          <CommandInput 
-                            placeholder="Wpisz numer lub nazwę konta..."
-                            value={debitSearchQuery}
-                            onValueChange={handleDebitSearchChange}
-                          />
-                          <CommandList className="max-h-60 overflow-y-auto">
-                            {debitSearchQuery.length < 2 ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
-                              </div>
-                            ) : isDebitSearching ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wyszukiwanie...
-                              </div>
-                            ) : debitAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {debitAccounts.map((account) => (
-                                  <CommandItem
-                                    key={account.id}
-                                    value={`${account.number} ${account.name}`}
-                                    onSelect={() => handleDebitAccountChange(account.id)}
-                                    className="cursor-pointer hover:bg-gray-100"
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedDebitAccount?.id === account.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {account.number} - {account.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Show debit account only if not hidden */}
+              {!hiddenFields.debit && (
+                <FormField
+                  control={form.control}
+                  name="debit_account_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Konto Winien</FormLabel>
+                      <Popover open={debitSelectOpen} onOpenChange={setDebitSelectOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={debitSelectOpen}
+                              className="w-full justify-between"
+                            >
+                              {selectedDebitAccount ? 
+                                `${selectedDebitAccount.number} - ${selectedDebitAccount.name}` : 
+                                debitSearchQuery || "Wybierz konto winien..."
+                              }
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                          <Command>
+                            <CommandInput 
+                              placeholder="Wpisz numer lub nazwę konta..."
+                              value={debitSearchQuery}
+                              onValueChange={handleDebitSearchChange}
+                            />
+                            <CommandList className="max-h-60 overflow-y-auto">
+                              {debitSearchQuery.length < 2 ? (
+                                <div className="py-6 text-center text-sm text-gray-500">
+                                  Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                                </div>
+                              ) : isDebitSearching ? (
+                                <div className="py-6 text-center text-sm text-gray-500">
+                                  Wyszukiwanie...
+                                </div>
+                              ) : debitAccounts.length === 0 ? (
+                                <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
+                              ) : (
+                                <CommandGroup>
+                                  {debitAccounts.map((account) => (
+                                    <CommandItem
+                                      key={account.id}
+                                      value={`${account.number} ${account.name}`}
+                                      onSelect={() => handleDebitAccountChange(account.id)}
+                                      className="cursor-pointer hover:bg-gray-100"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          selectedDebitAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      {account.number} - {account.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              <FormField
-                control={form.control}
-                name="credit_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Konto Ma</FormLabel>
-                    <Popover open={creditSelectOpen} onOpenChange={setCreditSelectOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={creditSelectOpen}
-                            className="w-full justify-between"
-                          >
-                            {selectedCreditAccount ? 
-                              `${selectedCreditAccount.number} - ${selectedCreditAccount.name}` : 
-                              creditSearchQuery || "Wybierz konto ma..."
-                            }
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                        <Command>
-                          <CommandInput 
-                            placeholder="Wpisz numer lub nazwę konta..."
-                            value={creditSearchQuery}
-                            onValueChange={handleCreditSearchChange}
-                          />
-                          <CommandList className="max-h-60 overflow-y-auto">
-                            {creditSearchQuery.length < 2 ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
-                              </div>
-                            ) : isCreditSearching ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wyszukiwanie...
-                              </div>
-                            ) : creditAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {creditAccounts.map((account) => (
-                                  <CommandItem
-                                    key={account.id}
-                                    value={`${account.number} ${account.name}`}
-                                    onSelect={() => handleCreditAccountChange(account.id)}
-                                    className="cursor-pointer hover:bg-gray-100"
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedCreditAccount?.id === account.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {account.number} - {account.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Show credit account only if not hidden */}
+              {!hiddenFields.credit && (
+                <FormField
+                  control={form.control}
+                  name="credit_account_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Konto Ma</FormLabel>
+                      <Popover open={creditSelectOpen} onOpenChange={setCreditSelectOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={creditSelectOpen}
+                              className="w-full justify-between"
+                            >
+                              {selectedCreditAccount ? 
+                                `${selectedCreditAccount.number} - ${selectedCreditAccount.name}` : 
+                                creditSearchQuery || "Wybierz konto ma..."
+                              }
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                          <Command>
+                            <CommandInput 
+                              placeholder="Wpisz numer lub nazwę konta..."
+                              value={creditSearchQuery}
+                              onValueChange={handleCreditSearchChange}
+                            />
+                            <CommandList className="max-h-60 overflow-y-auto">
+                              {creditSearchQuery.length < 2 ? (
+                                <div className="py-6 text-center text-sm text-gray-500">
+                                  Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                                </div>
+                              ) : isCreditSearching ? (
+                                <div className="py-6 text-center text-sm text-gray-500">
+                                  Wyszukiwanie...
+                                </div>
+                              ) : creditAccounts.length === 0 ? (
+                                <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
+                              ) : (
+                                <CommandGroup>
+                                  {creditAccounts.map((account) => (
+                                    <CommandItem
+                                      key={account.id}
+                                      value={`${account.number} ${account.name}`}
+                                      onSelect={() => handleCreditAccountChange(account.id)}
+                                      className="cursor-pointer hover:bg-gray-100"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          selectedCreditAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      {account.number} - {account.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="debit_amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kwota Winien</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Show debit amount only if not hidden */}
+              {!hiddenFields.debit && (
+                <FormField
+                  control={form.control}
+                  name="debit_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kwota Winien</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              <FormField
-                control={form.control}
-                name="credit_amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kwota Ma</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Show credit amount only if not hidden */}
+              {!hiddenFields.credit && (
+                <FormField
+                  control={form.control}
+                  name="credit_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kwota Ma</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div className="flex justify-end space-x-2">
