@@ -80,9 +80,14 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
     name: 'splitItems',
   });
 
+  // Add null check for transaction
+  if (!transaction) {
+    return null;
+  }
+
   const targetAmount = splitSide === 'debit' 
-    ? (transaction.credit_amount || transaction.amount)
-    : (transaction.debit_amount || transaction.amount);
+    ? (transaction.credit_amount || transaction.amount || 0)
+    : (transaction.debit_amount || transaction.amount || 0);
 
   const fixedSide = splitSide === 'debit' ? 'credit' : 'debit';
   const fixedAccountId = splitSide === 'debit' 
