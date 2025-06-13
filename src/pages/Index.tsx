@@ -62,17 +62,6 @@ const Index = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-center">Księga KPiR</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-center">
-                Prowadzenie księgi przychodów i rozchodów zgodnie z przepisami
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle className="text-center">Raporty</CardTitle>
             </CardHeader>
             <CardContent>
