@@ -225,46 +225,43 @@ const Dashboard = () => {
   };
 
   return (
-    <MainLayout>
-      <div className="space-y-6">
+<MainLayout>
+    <div className="space-y-6">
+        {/* Nagłówek tytułowy */}
+        <h1 className="text-2xl font-bold text-center">Witaj, {user?.name || 'Użytkowniku'}</h1>
 
         {/* Cards section */}
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto mt-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-center">Witaj, {user?.name || 'Użytkowniku'}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-center">
-                  {getWelcomeMessage()}
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-center">Dokumenty</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-center">
-                  Tworzenie i przeglądanie dokumentów
-                </CardDescription>
-              </CardContent>
-            </Card>
-  
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-center">Raporty</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-center">
-                  Generowanie raportów finansowych i analiz
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-8">
+            <Link href="/dokumenty">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-center">Dokumenty</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <CardDescription className="text-center">
+                            Tworzenie i przeglądanie dokumentów
+                        </CardDescription>
+                    </CardContent>
+                </Card>
+            </Link>
+
+            <Link href="/raporty">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-center">Raporty</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <CardDescription className="text-center">
+                            Generowanie raportów finansowych i analiz
+                        </CardDescription>
+                    </CardContent>
+                </Card>
+            </Link>
         </div>
-    </MainLayout>
+    </div>
+</MainLayout>
+
+
   );
 };
 
