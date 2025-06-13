@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
@@ -232,7 +232,7 @@ const Dashboard = () => {
 
         {/* Cards section */}
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-8">
-            <Link href="/dokumenty">
+            <Link to="/dokumenty">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-center">Dokumenty</CardTitle>
@@ -245,7 +245,7 @@ const Dashboard = () => {
                 </Card>
             </Link>
 
-            <Link href="/raporty">
+            <Link to="/raporty">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-center">Raporty</CardTitle>
