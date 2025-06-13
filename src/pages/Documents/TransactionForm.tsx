@@ -96,43 +96,47 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       
       console.log('Wyszukiwanie kont dla zapytania:', query, 'w lokalizacji:', user.location);
       
-      // Search for accounts assigned to the user's location
-      const { data, error } = await supabase
-        .from('location_accounts' as any)
-        .select(`
-          accounts (
-            id,
-            number,
-            name,
-            type
-          )
-        `)
-        .eq('location_id', user.location)
-        .or(`accounts.number.ilike.%${query}%,accounts.name.ilike.%${query}%`)
-        .order('accounts.number', { ascending: true })
-        .limit(50);
+      // First get the location_account assignments for this location
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('location_accounts')
+        .select('account_id')
+        .eq('location_id', user.location);
         
-      if (error) {
-        console.error('Błąd podczas wyszukiwania kont:', error);
-        throw error;
+      if (assignmentsError) {
+        console.error('Błąd podczas pobierania przypisań kont:', assignmentsError);
+        throw assignmentsError;
       }
       
-      // Extract accounts from the nested structure and filter out null/undefined
-      const accounts = (data || [])
-        .map((item: any) => item.accounts)
-        .filter((account: any): account is Account => 
-          account && 
-          typeof account === 'object' && 
-          'id' in account && 
-          'number' in account && 
-          'name' in account && 
-          'type' in account
-        );
+      if (!assignments || assignments.length === 0) {
+        console.log('Brak przypisanych kont dla tej lokalizacji');
+        if (isDebit) {
+          setDebitAccounts([]);
+        } else {
+          setCreditAccounts([]);
+        }
+        return;
+      }
+
+      const accountIds = assignments.map(a => a.account_id);
+      console.log('Znalezione ID kont przypisanych do lokalizacji:', accountIds);
+
+      // Now get the actual accounts that match the search query
+      const { data: accounts, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*')
+        .in('id', accountIds)
+        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
+        .order('number');
+        
+      if (accountsError) {
+        console.error('Błąd podczas wyszukiwania kont:', accountsError);
+        throw accountsError;
+      }
       
       console.log('Znalezione konta przed filtrowaniem:', accounts);
       
       // Filter accounts based on debit/credit type
-      let filteredData = accounts;
+      let filteredData = accounts || [];
       
       if (isDebit) {
         // For debit accounts, exclude accounts in 700-799 range
@@ -281,14 +285,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 name="debit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Konto Winien (przypisane do placówki, bez kont 700-799)
-                      {debitSearchQuery.length >= 2 && (
-                        <span className="text-gray-500 ml-2">
-                          ({isDebitSearching ? 'Wyszukiwanie...' : `${debitAccounts.length} znalezionych kont`})
-                        </span>
-                      )}
-                    </FormLabel>
+                    <FormLabel>Konto Winien</FormLabel>
                     <Popover open={debitSelectOpen} onOpenChange={setDebitSelectOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -358,14 +355,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 name="credit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Konto Ma (przypisane do placówki, bez kont 400-499)
-                      {creditSearchQuery.length >= 2 && (
-                        <span className="text-gray-500 ml-2">
-                          ({isCreditSearching ? 'Wyszukiwanie...' : `${creditAccounts.length} znalezionych kont`})
-                        </span>
-                      )}
-                    </FormLabel>
+                    <FormLabel>Konto Ma</FormLabel>
                     <Popover open={creditSelectOpen} onOpenChange={setCreditSelectOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
