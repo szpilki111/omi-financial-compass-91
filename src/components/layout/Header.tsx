@@ -27,7 +27,7 @@ const Header = () => {
     // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
     baseItems.push(
       { name: 'Raporty', path: '/reports' },
-      { name: 'Wizualizacja danych', path: '/wizualizacja' }
+      { name: 'Ustawienia', path: '/settings' }
     );
 
     // Administracja dla prowincjała i admina
