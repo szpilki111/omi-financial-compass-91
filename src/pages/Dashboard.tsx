@@ -220,7 +220,7 @@ const Dashboard = () => {
     } else if (user?.role === 'prowincjal') {
       return 'Panel prowincjała - Nadzór nad raportami';
     } else {
-      return locationInfo?.name ? `${locationInfo.name} - Podsumowanie finansowe` : 'Podsumowanie finansowe';
+      return locationInfo?.name ? `Dom ${locationInfo.name}` : '';
     }
   };
 
