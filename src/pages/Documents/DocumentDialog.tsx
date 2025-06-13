@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +27,7 @@ import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
+import TransactionSplitDialog from './TransactionSplitDialog';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -63,6 +63,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
+  const [splittingTransactionIndex, setSplittingTransactionIndex] = useState<number | null>(null);
+  const [splitSide, setSplitSide] = useState<'debit' | 'credit'>('debit');
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -309,6 +313,29 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(true);
   };
 
+  const handleSplitTransaction = (transaction: Transaction, index: number, side: 'debit' | 'credit') => {
+    setSplittingTransaction(transaction);
+    setSplittingTransactionIndex(index);
+    setSplitSide(side);
+    setShowSplitDialog(true);
+  };
+
+  const handleTransactionSplit = (splitTransactions: Transaction[]) => {
+    if (splittingTransactionIndex !== null) {
+      setTransactions(prev => {
+        const updated = [...prev];
+        // Remove the original transaction
+        updated.splice(splittingTransactionIndex, 1);
+        // Add the split transactions
+        updated.push(...splitTransactions);
+        return updated;
+      });
+    }
+    setShowSplitDialog(false);
+    setSplittingTransaction(null);
+    setSplittingTransactionIndex(null);
+  };
+
   const handleTransactionUpdated = (updatedTransaction: Transaction) => {
     // Reload transactions if editing existing document
     if (document?.id) {
@@ -496,6 +523,28 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       type="button"
                       variant="ghost"
                       size="sm"
+                      onClick={() => handleSplitTransaction(transaction, index, 'debit')}
+                      className="text-green-600 hover:text-green-700"
+                      title="Rozbij stronę Winien"
+                    >
+                      <Plus className="h-4 w-4" />
+                      W
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSplitTransaction(transaction, index, 'credit')}
+                      className="text-blue-600 hover:text-blue-700"
+                      title="Rozbij stronę Ma"
+                    >
+                      <Plus className="h-4 w-4" />
+                      M
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleEditTransaction(transaction, index)}
                       className="text-blue-600 hover:text-blue-700"
                     >
@@ -569,6 +618,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
         isNewDocument={!document}
+      />
+
+      {/* Transaction Split Dialog */}
+      <TransactionSplitDialog
+        isOpen={showSplitDialog}
+        onClose={() => {
+          setShowSplitDialog(false);
+          setSplittingTransaction(null);
+          setSplittingTransactionIndex(null);
+        }}
+        onSplit={handleTransactionSplit}
+        transaction={splittingTransaction}
+        splitSide={splitSide}
       />
     </Dialog>
   );
