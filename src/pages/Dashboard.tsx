@@ -227,26 +227,27 @@ const Dashboard = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Nagłówek z powitaniem */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Witaj, {user?.name || 'Użytkowniku'}
-          </h1>
-          <p className="text-gray-600">
-            {getWelcomeMessage()}
-          </p>
-        </div>
 
         {/* Cards section */}
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="grid md:grid-cols-2 gap-16 max-w-2xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-center">Witaj, {user?.name || 'Użytkowniku'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-center">
+                  {getWelcomeMessage()}
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">Dokumenty</CardTitle>
               </CardHeader>
               <CardContent>
                 <CardDescription className="text-center">
-                  Tworzenie i zarządzanie dokumentami finansowymi z wieloma transakcjami
+                  Tworzenie i przeglądanie dokumentów
                 </CardDescription>
               </CardContent>
             </Card>
@@ -263,7 +264,6 @@ const Dashboard = () => {
             </Card>
           </div>
         </div>
-      </div>
     </MainLayout>
   );
 };
