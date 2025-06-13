@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -135,46 +136,55 @@ const LocationAccountsManagement = () => {
     };
   }, []);
 
-  // Fetch location-account assignments with manual joins
+  // Fetch location-account assignments with proper joins
   const { data: locationAccounts, isLoading } = useQuery({
     queryKey: ['location-accounts'],
     queryFn: async () => {
-      // First get the location_accounts
-      const { data: assignments, error: assignmentsError } = await supabase
+      console.log('Pobieranie przypisań kont do placówek...');
+      
+      const { data: assignments, error } = await supabase
         .from('location_accounts')
-        .select('*')
+        .select(`
+          id,
+          location_id,
+          account_id,
+          created_at,
+          locations!location_accounts_location_id_fkey (
+            id,
+            name
+          ),
+          accounts!location_accounts_account_id_fkey (
+            id,
+            number,
+            name,
+            type
+          )
+        `)
         .order('created_at');
       
-      if (assignmentsError) throw assignmentsError;
+      if (error) {
+        console.error('Błąd podczas pobierania przypisań:', error);
+        throw error;
+      }
+
+      console.log('Pobrane przypisania:', assignments);
+
       if (!assignments) return [];
 
-      // Get all locations
-      const { data: allLocations, error: locationsError } = await supabase
-        .from('locations')
-        .select('*');
-      
-      if (locationsError) throw locationsError;
-
-      // Get all accounts
-      const { data: allAccounts, error: accountsError } = await supabase
-        .from('accounts')
-        .select('*');
-      
-      if (accountsError) throw accountsError;
-
-      // Manually join the data
+      // Przekształć dane na oczekiwany format
       const result: LocationAccount[] = assignments.map(assignment => {
-        const location = allLocations?.find(loc => loc.id === assignment.location_id);
-        const account = allAccounts?.find(acc => acc.id === assignment.account_id);
+        console.log('Przetwarzanie przypisania:', assignment);
         
         return {
           id: assignment.id,
           location_id: assignment.location_id,
           account_id: assignment.account_id,
-          locations: location || { id: assignment.location_id, name: 'Unknown Location' },
-          accounts: account || { id: assignment.account_id, number: 'Unknown', name: 'Unknown Account', type: 'Unknown' }
+          locations: assignment.locations || { id: assignment.location_id, name: 'Unknown Location' },
+          accounts: assignment.accounts || { id: assignment.account_id, number: 'Unknown', name: 'Unknown Account', type: 'Unknown' }
         };
       });
+
+      console.log('Przetworzone przypisania:', result);
 
       // Sort by location name, then account number
       return result.sort((a, b) => {
@@ -188,6 +198,24 @@ const LocationAccountsManagement = () => {
   // Add location-account assignment
   const addMutation = useMutation({
     mutationFn: async ({ locationId, accountId }: { locationId: string; accountId: string }) => {
+      console.log('Dodawanie przypisania:', { locationId, accountId });
+      
+      // Sprawdź czy przypisanie już istnieje
+      const { data: existing, error: checkError } = await supabase
+        .from('location_accounts')
+        .select('id')
+        .eq('location_id', locationId)
+        .eq('account_id', accountId)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existing) {
+        throw new Error('To konto jest już przypisane do tej placówki');
+      }
+
       const { error } = await supabase
         .from('location_accounts')
         .insert({
