@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { KpirTransaction } from '@/types/kpir';
 import { Spinner } from '@/components/ui/Spinner';
-import { Pencil, Split, ArrowRight } from 'lucide-react';
+import { Pencil, Split, CornerDownRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface KpirTableProps {
@@ -64,13 +64,19 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
   }
 
   const renderTransactionRow = (transaction: KpirTransaction, isSubTransaction = false, isLast = false) => (
-    <TableRow key={transaction.id} className={`hover:bg-omi-100 ${isSubTransaction ? 'bg-blue-50' : ''}`}>
+    <TableRow key={transaction.id} className={`hover:bg-omi-100 ${isSubTransaction ? 'bg-blue-50/30' : ''}`}>
       <TableCell>
         <div className="flex items-center">
           {isSubTransaction && (
-            <div className="flex items-center mr-2 text-blue-600">
-              <div className={`border-l-2 border-blue-300 h-4 ${!isLast ? 'border-b-2' : ''} w-4 mr-2`}></div>
-              <ArrowRight className="h-3 w-3" />
+            <div className="flex items-center mr-3 text-blue-600">
+              <div className="flex flex-col items-center">
+                <div className="w-px h-4 bg-blue-300"></div>
+                <div className="flex items-center">
+                  <div className={`w-4 h-px bg-blue-300 ${!isLast ? '' : ''}`}></div>
+                  <CornerDownRight className="h-4 w-4 ml-1 text-blue-500" />
+                </div>
+                {!isLast && <div className="w-px h-4 bg-blue-300"></div>}
+              </div>
             </div>
           )}
           {transaction.formattedDate}
@@ -79,20 +85,38 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
       <TableCell>{transaction.document_number || '-'}</TableCell>
       <TableCell>
         <div className="flex items-center">
-          {transaction.is_split_transaction && (
+          {transaction.is_split_transaction && !isSubTransaction && (
             <Split className="h-4 w-4 text-orange-500 mr-2" />
           )}
           {transaction.description}
         </div>
       </TableCell>
-      <TableCell className="font-semibold">
-        {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-        {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+      <TableCell>
+        <div className="space-y-1">
+          <div className="font-semibold text-green-700">
+            <span className="text-xs text-gray-500 mr-1">Wn:</span>
+            <span className="font-mono">
+              {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+              {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+            </span>
+          </div>
+          <div className="text-xs text-gray-600">
+            {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+          </div>
+        </div>
       </TableCell>
       <TableCell>
-        <div className="text-sm">
-          <div><strong>Wn:</strong> {transaction.debitAccount?.number} - {transaction.debitAccount?.name}</div>
-          <div><strong>Ma:</strong> {transaction.creditAccount?.number} - {transaction.creditAccount?.name}</div>
+        <div className="space-y-1">
+          <div className="font-semibold text-red-700">
+            <span className="text-xs text-gray-500 mr-1">Ma:</span>
+            <span className="font-mono">
+              {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+              {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+            </span>
+          </div>
+          <div className="text-xs text-gray-600">
+            {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+          </div>
         </div>
       </TableCell>
       <TableCell>{transaction.settlement_type}</TableCell>
@@ -127,8 +151,8 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
-            <TableHead>Kwota</TableHead>
-            <TableHead>Konta</TableHead>
+            <TableHead>Strona Wn (Winien)</TableHead>
+            <TableHead>Strona Ma</TableHead>
             <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
             {!isAdmin && <TableHead>Akcje</TableHead>}
