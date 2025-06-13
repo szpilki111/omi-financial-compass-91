@@ -225,7 +225,7 @@ const Dashboard = () => {
   };
 
   return (
-<MainLayout>
+   <MainLayout>
     <div className="space-y-6">
         {/* Nagłówek tytułowy */}
         <h1 className="text-2xl font-bold text-center">Witaj, {user?.name || 'Użytkowniku'}</h1>
@@ -260,7 +260,6 @@ const Dashboard = () => {
         </div>
     </div>
 </MainLayout>
-
 
   );
 };
