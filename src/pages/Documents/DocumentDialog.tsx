@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,11 +21,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
+import TransactionEditDialog from './TransactionEditDialog';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -48,6 +48,8 @@ interface Transaction {
   amount: number;
   description: string;
   settlement_type: string;
+  debit_amount?: number;
+  credit_amount?: number;
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
@@ -57,6 +59,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -286,6 +290,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleEditTransaction = (transaction: Transaction, index: number) => {
+    setEditingTransaction({ ...transaction, index });
+    setShowEditDialog(true);
+  };
+
+  const handleTransactionUpdated = () => {
+    // Reload transactions if editing existing document
+    if (document?.id) {
+      loadTransactions(document.id);
+    }
+    setShowEditDialog(false);
+    setEditingTransaction(null);
+  };
+
   const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
 
   return (
@@ -424,15 +442,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       })}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeTransaction(index)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditTransaction(transaction, index)}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeTransaction(index)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
               <div className="text-right font-medium text-lg">
@@ -452,6 +481,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           )}
         </div>
       </DialogContent>
+
+      {/* Transaction Edit Dialog */}
+      <TransactionEditDialog
+        isOpen={showEditDialog}
+        onClose={() => {
+          setShowEditDialog(false);
+          setEditingTransaction(null);
+        }}
+        onSave={handleTransactionUpdated}
+        transaction={editingTransaction}
+      />
     </Dialog>
   );
 };
