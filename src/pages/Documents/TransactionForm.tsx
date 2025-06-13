@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import {
   Form,
   FormControl,
@@ -49,6 +50,7 @@ interface Account {
 }
 
 const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
+  const { user } = useAuth();
   const [debitAccounts, setDebitAccounts] = useState<Account[]>([]);
   const [creditAccounts, setCreditAccounts] = useState<Account[]>([]);
   const [debitSearchQuery, setDebitSearchQuery] = useState('');
@@ -68,7 +70,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
     },
   });
 
-  // Function to search accounts based on query with filtering
+  // Function to search accounts based on query with location and type filtering
   const searchAccounts = async (query: string, isDebit: boolean) => {
     if (!query || query.length < 2) {
       if (isDebit) {
@@ -79,6 +81,11 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       return;
     }
 
+    if (!user?.location) {
+      console.warn('Brak informacji o lokalizacji użytkownika');
+      return;
+    }
+
     try {
       if (isDebit) {
         setIsDebitSearching(true);
@@ -86,13 +93,22 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
         setIsCreditSearching(true);
       }
       
-      console.log('Wyszukiwanie kont dla zapytania:', query);
+      console.log('Wyszukiwanie kont dla zapytania:', query, 'w lokalizacji:', user.location);
       
+      // Search for accounts assigned to the user's location
       const { data, error } = await supabase
-        .from('accounts')
-        .select('id, number, name, type')
-        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
-        .order('number', { ascending: true })
+        .from('location_accounts')
+        .select(`
+          accounts (
+            id,
+            number,
+            name,
+            type
+          )
+        `)
+        .eq('location_id', user.location)
+        .or(`accounts.number.ilike.%${query}%,accounts.name.ilike.%${query}%`)
+        .order('accounts.number', { ascending: true })
         .limit(50);
         
       if (error) {
@@ -100,10 +116,13 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
         throw error;
       }
       
-      console.log('Znalezione konta przed filtrowaniem:', data);
+      // Extract accounts from the nested structure
+      const accounts = data?.map(item => item.accounts).filter(Boolean) || [];
+      
+      console.log('Znalezione konta przed filtrowaniem:', accounts);
       
       // Filter accounts based on debit/credit type
-      let filteredData = data || [];
+      let filteredData = accounts;
       
       if (isDebit) {
         // For debit accounts, exclude accounts in 700-799 range
@@ -253,7 +272,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Konto Winien (bez kont 700-799)
+                      Konto Winien (przypisane do placówki, bez kont 700-799)
                       {debitSearchQuery.length >= 2 && (
                         <span className="text-gray-500 ml-2">
                           ({isDebitSearching ? 'Wyszukiwanie...' : `${debitAccounts.length} znalezionych kont`})
@@ -294,7 +313,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                                 Wyszukiwanie...
                               </div>
                             ) : debitAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
                             ) : (
                               <CommandGroup>
                                 {debitAccounts.map((account) => (
@@ -330,7 +349,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Konto Ma (bez kont 400-499)
+                      Konto Ma (przypisane do placówki, bez kont 400-499)
                       {creditSearchQuery.length >= 2 && (
                         <span className="text-gray-500 ml-2">
                           ({isCreditSearching ? 'Wyszukiwanie...' : `${creditAccounts.length} znalezionych kont`})
@@ -371,7 +390,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                                 Wyszukiwanie...
                               </div>
                             ) : creditAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
                             ) : (
                               <CommandGroup>
                                 {creditAccounts.map((account) => (
