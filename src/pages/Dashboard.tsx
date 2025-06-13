@@ -224,14 +224,6 @@ const Dashboard = () => {
     }
   };
 
-  const getDataSource = () => {
-    if (user?.role === 'ekonom') {
-      return 'Na podstawie transakcji KPiR z placówki';
-    } else {
-      return 'Na podstawie transakcji KPiR ze wszystkich placówek';
-    }
-  };
-
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -243,34 +235,33 @@ const Dashboard = () => {
           <p className="text-gray-600">
             {getWelcomeMessage()}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            {getDataSource()}
-          </p>
         </div>
 
         {/* Cards section */}
-        <div className="grid md:grid-cols-2 gap-16 max-w-2xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center">Dokumenty</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-center">
-                Tworzenie i zarządzanie dokumentami finansowymi z wieloma transakcjami
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center">Raporty</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-center">
-                Generowanie raportów finansowych i analiz
-              </CardDescription>
-            </CardContent>
-          </Card>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="grid md:grid-cols-2 gap-16 max-w-2xl mx-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-center">Dokumenty</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-center">
+                  Tworzenie i zarządzanie dokumentami finansowymi z wieloma transakcjami
+                </CardDescription>
+              </CardContent>
+            </Card>
+  
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-center">Raporty</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-center">
+                  Generowanie raportów finansowych i analiz
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </MainLayout>
