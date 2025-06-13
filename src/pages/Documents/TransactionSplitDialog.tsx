@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -63,6 +62,11 @@ interface Account {
 }
 
 const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSide }: TransactionSplitDialogProps) => {
+  // Add null check for transaction BEFORE any hooks
+  if (!transaction) {
+    return null;
+  }
+
   const { user } = useAuth();
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -79,11 +83,6 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
     control: form.control,
     name: 'splitItems',
   });
-
-  // Add null check for transaction
-  if (!transaction) {
-    return null;
-  }
 
   const targetAmount = splitSide === 'debit' 
     ? (transaction.credit_amount || transaction.amount || 0)
