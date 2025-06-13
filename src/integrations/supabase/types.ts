@@ -582,6 +582,10 @@ export type Database = {
         Args: { user_id_to_delete: string }
         Returns: undefined
       }
+      generate_document_number: {
+        Args: { p_location_id: string; p_year: number; p_month: number }
+        Returns: string
+      }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string

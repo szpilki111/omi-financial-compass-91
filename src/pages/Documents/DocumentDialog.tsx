@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2 } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
 
@@ -64,6 +65,47 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       document_date: new Date(),
     },
   });
+
+  // Generate document number using the database function
+  const generateDocumentNumber = async (date: Date) => {
+    if (!user?.location) {
+      toast({
+        title: "Błąd",
+        description: "Nie można określić lokalizacji użytkownika",
+        variant: "destructive",
+      });
+      return '';
+    }
+
+    setIsGeneratingNumber(true);
+    try {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+
+      const { data, error } = await supabase.rpc('generate_document_number', {
+        p_location_id: user.location,
+        p_year: year,
+        p_month: month
+      });
+
+      if (error) {
+        console.error('Error generating document number:', error);
+        throw error;
+      }
+
+      return data || '';
+    } catch (error: any) {
+      console.error('Error generating document number:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się wygenerować numeru dokumentu",
+        variant: "destructive",
+      });
+      return '';
+    } finally {
+      setIsGeneratingNumber(false);
+    }
+  };
 
   // Load document data when editing
   useEffect(() => {
@@ -86,6 +128,34 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   }, [document, form]);
 
+  // Auto-generate document number for new documents when date changes
+  useEffect(() => {
+    if (!document && isOpen) {
+      const subscription = form.watch((value, { name }) => {
+        if (name === 'document_date' && value.document_date) {
+          generateDocumentNumber(new Date(value.document_date)).then(generatedNumber => {
+            if (generatedNumber) {
+              form.setValue('document_number', generatedNumber);
+            }
+          });
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [document, isOpen, form]);
+
+  // Generate initial document number for new documents
+  useEffect(() => {
+    if (!document && isOpen && user?.location) {
+      const currentDate = form.getValues('document_date');
+      generateDocumentNumber(currentDate).then(generatedNumber => {
+        if (generatedNumber) {
+          form.setValue('document_number', generatedNumber);
+        }
+      });
+    }
+  }, [document, isOpen, user?.location]);
+
   const loadTransactions = async (documentId: string) => {
     try {
       const { data, error } = await supabase
@@ -97,6 +167,18 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       setTransactions(data || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
+    }
+  };
+
+  const handleRegenerateNumber = async () => {
+    const currentDate = form.getValues('document_date');
+    const generatedNumber = await generateDocumentNumber(currentDate);
+    if (generatedNumber) {
+      form.setValue('document_number', generatedNumber);
+      toast({
+        title: "Sukces",
+        description: "Numer dokumentu został wygenerowany ponownie",
+      });
     }
   };
 
@@ -224,9 +306,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Numer dokumentu</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="np. DOK/001/2024" />
-                    </FormControl>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input {...field} placeholder="np. DOM/2024/01/001" />
+                      </FormControl>
+                      {!document && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRegenerateNumber}
+                          disabled={isGeneratingNumber}
+                          title="Wygeneruj ponownie numer dokumentu"
+                        >
+                          <RefreshCw className={cn("h-4 w-4", isGeneratingNumber && "animate-spin")} />
+                        </Button>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
