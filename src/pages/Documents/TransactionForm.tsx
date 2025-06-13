@@ -11,15 +11,23 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface TransactionFormProps {
   onAdd: (transaction: any) => void;
@@ -42,8 +50,14 @@ interface Account {
 }
 
 const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [debitAccounts, setDebitAccounts] = useState<Account[]>([]);
+  const [creditAccounts, setCreditAccounts] = useState<Account[]>([]);
+  const [debitSearchQuery, setDebitSearchQuery] = useState('');
+  const [creditSearchQuery, setCreditSearchQuery] = useState('');
+  const [isDebitSearching, setIsDebitSearching] = useState(false);
+  const [isCreditSearching, setIsCreditSearching] = useState(false);
+  const [debitSelectOpen, setDebitSelectOpen] = useState(false);
+  const [creditSelectOpen, setCreditSelectOpen] = useState(false);
 
   const form = useForm<TransactionFormData>({
     defaultValues: {
@@ -55,23 +69,120 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
     },
   });
 
-  useEffect(() => {
-    loadAccounts();
-  }, []);
+  // Function to search accounts based on query
+  const searchAccounts = async (query: string, isDebit: boolean) => {
+    if (!query || query.length < 2) {
+      if (isDebit) {
+        setDebitAccounts([]);
+      } else {
+        setCreditAccounts([]);
+      }
+      return;
+    }
 
-  const loadAccounts = async () => {
     try {
+      if (isDebit) {
+        setIsDebitSearching(true);
+      } else {
+        setIsCreditSearching(true);
+      }
+      
+      console.log('Wyszukiwanie kont dla zapytania:', query);
+      
       const { data, error } = await supabase
         .from('accounts')
-        .select('*')
-        .order('number');
-
-      if (error) throw error;
-      setAccounts(data || []);
+        .select('id, number, name, type')
+        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
+        .order('number', { ascending: true })
+        .limit(50);
+        
+      if (error) {
+        console.error('Błąd podczas wyszukiwania kont:', error);
+        throw error;
+      }
+      
+      console.log('Znalezione konta:', data);
+      console.log('Liczba znalezionych kont:', data?.length || 0);
+      
+      if (isDebit) {
+        setDebitAccounts(data || []);
+      } else {
+        setCreditAccounts(data || []);
+      }
     } catch (error) {
-      console.error('Error loading accounts:', error);
+      console.error('Błąd podczas wyszukiwania kont:', error);
     } finally {
-      setIsLoading(false);
+      if (isDebit) {
+        setIsDebitSearching(false);
+      } else {
+        setIsCreditSearching(false);
+      }
+    }
+  };
+
+  // Effect for debit account search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchAccounts(debitSearchQuery, true);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [debitSearchQuery]);
+
+  // Effect for credit account search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchAccounts(creditSearchQuery, false);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [creditSearchQuery]);
+
+  const handleDebitAccountChange = (accountId: string) => {
+    const selectedAccount = debitAccounts.find(acc => acc.id === accountId);
+    
+    form.setValue('debit_account_id', accountId);
+    
+    if (selectedAccount) {
+      setDebitSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
+    }
+    
+    setDebitSelectOpen(false);
+  };
+
+  const handleCreditAccountChange = (accountId: string) => {
+    const selectedAccount = creditAccounts.find(acc => acc.id === accountId);
+    
+    form.setValue('credit_account_id', accountId);
+    
+    if (selectedAccount) {
+      setCreditSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
+    }
+    
+    setCreditSelectOpen(false);
+  };
+
+  const handleDebitSearchChange = (value: string) => {
+    setDebitSearchQuery(value);
+    
+    // Clear selected account if user changes search text
+    if (form.getValues('debit_account_id')) {
+      const selectedAccount = debitAccounts.find(acc => acc.id === form.getValues('debit_account_id'));
+      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+        form.setValue('debit_account_id', '');
+      }
+    }
+  };
+
+  const handleCreditSearchChange = (value: string) => {
+    setCreditSearchQuery(value);
+    
+    // Clear selected account if user changes search text
+    if (form.getValues('credit_account_id')) {
+      const selectedAccount = creditAccounts.find(acc => acc.id === form.getValues('credit_account_id'));
+      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+        form.setValue('credit_account_id', '');
+      }
     }
   };
 
@@ -86,17 +197,14 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       credit_amount: Number(data.credit_amount),
     });
     form.reset();
+    setDebitSearchQuery('');
+    setCreditSearchQuery('');
+    setDebitAccounts([]);
+    setCreditAccounts([]);
   };
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center p-6">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const selectedDebitAccount = debitAccounts.find(account => account.id === form.watch('debit_account_id'));
+  const selectedCreditAccount = creditAccounts.find(account => account.id === form.watch('credit_account_id'));
 
   return (
     <Card>
@@ -126,21 +234,73 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 name="debit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Konto Winien</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz konto winien" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.number} - {account.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>
+                      Konto Winien
+                      {debitSearchQuery.length >= 2 && (
+                        <span className="text-gray-500 ml-2">
+                          ({isDebitSearching ? 'Wyszukiwanie...' : `${debitAccounts.length} znalezionych kont`})
+                        </span>
+                      )}
+                    </FormLabel>
+                    <Popover open={debitSelectOpen} onOpenChange={setDebitSelectOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={debitSelectOpen}
+                            className="w-full justify-between"
+                          >
+                            {selectedDebitAccount ? 
+                              `${selectedDebitAccount.number} - ${selectedDebitAccount.name}` : 
+                              debitSearchQuery || "Wybierz konto winien..."
+                            }
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                        <Command>
+                          <CommandInput 
+                            placeholder="Wpisz numer lub nazwę konta..."
+                            value={debitSearchQuery}
+                            onValueChange={handleDebitSearchChange}
+                          />
+                          <CommandList className="max-h-60 overflow-y-auto">
+                            {debitSearchQuery.length < 2 ? (
+                              <div className="py-6 text-center text-sm text-gray-500">
+                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                              </div>
+                            ) : isDebitSearching ? (
+                              <div className="py-6 text-center text-sm text-gray-500">
+                                Wyszukiwanie...
+                              </div>
+                            ) : debitAccounts.length === 0 ? (
+                              <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {debitAccounts.map((account) => (
+                                  <CommandItem
+                                    key={account.id}
+                                    value={`${account.number} ${account.name}`}
+                                    onSelect={() => handleDebitAccountChange(account.id)}
+                                    className="cursor-pointer hover:bg-gray-100"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedDebitAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {account.number} - {account.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -151,21 +311,73 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
                 name="credit_account_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Konto Ma</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz konto ma" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.number} - {account.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>
+                      Konto Ma
+                      {creditSearchQuery.length >= 2 && (
+                        <span className="text-gray-500 ml-2">
+                          ({isCreditSearching ? 'Wyszukiwanie...' : `${creditAccounts.length} znalezionych kont`})
+                        </span>
+                      )}
+                    </FormLabel>
+                    <Popover open={creditSelectOpen} onOpenChange={setCreditSelectOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={creditSelectOpen}
+                            className="w-full justify-between"
+                          >
+                            {selectedCreditAccount ? 
+                              `${selectedCreditAccount.number} - ${selectedCreditAccount.name}` : 
+                              creditSearchQuery || "Wybierz konto ma..."
+                            }
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                        <Command>
+                          <CommandInput 
+                            placeholder="Wpisz numer lub nazwę konta..."
+                            value={creditSearchQuery}
+                            onValueChange={handleCreditSearchChange}
+                          />
+                          <CommandList className="max-h-60 overflow-y-auto">
+                            {creditSearchQuery.length < 2 ? (
+                              <div className="py-6 text-center text-sm text-gray-500">
+                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                              </div>
+                            ) : isCreditSearching ? (
+                              <div className="py-6 text-center text-sm text-gray-500">
+                                Wyszukiwanie...
+                              </div>
+                            ) : creditAccounts.length === 0 ? (
+                              <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {creditAccounts.map((account) => (
+                                  <CommandItem
+                                    key={account.id}
+                                    value={`${account.number} ${account.name}`}
+                                    onSelect={() => handleCreditAccountChange(account.id)}
+                                    className="cursor-pointer hover:bg-gray-100"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedCreditAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {account.number} - {account.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
