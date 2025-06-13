@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,6 +52,8 @@ interface Transaction {
   credit_amount?: number;
   isCloned?: boolean;
   clonedType?: 'debit' | 'credit';
+  debitAccountName?: string;
+  creditAccountName?: string;
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
@@ -175,6 +176,37 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   }, [document, isOpen, user?.location]);
 
+  // Load account names for transactions
+  const loadAccountNamesForTransactions = async (transactionsToLoad: Transaction[]) => {
+    try {
+      const accountIds = new Set<string>();
+      transactionsToLoad.forEach(t => {
+        if (t.debit_account_id) accountIds.add(t.debit_account_id);
+        if (t.credit_account_id) accountIds.add(t.credit_account_id);
+      });
+
+      if (accountIds.size === 0) return transactionsToLoad;
+
+      const { data: accounts, error } = await supabase
+        .from('accounts')
+        .select('id, number, name')
+        .in('id', Array.from(accountIds));
+
+      if (error) throw error;
+
+      const accountsMap = new Map(accounts?.map(acc => [acc.id, acc]) || []);
+
+      return transactionsToLoad.map(transaction => ({
+        ...transaction,
+        debitAccountName: accountsMap.get(transaction.debit_account_id)?.name || '',
+        creditAccountName: accountsMap.get(transaction.credit_account_id)?.name || '',
+      }));
+    } catch (error) {
+      console.error('Error loading account names:', error);
+      return transactionsToLoad;
+    }
+  };
+
   const loadTransactions = async (documentId: string) => {
     try {
       const { data, error } = await supabase
@@ -183,7 +215,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         .eq('document_id', documentId);
 
       if (error) throw error;
-      setTransactions(data || []);
+      
+      const transactionsWithAccountNames = await loadAccountNamesForTransactions(data || []);
+      setTransactions(transactionsWithAccountNames);
     } catch (error) {
       console.error('Error loading transactions:', error);
     }
@@ -298,8 +332,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
-  const addTransaction = (transaction: Transaction) => {
-    setTransactions(prev => [...prev, transaction]);
+  const addTransaction = async (transaction: Transaction) => {
+    const transactionWithAccountNames = await loadAccountNamesForTransactions([transaction]);
+    setTransactions(prev => [...prev, transactionWithAccountNames[0]]);
     setShowTransactionForm(false);
   };
 
@@ -310,30 +345,48 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const duplicateDebitSide = (index: number) => {
     const originalTransaction = transactions[index];
     
-    // Update original transaction - remove debit amount
+    // For child transactions, don't modify the original - just duplicate as is
+    if (originalTransaction.isCloned) {
+      const duplicatedTransaction: Transaction = {
+        ...originalTransaction,
+        id: undefined, // Remove ID so it gets a new one when saved
+      };
+      
+      setTransactions(prev => {
+        const updated = [...prev];
+        // Insert the duplicated transaction right after the original one
+        updated.splice(index + 1, 0, duplicatedTransaction);
+        return updated;
+      });
+
+      toast({
+        title: "Sukces",
+        description: "Transakcja została powielona",
+      });
+      return;
+    }
+    
+    // For parent transactions, use the original logic
     const updatedOriginal = {
       ...originalTransaction,
       debit_amount: 0,
       amount: originalTransaction.credit_amount || originalTransaction.amount,
     };
     
-    // Create duplicated transaction with only debit side
     const duplicatedTransaction: Transaction = {
       ...originalTransaction,
-      description: '', // Clear description for editing
+      description: '',
       debit_amount: originalTransaction.debit_amount || originalTransaction.amount,
-      credit_amount: 0, // Set credit side to 0
+      credit_amount: 0,
       amount: originalTransaction.debit_amount || originalTransaction.amount,
-      id: undefined, // Remove ID so it gets a new one when saved
+      id: undefined,
       isCloned: true,
       clonedType: 'debit' as const
     };
     
     setTransactions(prev => {
       const updated = [...prev];
-      // Update the original transaction
       updated[index] = updatedOriginal;
-      // Insert the duplicated transaction right after the original one
       updated.splice(index + 1, 0, duplicatedTransaction);
       return updated;
     });
@@ -347,30 +400,48 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const duplicateCreditSide = (index: number) => {
     const originalTransaction = transactions[index];
     
-    // Update original transaction - remove credit amount
+    // For child transactions, don't modify the original - just duplicate as is
+    if (originalTransaction.isCloned) {
+      const duplicatedTransaction: Transaction = {
+        ...originalTransaction,
+        id: undefined, // Remove ID so it gets a new one when saved
+      };
+      
+      setTransactions(prev => {
+        const updated = [...prev];
+        // Insert the duplicated transaction right after the original one
+        updated.splice(index + 1, 0, duplicatedTransaction);
+        return updated;
+      });
+
+      toast({
+        title: "Sukces",
+        description: "Transakcja została powielona",
+      });
+      return;
+    }
+    
+    // For parent transactions, use the original logic
     const updatedOriginal = {
       ...originalTransaction,
       credit_amount: 0,
       amount: originalTransaction.debit_amount || originalTransaction.amount,
     };
     
-    // Create duplicated transaction with only credit side
     const duplicatedTransaction: Transaction = {
       ...originalTransaction,
-      description: '', // Clear description for editing
-      debit_amount: 0, // Set debit side to 0
+      description: '',
+      debit_amount: 0,
       credit_amount: originalTransaction.credit_amount || originalTransaction.amount,
       amount: originalTransaction.credit_amount || originalTransaction.amount,
-      id: undefined, // Remove ID so it gets a new one when saved
+      id: undefined,
       isCloned: true,
       clonedType: 'credit' as const
     };
     
     setTransactions(prev => {
       const updated = [...prev];
-      // Update the original transaction
       updated[index] = updatedOriginal;
-      // Insert the duplicated transaction right after the original one
       updated.splice(index + 1, 0, duplicatedTransaction);
       return updated;
     });
@@ -597,24 +668,38 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex-1">
                     <p className="font-medium">{transaction.description}</p>
-                    <p className="text-sm text-gray-600">
+                    <div className="text-sm text-gray-600 space-y-1">
                       {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                        <span className="ml-2 text-green-600">
-                          Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
-                            style: 'currency', 
-                            currency: 'PLN' 
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 font-medium">
+                            Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
+                              style: 'currency', 
+                              currency: 'PLN' 
+                            })}
+                          </span>
+                          {transaction.debitAccountName && (
+                            <span className="text-gray-500 text-xs">
+                              → {transaction.debitAccountName}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                        <span className="ml-2 text-blue-600">
-                          Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
-                            style: 'currency', 
-                            currency: 'PLN' 
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-600 font-medium">
+                            Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
+                              style: 'currency', 
+                              currency: 'PLN' 
+                            })}
+                          </span>
+                          {transaction.creditAccountName && (
+                            <span className="text-gray-500 text-xs">
+                              → {transaction.creditAccountName}
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     {/* Show duplication buttons based on cloned type restrictions */}
