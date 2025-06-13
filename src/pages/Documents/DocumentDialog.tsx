@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -665,6 +666,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </Button>
           </div>
 
+          {/* Transaction form appears right after the button */}
+          {showTransactionForm && (
+            <TransactionForm
+              onAdd={addTransaction}
+              onCancel={() => setShowTransactionForm(false)}
+            />
+          )}
+
+          {/* Transaction list appears after the form */}
           {transactions.length > 0 && (
             <div className="space-y-2">
               {transactions.map((transaction, index) => (
@@ -787,13 +797,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 </div>
               </div>
             </div>
-          )}
-
-          {showTransactionForm && (
-            <TransactionForm
-              onAdd={addTransaction}
-              onCancel={() => setShowTransactionForm(false)}
-            />
           )}
         </div>
       </DialogContent>
