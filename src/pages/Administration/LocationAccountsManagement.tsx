@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -19,8 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface Location {
   id: string;
@@ -45,6 +58,10 @@ interface LocationAccount {
 const LocationAccountsManagement = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [accountSelectOpen, setAccountSelectOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -62,19 +79,61 @@ const LocationAccountsManagement = () => {
     }
   });
 
-  // Fetch accounts
-  const { data: accounts } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: async () => {
+  // Function to search accounts based on query
+  const searchAccounts = async (query: string) => {
+    if (!query || query.length < 2) {
+      setAccounts([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      console.log('Wyszukiwanie kont dla zapytania:', query);
+      
       const { data, error } = await supabase
         .from('accounts')
-        .select('*')
-        .order('number');
+        .select('id, number, name, type')
+        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
+        .order('number', { ascending: true })
+        .limit(50);
+        
+      if (error) {
+        console.error('Błąd podczas wyszukiwania kont:', error);
+        throw error;
+      }
       
-      if (error) throw error;
-      return data;
+      console.log('Znalezione konta:', data);
+      console.log('Liczba znalezionych kont:', data?.length || 0);
+      
+      setAccounts(data || []);
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania kont:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się wyszukać kont",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
     }
-  });
+  };
+
+  // Effect to handle search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchAccounts(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset search when component unmounts or clears
+  useEffect(() => {
+    return () => {
+      setSearchQuery('');
+      setAccounts([]);
+    };
+  }, []);
 
   // Fetch location-account assignments with manual joins
   const { data: locationAccounts, isLoading } = useQuery({
@@ -142,6 +201,8 @@ const LocationAccountsManagement = () => {
       queryClient.invalidateQueries({ queryKey: ['location-accounts'] });
       setSelectedLocationId('');
       setSelectedAccountId('');
+      setSearchQuery('');
+      setAccounts([]);
       toast({
         title: "Sukces",
         description: "Przypisanie konta do placówki zostało dodane.",
@@ -182,6 +243,31 @@ const LocationAccountsManagement = () => {
     }
   });
 
+  const handleAccountChange = (accountId: string) => {
+    const selectedAccount = accounts.find(acc => acc.id === accountId);
+    
+    setSelectedAccountId(accountId);
+    
+    // Set search query to show selected account
+    if (selectedAccount) {
+      setSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
+    }
+    
+    setAccountSelectOpen(false);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    
+    // Clear selected account if user changes search text
+    if (selectedAccountId) {
+      const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+        setSelectedAccountId('');
+      }
+    }
+  };
+
   const handleAdd = () => {
     if (!selectedLocationId || !selectedAccountId) {
       toast({
@@ -213,6 +299,8 @@ const LocationAccountsManagement = () => {
     acc[locationName].push(assignment);
     return acc;
   }, {} as Record<string, LocationAccount[]>) || {};
+
+  const selectedAccount = accounts.find(account => account.id === selectedAccountId);
 
   if (isLoading) {
     return (
@@ -248,19 +336,71 @@ const LocationAccountsManagement = () => {
               </Select>
             </div>
             <div className="flex-1">
-              <label className="text-sm font-medium">Konto</label>
-              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Wybierz konto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts?.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.number} - {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">
+                Konto 
+                {searchQuery.length >= 2 && (
+                  <span className="text-gray-500">
+                    ({isSearching ? 'Wyszukiwanie...' : `${accounts.length} znalezionych kont`})
+                  </span>
+                )}
+              </label>
+              <Popover open={accountSelectOpen} onOpenChange={setAccountSelectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={accountSelectOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedAccount ? 
+                      `${selectedAccount.number} - ${selectedAccount.name}` : 
+                      searchQuery || "Wybierz konto..."
+                    }
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                  <Command>
+                    <CommandInput 
+                      placeholder="Wpisz numer lub nazwę konta..."
+                      value={searchQuery}
+                      onValueChange={handleSearchChange}
+                    />
+                    <CommandList className="max-h-60 overflow-y-auto">
+                      {searchQuery.length < 2 ? (
+                        <div className="py-6 text-center text-sm text-gray-500">
+                          Wpisz co najmniej 2 znaki, aby wyszukać konta...
+                        </div>
+                      ) : isSearching ? (
+                        <div className="py-6 text-center text-sm text-gray-500">
+                          Wyszukiwanie...
+                        </div>
+                      ) : accounts.length === 0 ? (
+                        <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
+                      ) : (
+                        <CommandGroup>
+                          {accounts.map((account) => (
+                            <CommandItem
+                              key={account.id}
+                              value={`${account.number} ${account.name}`}
+                              onSelect={() => handleAccountChange(account.id)}
+                              className="cursor-pointer hover:bg-gray-100"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedAccount?.id === account.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {account.number} - {account.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <Button 
               onClick={handleAdd} 
