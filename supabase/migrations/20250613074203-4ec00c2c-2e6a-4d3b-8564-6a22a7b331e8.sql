@@ -1,4 +1,5 @@
 
+
 -- Funkcja do generowania kolejnego numeru dokumentu dla danej lokalizacji i miesiąca
 CREATE OR REPLACE FUNCTION generate_document_number(
   p_location_id UUID,
@@ -23,8 +24,8 @@ BEGIN
   -- Znajdź najwyższy numer dokumentu dla danej lokalizacji, roku i miesiąca
   SELECT COALESCE(MAX(
     CASE 
-      WHEN document_number ~ ('^' || house_abbr || '/' || p_year || '/' || LPAD(p_month::TEXT, 2, '0') || '/[0-9]+$') 
-      THEN CAST(SPLIT_PART(document_number, '/', 4) AS INTEGER)
+      WHEN d.document_number ~ ('^' || house_abbr || '/' || p_year || '/' || LPAD(p_month::TEXT, 2, '0') || '/[0-9]+$') 
+      THEN CAST(SPLIT_PART(d.document_number, '/', 4) AS INTEGER)
       ELSE 0
     END
   ), 0) + 1 INTO next_number
@@ -39,3 +40,4 @@ BEGIN
   RETURN document_number;
 END;
 $$ LANGUAGE plpgsql;
+
