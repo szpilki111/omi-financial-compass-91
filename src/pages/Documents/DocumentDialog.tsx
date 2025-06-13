@@ -27,7 +27,6 @@ import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
-import TransactionSplitDialog from './TransactionSplitDialog';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -63,10 +62,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showSplitDialog, setShowSplitDialog] = useState(false);
-  const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
-  const [splittingTransactionIndex, setSplittingTransactionIndex] = useState<number | null>(null);
-  const [splitSide, setSplitSide] = useState<'debit' | 'credit'>('debit');
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -307,11 +302,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
-  const duplicateTransaction = (index: number) => {
+  const duplicateDebitSide = (index: number) => {
     const originalTransaction = transactions[index];
     const duplicatedTransaction = {
       ...originalTransaction,
-      description: '', // No description for duplicated transaction
+      description: '', // Clear description for editing
+      debit_amount: originalTransaction.debit_amount || originalTransaction.amount,
+      credit_amount: 0, // Set credit side to 0
+      amount: originalTransaction.debit_amount || originalTransaction.amount,
       id: undefined, // Remove ID so it gets a new one when saved
     };
     
@@ -324,7 +322,31 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     toast({
       title: "Sukces",
-      description: "Transakcja została powielona",
+      description: "Strona Winien została powielona",
+    });
+  };
+
+  const duplicateCreditSide = (index: number) => {
+    const originalTransaction = transactions[index];
+    const duplicatedTransaction = {
+      ...originalTransaction,
+      description: '', // Clear description for editing
+      debit_amount: 0, // Set debit side to 0
+      credit_amount: originalTransaction.credit_amount || originalTransaction.amount,
+      amount: originalTransaction.credit_amount || originalTransaction.amount,
+      id: undefined, // Remove ID so it gets a new one when saved
+    };
+    
+    setTransactions(prev => {
+      const updated = [...prev];
+      // Insert the duplicated transaction right after the original one
+      updated.splice(index + 1, 0, duplicatedTransaction);
+      return updated;
+    });
+
+    toast({
+      title: "Sukces",
+      description: "Strona Ma została powielona",
     });
   };
 
@@ -332,29 +354,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setEditingTransaction(transaction);
     setEditingTransactionIndex(index);
     setShowEditDialog(true);
-  };
-
-  const handleSplitTransaction = (transaction: Transaction, index: number, side: 'debit' | 'credit') => {
-    setSplittingTransaction(transaction);
-    setSplittingTransactionIndex(index);
-    setSplitSide(side);
-    setShowSplitDialog(true);
-  };
-
-  const handleTransactionSplit = (splitTransactions: Transaction[]) => {
-    if (splittingTransactionIndex !== null) {
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Remove the original transaction
-        updated.splice(splittingTransactionIndex, 1);
-        // Add the split transactions
-        updated.push(...splitTransactions);
-        return updated;
-      });
-    }
-    setShowSplitDialog(false);
-    setSplittingTransaction(null);
-    setSplittingTransactionIndex(null);
   };
 
   const handleTransactionUpdated = (updatedTransaction: Transaction) => {
@@ -544,32 +543,22 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => duplicateTransaction(index)}
-                      className="text-purple-600 hover:text-purple-700"
-                      title="Powiel transakcję"
+                      onClick={() => duplicateDebitSide(index)}
+                      className="text-green-600 hover:text-green-700"
+                      title="Powiel stronę Winien"
                     >
                       <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleSplitTransaction(transaction, index, 'debit')}
-                      className="text-green-600 hover:text-green-700"
-                      title="Rozbij stronę Winien"
-                    >
-                      <Plus className="h-4 w-4" />
                       W
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleSplitTransaction(transaction, index, 'credit')}
+                      onClick={() => duplicateCreditSide(index)}
                       className="text-blue-600 hover:text-blue-700"
-                      title="Rozbij stronę Ma"
+                      title="Powiel stronę Ma"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Copy className="h-4 w-4" />
                       M
                     </Button>
                     <Button
@@ -649,19 +638,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
         isNewDocument={!document}
-      />
-
-      {/* Transaction Split Dialog */}
-      <TransactionSplitDialog
-        isOpen={showSplitDialog}
-        onClose={() => {
-          setShowSplitDialog(false);
-          setSplittingTransaction(null);
-          setSplittingTransactionIndex(null);
-        }}
-        onSplit={handleTransactionSplit}
-        transaction={splittingTransaction}
-        splitSide={splitSide}
       />
     </Dialog>
   );
