@@ -81,7 +81,7 @@ const LocationAccountsManagement = () => {
     queryKey: ['location-accounts'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('location_accounts')
+        .from('location_accounts' as any)
         .select(`
           *,
           locations (id, name),
@@ -98,7 +98,7 @@ const LocationAccountsManagement = () => {
   const addMutation = useMutation({
     mutationFn: async ({ locationId, accountId }: { locationId: string; accountId: string }) => {
       const { error } = await supabase
-        .from('location_accounts')
+        .from('location_accounts' as any)
         .insert({
           location_id: locationId,
           account_id: accountId,
@@ -128,7 +128,7 @@ const LocationAccountsManagement = () => {
   const deleteMutation = useMutation({
     mutationFn: async (assignmentId: string) => {
       const { error } = await supabase
-        .from('location_accounts')
+        .from('location_accounts' as any)
         .delete()
         .eq('id', assignmentId);
 

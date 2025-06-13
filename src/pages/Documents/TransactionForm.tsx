@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -97,7 +98,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
       
       // Search for accounts assigned to the user's location
       const { data, error } = await supabase
-        .from('location_accounts')
+        .from('location_accounts' as any)
         .select(`
           accounts (
             id,
@@ -116,8 +117,17 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
         throw error;
       }
       
-      // Extract accounts from the nested structure
-      const accounts = data?.map(item => item.accounts).filter(Boolean) || [];
+      // Extract accounts from the nested structure and filter out null/undefined
+      const accounts = (data || [])
+        .map((item: any) => item.accounts)
+        .filter((account: any): account is Account => 
+          account && 
+          typeof account === 'object' && 
+          'id' in account && 
+          'number' in account && 
+          'name' in account && 
+          'type' in account
+        );
       
       console.log('Znalezione konta przed filtrowaniem:', accounts);
       
@@ -164,7 +174,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [debitSearchQuery]);
+  }, [debitSearchQuery, user?.location]);
 
   // Effect for credit account search with debounce
   useEffect(() => {
@@ -173,7 +183,7 @@ const TransactionForm = ({ onAdd, onCancel }: TransactionFormProps) => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [creditSearchQuery]);
+  }, [creditSearchQuery, user?.location]);
 
   const handleDebitAccountChange = (accountId: string) => {
     const selectedAccount = debitAccounts.find(acc => acc.id === accountId);
