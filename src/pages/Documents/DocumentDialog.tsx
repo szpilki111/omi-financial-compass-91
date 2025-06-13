@@ -326,8 +326,21 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   // Calculate separate sums for debit and credit
-  const debitTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
-  const creditTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
+  const debitTotal = transactions.reduce((sum, t) => {
+    // Dla debit używamy debit_amount jeśli dostępne, w przeciwnym razie amount
+    const debitAmount = t.debit_amount !== undefined ? t.debit_amount : t.amount;
+    return sum + debitAmount;
+  }, 0);
+  
+  const creditTotal = transactions.reduce((sum, t) => {
+    // Dla credit używamy credit_amount jeśli dostępne, w przeciwnym razie amount
+    const creditAmount = t.credit_amount !== undefined ? t.credit_amount : t.amount;
+    return sum + creditAmount;
+  }, 0);
+
+  console.log('Transactions:', transactions);
+  console.log('Debit total:', debitTotal);
+  console.log('Credit total:', creditTotal);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -463,6 +476,22 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         style: 'currency', 
                         currency: 'PLN' 
                       })}
+                      {transaction.debit_amount !== undefined && (
+                        <span className="ml-2 text-green-600">
+                          (Debit: {transaction.debit_amount.toLocaleString('pl-PL', { 
+                            style: 'currency', 
+                            currency: 'PLN' 
+                          })})
+                        </span>
+                      )}
+                      {transaction.credit_amount !== undefined && (
+                        <span className="ml-2 text-blue-600">
+                          (Credit: {transaction.credit_amount.toLocaleString('pl-PL', { 
+                            style: 'currency', 
+                            currency: 'PLN' 
+                          })})
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-2">
