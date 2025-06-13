@@ -63,6 +63,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [hiddenFieldsInEdit, setHiddenFieldsInEdit] = useState<{debit?: boolean, credit?: boolean}>({});
+  const [isClonedTransaction, setIsClonedTransaction] = useState(false);
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -321,6 +322,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       credit_amount: 0, // Set credit side to 0
       amount: originalTransaction.debit_amount || originalTransaction.amount,
       id: undefined, // Remove ID so it gets a new one when saved
+      isCloned: true,
+      clonedType: 'debit'
     };
     
     setTransactions(prev => {
@@ -356,6 +359,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       credit_amount: originalTransaction.credit_amount || originalTransaction.amount,
       amount: originalTransaction.credit_amount || originalTransaction.amount,
       id: undefined, // Remove ID so it gets a new one when saved
+      isCloned: true,
+      clonedType: 'credit'
     };
     
     setTransactions(prev => {
@@ -374,11 +379,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleEditTransaction = (transaction: Transaction, index: number) => {
-    // Determine which fields to hide based on transaction amounts
-    const hideFields = {
-      debit: transaction.debit_amount === 0,
-      credit: transaction.credit_amount === 0,
-    };
+    // Check if this is a cloned transaction and determine hidden fields
+    let hideFields = {};
+    
+    if (transaction.isCloned) {
+      // For cloned transactions, hide the opposite side
+      hideFields = {
+        debit: transaction.clonedType === 'credit',
+        credit: transaction.clonedType === 'debit',
+      };
+      setIsClonedTransaction(true);
+    } else {
+      // For regular transactions, determine which fields to hide based on amounts
+      hideFields = {
+        debit: transaction.debit_amount === 0,
+        credit: transaction.credit_amount === 0,
+      };
+      setIsClonedTransaction(false);
+    }
     
     setHiddenFieldsInEdit(hideFields);
     setEditingTransaction(transaction);
@@ -395,6 +413,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       if (editingTransactionIndex !== null) {
         setTransactions(prev => {
           const updated = [...prev];
+          // Preserve the cloned properties when updating
+          if (isClonedTransaction) {
+            updatedTransaction.isCloned = true;
+            updatedTransaction.clonedType = updated[editingTransactionIndex].clonedType;
+          }
           updated[editingTransactionIndex] = updatedTransaction;
           return updated;
         });
@@ -403,7 +426,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(false);
     setEditingTransaction(null);
     setEditingTransactionIndex(null);
-    setHiddenFieldsInEdit({});
+    // Don't reset hiddenFieldsInEdit here to preserve the hidden state
+    // setHiddenFieldsInEdit({});
+    setIsClonedTransaction(false);
   };
 
   // Calculate separate sums for debit and credit using the new columns
@@ -666,6 +691,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           setEditingTransaction(null);
           setEditingTransactionIndex(null);
           setHiddenFieldsInEdit({});
+          setIsClonedTransaction(false);
         }}
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
