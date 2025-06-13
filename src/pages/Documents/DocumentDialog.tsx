@@ -60,6 +60,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
   const form = useForm<DocumentFormData>({
@@ -291,7 +292,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleEditTransaction = (transaction: Transaction, index: number) => {
-    setEditingTransaction({ ...transaction, index });
+    setEditingTransaction(transaction);
+    setEditingTransactionIndex(index);
     setShowEditDialog(true);
   };
 
@@ -299,9 +301,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Reload transactions if editing existing document
     if (document?.id) {
       loadTransactions(document.id);
+    } else {
+      // For new documents, update the local transactions array
+      if (editingTransactionIndex !== null && editingTransaction) {
+        setTransactions(prev => {
+          const updated = [...prev];
+          updated[editingTransactionIndex] = editingTransaction;
+          return updated;
+        });
+      }
     }
     setShowEditDialog(false);
     setEditingTransaction(null);
+    setEditingTransactionIndex(null);
   };
 
   const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
@@ -488,6 +500,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         onClose={() => {
           setShowEditDialog(false);
           setEditingTransaction(null);
+          setEditingTransactionIndex(null);
         }}
         onSave={handleTransactionUpdated}
         transaction={editingTransaction}
