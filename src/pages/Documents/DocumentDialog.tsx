@@ -472,24 +472,21 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   <div className="flex-1">
                     <p className="font-medium">{transaction.description}</p>
                     <p className="text-sm text-gray-600">
-                      Kwota: {transaction.amount.toLocaleString('pl-PL', { 
-                        style: 'currency', 
-                        currency: 'PLN' 
-                      })}
+
                       {transaction.debit_amount !== undefined && (
                         <span className="ml-2 text-green-600">
-                          (Debit: {transaction.debit_amount.toLocaleString('pl-PL', { 
+                          Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
                             style: 'currency', 
                             currency: 'PLN' 
-                          })})
+                          })}
                         </span>
                       )}
                       {transaction.credit_amount !== undefined && (
                         <span className="ml-2 text-blue-600">
-                          (Credit: {transaction.credit_amount.toLocaleString('pl-PL', { 
+                          Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
                             style: 'currency', 
                             currency: 'PLN' 
-                          })})
+                          })}
                         </span>
                       )}
                     </p>
@@ -520,7 +517,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               {/* Updated summary section with separate debit and credit totals */}
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between items-center text-lg">
-                  <span className="font-medium text-green-700">Winien (Debit):</span>
+                  <span className="font-medium text-green-700">Winien:</span>
                   <span className="font-semibold text-green-700">
                     {debitTotal.toLocaleString('pl-PL', { 
                       style: 'currency', 
@@ -529,7 +526,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-lg">
-                  <span className="font-medium text-blue-700">Ma (Credit):</span>
+                  <span className="font-medium text-blue-700">Ma:</span>
                   <span className="font-semibold text-blue-700">
                     {creditTotal.toLocaleString('pl-PL', { 
                       style: 'currency', 
