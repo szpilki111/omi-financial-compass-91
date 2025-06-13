@@ -511,9 +511,11 @@ export type Database = {
           amount: number
           created_at: string
           credit_account_id: string
+          credit_amount: number | null
           currency: string
           date: string
           debit_account_id: string
+          debit_amount: number | null
           description: string
           document_id: string | null
           document_number: string | null
@@ -528,9 +530,11 @@ export type Database = {
           amount: number
           created_at?: string
           credit_account_id: string
+          credit_amount?: number | null
           currency?: string
           date: string
           debit_account_id: string
+          debit_amount?: number | null
           description: string
           document_id?: string | null
           document_number?: string | null
@@ -545,9 +549,11 @@ export type Database = {
           amount?: number
           created_at?: string
           credit_account_id?: string
+          credit_amount?: number | null
           currency?: string
           date?: string
           debit_account_id?: string
+          debit_amount?: number | null
           description?: string
           document_id?: string | null
           document_number?: string | null

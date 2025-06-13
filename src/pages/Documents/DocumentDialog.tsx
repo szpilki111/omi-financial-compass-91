@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -262,7 +263,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           document_id: documentId,
           debit_account_id: t.debit_account_id,
           credit_account_id: t.credit_account_id,
-          amount: t.amount,
+          amount: t.debit_amount || t.amount, // Use debit_amount as primary amount
+          debit_amount: t.debit_amount || t.amount,
+          credit_amount: t.credit_amount || t.amount,
           description: t.description,
           settlement_type: t.settlement_type,
           date: format(data.document_date, 'yyyy-MM-dd'),
@@ -325,15 +328,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setEditingTransactionIndex(null);
   };
 
-  // Calculate separate sums for debit and credit
+  // Calculate separate sums for debit and credit using the new columns
   const debitTotal = transactions.reduce((sum, t) => {
-    // Dla debit używamy debit_amount jeśli dostępne, w przeciwnym razie amount
     const debitAmount = t.debit_amount !== undefined ? t.debit_amount : t.amount;
     return sum + debitAmount;
   }, 0);
   
   const creditTotal = transactions.reduce((sum, t) => {
-    // Dla credit używamy credit_amount jeśli dostępne, w przeciwnym razie amount
     const creditAmount = t.credit_amount !== undefined ? t.credit_amount : t.amount;
     return sum + creditAmount;
   }, 0);
@@ -472,7 +473,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   <div className="flex-1">
                     <p className="font-medium">{transaction.description}</p>
                     <p className="text-sm text-gray-600">
-
                       {transaction.debit_amount !== undefined && (
                         <span className="ml-2 text-green-600">
                           Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
