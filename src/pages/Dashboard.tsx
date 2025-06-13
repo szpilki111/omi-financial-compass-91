@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +12,7 @@ import NotificationCard from '@/components/dashboard/NotificationCard';
 import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen, Activity, CheckCircle, Clock } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -245,7 +247,9 @@ const Dashboard = () => {
             {getDataSource()}
           </p>
         </div>
-<div className="grid md:grid-cols-2 gap-16 max-w-2xl mx-auto">
+
+        {/* Cards section */}
+        <div className="grid md:grid-cols-2 gap-16 max-w-2xl mx-auto">
           <Card>
             <CardHeader>
               <CardTitle className="text-center">Dokumenty</CardTitle>
@@ -268,6 +272,7 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
     </MainLayout>
   );
 };
