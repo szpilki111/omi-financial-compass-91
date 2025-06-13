@@ -245,7 +245,7 @@ const Dashboard = () => {
                 </Card>
             </Link>
 
-            <Link to="/raporty">
+            <Link to="/reports">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-center">Raporty</CardTitle>
