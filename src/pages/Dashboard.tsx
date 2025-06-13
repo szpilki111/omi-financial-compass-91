@@ -229,7 +229,7 @@ const Dashboard = () => {
       <div className="space-y-6">
 
         {/* Cards section */}
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto mt-8">
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">Witaj, {user?.name || 'Użytkowniku'}</CardTitle>
