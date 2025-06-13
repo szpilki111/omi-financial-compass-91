@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -318,15 +317,20 @@ const LocationAccountsManagement = () => {
     }
   };
 
-  // Group assignments by location
-  const groupedAssignments = locationAccounts?.reduce((acc, assignment) => {
+  // Filter assignments to show only those for the selected location
+  const filteredAssignments = locationAccounts?.filter(assignment => 
+    !selectedLocationId || assignment.location_id === selectedLocationId
+  ) || [];
+
+  // Group filtered assignments by location
+  const groupedAssignments = filteredAssignments.reduce((acc, assignment) => {
     const locationName = assignment.locations.name;
     if (!acc[locationName]) {
       acc[locationName] = [];
     }
     acc[locationName].push(assignment);
     return acc;
-  }, {} as Record<string, LocationAccount[]>) || {};
+  }, {} as Record<string, LocationAccount[]>);
 
   const selectedAccount = accounts.find(account => account.id === selectedAccountId);
 
@@ -440,8 +444,10 @@ const LocationAccountsManagement = () => {
             </Button>
           </div>
 
-          {Object.keys(groupedAssignments).length === 0 ? (
-            <p className="text-center text-gray-500">Brak przypisań kont do placówek.</p>
+          {!selectedLocationId ? (
+            <p className="text-center text-gray-500">Wybierz placówkę, aby zobaczyć przypisane konta.</p>
+          ) : Object.keys(groupedAssignments).length === 0 ? (
+            <p className="text-center text-gray-500">Brak przypisanych kont do wybranej placówki.</p>
           ) : (
             <div className="space-y-6">
               {Object.entries(groupedAssignments).map(([locationName, assignments]) => (
