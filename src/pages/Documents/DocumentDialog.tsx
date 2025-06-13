@@ -52,8 +52,8 @@ interface Transaction {
   credit_amount?: number;
   isCloned?: boolean;
   clonedType?: 'debit' | 'credit';
-  debitAccountName?: string;
-  creditAccountName?: string;
+  debitAccountNumber?: string;
+  creditAccountNumber?: string;
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
@@ -176,8 +176,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   }, [document, isOpen, user?.location]);
 
-  // Load account names for transactions
-  const loadAccountNamesForTransactions = async (transactionsToLoad: Transaction[]) => {
+  // Load account numbers for transactions
+  const loadAccountNumbersForTransactions = async (transactionsToLoad: Transaction[]) => {
     try {
       const accountIds = new Set<string>();
       transactionsToLoad.forEach(t => {
@@ -198,11 +198,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       return transactionsToLoad.map(transaction => ({
         ...transaction,
-        debitAccountName: accountsMap.get(transaction.debit_account_id)?.name || '',
-        creditAccountName: accountsMap.get(transaction.credit_account_id)?.name || '',
+        debitAccountNumber: accountsMap.get(transaction.debit_account_id)?.number || '',
+        creditAccountNumber: accountsMap.get(transaction.credit_account_id)?.number || '',
       }));
     } catch (error) {
-      console.error('Error loading account names:', error);
+      console.error('Error loading account numbers:', error);
       return transactionsToLoad;
     }
   };
@@ -216,8 +216,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (error) throw error;
       
-      const transactionsWithAccountNames = await loadAccountNamesForTransactions(data || []);
-      setTransactions(transactionsWithAccountNames);
+      const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(data || []);
+      setTransactions(transactionsWithAccountNumbers);
     } catch (error) {
       console.error('Error loading transactions:', error);
     }
@@ -333,8 +333,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const addTransaction = async (transaction: Transaction) => {
-    const transactionWithAccountNames = await loadAccountNamesForTransactions([transaction]);
-    setTransactions(prev => [...prev, transactionWithAccountNames[0]]);
+    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
+    setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
     setShowTransactionForm(false);
   };
 
@@ -478,13 +478,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(true);
   };
 
-  const handleTransactionUpdated = (updatedTransaction: Transaction) => {
+  const handleTransactionUpdated = async (updatedTransaction: Transaction) => {
     // Reload transactions if editing existing document
     if (document?.id) {
       loadTransactions(document.id);
     } else {
       // For new documents, update the local transactions array
       if (editingTransactionIndex !== null) {
+        // Load account numbers for the updated transaction
+        const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
+        
         setTransactions(prev => {
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
@@ -492,7 +495,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           // If this is a cloned transaction, preserve the cloned properties and restrictions
           if (isClonedTransaction && originalTransaction.isCloned) {
             const finalTransaction = {
-              ...updatedTransaction,
+              ...transactionWithAccountNumbers[0],
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
@@ -511,7 +514,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             updated[editingTransactionIndex] = finalTransaction;
           } else {
             // For regular transactions, use the updated transaction as is
-            updated[editingTransactionIndex] = updatedTransaction;
+            updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
           
           return updated;
@@ -677,9 +680,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               currency: 'PLN' 
                             })}
                           </span>
-                          {transaction.debitAccountName && (
+                          {transaction.debitAccountNumber && (
                             <span className="text-gray-500 text-xs">
-                              → {transaction.debitAccountName}
+                              → {transaction.debitAccountNumber}
                             </span>
                           )}
                         </div>
@@ -692,9 +695,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               currency: 'PLN' 
                             })}
                           </span>
-                          {transaction.creditAccountName && (
+                          {transaction.creditAccountNumber && (
                             <span className="text-gray-500 text-xs">
-                              → {transaction.creditAccountName}
+                              → {transaction.creditAccountNumber}
                             </span>
                           )}
                         </div>
