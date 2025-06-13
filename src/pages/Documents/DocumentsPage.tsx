@@ -93,8 +93,7 @@ const DocumentsPage = () => {
     return documents.filter(doc => 
       doc.document_number.toLowerCase().includes(search) ||
       doc.document_name.toLowerCase().includes(search) ||
-      format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search) ||
-      doc.locations?.name.toLowerCase().includes(search)
+      format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search)
     );
   }, [documents, searchTerm]);
 
@@ -147,7 +146,7 @@ const DocumentsPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Szukaj po numerze, nazwie, dacie lub lokalizacji..."
+            placeholder="Szukaj po numerze, nazwie lub dacie..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
