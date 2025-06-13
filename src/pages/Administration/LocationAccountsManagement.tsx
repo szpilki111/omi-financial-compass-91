@@ -76,21 +76,53 @@ const LocationAccountsManagement = () => {
     }
   });
 
-  // Fetch location-account assignments
+  // Fetch location-account assignments with manual joins
   const { data: locationAccounts, isLoading } = useQuery({
     queryKey: ['location-accounts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('location_accounts' as any)
-        .select(`
-          *,
-          locations (id, name),
-          accounts (id, number, name, type)
-        `)
-        .order('locations.name, accounts.number');
+      // First get the location_accounts
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('location_accounts')
+        .select('*')
+        .order('created_at');
       
-      if (error) throw error;
-      return data as LocationAccount[];
+      if (assignmentsError) throw assignmentsError;
+      if (!assignments) return [];
+
+      // Get all locations
+      const { data: allLocations, error: locationsError } = await supabase
+        .from('locations')
+        .select('*');
+      
+      if (locationsError) throw locationsError;
+
+      // Get all accounts
+      const { data: allAccounts, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*');
+      
+      if (accountsError) throw accountsError;
+
+      // Manually join the data
+      const result: LocationAccount[] = assignments.map(assignment => {
+        const location = allLocations?.find(loc => loc.id === assignment.location_id);
+        const account = allAccounts?.find(acc => acc.id === assignment.account_id);
+        
+        return {
+          id: assignment.id,
+          location_id: assignment.location_id,
+          account_id: assignment.account_id,
+          locations: location || { id: assignment.location_id, name: 'Unknown Location' },
+          accounts: account || { id: assignment.account_id, number: 'Unknown', name: 'Unknown Account', type: 'Unknown' }
+        };
+      });
+
+      // Sort by location name, then account number
+      return result.sort((a, b) => {
+        const locationCompare = a.locations.name.localeCompare(b.locations.name);
+        if (locationCompare !== 0) return locationCompare;
+        return a.accounts.number.localeCompare(b.accounts.number);
+      });
     }
   });
 
@@ -98,7 +130,7 @@ const LocationAccountsManagement = () => {
   const addMutation = useMutation({
     mutationFn: async ({ locationId, accountId }: { locationId: string; accountId: string }) => {
       const { error } = await supabase
-        .from('location_accounts' as any)
+        .from('location_accounts')
         .insert({
           location_id: locationId,
           account_id: accountId,
@@ -128,7 +160,7 @@ const LocationAccountsManagement = () => {
   const deleteMutation = useMutation({
     mutationFn: async (assignmentId: string) => {
       const { error } = await supabase
-        .from('location_accounts' as any)
+        .from('location_accounts')
         .delete()
         .eq('id', assignmentId);
 
