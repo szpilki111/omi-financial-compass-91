@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2, RefreshCw, Edit } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, RefreshCw, Edit, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -307,6 +307,27 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
+  const duplicateTransaction = (index: number) => {
+    const originalTransaction = transactions[index];
+    const duplicatedTransaction = {
+      ...originalTransaction,
+      description: '', // No description for duplicated transaction
+      id: undefined, // Remove ID so it gets a new one when saved
+    };
+    
+    setTransactions(prev => {
+      const updated = [...prev];
+      // Insert the duplicated transaction right after the original one
+      updated.splice(index + 1, 0, duplicatedTransaction);
+      return updated;
+    });
+
+    toast({
+      title: "Sukces",
+      description: "Transakcja została powielona",
+    });
+  };
+
   const handleEditTransaction = (transaction: Transaction, index: number) => {
     setEditingTransaction(transaction);
     setEditingTransactionIndex(index);
@@ -519,6 +540,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => duplicateTransaction(index)}
+                      className="text-purple-600 hover:text-purple-700"
+                      title="Powiel transakcję"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
