@@ -121,17 +121,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         document_date: new Date(document.document_date),
       });
       
-      // Load existing transactions
+      // Load existing transactions only for existing documents
       loadTransactions(document.id);
     } else {
+      // For new documents, always start with empty form and no transactions
       form.reset({
         document_number: '',
         document_name: '',
         document_date: new Date(),
       });
+      setTransactions([]); // Explicitly clear transactions for new documents
+    }
+  }, [document, form, isOpen]); // Added isOpen to dependency array
+
+  // Clear transactions when dialog closes and opens for new document
+  useEffect(() => {
+    if (isOpen && !document) {
+      // This is a new document - ensure transactions are cleared
       setTransactions([]);
     }
-  }, [document, form]);
+  }, [isOpen, document]);
 
   // Auto-generate document number for new documents when date changes
   useEffect(() => {
