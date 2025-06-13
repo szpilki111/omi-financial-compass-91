@@ -199,7 +199,7 @@ const LocationAccountsManagement = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['location-accounts'] });
-      setSelectedLocationId('');
+      // Keep selectedLocationId unchanged, only clear account-related fields
       setSelectedAccountId('');
       setSearchQuery('');
       setAccounts([]);
