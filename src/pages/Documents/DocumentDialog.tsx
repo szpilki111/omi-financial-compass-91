@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -416,12 +415,33 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       if (editingTransactionIndex !== null) {
         setTransactions(prev => {
           const updated = [...prev];
-          // Preserve the cloned properties when updating
-          if (isClonedTransaction) {
-            updatedTransaction.isCloned = true;
-            updatedTransaction.clonedType = updated[editingTransactionIndex].clonedType;
+          const originalTransaction = updated[editingTransactionIndex];
+          
+          // If this is a cloned transaction, preserve the cloned properties and restrictions
+          if (isClonedTransaction && originalTransaction.isCloned) {
+            const finalTransaction = {
+              ...updatedTransaction,
+              isCloned: true,
+              clonedType: originalTransaction.clonedType,
+            };
+            
+            // Enforce the cloned restrictions - keep the opposite side at 0
+            if (originalTransaction.clonedType === 'debit') {
+              // For cloned debit transactions, keep credit_amount at 0
+              finalTransaction.credit_amount = 0;
+              finalTransaction.amount = finalTransaction.debit_amount || 0;
+            } else if (originalTransaction.clonedType === 'credit') {
+              // For cloned credit transactions, keep debit_amount at 0
+              finalTransaction.debit_amount = 0;
+              finalTransaction.amount = finalTransaction.credit_amount || 0;
+            }
+            
+            updated[editingTransactionIndex] = finalTransaction;
+          } else {
+            // For regular transactions, use the updated transaction as is
+            updated[editingTransactionIndex] = updatedTransaction;
           }
-          updated[editingTransactionIndex] = updatedTransaction;
+          
           return updated;
         });
       }
@@ -429,8 +449,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(false);
     setEditingTransaction(null);
     setEditingTransactionIndex(null);
-    // Don't reset hiddenFieldsInEdit here to preserve the hidden state
-    // setHiddenFieldsInEdit({});
     setIsClonedTransaction(false);
   };
 
