@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -317,7 +318,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     };
     
     // Create duplicated transaction with only debit side
-    const duplicatedTransaction = {
+    const duplicatedTransaction: Transaction = {
       ...originalTransaction,
       description: '', // Clear description for editing
       debit_amount: originalTransaction.debit_amount || originalTransaction.amount,
@@ -325,7 +326,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       amount: originalTransaction.debit_amount || originalTransaction.amount,
       id: undefined, // Remove ID so it gets a new one when saved
       isCloned: true,
-      clonedType: 'debit'
+      clonedType: 'debit' as const
     };
     
     setTransactions(prev => {
@@ -354,7 +355,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     };
     
     // Create duplicated transaction with only credit side
-    const duplicatedTransaction = {
+    const duplicatedTransaction: Transaction = {
       ...originalTransaction,
       description: '', // Clear description for editing
       debit_amount: 0, // Set debit side to 0
@@ -362,7 +363,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       amount: originalTransaction.credit_amount || originalTransaction.amount,
       id: undefined, // Remove ID so it gets a new one when saved
       isCloned: true,
-      clonedType: 'credit'
+      clonedType: 'credit' as const
     };
     
     setTransactions(prev => {
