@@ -325,7 +325,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setEditingTransactionIndex(null);
   };
 
-  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+  // Calculate separate sums for debit and credit
+  const debitTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
+  const creditTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -485,11 +487,38 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   </div>
                 </div>
               ))}
-              <div className="text-right font-medium text-lg">
-                Suma: {totalAmount.toLocaleString('pl-PL', { 
-                  style: 'currency', 
-                  currency: 'PLN' 
-                })}
+              
+              {/* Updated summary section with separate debit and credit totals */}
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between items-center text-lg">
+                  <span className="font-medium text-green-700">Winien (Debit):</span>
+                  <span className="font-semibold text-green-700">
+                    {debitTotal.toLocaleString('pl-PL', { 
+                      style: 'currency', 
+                      currency: 'PLN' 
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-lg">
+                  <span className="font-medium text-blue-700">Ma (Credit):</span>
+                  <span className="font-semibold text-blue-700">
+                    {creditTotal.toLocaleString('pl-PL', { 
+                      style: 'currency', 
+                      currency: 'PLN' 
+                    })}
+                  </span>
+                </div>
+                <div className="border-t pt-2">
+                  <div className="flex justify-between items-center text-xl font-bold">
+                    <span>Razem:</span>
+                    <span>
+                      {(debitTotal + creditTotal).toLocaleString('pl-PL', { 
+                        style: 'currency', 
+                        currency: 'PLN' 
+                      })}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
