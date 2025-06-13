@@ -50,6 +50,8 @@ interface Transaction {
   settlement_type: string;
   debit_amount?: number;
   credit_amount?: number;
+  isCloned?: boolean;
+  clonedType?: 'debit' | 'credit';
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
