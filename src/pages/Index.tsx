@@ -48,7 +48,7 @@ const Index = () => {
           </Button>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-1xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8 max-w-2xl mx-auto">
           <Card>
             <CardHeader>
               <CardTitle className="text-center">Dokumenty</CardTitle>
