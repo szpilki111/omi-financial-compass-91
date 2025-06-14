@@ -70,15 +70,14 @@ export const calculateFinancialSummary = async (
     let income = 0;
     let expense = 0;
 
-    // Zakres kont do zliczania przychodów
+    // Przychód: tylko konta 700-799!
     const isIncomeAccount = (accountNum: string) =>
-      /^7[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+      /^7[0-9]{2}$/.test(accountNum.slice(0, 3));
 
-    // Zakres kont do zliczania kosztów
+    // Rozchód: konta 400-499
     const isExpenseAccount = (accountNum: string) =>
-      /^4[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+      /^4[0-9]{2}$/.test(accountNum.slice(0, 3));
 
-    // Jeśli nie mamy transakcji, zwróć zerowe wartości
     if (!formattedTransactions || formattedTransactions.length === 0) {
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
@@ -94,7 +93,6 @@ export const calculateFinancialSummary = async (
       }
     });
 
-    // Oblicz bilans (przychody - rozchody)
     const balance = income - expense;
 
     return {
