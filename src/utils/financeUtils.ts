@@ -72,13 +72,14 @@ export const calculateFinancialSummary = async (
     // Nowy algorytm: klasyczne KPIR 
     const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
+      // Obsługa konta z sufiksem ("701-2") oraz bez sufiksu ("700")
       const mainPart = accountNum.split('-')[0];
-      return /^7[0-9]{2}$/.test(mainPart);
+      return /^7[0-9]{2}$/.test(mainPart); // tylko konta 7xx
     };
     const isPnlExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const mainPart = accountNum.split('-')[0];
-      return /^4[0-9]{2}$/.test(mainPart);
+      return /^4[0-9]{2}$/.test(mainPart); // tylko konta 4xx
     };
 
     let income = 0;
@@ -88,29 +89,34 @@ export const calculateFinancialSummary = async (
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
+    // Dodane logowanie szczegółowe kwot i kont
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      // Użyj kwot debet/kredyt jeśli istnieją, domyślnie .amount
+      // Użyj kwot debet/kredyt jeśli istnieją, domyślnie amount
       const hasSpecificAmounts = transaction.debit_amount != null || transaction.credit_amount != null;
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      // Poprawiona logika – tylko klasyczna KPIR!
-      // Suma przychodów: MA na 7xx
+      // Nowy log: szczegółowa analiza każdej transakcji 7xx na kredycie (MA)
       if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
+        console.log(
+          `Przychód +${creditAmount} zł (konto MA: ${creditAccountNumber}) transakcja: ${transaction.id}`
+        );
       }
-
-      // Suma kosztów: WN na 4xx
+      // Pokazuję ewentualne korygujące 7xx po stronie debetu, ale domyślnie nie stosujemy minusów jeśli tak nie było w rzeczywistych danych
       if (isPnlExpenseAccount(debitAccountNumber)) {
         expense += debitAmount;
+        console.log(
+          `Koszt +${debitAmount} zł (konto WN: ${debitAccountNumber}) transakcja: ${transaction.id}`
+        );
       }
     });
 
-    console.log(`Łączne przychody (7xx-MA): ${income} zł`);
-    console.log(`Łączne rozchody (4xx-WN): ${expense} zł`);
+    console.log(`Łączne przychody sumowane z kont 7xx (MA): ${income} zł`);
+    console.log(`Łączne rozchody sumowane z kont 4xx (WN): ${expense} zł`);
 
     const balance = income - expense;
 
