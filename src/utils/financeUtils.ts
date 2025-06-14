@@ -83,14 +83,12 @@ export const calculateFinancialSummary = async (
     // Funkcje do sprawdzania kont na podstawie pierwszej cyfry
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      const firstDigit = accountNum.charAt(0);
-      return firstDigit === '4';
+      return accountNum.startsWith('7');
     };
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      const firstDigit = accountNum.charAt(0);
-      return firstDigit === '7';
+      return accountNum.startsWith('4');
     };
 
     let income = 0;
@@ -113,37 +111,40 @@ export const calculateFinancialSummary = async (
       console.log(`   WN (debet): ${debitAccountNumber} | MA (kredyt): ${creditAccountNumber}`);
       console.log(`   DANE KWOT: amount: ${transaction.amount}, debit_amount: ${transaction.debit_amount ?? 'brak'}, credit_amount: ${transaction.credit_amount ?? 'brak'}`);
 
-      // NOWA LOGIKA: Sprawdź każdą stronę transakcji oddzielnie
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      // Przychody: konta 7xx po stronie kredytu (MA)
-      if (isIncomeAccount(creditAccountNumber)) {
-        // Użyj credit_amount, jeśli jest zdefiniowane i dodatnie; w przeciwnym razie użyj głównej kwoty transakcji.
-        // Zapobiega to problemom, gdy credit_amount jest 0, null, lub niezdefiniowane.
+      const isIncome = isIncomeAccount(creditAccountNumber);
+      const isExpense = isExpenseAccount(debitAccountNumber);
+
+      // Przychód: tylko jeśli to transakcja przychodowa (kredyt 7xx), a nie wewnętrzna kosztowo-przychodowa
+      if (isIncome && !isExpense) {
         transactionIncome = (transaction.credit_amount && transaction.credit_amount > 0)
           ? transaction.credit_amount
           : transaction.amount;
         console.log(`   ✅ PRZYCHÓD: +${transactionIncome} zł (konto MA: ${creditAccountNumber})`);
       }
-
-      // Koszty: konta 4xx po stronie debetu (WN)
-      if (isExpenseAccount(debitAccountNumber)) {
-        // Użyj debit_amount, jeśli jest zdefiniowane i dodatnie; w przeciwnym razie użyj głównej kwoty transakcji.
+      // Koszt: tylko jeśli to transakcja kosztowa (debet 4xx), a nie wewnętrzna
+      else if (isExpense && !isIncome) {
         transactionExpense = (transaction.debit_amount && transaction.debit_amount > 0)
           ? transaction.debit_amount
           : transaction.amount;
         console.log(`   ✅ KOSZT: +${transactionExpense} zł (konto WN: ${debitAccountNumber})`);
+      }
+      // Transakcje, które nie wpływają na wynik finansowy lub są wewnętrzne
+      else {
+        if (isIncome && isExpense) {
+          console.log(`   ℹ️ Transakcja wewnętrzna (np. 4xx/7xx) - nie wpływa na P&L`);
+        } else {
+          console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
+        }
       }
 
       // Dodaj do sum całkowitych
       income += transactionIncome;
       expense += transactionExpense;
 
-      // Logowanie dla debugowania
-      if (transactionIncome === 0 && transactionExpense === 0) {
-        console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
-      } else {
+      if (transactionIncome > 0 || transactionExpense > 0) {
         console.log(`   📊 Zmiana w P&L: Przychody: ${transactionIncome}, Koszty: ${transactionExpense}`);
       }
     });
