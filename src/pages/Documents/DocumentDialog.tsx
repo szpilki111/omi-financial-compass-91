@@ -482,45 +482,42 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleTransactionUpdated = async (updatedTransaction: Transaction) => {
-    // Reload transactions if editing existing document
     if (document?.id) {
       loadTransactions(document.id);
     } else {
-      // For new documents, update the local transactions array
       if (editingTransactionIndex !== null) {
-        // Load account numbers for the updated transaction
         const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
-        
         setTransactions(prev => {
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
 
-          // Jeśli to była rozdzielona transakcja (split), zachowaj jej split
+          // Jeśli nie ma id (czyli NOWA transakcja sklonowana), to DODAJ do listy zamiast nadpisywać
+          if (!updatedTransaction.id) {
+            // Wstawiamy nową transakcję tuż po edytowanym indeksie
+            updated.splice(editingTransactionIndex + 1, 0, transactionWithAccountNumbers[0]);
+            return updated;
+          }
+
+          // Stara logika dla edycji istniejących:
           if (originalTransaction.isCloned && originalTransaction.clonedType) {
-            // ZAWSZE split! Nawet po edycji nowa transakcja zostaje rozdzielona.
             let finalTransaction = {
               ...transactionWithAccountNumbers[0],
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
 
-            // Gwarantujemy, że split MA albo WINIEN zawsze 0 po stronie przeciwnej
             if (originalTransaction.clonedType === 'debit') {
               finalTransaction.credit_amount = 0;
               finalTransaction.amount = finalTransaction.debit_amount || 0;
-              // Możemy też wymusić, żeby jeśli ktoś przez przypadek coś wpisze w Ma, to i tak zostanie nadpisane przez 0
             } else if (originalTransaction.clonedType === 'credit') {
               finalTransaction.debit_amount = 0;
               finalTransaction.amount = finalTransaction.credit_amount || 0;
             }
 
-            // Absolutnie nie pozwalamy na scalenie splitu z dwóch stron!
             updated[editingTransactionIndex] = finalTransaction;
           } else {
-            // Dla zwykłych transakcji, jeśli ktoś po edycji wykasuje jedną ze stron — może wtedy splitować, ale nie scali splitu
             updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
-
           return updated;
         });
       }
