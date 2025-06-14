@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Table, 
@@ -55,9 +54,9 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
 
-    // Użyj debit_amount i credit_amount jeśli są dostępne, w przeciwnym razie użyj amount
-    const debitAmount = transaction.debit_amount ?? transaction.amount;
-    const creditAmount = transaction.credit_amount ?? transaction.amount;
+    // Używaj WYŁĄCZNIE debit_amount i credit_amount po odpowiednich stronach
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : 0;
 
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
