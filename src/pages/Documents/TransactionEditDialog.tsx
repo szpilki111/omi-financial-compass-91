@@ -46,8 +46,6 @@ const TransactionEditDialog = ({
     debit_account_id: '',
     credit_account_id: '',
     amount: 0,
-    description: '',
-    settlement_type: 'Bank',
     debit_amount: 0,
     credit_amount: 0,
   });
@@ -80,13 +78,11 @@ const TransactionEditDialog = ({
 
   useEffect(() => {
     if (transaction) {
-      // Initialize form with transaction data
+      // Initialize form with transaction data, exclude description/settlement_type
       setForm({
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
         amount: transaction.amount || 0,
-        description: transaction.description || '',
-        settlement_type: transaction.settlement_type || 'Bank',
         debit_amount: transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount,
         credit_amount: transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount,
         id: transaction.id,
@@ -97,8 +93,6 @@ const TransactionEditDialog = ({
         debit_account_id: '',
         credit_account_id: '',
         amount: 0,
-        description: '',
-        settlement_type: 'Bank',
         debit_amount: 0,
         credit_amount: 0,
       });
@@ -140,8 +134,6 @@ const TransactionEditDialog = ({
             debit_account_id: form.debit_account_id,
             credit_account_id: form.credit_account_id,
             amount: form.amount,
-            description: form.description,
-            settlement_type: form.settlement_type,
             debit_amount: form.debit_amount,
             credit_amount: form.credit_amount,
           })
@@ -194,18 +186,8 @@ const TransactionEditDialog = ({
         </DialogHeader>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Opis */}
-          <div>
-            <Label htmlFor="description" className="block text-xs font-medium mb-1">Opis</Label>
-            <Input
-              type="text"
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="Opis transakcji"
-            />
-          </div>
-          
+          {/* Usunięto pole Opis */}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Winien */}
             <div>
@@ -286,20 +268,7 @@ const TransactionEditDialog = ({
             </div>
           </div>
 
-          {/* Forma rozrachunku */}
-          <div>
-            <Label htmlFor="settlement_type" className="block text-xs font-medium mb-1">Forma rozrachunku</Label>
-            <select
-              name="settlement_type"
-              value={form.settlement_type}
-              onChange={handleChange}
-              className="w-full p-2 border rounded-md"
-            >
-              <option value="Gotówka">Gotówka</option>
-              <option value="Bank">Bank</option>
-              <option value="Rozrachunek">Rozrachunek</option>
-            </select>
-          </div>
+          {/* Usunięto pole Forma rozrachunku */}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" type="button" onClick={onClose}>Anuluj</Button>
