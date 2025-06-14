@@ -238,16 +238,20 @@ const TransactionForm = ({ onAdd, onCancel, parentTransactionId }: TransactionFo
   };
 
   const onSubmit = (data: TransactionFormData) => {
+    // Wymuś by description był stringiem, nigdy null/undefined
+    const safeDescription = (typeof data.description === "string" && data.description.trim() !== "") ? data.description : "";
+
     onAdd({
       debit_account_id: data.debit_account_id,
       credit_account_id: data.credit_account_id,
-      amount: Number(data.debit_amount), // Using debit amount as main amount for compatibility
-      description: data.description,
-      settlement_type: 'gotówka', // Default value for compatibility
+      amount: Number(data.debit_amount),
+      description: safeDescription,
+      settlement_type: 'gotówka',
       debit_amount: Number(data.debit_amount),
       credit_amount: Number(data.credit_amount),
-      parent_transaction_id: parentTransactionId || null, // Include parent transaction ID for split transactions
+      parent_transaction_id: parentTransactionId || null,
     });
+
     form.reset();
     setDebitSearchQuery('');
     setCreditSearchQuery('');

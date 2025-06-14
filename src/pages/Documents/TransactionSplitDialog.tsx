@@ -217,8 +217,12 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
       return;
     }
 
-    // Create split transactions
+    // Zapewnij, że każda subtransakcja ma opis (z transakcji głównej jeśli user nie podał)
     const splitTransactions = data.splitItems.map(item => {
+      let description = (typeof item.description === "string" && item.description.trim() !== "")
+        ? item.description
+        : (transaction.description || "");
+
       if (splitSide === 'debit') {
         return {
           debit_account_id: item.account_id,
@@ -226,7 +230,7 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
           amount: item.amount,
           debit_amount: item.amount,
           credit_amount: item.amount,
-          description: item.description || transaction.description,
+          description,
           settlement_type: transaction.settlement_type || 'gotówka',
         };
       } else {
@@ -236,7 +240,7 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
           amount: item.amount,
           debit_amount: item.amount,
           credit_amount: item.amount,
-          description: item.description || transaction.description,
+          description,
           settlement_type: transaction.settlement_type || 'gotówka',
         };
       }
