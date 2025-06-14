@@ -53,7 +53,7 @@ export const calculateFinancialSummary = async (
 
     console.log('Pobrane transakcje:', data);
 
-    // Pobierz informacje o kontach
+    // Pobierz informacje o kontach - ROZSZERZONE LOGOWANIE
     const { data: accounts, error: accountsError } = await supabase
       .from('accounts')
       .select('id, number, name');
@@ -62,15 +62,28 @@ export const calculateFinancialSummary = async (
       throw accountsError;
     }
 
-    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
+    console.log('Pobrane konta z bazy:', accounts);
 
-    const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => ({
-      ...transaction,
-      debitAccount: accountsMap.get(transaction.debit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
-      creditAccount: accountsMap.get(transaction.credit_account_id) || { number: 'Nieznane', name: 'Nieznane konto' },
-      formattedDate: new Date(transaction.date).toLocaleDateString('pl-PL'),
-      settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
-    }));
+    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
+    
+    console.log('Mapa kont:', Array.from(accountsMap.entries()));
+
+    const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => {
+      const debitAccount = accountsMap.get(transaction.debit_account_id);
+      const creditAccount = accountsMap.get(transaction.credit_account_id);
+      
+      console.log(`Mapowanie transakcji ${transaction.id}:`);
+      console.log(`  debit_account_id: ${transaction.debit_account_id} -> ${debitAccount ? debitAccount.number : 'NIE ZNALEZIONO'}`);
+      console.log(`  credit_account_id: ${transaction.credit_account_id} -> ${creditAccount ? creditAccount.number : 'NIE ZNALEZIONO'}`);
+      
+      return {
+        ...transaction,
+        debitAccount: debitAccount || { number: 'Nieznane', name: 'Nieznane konto' },
+        creditAccount: creditAccount || { number: 'Nieznane', name: 'Nieznane konto' },
+        formattedDate: new Date(transaction.date).toLocaleDateString('pl-PL'),
+        settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
+      };
+    });
 
     console.log('Sformatowane transakcje z numerami kont:', formattedTransactions.map(t => ({
       id: t.id,
@@ -84,12 +97,12 @@ export const calculateFinancialSummary = async (
 
     // Funkcje do sprawdzania kont na podstawie pierwszej cyfry
     const isIncomeAccount = (accountNum: string) => {
-      if (!accountNum) return false;
+      if (!accountNum || accountNum === 'Nieznane') return false;
       return accountNum.startsWith('7');
     };
 
     const isExpenseAccount = (accountNum: string) => {
-      if (!accountNum) return false;
+      if (!accountNum || accountNum === 'Nieznane') return false;
       return accountNum.startsWith('4');
     };
 
