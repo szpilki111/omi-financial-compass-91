@@ -119,9 +119,9 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             variant="ghost"
             size="icon"
             onClick={() => onShowDocument?.(transaction.document)}
-            title="Pokaż dokument"
+            title="Edytuj dokument"
           >
-            <span className="sr-only">Pokaż dokument</span>
+            <span className="sr-only">Edytuj dokument</span>
             {/* Ikona search (lupa) */}
             <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/>

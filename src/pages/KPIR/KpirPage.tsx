@@ -16,6 +16,8 @@ import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 
+import DocumentDialog from '@/pages/Documents/DocumentDialog'; // <-- importujemy okno edycji dokumentu
+
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -27,7 +29,14 @@ const KpirPage: React.FC = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<KpirTransaction["document"] | null>(null);
+  // Nowy stan dla edycji dokumentu:
+  const [selectedDocumentToEdit, setSelectedDocumentToEdit] = useState<{
+    id: string;
+    document_number: string;
+    document_name: string;
+    document_date: string;
+  } | null>(null);
+  const [showDocumentEditDialog, setShowDocumentEditDialog] = useState(false);
   
   // Stan filtrów
   const [filters, setFilters] = useState({
@@ -234,8 +243,23 @@ const KpirPage: React.FC = () => {
     });
   };
 
+  // Handler do otwierania edycji dokumentu
+  const handleEditDocument = (document: KpirTransaction["document"]) => {
+    if (document) {
+      setSelectedDocumentToEdit(document);
+      setShowDocumentEditDialog(true);
+    }
+  };
+
+  // Zamknięcie dialogu edycji dokumentu
+  const handleCloseDocumentEditDialog = () => {
+    setShowDocumentEditDialog(false);
+    setSelectedDocumentToEdit(null);
+  };
+
   return (
     <MainLayout>
+      
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <PageTitle 
@@ -303,7 +327,7 @@ const KpirPage: React.FC = () => {
             transactions={transactions} 
             loading={loading} 
             onEditTransaction={handleEditTransaction}
-            onShowDocument={(doc) => setSelectedDocument(doc)}
+            onShowDocument={handleEditDocument} // <--- WAŻNE: przekazujemy handler edycji, nie podglądu
           />
         </div>
       </div>
@@ -336,12 +360,17 @@ const KpirPage: React.FC = () => {
         />
       )}
 
-      {/* Dialog podglądu dokumentu */}
-      <KpirDocumentDialog
-        open={!!selectedDocument}
-        onClose={() => setSelectedDocument(null)}
-        document={selectedDocument}
-      />
+      {/* Okno edycji dokumentu */}
+      {showDocumentEditDialog && selectedDocumentToEdit && (
+        <DocumentDialog
+          open={showDocumentEditDialog}
+          onClose={handleCloseDocumentEditDialog}
+          document={selectedDocumentToEdit}
+          mode="edit"
+        />
+      )}
+
+      {/* Usuwamy KpirDocumentDialog, bo już nie pokazujemy podglądu */}
     </MainLayout>
   );
 };
