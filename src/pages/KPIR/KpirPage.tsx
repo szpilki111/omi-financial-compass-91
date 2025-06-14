@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -135,6 +136,8 @@ const KpirPage: React.FC = () => {
         parent_transaction_id: transaction.parent_transaction_id,
         is_split_transaction: transaction.is_split_transaction || false,
         document: transaction.document || null,
+        debit_amount: transaction.debit_amount != null ? parseFloat(transaction.debit_amount.toString()) : undefined,
+        credit_amount: transaction.credit_amount != null ? parseFloat(transaction.credit_amount.toString()) : undefined,
       }));
 
       setTransactions(mappedTransactions);

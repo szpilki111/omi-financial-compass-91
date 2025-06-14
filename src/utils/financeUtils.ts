@@ -88,9 +88,10 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      // Użyj debit_amount i credit_amount jeśli są dostępne, w przeciwnym razie użyj amount
-      const debitAmount = transaction.debit_amount ?? transaction.amount;
-      const creditAmount = transaction.credit_amount ?? transaction.amount;
+      // Użyj kwot debet/kredyt jeśli istnieją; w przeciwnym razie użyj głównej kwoty transakcji.
+      const hasSpecificAmounts = transaction.debit_amount != null || transaction.credit_amount != null;
+      const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
+      const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
       // PRZYCHÓD - suma kwot na kontach 7xx i 2xx po stronie KREDYTU
       if (isIncomeAccount(creditAccountNumber)) {
