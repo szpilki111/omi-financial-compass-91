@@ -1,3 +1,4 @@
+
 export interface AccountInfo {
   number: string;
   name: string;
@@ -29,6 +30,9 @@ export interface KpirTransaction {
     document_name: string;
     document_date: string;
   } | null;
+  // --- Dodane by naprawić TS error związany z subTransakcjami ---
+  debit_amount?: number;
+  credit_amount?: number;
 }
 
 export interface Account {
@@ -56,3 +60,4 @@ export interface ImportRow {
   amount: number;
   account: string;
 }
+
