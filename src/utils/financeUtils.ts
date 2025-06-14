@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -24,7 +23,9 @@ export const calculateFinancialSummary = async (
         settlement_type,
         currency,
         exchange_rate,
-        location_id
+        location_id,
+        debit_amount,
+        credit_amount
       `)
       .order('date', { ascending: false });
 
@@ -87,16 +88,20 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
+      // Użyj debit_amount i credit_amount jeśli są dostępne, w przeciwnym razie użyj amount
+      const debitAmount = transaction.debit_amount ?? transaction.amount;
+      const creditAmount = transaction.credit_amount ?? transaction.amount;
+
       // PRZYCHÓD - suma kwot na kontach 7xx i 2xx po stronie KREDYTU
       if (isIncomeAccount(creditAccountNumber)) {
-        income += transaction.amount;
-        console.log(`Przychód: ${transaction.amount} zł z konta ${creditAccountNumber} (${transaction.creditAccount?.name})`);
+        income += creditAmount;
+        console.log(`Przychód: ${creditAmount} zł z konta ${creditAccountNumber} (${transaction.creditAccount?.name})`);
       }
       
       // ROZCHÓD - suma kwot na kontach 4xx po stronie DEBETU
       if (isExpenseAccount(debitAccountNumber)) {
-        expense += transaction.amount;
-        console.log(`Rozchód: ${transaction.amount} zł z konta ${debitAccountNumber} (${transaction.debitAccount?.name})`);
+        expense += debitAmount;
+        console.log(`Rozchód: ${debitAmount} zł z konta ${debitAccountNumber} (${transaction.debitAccount?.name})`);
       }
     });
 

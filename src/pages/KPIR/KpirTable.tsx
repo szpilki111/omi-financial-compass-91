@@ -55,6 +55,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
 
+    // Użyj debit_amount i credit_amount jeśli są dostępne, w przeciwnym razie użyj amount
+    const debitAmount = transaction.debit_amount ?? transaction.amount;
+    const creditAmount = transaction.credit_amount ?? transaction.amount;
+
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
         <TableCell>{transaction.formattedDate}</TableCell>
@@ -68,68 +72,36 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           </div>
         </TableCell>
         <TableCell>
-          {typeof transaction.debit_amount === 'number'
-            ? (transaction.debit_amount > 0 && (
-                <div className="space-y-1">
-                  <div className="font-semibold text-green-700">
-                    <span className="text-xs text-gray-500 mr-1">Wn:</span>
-                    <span className="font-mono">
-                      {transaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                      {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-                  </div>
-                </div>
-              ))
-            : (transaction.amount > 0 && (
-                <div className="space-y-1">
-                  <div className="font-semibold text-green-700">
-                    <span className="text-xs text-gray-500 mr-1">Wn:</span>
-                    <span className="font-mono">
-                      {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                      {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-                  </div>
-                </div>
-              ))
-          }
+          {debitAmount > 0 && (
+            <div className="space-y-1">
+              <div className="font-semibold text-green-700">
+                <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                <span className="font-mono">
+                  {debitAmount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600">
+                {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+              </div>
+            </div>
+          )}
         </TableCell>
         <TableCell>
-          {typeof transaction.credit_amount === 'number'
-            ? (transaction.credit_amount > 0 && (
-                <div className="space-y-1">
-                  <div className="font-semibold text-red-700">
-                    <span className="text-xs text-gray-500 mr-1">Ma:</span>
-                    <span className="font-mono">
-                      {transaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                      {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-                  </div>
-                </div>
-              ))
-            : (transaction.amount > 0 && (
-                <div className="space-y-1">
-                  <div className="font-semibold text-red-700">
-                    <span className="text-xs text-gray-500 mr-1">Ma:</span>
-                    <span className="font-mono">
-                      {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                      {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-                  </div>
-                </div>
-              ))
-          }
+          {creditAmount > 0 && (
+            <div className="space-y-1">
+              <div className="font-semibold text-red-700">
+                <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                <span className="font-mono">
+                  {creditAmount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600">
+                {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+              </div>
+            </div>
+          )}
         </TableCell>
         <TableCell>{transaction.settlement_type}</TableCell>
         <TableCell>
