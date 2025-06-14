@@ -75,6 +75,10 @@ export const calculateFinancialSummary = async (
     const isExpenseAccount = (accountNum: string) =>
       /^4[0-9]{2}$/.test(accountNum.slice(0, 3));
 
+    // --- FIX: Declare the accumulators before use ---
+    let income = 0;
+    let expense = 0;
+
     if (!formattedTransactions || formattedTransactions.length === 0) {
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
