@@ -69,13 +69,11 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
-    // Przychód: konta 700-799 i 200-299 po stronie KREDYTU
     const isIncomeAccount = (accountNum: string) =>
       /^7[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
-
-    // Rozchód: konta 400-499 po stronie DEBETU  
+    
     const isExpenseAccount = (accountNum: string) =>
-      /^4[0-9]{2}$/.test(accountNum.slice(0, 3));
+      /^4[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
 
     let income = 0;
     let expense = 0;
@@ -93,13 +91,11 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      // PRZYCHÓD - suma kwot na kontach 7xx i 2xx po stronie KREDYTU
       if (isIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
         console.log(`Przychód: ${creditAmount} zł z konta ${creditAccountNumber} (${transaction.creditAccount?.name})`);
       }
       
-      // ROZCHÓD - suma kwot na kontach 4xx po stronie DEBETU
       if (isExpenseAccount(debitAccountNumber)) {
         expense += debitAmount;
         console.log(`Rozchód: ${debitAmount} zł z konta ${debitAccountNumber} (${transaction.debitAccount?.name})`);

@@ -341,7 +341,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
-              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499 po stronie debetu)"
+              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499, 200-299 po stronie debetu)"
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
