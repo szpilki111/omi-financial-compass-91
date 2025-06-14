@@ -491,17 +491,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
 
-          // Jeśli nie ma id (czyli NOWA transakcja sklonowana), to DODAJ do listy zamiast nadpisywać
-          if (!updatedTransaction.id) {
-            // Wstawiamy nową transakcję tuż po edytowanym indeksie
-            updated.splice(editingTransactionIndex + 1, 0, transactionWithAccountNumbers[0]);
-            return updated;
-          }
+          // Nowa logika: zawsze nadpisujemy pod tym indeksem, nie klonujemy już raz sklonowanej transakcji!
+          let finalTransaction = transactionWithAccountNumbers[0];
 
-          // Stara logika dla edycji istniejących:
           if (originalTransaction.isCloned && originalTransaction.clonedType) {
-            let finalTransaction = {
-              ...transactionWithAccountNumbers[0],
+            finalTransaction = {
+              ...finalTransaction,
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
@@ -513,11 +508,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               finalTransaction.debit_amount = 0;
               finalTransaction.amount = finalTransaction.credit_amount || 0;
             }
-
-            updated[editingTransactionIndex] = finalTransaction;
-          } else {
-            updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
+
+          updated[editingTransactionIndex] = finalTransaction;
           return updated;
         });
       }
