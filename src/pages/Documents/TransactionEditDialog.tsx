@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Transaction } from './DocumentDialog';
+import { Transaction } from './types';
 import { useToast } from '@/hooks/use-toast';
 import { Account } from '@/types/kpir';
 

@@ -27,6 +27,7 @@ import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
+import { Transaction } from './types';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -41,26 +42,11 @@ interface DocumentFormData {
   document_date: Date;
 }
 
-interface Transaction {
-  id?: string;
-  debit_account_id: string;
-  credit_account_id: string;
-  amount: number;
-  description: string;
-  settlement_type: string;
-  debit_amount?: number;
-  credit_amount?: number;
-  isCloned?: boolean;
-  clonedType?: 'debit' | 'credit';
-  debitAccountNumber?: string;
-  creditAccountNumber?: string;
-}
-
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
+  const [isGeneratingNumber, setIsGeneratingNumber] = useState(isGeneratingNumber);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
