@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Table, 
@@ -27,24 +26,25 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
   // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może edytować operacji)
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
-  // Group transactions to show parent-child relationships
+  // GROUPING & FILTROWANIE: sub-transakcje są pokazywane tylko zagnieżdżone
   const groupedTransactions = React.useMemo(() => {
     const grouped: { [key: string]: KpirTransaction[] } = {};
+    // FILTRUJEMY: parentTransactions to TYLKO transakcje bez parent_transaction_id
     const parentTransactions: KpirTransaction[] = [];
-    
+
     transactions.forEach(transaction => {
       if (transaction.parent_transaction_id) {
-        // This is a sub-transaction
+        // Sub-transakcje grupujemy po parent_transaction_id
         if (!grouped[transaction.parent_transaction_id]) {
           grouped[transaction.parent_transaction_id] = [];
         }
         grouped[transaction.parent_transaction_id].push(transaction);
       } else {
-        // This is either a normal transaction or a parent of split transactions
+        // TYLKO transakcje bez parent_transaction_id trafiają do głównej listy
         parentTransactions.push(transaction);
       }
     });
-    
+
     return { grouped, parentTransactions };
   }, [transactions]);
 
@@ -316,4 +316,3 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
 };
 
 export default KpirTable;
-
