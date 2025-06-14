@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,7 +71,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     financialDetails.balance !== 0
   );
 
-  // Funkcja do odświeżania sum raportu
+  // Funkcja do odświeżania sum raportu - przelicza przychody i koszty zgodnie z określonymi kontami
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
       if (isReportLocked) {
@@ -88,6 +87,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsRefreshing(true);
     
     try {
+      console.log('Rozpoczynam przeliczanie sum dla raportu:', reportId);
+      
       // Pobierz dane raportu
       const { data: report, error: reportError } = await supabase
         .from('reports')
@@ -97,6 +98,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
       if (reportError) throw reportError;
       
+      console.log('Dane raportu:', report);
+      
       // Oblicz daty na podstawie miesiąca i roku
       const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
       const lastDayOfMonth = new Date(report.year, report.month, 0);
@@ -104,8 +107,15 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
       
-      // Oblicz finansowe podsumowanie
+      console.log('Okres przeliczania:', dateFrom, 'do', dateTo);
+      console.log('Lokalizacja:', report.location_id);
+      
+      // Oblicz finansowe podsumowanie zgodnie z określonymi kontami:
+      // - Przychody: konta 700-799 i 200-299 po stronie KREDYTU
+      // - Koszty: konta 400-499 i 200-299 po stronie DEBETU
       const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
+      
+      console.log('Obliczone podsumowanie:', summary);
       
       // Aktualizuj szczegóły raportu w bazie danych
       await updateReportDetails(reportId, summary);
@@ -114,8 +124,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       await refetchFinancial();
       
       toast({
-        title: "Sukces",
-        description: "Sumy raportu zostały przeliczone i zapisane.",
+        title: "Sumy przeliczone",
+        description: `Przychody: ${summary.income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Koszty: ${summary.expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`,
       });
     } catch (error) {
       console.error('Błąd podczas odświeżania sum:', error);
@@ -331,6 +341,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
+              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499, 200-299 po stronie debetu)"
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
@@ -353,6 +364,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               <div className="text-center py-8">
                 <p className="text-omi-gray-500 mb-4">
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.
+                </p>
+                <p className="text-sm text-omi-gray-400 mb-4">
+                  Przychody będą obliczone z kont 700-799 i 200-299 (strona kredytu)<br/>
+                  Koszty będą obliczone z kont 400-499 i 200-299 (strona debetu)
                 </p>
                 <Button onClick={handleRefreshSums} disabled={isRefreshing}>
                   {isRefreshing ? (
