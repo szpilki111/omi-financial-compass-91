@@ -341,7 +341,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
-              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499, 200-299 po stronie debetu)"
+              title="Przelicza sumaryczne przychody (obroty na kontach 7xx) i koszty (obroty na kontach 4xx)."
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
@@ -366,8 +366,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.
                 </p>
                 <p className="text-sm text-omi-gray-400 mb-4">
-                  Przychody będą obliczone z kont 700-799 i 200-299 (strona kredytu)<br/>
-                  Koszty będą obliczone z kont 400-499 (strona debetu)
+                  Przychody będą obliczone jako suma obrotów kredytowych minus debetowe na kontach 700-799.<br/>
+                  Koszty będą obliczone jako suma obrotów debetowych minus kredytowe na kontach 400-499.
                 </p>
                 <Button onClick={handleRefreshSums} disabled={isRefreshing}>
                   {isRefreshing ? (

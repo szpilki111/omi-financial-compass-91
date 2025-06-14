@@ -69,17 +69,17 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
-    const isIncomeAccount = (accountNum: string) => {
+    const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const mainPart = accountNum.split('-')[0];
-      // Przychody: konta 7xx i 2xx
-      return /^(7[0-9]{2}|2[0-9]{2})$/.test(mainPart);
+      // Przychody to konta wynikowe z grupy 7xx
+      return /^7[0-9]{2}$/.test(mainPart);
     };
     
-    const isExpenseAccount = (accountNum: string) => {
+    const isPnlExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const mainPart = accountNum.split('-')[0];
-      // Koszty: tylko konta 4xx, zgodnie z opisem w UI
+      // Koszty to konta wynikowe z grupy 4xx
       return /^4[0-9]{2}$/.test(mainPart);
     };
 
@@ -99,14 +99,20 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      if (isIncomeAccount(creditAccountNumber)) {
+      // Przychody (konta 7xx): Kredyt zwiększa przychody, Debet je zmniejsza (korekta)
+      if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
-        console.log(`Przychód: ${creditAmount} zł z konta ${creditAccountNumber} (${transaction.creditAccount?.name})`);
+      }
+      if (isPnlIncomeAccount(debitAccountNumber)) {
+        income -= debitAmount;
       }
       
-      if (isExpenseAccount(debitAccountNumber)) {
+      // Koszty (konta 4xx): Debet zwiększa koszty, Kredyt je zmniejsza (korekta)
+      if (isPnlExpenseAccount(debitAccountNumber)) {
         expense += debitAmount;
-        console.log(`Rozchód: ${debitAmount} zł z konta ${debitAccountNumber} (${transaction.debitAccount?.name})`);
+      }
+      if (isPnlExpenseAccount(creditAccountNumber)) {
+        expense -= creditAmount;
       }
     });
 
