@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Table, 
@@ -18,9 +17,10 @@ interface KpirTableProps {
   transactions: KpirTransaction[];
   loading: boolean;
   onEditTransaction?: (transaction: KpirTransaction) => void;
+  onShowDocument?: (doc: KpirTransaction["document"]) => void;
 }
 
-const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTransaction }) => {
+const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTransaction, onShowDocument }) => {
   const { user } = useAuth();
   
   // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może edytować operacji)
@@ -111,6 +111,25 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           <span className="text-xs text-omi-gray-500 block">
             kurs: {transaction.exchange_rate.toFixed(4)}
           </span>
+        )}
+      </TableCell>
+      <TableCell>
+        {transaction.document ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onShowDocument?.(transaction.document)}
+            title="Pokaż dokument"
+          >
+            <span className="sr-only">Pokaż dokument</span>
+            {/* Ikona search (lupa) */}
+            <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </Button>
+        ) : (
+          <span className="text-xs text-gray-400 italic">Brak</span>
         )}
       </TableCell>
       {!isAdmin && (
@@ -226,6 +245,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             <TableHead>Strona Ma</TableHead>
             <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
+            <TableHead>Dokument</TableHead>
             {!isAdmin && <TableHead>Akcje</TableHead>}
           </TableRow>
         </TableHeader>

@@ -9,6 +9,7 @@ import { FilePlus2, Download, Upload, FileDown, FileUp, Search } from 'lucide-re
 import { format } from 'date-fns';
 import KpirOperationDialog from './KpirOperationDialog';
 import KpirEditDialog from './KpirEditDialog';
+import KpirDocumentDialog from './KpirDocumentDialog';
 import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
@@ -26,6 +27,7 @@ const KpirPage: React.FC = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<KpirTransaction["document"] | null>(null);
   
   // Stan filtrów
   const [filters, setFilters] = useState({
@@ -61,7 +63,8 @@ const KpirPage: React.FC = () => {
           debitAccount:accounts!debit_account_id(number, name),
           creditAccount:accounts!credit_account_id(number, name),
           location:locations(name),
-          parentTransaction:transactions!parent_transaction_id(id, description, document_number)
+          parentTransaction:transactions!parent_transaction_id(id, description, document_number),
+          document:documents(id, document_number, document_name, document_date)
         `)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
@@ -120,7 +123,8 @@ const KpirPage: React.FC = () => {
         user_id: transaction.user_id,
         location_id: transaction.location_id,
         parent_transaction_id: transaction.parent_transaction_id,
-        is_split_transaction: transaction.is_split_transaction || false
+        is_split_transaction: transaction.is_split_transaction || false,
+        document: transaction.document || null,
       }));
 
       setTransactions(mappedTransactions);
@@ -299,6 +303,7 @@ const KpirPage: React.FC = () => {
             transactions={transactions} 
             loading={loading} 
             onEditTransaction={handleEditTransaction}
+            onShowDocument={(doc) => setSelectedDocument(doc)}
           />
         </div>
       </div>
@@ -330,6 +335,13 @@ const KpirPage: React.FC = () => {
           onImportComplete={handleImportComplete}
         />
       )}
+
+      {/* Dialog podglądu dokumentu */}
+      <KpirDocumentDialog
+        open={!!selectedDocument}
+        onClose={() => setSelectedDocument(null)}
+        document={selectedDocument}
+      />
     </MainLayout>
   );
 };

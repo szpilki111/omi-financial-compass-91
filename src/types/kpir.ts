@@ -1,4 +1,3 @@
-
 export interface AccountInfo {
   number: string;
   name: string;
@@ -23,6 +22,13 @@ export interface KpirTransaction {
   is_split_transaction?: boolean;
   user_id?: string;
   location?: { name: string };
+  // Dodaj pole document (często null jeśli nie powiązana z dokumentem)
+  document?: {
+    id: string;
+    document_number: string;
+    document_name: string;
+    document_date: string;
+  } | null;
 }
 
 export interface Account {
