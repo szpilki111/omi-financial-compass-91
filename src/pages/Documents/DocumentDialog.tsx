@@ -272,6 +272,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         documentId = newDocument.id;
       }
 
+      // KLUCZOWA POPRAWKA: Upewnij się, że description ZAWSZE jest stringiem
+      const transactionsSafe = transactions.map((t, idx) => ({
+        ...t,
+        description:
+          typeof t.description === "string" && t.description.trim() !== ""
+            ? t.description
+            : "",
+      }));
+
       // Save transactions if any - CRITICAL FIX HERE
       if (documentId) {
         // First, delete existing transactions if editing (FIXED: Always delete for consistency)
@@ -286,8 +295,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
 
         // Insert new/updated transactions only if there are any
-        if (transactions.length > 0) {
-          const transactionsToInsert = transactions.map(t => {
+        if (transactionsSafe.length > 0) {
+          const transactionsToInsert = transactionsSafe.map(t => {
             // CRITICAL FIX: Zawsze explicitnie przypisujemy wartości amount i oba pola stron, bez "magicznego" fallbackowania.
             // amount pole zostaje domyślną podstawową wartością (historycznie), debit_amount i credit_amount zawsze osobno
             return {
@@ -297,7 +306,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               amount: t.amount, // amount zachowujemy jako podstawowe pole (histori compatibility/prezentacja)
               debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
               credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
-              description: t.description,
+              description: t.description, // Teraz na pewno nie będzie null!
               settlement_type: t.settlement_type,
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
