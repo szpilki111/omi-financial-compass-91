@@ -363,7 +363,7 @@ const KpirPage: React.FC = () => {
       {/* Okno edycji dokumentu */}
       {showDocumentEditDialog && selectedDocumentToEdit && (
         <DocumentDialog
-          open={showDocumentEditDialog}
+          isOpen={showDocumentEditDialog}
           onClose={handleCloseDocumentEditDialog}
           document={selectedDocumentToEdit}
           mode="edit"
