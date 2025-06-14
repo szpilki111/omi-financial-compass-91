@@ -522,34 +522,33 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         setTransactions(prev => {
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
-          
-          // Jeśli to była rozdzielona transakcja, zachowaj jej split
+
+          // Jeśli to była rozdzielona transakcja (split), zachowaj jej split
           if (originalTransaction.isCloned && originalTransaction.clonedType) {
-            const finalTransaction = {
+            // ZAWSZE split! Nawet po edycji nowa transakcja zostaje rozdzielona.
+            let finalTransaction = {
               ...transactionWithAccountNumbers[0],
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
 
-            // Wymusz logikę splitu:
+            // Gwarantujemy, że split MA albo WINIEN zawsze 0 po stronie przeciwnej
             if (originalTransaction.clonedType === 'debit') {
-              // To rozdzielona strona Winien: kwota MA musi być 0
               finalTransaction.credit_amount = 0;
-              // amount i debit_amount są ustawione z formularza
               finalTransaction.amount = finalTransaction.debit_amount || 0;
+              // Możemy też wymusić, żeby jeśli ktoś przez przypadek coś wpisze w Ma, to i tak zostanie nadpisane przez 0
             } else if (originalTransaction.clonedType === 'credit') {
-              // To rozdzielona strona Ma: kwota WINIEN musi być 0
               finalTransaction.debit_amount = 0;
-              // amount i credit_amount są ustawione z formularza
               finalTransaction.amount = finalTransaction.credit_amount || 0;
             }
 
+            // Absolutnie nie pozwalamy na scalenie splitu z dwóch stron!
             updated[editingTransactionIndex] = finalTransaction;
           } else {
-            // Dla zwykłych transakcji, zapisz jak przyszło z formularza
+            // Dla zwykłych transakcji, jeśli ktoś po edycji wykasuje jedną ze stron — może wtedy splitować, ale nie scali splitu
             updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
-          
+
           return updated;
         });
       }
