@@ -6,20 +6,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Transaction } from './types';
 import { useToast } from '@/hooks/use-toast';
-import { Account } from '@/types/kpir';
+import { AccountCombobox } from './AccountCombobox';
 
 interface TransactionEditDialogProps {
   isOpen: boolean;
@@ -40,8 +31,8 @@ const TransactionEditDialog = ({
 }: any) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lockedAccountName, setLockedAccountName] = useState('');
   const [form, setForm] = useState<Transaction>({
     debit_account_id: '',
     credit_account_id: '',
@@ -49,32 +40,6 @@ const TransactionEditDialog = ({
     debit_amount: 0,
     credit_amount: 0,
   });
-
-  useEffect(() => {
-    const fetchAccounts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .order('number', { ascending: true });
-
-        if (error) {
-          throw error;
-        }
-
-        setAccounts(data);
-      } catch (error) {
-        console.error('Błąd podczas pobierania kont:', error);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się pobrać listy kont",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchAccounts();
-  }, [user]);
 
   useEffect(() => {
     if (transaction) {
@@ -88,6 +53,30 @@ const TransactionEditDialog = ({
         isCloned: transaction.isCloned,
         clonedType: transaction.clonedType,
       });
+
+      if (transaction.isCloned) {
+        const lockedAccountId =
+          transaction.clonedType === 'credit'
+            ? transaction.debit_account_id
+            : transaction.credit_account_id;
+
+        if (lockedAccountId) {
+          const fetchLockedAccountName = async () => {
+            setLockedAccountName('Ładowanie...');
+            const { data } = await supabase
+              .from('accounts')
+              .select('number, name')
+              .eq('id', lockedAccountId)
+              .single();
+            if (data) {
+              setLockedAccountName(`${data.number} - ${data.name}`);
+            } else {
+              setLockedAccountName('Nieznane konto');
+            }
+          };
+          fetchLockedAccountName();
+        }
+      }
     } else {
       setForm({
         debit_account_id: '',
@@ -99,9 +88,13 @@ const TransactionEditDialog = ({
     }
   }, [transaction]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAccountChange = (fieldName: 'debit_account_id' | 'credit_account_id', value: string) => {
+    setForm(prev => ({ ...prev, [fieldName]: value }));
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -166,11 +159,6 @@ const TransactionEditDialog = ({
     }
   };
 
-  const getAccountNameById = (accountId: string) => {
-    const account = accounts.find(acc => acc.id === accountId);
-    return account ? `${account.number} - ${account.name}` : 'Konto nieznane';
-  };
-
   // Helpers to determine readonly/enabled for account and amount fields
   const isCloned = transaction?.isCloned;
   const clonedType = transaction?.clonedType; // 'debit' | 'credit'
@@ -210,24 +198,15 @@ const TransactionEditDialog = ({
               {isDebitLocked ? (
                 <input
                   type="text"
-                  value={getAccountNameById(form.debit_account_id)}
+                  value={lockedAccountName}
                   disabled
                   className="w-full p-2 border rounded-md bg-gray-100 text-gray-400"
                 />
               ) : (
-                <select
-                  name="debit_account_id"
+                <AccountCombobox
                   value={form.debit_account_id}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md"
-                >
-                  <option value="">Wybierz konto</option>
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.number} - {acc.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => handleAccountChange('debit_account_id', id)}
+                />
               )}
             </div>
 
@@ -249,24 +228,15 @@ const TransactionEditDialog = ({
               {isCreditLocked ? (
                 <input
                   type="text"
-                  value={getAccountNameById(form.credit_account_id)}
+                  value={lockedAccountName}
                   disabled
                   className="w-full p-2 border rounded-md bg-gray-100 text-gray-400"
                 />
               ) : (
-                <select
-                  name="credit_account_id"
+                <AccountCombobox
                   value={form.credit_account_id}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md"
-                >
-                  <option value="">Wybierz konto</option>
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.number} - {acc.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => handleAccountChange('credit_account_id', id)}
+                />
               )}
             </div>
           </div>
@@ -275,7 +245,7 @@ const TransactionEditDialog = ({
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" type="button" onClick={onClose}>Anuluj</Button>
-            <Button type="submit">Zapisz zmiany</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Zapisywanie...' : 'Zapisz zmiany'}</Button>
           </div>
         </form>
       </DialogContent>
