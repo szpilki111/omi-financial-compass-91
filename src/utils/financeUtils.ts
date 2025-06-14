@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -185,20 +186,32 @@ export const calculateFinancialSummary = async (
 
     console.log('Pobrane transakcje:', data);
 
-    // Pobierz informacje o kontach - ROZSZERZONE LOGOWANIE
-    const { data: accounts, error: accountsError } = await supabase
+    // NOWA LOGIKA: Pobierz konta TYLKO przypisane do lokalizacji (tak jak w komponentach)
+    let accountsQuery = supabase
       .from('accounts')
-      .select('id, number, name');
+      .select(`
+        id, 
+        number, 
+        name,
+        location_accounts!inner(location_id)
+      `);
+
+    // Jeśli mamy lokalizację, filtruj konta tylko dla tej lokalizacji
+    if (locationId) {
+      accountsQuery = accountsQuery.eq('location_accounts.location_id', locationId);
+    }
+
+    const { data: accounts, error: accountsError } = await accountsQuery;
 
     if (accountsError) {
       throw accountsError;
     }
 
-    console.log('Pobrane konta z bazy:', accounts);
+    console.log('Pobrane konta przypisane do lokalizacji:', accounts);
 
     const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
     
-    console.log('Mapa kont:', Array.from(accountsMap.entries()));
+    console.log('Mapa kont (tylko przypisane do lokalizacji):', Array.from(accountsMap.entries()));
 
     const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => {
       const debitAccount = accountsMap.get(transaction.debit_account_id);
