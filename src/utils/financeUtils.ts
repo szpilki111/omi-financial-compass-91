@@ -1,5 +1,3 @@
-
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -140,11 +138,6 @@ export const calculateFinancialSummary = async (
   dateTo?: string
 ) => {
   try {
-    // URUCHOM DIAGNOSTYKĘ PRZED GŁÓWNYM OBLICZENIEM
-    console.log('🔬 Uruchamiam diagnostykę integralności danych...');
-    await diagnoseDatabaseAccountIntegrity(locationId, dateFrom, dateTo);
-    console.log('🔬 Diagnostyka zakończona, przechodzę do głównych obliczeń...\n');
-
     let query = supabase
       .from('transactions')
       .select(`
@@ -185,9 +178,7 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
-    console.log('Pobrane transakcje:', data);
-
-    // NOWA LOGIKA: Pobierz konta TYLKO przypisane do lokalizacji (tak jak w komponentach)
+    // Pobierz konta TYLKO przypisane do lokalizacji
     let accountsQuery = supabase
       .from('accounts')
       .select(`
@@ -208,19 +199,11 @@ export const calculateFinancialSummary = async (
       throw accountsError;
     }
 
-    console.log('Pobrane konta przypisane do lokalizacji:', accounts);
-
     const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
-    
-    console.log('Mapa kont (tylko przypisane do lokalizacji):', Array.from(accountsMap.entries()));
 
     const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => {
       const debitAccount = accountsMap.get(transaction.debit_account_id);
       const creditAccount = accountsMap.get(transaction.credit_account_id);
-      
-      console.log(`Mapowanie transakcji ${transaction.id}:`);
-      console.log(`  debit_account_id: ${transaction.debit_account_id} -> ${debitAccount ? debitAccount.number : 'NIE ZNALEZIONO'}`);
-      console.log(`  credit_account_id: ${transaction.credit_account_id} -> ${creditAccount ? creditAccount.number : 'NIE ZNALEZIONO'}`);
       
       return {
         ...transaction,
@@ -230,16 +213,6 @@ export const calculateFinancialSummary = async (
         settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
       };
     });
-
-    console.log('Sformatowane transakcje z numerami kont:', formattedTransactions.map(t => ({
-      id: t.id,
-      document_number: t.document_number,
-      debitAccount: t.debitAccount?.number,
-      creditAccount: t.creditAccount?.number,
-      amount: t.amount,
-      debit_amount: t.debit_amount,
-      credit_amount: t.credit_amount
-    })));
 
     // Funkcje do sprawdzania kont na podstawie pierwszej cyfry + konto 200
     const isIncomeAccount = (accountNum: string) => {
@@ -256,42 +229,30 @@ export const calculateFinancialSummary = async (
     let expense = 0;
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
-      console.log('Brak transakcji do przetworzenia');
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
-
-    console.log(`\n🔍 ROZPOCZYNAM ANALIZĘ ${formattedTransactions.length} TRANSAKCJI:`);
-    console.log('='.repeat(80));
 
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      console.log(`\n📝 TRANSAKCJA ${transaction.id} (${transaction.document_number}):`);
-      console.log(`   WN (debet): ${debitAccountNumber} | MA (kredyt): ${creditAccountNumber}`);
-      console.log(`   KWOTY: amount=${transaction.amount}, debit_amount=${transaction.debit_amount ?? 'null'}, credit_amount=${transaction.credit_amount ?? 'null'}`);
-
       let transactionIncome = 0;
       let transactionExpense = 0;
 
       // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx lub 200)
       const creditIsIncome = isIncomeAccount(creditAccountNumber);
-      console.log(`   Konto kredytowe ${creditAccountNumber} to przychód: ${creditIsIncome}`);
 
       // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx lub 200)  
       const debitIsExpense = isExpenseAccount(debitAccountNumber);
-      console.log(`   Konto debetowe ${debitAccountNumber} to koszt: ${debitIsExpense}`);
 
       // PRZYCHODY: konto 7xx lub 200 po stronie kredytu (MA)
       if (creditIsIncome) {
         // Użyj credit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.credit_amount != null && transaction.credit_amount > 0) {
           transactionIncome = transaction.credit_amount;
-          console.log(`   ✅ PRZYCHÓD (z credit_amount): +${transactionIncome} zł`);
         } else {
           transactionIncome = transaction.amount;
-          console.log(`   ✅ PRZYCHÓD (z amount): +${transactionIncome} zł`);
         }
       }
 
@@ -300,34 +261,17 @@ export const calculateFinancialSummary = async (
         // Użyj debit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.debit_amount != null && transaction.debit_amount > 0) {
           transactionExpense = transaction.debit_amount;
-          console.log(`   ✅ KOSZT (z debit_amount): +${transactionExpense} zł`);
         } else {
           transactionExpense = transaction.amount;
-          console.log(`   ✅ KOSZT (z amount): +${transactionExpense} zł`);
         }
-      }
-
-      // Jeśli ani przychód ani koszt
-      if (!creditIsIncome && !debitIsExpense) {
-        console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
       }
 
       // Dodaj do sum całkowitych
       income += transactionIncome;
       expense += transactionExpense;
-
-      console.log(`   📊 Dodano do P&L: Przychody: +${transactionIncome}, Koszty: +${transactionExpense}`);
-      console.log(`   📊 Suma do tej pory: Przychody: ${income}, Koszty: ${expense}`);
     });
 
-    console.log('\n' + '='.repeat(80));
-    console.log(`🏁 KOŃCOWE PODSUMOWANIE:`);
-    console.log(`📈 Łączne przychody (konta 7xx + 200 na MA): ${income} zł`);
-    console.log(`📉 Łączne koszty (konta 4xx + 200 na WN): ${expense} zł`);
-
     const balance = income - expense;
-    console.log(`💰 Wynik finansowy (przychody - koszty): ${balance} zł`);
-    console.log('='.repeat(80));
 
     return {
       income,
