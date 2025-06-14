@@ -20,7 +20,7 @@ const KpirSummary: React.FC<KpirSummaryProps> = ({ income, expense, balance }) =
             {income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
           </p>
           <p className="text-xs text-omi-gray-500 mt-1">
-            Suma wszystkich przychodów (konta 7xx i 2xx po stronie kredytu)
+            Suma wszystkich przychodów (konta 7xx i 200 po stronie kredytu)
           </p>
         </CardContent>
       </Card>
@@ -34,7 +34,7 @@ const KpirSummary: React.FC<KpirSummaryProps> = ({ income, expense, balance }) =
             {expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
           </p>
           <p className="text-xs text-omi-gray-500 mt-1">
-            Suma wszystkich kosztów (konta 4xx po stronie debetu)
+            Suma wszystkich kosztów (konta 4xx i 200 po stronie debetu)
           </p>
         </CardContent>
       </Card>

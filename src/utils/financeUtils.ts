@@ -1,4 +1,5 @@
 
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -240,15 +241,15 @@ export const calculateFinancialSummary = async (
       credit_amount: t.credit_amount
     })));
 
-    // Funkcje do sprawdzania kont na podstawie pierwszej cyfry
+    // Funkcje do sprawdzania kont na podstawie pierwszej cyfry + konto 200
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('7');
+      return accountNum.startsWith('7') || accountNum === '200';
     };
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('4');
+      return accountNum.startsWith('4') || accountNum === '200';
     };
 
     let income = 0;
@@ -274,15 +275,15 @@ export const calculateFinancialSummary = async (
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx)
+      // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx lub 200)
       const creditIsIncome = isIncomeAccount(creditAccountNumber);
       console.log(`   Konto kredytowe ${creditAccountNumber} to przychód: ${creditIsIncome}`);
 
-      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx)  
+      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx lub 200)  
       const debitIsExpense = isExpenseAccount(debitAccountNumber);
       console.log(`   Konto debetowe ${debitAccountNumber} to koszt: ${debitIsExpense}`);
 
-      // PRZYCHODY: konto 7xx po stronie kredytu (MA)
+      // PRZYCHODY: konto 7xx lub 200 po stronie kredytu (MA)
       if (creditIsIncome) {
         // Użyj credit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.credit_amount != null && transaction.credit_amount > 0) {
@@ -294,7 +295,7 @@ export const calculateFinancialSummary = async (
         }
       }
 
-      // KOSZTY: konto 4xx po stronie debetu (WN)
+      // KOSZTY: konto 4xx lub 200 po stronie debetu (WN)
       if (debitIsExpense) {
         // Użyj debit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.debit_amount != null && transaction.debit_amount > 0) {
@@ -321,8 +322,8 @@ export const calculateFinancialSummary = async (
 
     console.log('\n' + '='.repeat(80));
     console.log(`🏁 KOŃCOWE PODSUMOWANIE:`);
-    console.log(`📈 Łączne przychody (konta 7xx na MA): ${income} zł`);
-    console.log(`📉 Łączne koszty (konta 4xx na WN): ${expense} zł`);
+    console.log(`📈 Łączne przychody (konta 7xx + 200 na MA): ${income} zł`);
+    console.log(`📉 Łączne koszty (konta 4xx + 200 na WN): ${expense} zł`);
 
     const balance = income - expense;
     console.log(`💰 Wynik finansowy (przychody - koszty): ${balance} zł`);
