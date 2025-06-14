@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Table, 
@@ -218,100 +219,127 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
     );
   };
 
-  const renderSubTransactionRow = (subTransaction: KpirTransaction, isLast = false) => (
-    <TableRow key={subTransaction.id} className="hover:bg-omi-100 bg-blue-50/30">
-      <TableCell>
-        <div className="flex items-center pl-8">
-          <div className="flex items-center mr-3 text-blue-600">
-            <div className="flex flex-col items-center">
-              <div className="w-px h-4 bg-blue-300"></div>
-              <div className="flex items-center">
-                <div className="w-6 h-px bg-blue-300"></div>
-                <CornerDownRight className="h-4 w-4 ml-1 text-blue-500" />
+  const renderSubTransactionRow = (subTransaction: KpirTransaction, isLast = false) => {
+    // Sprawdź, które konto zostało sklonowane (ma wartość > 0)
+    const hasDebitAmount = typeof subTransaction.debit_amount === 'number' && subTransaction.debit_amount > 0;
+    const hasCreditAmount = typeof subTransaction.credit_amount === 'number' && subTransaction.credit_amount > 0;
+
+    return (
+      <TableRow key={subTransaction.id} className="hover:bg-omi-100 bg-blue-50/30">
+        <TableCell>
+          <div className="flex items-center pl-8">
+            <div className="flex items-center mr-3 text-blue-600">
+              <div className="flex flex-col items-center">
+                <div className="w-px h-4 bg-blue-300"></div>
+                <div className="flex items-center">
+                  <div className="w-6 h-px bg-blue-300"></div>
+                  <CornerDownRight className="h-4 w-4 ml-1 text-blue-500" />
+                </div>
+                {!isLast && <div className="w-px h-4 bg-blue-300"></div>}
               </div>
-              {!isLast && <div className="w-px h-4 bg-blue-300"></div>}
             </div>
+            <span className="text-sm text-gray-600">{subTransaction.formattedDate}</span>
           </div>
-          <span className="text-sm text-gray-600">{subTransaction.formattedDate}</span>
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="pl-8 text-sm text-gray-600">
-          {subTransaction.document_number || '-'}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="pl-8 text-sm">
-          {subTransaction.description}
-        </div>
-      </TableCell>
-      {/* Pokaż stronę Winien tylko jeśli debit_amount > 0 */}
-      <TableCell>
-        <div className="pl-8 space-y-1">
-          {(typeof subTransaction.debit_amount === 'number' && subTransaction.debit_amount > 0) && (
-            <>
+        </TableCell>
+        <TableCell>
+          <div className="pl-8 text-sm text-gray-600">
+            {subTransaction.document_number || '-'}
+          </div>
+        </TableCell>
+        <TableCell>
+          <div className="pl-8 text-sm">
+            {subTransaction.description}
+          </div>
+        </TableCell>
+        {/* Pokaż stronę Winien tylko jeśli została sklonowana (debit_amount > 0) */}
+        <TableCell>
+          {hasDebitAmount ? (
+            <div className="pl-8 space-y-1">
               <div className="font-semibold text-green-700">
                 <span className="text-xs text-gray-500 mr-1">Wn:</span>
                 <span className="font-mono">
-                  {subTransaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {subTransaction.debit_amount!.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
                   {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
                 </span>
               </div>
               <div className="text-xs text-gray-600">
                 {subTransaction.debitAccount?.number} - {subTransaction.debitAccount?.name}
               </div>
-            </>
+            </div>
+          ) : (
+            <div className="pl-8 text-xs text-gray-400 italic">-</div>
           )}
-        </div>
-      </TableCell>
-      {/* Pokaż stronę Ma tylko jeśli credit_amount > 0 */}
-      <TableCell>
-        <div className="pl-8 space-y-1">
-          {(typeof subTransaction.credit_amount === 'number' && subTransaction.credit_amount > 0) && (
-            <>
+        </TableCell>
+        {/* Pokaż stronę Ma tylko jeśli została sklonowana (credit_amount > 0) */}
+        <TableCell>
+          {hasCreditAmount ? (
+            <div className="pl-8 space-y-1">
               <div className="font-semibold text-red-700">
                 <span className="text-xs text-gray-500 mr-1">Ma:</span>
                 <span className="font-mono">
-                  {subTransaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {subTransaction.credit_amount!.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
                   {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
                 </span>
               </div>
               <div className="text-xs text-gray-600">
                 {subTransaction.creditAccount?.number} - {subTransaction.creditAccount?.name}
               </div>
-            </>
+            </div>
+          ) : (
+            <div className="pl-8 text-xs text-gray-400 italic">-</div>
           )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="pl-8 text-sm">{subTransaction.settlement_type}</div>
-      </TableCell>
-      <TableCell>
-        <div className="pl-8 text-sm">
-          {subTransaction.currency}
-          {subTransaction.currency !== 'PLN' && subTransaction.exchange_rate && (
-            <span className="text-xs text-omi-gray-500 block">
-              kurs: {subTransaction.exchange_rate.toFixed(4)}
-            </span>
-          )}
-        </div>
-      </TableCell>
-      {!isAdmin && (
+        </TableCell>
         <TableCell>
-          <div className="pl-8">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEditTransaction?.(subTransaction)}
-              className="h-8 w-8 p-0"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
+          <div className="pl-8 text-sm">{subTransaction.settlement_type}</div>
+        </TableCell>
+        <TableCell>
+          <div className="pl-8 text-sm">
+            {subTransaction.currency}
+            {subTransaction.currency !== 'PLN' && subTransaction.exchange_rate && (
+              <span className="text-xs text-omi-gray-500 block">
+                kurs: {subTransaction.exchange_rate.toFixed(4)}
+              </span>
+            )}
           </div>
         </TableCell>
-      )}
-    </TableRow>
-  );
+        <TableCell>
+          {subTransaction.document ? (
+            <div className="pl-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onShowDocument?.(subTransaction.document)}
+                title="Edytuj dokument"
+                className="h-8 w-8 p-0"
+              >
+                <span className="sr-only">Edytuj dokument</span>
+                <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </Button>
+            </div>
+          ) : (
+            <div className="pl-8 text-xs text-gray-400 italic">Brak</div>
+          )}
+        </TableCell>
+        {!isAdmin && (
+          <TableCell>
+            <div className="pl-8">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEditTransaction?.(subTransaction)}
+                className="h-8 w-8 p-0"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          </TableCell>
+        )}
+      </TableRow>
+    );
+  };
 
   return (
     <div className="overflow-x-auto">
