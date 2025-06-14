@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Table, 
@@ -17,11 +16,10 @@ import { useAuth } from '@/context/AuthContext';
 interface KpirTableProps {
   transactions: KpirTransaction[];
   loading: boolean;
-  onEditTransaction?: (transaction: KpirTransaction) => void;
   onShowDocument?: (doc: KpirTransaction["document"]) => void;
 }
 
-const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTransaction, onShowDocument }) => {
+const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocument }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
@@ -67,7 +65,6 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             {transaction.description}
           </div>
         </TableCell>
-        <TableCell>{transaction.settlement_type}</TableCell>
         <TableCell>
           {transaction.currency}
           {transaction.currency !== 'PLN' && transaction.exchange_rate && (
@@ -94,18 +91,6 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             <span className="text-xs text-gray-400 italic">Brak</span>
           )}
         </TableCell>
-        {!isAdmin && (
-          <TableCell>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEditTransaction?.(transaction)}
-              className="h-8 w-8 p-0"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </TableCell>
-        )}
       </TableRow>
     );
   };
@@ -118,10 +103,8 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
-            <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
             <TableHead>Dokument</TableHead>
-            {!isAdmin && <TableHead>Akcje</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>

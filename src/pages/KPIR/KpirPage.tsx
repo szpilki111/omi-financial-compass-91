@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -340,7 +339,6 @@ const KpirPage: React.FC = () => {
           <KpirTable 
             transactions={transactions} 
             loading={loading} 
-            onEditTransaction={handleEditTransaction}
             onShowDocument={handleEditDocument} // <--- WAŻNE: przekazujemy handler edycji, nie podglądu
           />
         </div>
