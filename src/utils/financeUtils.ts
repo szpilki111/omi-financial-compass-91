@@ -109,14 +109,9 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      // Użyj kwot debet/kredyt jeśli istnieją, domyślnie amount
-      const hasSpecificAmounts = transaction.debit_amount != null || transaction.credit_amount != null;
-      const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
-      const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
-
       console.log(`\n📝 TRANSAKCJA ${transaction.id}:`);
       console.log(`   WN (debet): ${debitAccountNumber} | MA (kredyt): ${creditAccountNumber}`);
-      console.log(`   Kwota WN: ${debitAmount} | Kwota MA: ${creditAmount}`);
+      console.log(`   DANE KWOT: amount: ${transaction.amount}, debit_amount: ${transaction.debit_amount ?? 'brak'}, credit_amount: ${transaction.credit_amount ?? 'brak'}`);
 
       // NOWA LOGIKA: Sprawdź każdą stronę transakcji oddzielnie
       let transactionIncome = 0;
@@ -124,14 +119,21 @@ export const calculateFinancialSummary = async (
 
       // Przychody: konta 7xx po stronie kredytu (MA)
       if (isIncomeAccount(creditAccountNumber)) {
-        transactionIncome = creditAmount;
-        console.log(`   ✅ PRZYCHÓD: +${creditAmount} zł (konto MA: ${creditAccountNumber})`);
+        // Użyj credit_amount, jeśli jest zdefiniowane i dodatnie; w przeciwnym razie użyj głównej kwoty transakcji.
+        // Zapobiega to problemom, gdy credit_amount jest 0, null, lub niezdefiniowane.
+        transactionIncome = (transaction.credit_amount && transaction.credit_amount > 0)
+          ? transaction.credit_amount
+          : transaction.amount;
+        console.log(`   ✅ PRZYCHÓD: +${transactionIncome} zł (konto MA: ${creditAccountNumber})`);
       }
 
       // Koszty: konta 4xx po stronie debetu (WN)
       if (isExpenseAccount(debitAccountNumber)) {
-        transactionExpense = debitAmount;
-        console.log(`   ✅ KOSZT: +${debitAmount} zł (konto WN: ${debitAccountNumber})`);
+        // Użyj debit_amount, jeśli jest zdefiniowane i dodatnie; w przeciwnym razie użyj głównej kwoty transakcji.
+        transactionExpense = (transaction.debit_amount && transaction.debit_amount > 0)
+          ? transaction.debit_amount
+          : transaction.amount;
+        console.log(`   ✅ KOSZT: +${transactionExpense} zł (konto WN: ${debitAccountNumber})`);
       }
 
       // Dodaj do sum całkowitych
@@ -141,9 +143,9 @@ export const calculateFinancialSummary = async (
       // Logowanie dla debugowania
       if (transactionIncome === 0 && transactionExpense === 0) {
         console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
+      } else {
+        console.log(`   📊 Zmiana w P&L: Przychody: ${transactionIncome}, Koszty: ${transactionExpense}`);
       }
-
-      console.log(`   📊 Suma przychodów: ${transactionIncome} | Suma kosztów: ${transactionExpense}`);
     });
 
     console.log('\n' + '='.repeat(80));
