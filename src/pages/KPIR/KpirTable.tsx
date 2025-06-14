@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Table, 
@@ -54,11 +55,6 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
 
-    // Użyj kwot debet/kredyt jeśli istnieją; w przeciwnym razie użyj głównej kwoty transakcji.
-    const hasSpecificAmounts = transaction.debit_amount != null || transaction.credit_amount != null;
-    const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
-    const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
-
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
         <TableCell>{transaction.formattedDate}</TableCell>
@@ -70,38 +66,6 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             )}
             {transaction.description}
           </div>
-        </TableCell>
-        <TableCell>
-          {debitAmount > 0 && (
-            <div className="space-y-1">
-              <div className="font-semibold text-green-700">
-                <span className="text-xs text-gray-500 mr-1">Wn:</span>
-                <span className="font-mono">
-                  {debitAmount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                  {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-              </div>
-            </div>
-          )}
-        </TableCell>
-        <TableCell>
-          {creditAmount > 0 && (
-            <div className="space-y-1">
-              <div className="font-semibold text-red-700">
-                <span className="text-xs text-gray-500 mr-1">Ma:</span>
-                <span className="font-mono">
-                  {creditAmount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                  {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-              </div>
-            </div>
-          )}
         </TableCell>
         <TableCell>{transaction.settlement_type}</TableCell>
         <TableCell>
@@ -154,8 +118,6 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
-            <TableHead>Strona Wn (Winien)</TableHead>
-            <TableHead>Strona Ma</TableHead>
             <TableHead>Forma rozrachunku</TableHead>
             <TableHead>Waluta</TableHead>
             <TableHead>Dokument</TableHead>
