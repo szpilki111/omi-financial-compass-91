@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -70,11 +69,19 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
-    const isIncomeAccount = (accountNum: string) =>
-      /^7[0-9]{2}/.test(accountNum) || /^2[0-9]{2}/.test(accountNum);
+    const isIncomeAccount = (accountNum: string) => {
+      if (!accountNum) return false;
+      const mainPart = accountNum.split('-')[0];
+      // Przychody: konta 7xx i 2xx
+      return /^(7[0-9]{2}|2[0-9]{2})$/.test(mainPart);
+    };
     
-    const isExpenseAccount = (accountNum: string) =>
-      /^4[0-9]{2}/.test(accountNum) || /^2[0-9]{2}/.test(accountNum);
+    const isExpenseAccount = (accountNum: string) => {
+      if (!accountNum) return false;
+      const mainPart = accountNum.split('-')[0];
+      // Koszty: tylko konta 4xx, zgodnie z opisem w UI
+      return /^4[0-9]{2}$/.test(mainPart);
+    };
 
     let income = 0;
     let expense = 0;
