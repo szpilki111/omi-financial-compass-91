@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -50,6 +51,8 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
+    console.log('Pobrane transakcje:', data);
+
     // Pobierz informacje o kontach
     const { data: accounts, error: accountsError } = await supabase
       .from('accounts')
@@ -69,7 +72,16 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
-    // Nowy algorytm: klasyczne KPIR 
+    console.log('Sformatowane transakcje z numerami kont:', formattedTransactions.map(t => ({
+      id: t.id,
+      debitAccount: t.debitAccount?.number,
+      creditAccount: t.creditAccount?.number,
+      amount: t.amount,
+      debit_amount: t.debit_amount,
+      credit_amount: t.credit_amount
+    })));
+
+    // Algorytm obliczania przychodów i kosztów
     const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
       // Obsługa konta z sufiksem ("701-2") oraz bez sufiksu ("700")
@@ -86,10 +98,13 @@ export const calculateFinancialSummary = async (
     let expense = 0;
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
+      console.log('Brak transakcji do przetworzenia');
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
-    // Dodane logowanie szczegółowe kwot i kont
+    console.log(`Rozpoczynam analizę ${formattedTransactions.length} transakcji:`);
+
+    // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
@@ -99,26 +114,38 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      // Nowy log: szczegółowa analiza każdej transakcji 7xx na kredycie (MA)
+      console.log(`Transakcja ${transaction.id}:`, {
+        debitAccount: debitAccountNumber,
+        creditAccount: creditAccountNumber,
+        debitAmount,
+        creditAmount,
+        originalAmount: transaction.amount
+      });
+
+      // Przychody: konta 7xx po stronie kredytu (MA)
       if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
-        console.log(
-          `Przychód +${creditAmount} zł (konto MA: ${creditAccountNumber}) transakcja: ${transaction.id}`
-        );
+        console.log(`✅ Przychód +${creditAmount} zł (konto MA: ${creditAccountNumber}) z transakcji: ${transaction.id}`);
       }
-      // Pokazuję ewentualne korygujące 7xx po stronie debetu, ale domyślnie nie stosujemy minusów jeśli tak nie było w rzeczywistych danych
+
+      // Koszty: konta 4xx po stronie debetu (WN)
       if (isPnlExpenseAccount(debitAccountNumber)) {
         expense += debitAmount;
-        console.log(
-          `Koszt +${debitAmount} zł (konto WN: ${debitAccountNumber}) transakcja: ${transaction.id}`
-        );
+        console.log(`✅ Koszt +${debitAmount} zł (konto WN: ${debitAccountNumber}) z transakcji: ${transaction.id}`);
+      }
+
+      // Dodatkowe logowanie dla debugowania
+      if (!isPnlIncomeAccount(creditAccountNumber) && !isPnlExpenseAccount(debitAccountNumber)) {
+        console.log(`ℹ️ Transakcja ${transaction.id} nie wpływa na P&L (WN: ${debitAccountNumber}, MA: ${creditAccountNumber})`);
       }
     });
 
-    console.log(`Łączne przychody sumowane z kont 7xx (MA): ${income} zł`);
-    console.log(`Łączne rozchody sumowane z kont 4xx (WN): ${expense} zł`);
+    console.log(`🔢 PODSUMOWANIE:`);
+    console.log(`📈 Łączne przychody z kont 7xx (MA): ${income} zł`);
+    console.log(`📉 Łączne koszty z kont 4xx (WN): ${expense} zł`);
 
     const balance = income - expense;
+    console.log(`💰 Bilans (przychody - koszty): ${balance} zł`);
 
     return {
       income,
