@@ -341,7 +341,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
-              title="Przelicza sumaryczne przychody (obroty na kontach 7xx) i koszty (obroty na kontach 4xx)."
+              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie."
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
@@ -366,8 +366,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.
                 </p>
                 <p className="text-sm text-omi-gray-400 mb-4">
-                  Przychody będą obliczone jako suma obrotów kredytowych minus debetowe na kontach 700-799.<br/>
-                  Koszty będą obliczone jako suma obrotów debetowych minus kredytowe na kontach 400-499.
+                  Przychody i koszty są obliczane na podstawie kont wynikowych (7xx, 4xx) oraz rozrachunkowych (2xx).<br/>
+                  Kliknij przycisk, aby wygenerować podsumowanie.
                 </p>
                 <Button onClick={handleRefreshSums} disabled={isRefreshing}>
                   {isRefreshing ? (

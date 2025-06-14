@@ -83,6 +83,13 @@ export const calculateFinancialSummary = async (
       return /^4[0-9]{2}$/.test(mainPart);
     };
 
+    const isSettlementAccount = (accountNum: string) => {
+      if (!accountNum) return false;
+      const mainPart = accountNum.split('-')[0];
+      // Rozrachunki to konta z grupy 2xx
+      return /^2[0-9]{2}$/.test(mainPart);
+    };
+
     let income = 0;
     let expense = 0;
 
@@ -99,6 +106,10 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
+      const isDebitPnl = isPnlIncomeAccount(debitAccountNumber) || isPnlExpenseAccount(debitAccountNumber);
+      const isCreditPnl = isPnlIncomeAccount(creditAccountNumber) || isPnlExpenseAccount(creditAccountNumber);
+
+      // Logika dla kont wynikowych (P&L) - ma priorytet
       // Przychody (konta 7xx): Kredyt zwiększa przychody, Debet je zmniejsza (korekta)
       if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
@@ -113,6 +124,19 @@ export const calculateFinancialSummary = async (
       }
       if (isPnlExpenseAccount(creditAccountNumber)) {
         expense -= creditAmount;
+      }
+
+      // Logika dla kont rozrachunkowych (2xx)
+      // Działa tylko, jeśli druga strona transakcji nie jest kontem wynikowym, by uniknąć podwójnego liczenia.
+      
+      // Jeśli konto kredytowe to 2xx A debetowe NIE jest wynikowe, potraktuj jako przychód
+      if (isSettlementAccount(creditAccountNumber) && !isDebitPnl) {
+        income += creditAmount;
+      }
+
+      // Jeśli konto debetowe to 2xx A kredytowe NIE jest wynikowe, potraktuj jako koszt
+      if (isSettlementAccount(debitAccountNumber) && !isCreditPnl) {
+        expense += debitAmount;
       }
     });
 
