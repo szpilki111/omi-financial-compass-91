@@ -174,33 +174,42 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           {subTransaction.description}
         </div>
       </TableCell>
+      {/* Wyświetlamy tylko Winien jeśli debit_amount > 0 */}
       <TableCell>
-        {/* For sub-transactions, show split details */}
         <div className="pl-8 space-y-1">
-          <div className="font-semibold text-green-700">
-            <span className="text-xs text-gray-500 mr-1">Wn:</span>
-            <span className="font-mono">
-              {subTransaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-              {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            {subTransaction.debitAccount?.number} - {subTransaction.debitAccount?.name}
-          </div>
+          {subTransaction.debit_amount !== undefined && subTransaction.debit_amount > 0 && (
+            <>
+              <div className="font-semibold text-green-700">
+                <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                <span className="font-mono">
+                  {subTransaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600">
+                {subTransaction.debitAccount?.number} - {subTransaction.debitAccount?.name}
+              </div>
+            </>
+          )}
         </div>
       </TableCell>
+      {/* Wyświetlamy tylko Ma jeśli credit_amount > 0 */}
       <TableCell>
         <div className="pl-8 space-y-1">
-          <div className="font-semibold text-red-700">
-            <span className="text-xs text-gray-500 mr-1">Ma:</span>
-            <span className="font-mono">
-              {subTransaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-              {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            {subTransaction.creditAccount?.number} - {subTransaction.creditAccount?.name}
-          </div>
+          {subTransaction.credit_amount !== undefined && subTransaction.credit_amount > 0 && (
+            <>
+              <div className="font-semibold text-red-700">
+                <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                <span className="font-mono">
+                  {subTransaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                  {subTransaction.currency !== 'PLN' && ` ${subTransaction.currency}`}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600">
+                {subTransaction.creditAccount?.number} - {subTransaction.creditAccount?.name}
+              </div>
+            </>
+          )}
         </div>
       </TableCell>
       <TableCell>
