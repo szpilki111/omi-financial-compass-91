@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -81,17 +80,41 @@ export const calculateFinancialSummary = async (
       credit_amount: t.credit_amount
     })));
 
-    // Algorytm obliczania przychodów i kosztów
+    // Nowa funkcja do sprawdzania kont - zamienia tekst na liczby
     const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      // Obsługa konta z sufiksem ("701-2") oraz bez sufiksu ("700")
-      const mainPart = accountNum.split('-')[0];
-      return /^7[0-9]{2}$/.test(mainPart); // tylko konta 7xx
+      
+      // Weź pierwsze 3 znaki numeru konta
+      const firstThreeChars = accountNum.substring(0, 3);
+      console.log(`Sprawdzam konto przychodowe: ${accountNum} -> pierwsze 3 znaki: "${firstThreeChars}"`);
+      
+      // Zamień na liczbę
+      const accountPrefix = parseInt(firstThreeChars, 10);
+      console.log(`Zamienione na liczbę: ${accountPrefix}`);
+      
+      // Sprawdź czy to konto 7xx (700-799)
+      const isIncome = accountPrefix >= 700 && accountPrefix <= 799;
+      console.log(`Czy to konto przychodowe (700-799)? ${isIncome}`);
+      
+      return isIncome;
     };
+
     const isPnlExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      const mainPart = accountNum.split('-')[0];
-      return /^4[0-9]{2}$/.test(mainPart); // tylko konta 4xx
+      
+      // Weź pierwsze 3 znaki numeru konta
+      const firstThreeChars = accountNum.substring(0, 3);
+      console.log(`Sprawdzam konto kosztowe: ${accountNum} -> pierwsze 3 znaki: "${firstThreeChars}"`);
+      
+      // Zamień na liczbę
+      const accountPrefix = parseInt(firstThreeChars, 10);
+      console.log(`Zamienione na liczbę: ${accountPrefix}`);
+      
+      // Sprawdź czy to konto 4xx (400-499)
+      const isExpense = accountPrefix >= 400 && accountPrefix <= 499;
+      console.log(`Czy to konto kosztowe (400-499)? ${isExpense}`);
+      
+      return isExpense;
     };
 
     let income = 0;
@@ -114,33 +137,29 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      console.log(`Transakcja ${transaction.id}:`, {
-        debitAccount: debitAccountNumber,
-        creditAccount: creditAccountNumber,
-        debitAmount,
-        creditAmount,
-        originalAmount: transaction.amount
-      });
+      console.log(`\n=== Transakcja ${transaction.id} ===`);
+      console.log(`Konto WN (debet): "${debitAccountNumber}" | Konto MA (kredyt): "${creditAccountNumber}"`);
+      console.log(`Kwota WN: ${debitAmount} | Kwota MA: ${creditAmount} | Oryginalna kwota: ${transaction.amount}`);
 
       // Przychody: konta 7xx po stronie kredytu (MA)
       if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
-        console.log(`✅ Przychód +${creditAmount} zł (konto MA: ${creditAccountNumber}) z transakcji: ${transaction.id}`);
+        console.log(`✅ PRZYCHÓD: +${creditAmount} zł (konto MA: ${creditAccountNumber})`);
       }
 
       // Koszty: konta 4xx po stronie debetu (WN)
       if (isPnlExpenseAccount(debitAccountNumber)) {
         expense += debitAmount;
-        console.log(`✅ Koszt +${debitAmount} zł (konto WN: ${debitAccountNumber}) z transakcji: ${transaction.id}`);
+        console.log(`✅ KOSZT: +${debitAmount} zł (konto WN: ${debitAccountNumber})`);
       }
 
       // Dodatkowe logowanie dla debugowania
       if (!isPnlIncomeAccount(creditAccountNumber) && !isPnlExpenseAccount(debitAccountNumber)) {
-        console.log(`ℹ️ Transakcja ${transaction.id} nie wpływa na P&L (WN: ${debitAccountNumber}, MA: ${creditAccountNumber})`);
+        console.log(`ℹ️ Transakcja pomijana - nie wpływa na P&L`);
       }
     });
 
-    console.log(`🔢 PODSUMOWANIE:`);
+    console.log(`\n🔢 KOŃCOWE PODSUMOWANIE:`);
     console.log(`📈 Łączne przychody z kont 7xx (MA): ${income} zł`);
     console.log(`📉 Łączne koszty z kont 4xx (WN): ${expense} zł`);
 
