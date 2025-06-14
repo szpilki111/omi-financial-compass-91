@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -70,27 +69,34 @@ export const calculateFinancialSummary = async (
 
     let income = 0;
     let expense = 0;
-    
+
+    // Zakres kont do zliczania przychodów
+    const isIncomeAccount = (accountNum: string) =>
+      /^7[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+
+    // Zakres kont do zliczania kosztów
+    const isExpenseAccount = (accountNum: string) =>
+      /^4[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+
     // Jeśli nie mamy transakcji, zwróć zerowe wartości
     if (!formattedTransactions || formattedTransactions.length === 0) {
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
-    
+
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = accountsMap.get(transaction.debit_account_id)?.number || '';
-      const creditAccountNumber = accountsMap.get(transaction.credit_account_id)?.number || '';
-      
-      if (debitAccountNumber.startsWith('700')) {
+
+      if (isIncomeAccount(debitAccountNumber)) {
         income += transaction.amount;
       }
-      else if (debitAccountNumber.startsWith('400')) {
+      if (isExpenseAccount(debitAccountNumber)) {
         expense += transaction.amount;
       }
     });
-    
+
     // Oblicz bilans (przychody - rozchody)
     const balance = income - expense;
-    
+
     return {
       income,
       expense,
