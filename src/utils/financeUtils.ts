@@ -80,33 +80,17 @@ export const calculateFinancialSummary = async (
       credit_amount: t.credit_amount
     })));
 
-    // Uproszczona funkcja do sprawdzania kont - porównuje tylko pierwszą cyfrę
-    const isPnlIncomeAccount = (accountNum: string) => {
+    // Funkcje do sprawdzania kont na podstawie pierwszej cyfry
+    const isIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      
-      // Weź pierwszą cyfrę numeru konta
       const firstDigit = accountNum.charAt(0);
-      console.log(`Sprawdzam konto przychodowe: ${accountNum} -> pierwsza cyfra: "${firstDigit}"`);
-      
-      // Sprawdź czy to cyfra 7 (konta 7xx)
-      const isIncome = firstDigit === '7';
-      console.log(`Czy to konto przychodowe (7xx)? ${isIncome}`);
-      
-      return isIncome;
+      return firstDigit === '7';
     };
 
-    const isPnlExpenseAccount = (accountNum: string) => {
+    const isExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
-      
-      // Weź pierwszą cyfrę numeru konta
       const firstDigit = accountNum.charAt(0);
-      console.log(`Sprawdzam konto kosztowe: ${accountNum} -> pierwsza cyfra: "${firstDigit}"`);
-      
-      // Sprawdź czy to cyfra 4 (konta 4xx)
-      const isExpense = firstDigit === '4';
-      console.log(`Czy to konto kosztowe (4xx)? ${isExpense}`);
-      
-      return isExpense;
+      return firstDigit === '4';
     };
 
     let income = 0;
@@ -117,7 +101,8 @@ export const calculateFinancialSummary = async (
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
-    console.log(`Rozpoczynam analizę ${formattedTransactions.length} transakcji:`);
+    console.log(`\n🔍 ROZPOCZYNAM ANALIZĘ ${formattedTransactions.length} TRANSAKCJI:`);
+    console.log('='.repeat(80));
 
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
@@ -129,34 +114,46 @@ export const calculateFinancialSummary = async (
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      console.log(`\n=== Transakcja ${transaction.id} ===`);
-      console.log(`Konto WN (debet): "${debitAccountNumber}" | Konto MA (kredyt): "${creditAccountNumber}"`);
-      console.log(`Kwota WN: ${debitAmount} | Kwota MA: ${creditAmount} | Oryginalna kwota: ${transaction.amount}`);
+      console.log(`\n📝 TRANSAKCJA ${transaction.id}:`);
+      console.log(`   WN (debet): ${debitAccountNumber} | MA (kredyt): ${creditAccountNumber}`);
+      console.log(`   Kwota WN: ${debitAmount} | Kwota MA: ${creditAmount}`);
+
+      // NOWA LOGIKA: Sprawdź każdą stronę transakcji oddzielnie
+      let transactionIncome = 0;
+      let transactionExpense = 0;
 
       // Przychody: konta 7xx po stronie kredytu (MA)
-      if (isPnlIncomeAccount(creditAccountNumber)) {
-        income += creditAmount;
-        console.log(`✅ PRZYCHÓD: +${creditAmount} zł (konto MA: ${creditAccountNumber})`);
+      if (isIncomeAccount(creditAccountNumber)) {
+        transactionIncome = creditAmount;
+        console.log(`   ✅ PRZYCHÓD: +${creditAmount} zł (konto MA: ${creditAccountNumber})`);
       }
 
       // Koszty: konta 4xx po stronie debetu (WN)
-      if (isPnlExpenseAccount(debitAccountNumber)) {
-        expense += debitAmount;
-        console.log(`✅ KOSZT: +${debitAmount} zł (konto WN: ${debitAccountNumber})`);
+      if (isExpenseAccount(debitAccountNumber)) {
+        transactionExpense = debitAmount;
+        console.log(`   ✅ KOSZT: +${debitAmount} zł (konto WN: ${debitAccountNumber})`);
       }
 
-      // Dodatkowe logowanie dla debugowania
-      if (!isPnlIncomeAccount(creditAccountNumber) && !isPnlExpenseAccount(debitAccountNumber)) {
-        console.log(`ℹ️ Transakcja pomijana - nie wpływa na P&L`);
+      // Dodaj do sum całkowitych
+      income += transactionIncome;
+      expense += transactionExpense;
+
+      // Logowanie dla debugowania
+      if (transactionIncome === 0 && transactionExpense === 0) {
+        console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
       }
+
+      console.log(`   📊 Suma przychodów: ${transactionIncome} | Suma kosztów: ${transactionExpense}`);
     });
 
-    console.log(`\n🔢 KOŃCOWE PODSUMOWANIE:`);
-    console.log(`📈 Łączne przychody z kont 7xx (MA): ${income} zł`);
-    console.log(`📉 Łączne koszty z kont 4xx (WN): ${expense} zł`);
+    console.log('\n' + '='.repeat(80));
+    console.log(`🏁 KOŃCOWE PODSUMOWANIE:`);
+    console.log(`📈 Łączne przychody (konta 7xx na MA): ${income} zł`);
+    console.log(`📉 Łączne koszty (konta 4xx na WN): ${expense} zł`);
 
     const balance = income - expense;
-    console.log(`💰 Bilans (przychody - koszty): ${balance} zł`);
+    console.log(`💰 Wynik finansowy (przychody - koszty): ${balance} zł`);
+    console.log('='.repeat(80));
 
     return {
       income,
