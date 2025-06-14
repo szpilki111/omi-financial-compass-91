@@ -84,13 +84,13 @@ export const calculateFinancialSummary = async (
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const firstDigit = accountNum.charAt(0);
-      return firstDigit === '7';
+      return firstDigit === '4';
     };
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const firstDigit = accountNum.charAt(0);
-      return firstDigit === '4';
+      return firstDigit === '7';
     };
 
     let income = 0;
