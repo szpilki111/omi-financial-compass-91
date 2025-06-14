@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -70,10 +71,10 @@ export const calculateFinancialSummary = async (
     }));
 
     const isIncomeAccount = (accountNum: string) =>
-      /^7[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+      /^7[0-9]{2}/.test(accountNum) || /^2[0-9]{2}/.test(accountNum);
     
     const isExpenseAccount = (accountNum: string) =>
-      /^4[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3));
+      /^4[0-9]{2}/.test(accountNum) || /^2[0-9]{2}/.test(accountNum);
 
     let income = 0;
     let expense = 0;
