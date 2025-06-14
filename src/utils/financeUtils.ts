@@ -67,12 +67,9 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
-    let income = 0;
-    let expense = 0;
-
-    // Przychód: tylko konta 700-799!
+    // Przychód: tylko konta 700-799 LUB 200-299!
     const isIncomeAccount = (accountNum: string) =>
-      /^7[0-9]{2}$/.test(accountNum.slice(0, 3));
+      (/^7[0-9]{2}$/.test(accountNum.slice(0, 3)) || /^2[0-9]{2}$/.test(accountNum.slice(0, 3)));
 
     // Rozchód: konta 400-499
     const isExpenseAccount = (accountNum: string) =>
