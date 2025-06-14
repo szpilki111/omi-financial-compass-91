@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -287,36 +286,67 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         documentId = newDocument.id;
       }
 
-      // Save transactions if any
-      if (transactions.length > 0 && documentId) {
-        // First, delete existing transactions if editing
-        if (document) {
-          await supabase
-            .from('transactions')
-            .delete()
-            .eq('document_id', documentId);
+      // Save transactions if any - CRITICAL FIX HERE
+      if (documentId) {
+        // First, delete existing transactions if editing (FIXED: Always delete for consistency)
+        const { error: deleteError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('document_id', documentId);
+
+        if (deleteError) {
+          console.error('Error deleting existing transactions:', deleteError);
+          throw deleteError;
         }
 
-        // Insert new/updated transactions
-        const transactionsToInsert = transactions.map(t => ({
-          document_id: documentId,
-          debit_account_id: t.debit_account_id,
-          credit_account_id: t.credit_account_id,
-          amount: t.debit_amount || t.amount, // Use debit_amount as primary amount
-          debit_amount: t.debit_amount || t.amount,
-          credit_amount: t.credit_amount || t.amount,
-          description: t.description,
-          settlement_type: t.settlement_type,
-          date: format(data.document_date, 'yyyy-MM-dd'),
-          location_id: user.location,
-          user_id: user.id, // Ensure user_id is set for transactions too
-        }));
+        // Insert new/updated transactions only if there are any
+        if (transactions.length > 0) {
+          const transactionsToInsert = transactions.map(t => {
+            // CRITICAL FIX: Properly calculate the main amount field
+            let mainAmount = t.amount;
+            
+            // If debit_amount and credit_amount exist, use the non-zero one as main amount
+            if (t.debit_amount !== undefined && t.credit_amount !== undefined) {
+              if (t.debit_amount > 0) {
+                mainAmount = t.debit_amount;
+              } else if (t.credit_amount > 0) {
+                mainAmount = t.credit_amount;
+              }
+            } else if (t.debit_amount !== undefined) {
+              mainAmount = t.debit_amount;
+            } else if (t.credit_amount !== undefined) {
+              mainAmount = t.credit_amount;
+            }
 
-        const { error: transactionError } = await supabase
-          .from('transactions')
-          .insert(transactionsToInsert);
+            return {
+              document_id: documentId,
+              debit_account_id: t.debit_account_id,
+              credit_account_id: t.credit_account_id,
+              amount: mainAmount, // FIXED: Use properly calculated amount
+              debit_amount: t.debit_amount || mainAmount,
+              credit_amount: t.credit_amount || mainAmount,
+              description: t.description,
+              settlement_type: t.settlement_type,
+              date: format(data.document_date, 'yyyy-MM-dd'),
+              location_id: user.location,
+              user_id: user.id,
+              document_number: data.document_number, // Add document number for better traceability
+            };
+          });
 
-        if (transactionError) throw transactionError;
+          console.log('Inserting transactions:', transactionsToInsert);
+
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert(transactionsToInsert);
+
+          if (transactionError) {
+            console.error('Error inserting transactions:', transactionError);
+            throw transactionError;
+          }
+
+          console.log('Transactions inserted successfully');
+        }
       }
 
       onDocumentCreated();
