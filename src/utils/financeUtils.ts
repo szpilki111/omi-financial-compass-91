@@ -69,25 +69,16 @@ export const calculateFinancialSummary = async (
       settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
     }));
 
+    // Nowy algorytm: klasyczne KPIR 
     const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const mainPart = accountNum.split('-')[0];
-      // Przychody to konta wynikowe z grupy 7xx
       return /^7[0-9]{2}$/.test(mainPart);
     };
-    
     const isPnlExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
       const mainPart = accountNum.split('-')[0];
-      // Koszty to konta wynikowe z grupy 4xx
       return /^4[0-9]{2}$/.test(mainPart);
-    };
-
-    const isSettlementAccount = (accountNum: string) => {
-      if (!accountNum) return false;
-      const mainPart = accountNum.split('-')[0];
-      // Rozrachunki to konta z grupy 2xx
-      return /^2[0-9]{2}$/.test(mainPart);
     };
 
     let income = 0;
@@ -101,47 +92,25 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      // Użyj kwot debet/kredyt jeśli istnieją; w przeciwnym razie użyj głównej kwoty transakcji.
+      // Użyj kwot debet/kredyt jeśli istnieją, domyślnie .amount
       const hasSpecificAmounts = transaction.debit_amount != null || transaction.credit_amount != null;
       const debitAmount = hasSpecificAmounts ? (transaction.debit_amount ?? 0) : transaction.amount;
       const creditAmount = hasSpecificAmounts ? (transaction.credit_amount ?? 0) : transaction.amount;
 
-      const isDebitPnl = isPnlIncomeAccount(debitAccountNumber) || isPnlExpenseAccount(debitAccountNumber);
-      const isCreditPnl = isPnlIncomeAccount(creditAccountNumber) || isPnlExpenseAccount(creditAccountNumber);
-
-      // Logika dla kont wynikowych (P&L) - ma priorytet
-      // Przychody (konta 7xx): Kredyt zwiększa przychody, Debet je zmniejsza (korekta)
+      // Poprawiona logika – tylko klasyczna KPIR!
+      // Suma przychodów: MA na 7xx
       if (isPnlIncomeAccount(creditAccountNumber)) {
         income += creditAmount;
       }
-      if (isPnlIncomeAccount(debitAccountNumber)) {
-        income -= debitAmount;
-      }
-      
-      // Koszty (konta 4xx): Debet zwiększa koszty, Kredyt je zmniejsza (korekta)
+
+      // Suma kosztów: WN na 4xx
       if (isPnlExpenseAccount(debitAccountNumber)) {
-        expense += debitAmount;
-      }
-      if (isPnlExpenseAccount(creditAccountNumber)) {
-        expense -= creditAmount;
-      }
-
-      // Logika dla kont rozrachunkowych (2xx)
-      // Działa tylko, jeśli druga strona transakcji nie jest kontem wynikowym, by uniknąć podwójnego liczenia.
-      
-      // Jeśli konto kredytowe to 2xx A debetowe NIE jest wynikowe, potraktuj jako przychód
-      if (isSettlementAccount(creditAccountNumber) && !isDebitPnl) {
-        income += creditAmount;
-      }
-
-      // Jeśli konto debetowe to 2xx A kredytowe NIE jest wynikowe, potraktuj jako koszt
-      if (isSettlementAccount(debitAccountNumber) && !isCreditPnl) {
         expense += debitAmount;
       }
     });
 
-    console.log(`Łączne przychody: ${income} zł`);
-    console.log(`Łączne rozchody: ${expense} zł`);
+    console.log(`Łączne przychody (7xx-MA): ${income} zł`);
+    console.log(`Łączne rozchody (4xx-WN): ${expense} zł`);
 
     const balance = income - expense;
 
