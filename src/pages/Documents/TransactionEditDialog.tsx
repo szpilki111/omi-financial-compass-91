@@ -78,7 +78,6 @@ const TransactionEditDialog = ({
 
   useEffect(() => {
     if (transaction) {
-      // Initialize form with transaction data, exclude description/settlement_type
       setForm({
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
@@ -86,9 +85,10 @@ const TransactionEditDialog = ({
         debit_amount: transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount,
         credit_amount: transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount,
         id: transaction.id,
+        isCloned: transaction.isCloned,
+        clonedType: transaction.clonedType,
       });
     } else {
-      // Reset form for new transactions
       setForm({
         debit_account_id: '',
         credit_account_id: '',
@@ -109,7 +109,6 @@ const TransactionEditDialog = ({
     setLoading(true);
 
     try {
-      // Validate that either debit_amount or credit_amount is set
       if (!form.debit_amount && !form.credit_amount) {
         toast({
           title: "Błąd",
@@ -119,37 +118,41 @@ const TransactionEditDialog = ({
         return;
       }
 
-      // If it's a new document, we don't save to the database here
-      if (isNewDocument) {
-        onSave(form);
-      } else {
-        // If it's an existing document, update the transaction in the database
-        if (!transaction?.id) {
-          throw new Error("Brak ID transakcji");
-        }
-
-        const { error } = await supabase
-          .from('transactions')
-          .update({
-            debit_account_id: form.debit_account_id,
-            credit_account_id: form.credit_account_id,
-            amount: form.amount,
-            debit_amount: form.debit_amount,
-            credit_amount: form.credit_amount,
-          })
-          .eq('id', transaction.id);
-
-        if (error) {
-          throw error;
-        }
-
-        toast({
-          title: "Sukces",
-          description: "Transakcja została zaktualizowana",
-        });
-
-        onSave(form);
+      // Uwaga: w przypadku nowego dokumentu LUB klonowanej transakcji nie zapisujemy do bazy
+      if (isNewDocument || form.isCloned) {
+        // Usuwamy id, żeby nie przekazywać "starego" id z bazowej transakcji
+        const { id, ...newForm } = form;
+        onSave(newForm as Transaction);
+        onClose();
+        return;
       }
+
+      // Edycja istniejącej transakcji w bazie
+      if (!transaction?.id) {
+        throw new Error("Brak ID transakcji");
+      }
+
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          debit_account_id: form.debit_account_id,
+          credit_account_id: form.credit_account_id,
+          amount: form.amount,
+          debit_amount: form.debit_amount,
+          credit_amount: form.credit_amount,
+        })
+        .eq('id', transaction.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Sukces",
+        description: "Transakcja została zaktualizowana",
+      });
+
+      onSave(form);
       onClose();
     } catch (error: any) {
       console.error('Błąd podczas aktualizacji transakcji:', error);
