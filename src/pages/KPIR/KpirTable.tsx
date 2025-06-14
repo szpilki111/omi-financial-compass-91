@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Table, 
@@ -76,33 +77,70 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
         </div>
       </TableCell>
       <TableCell>
-        {/* For parent transaction, show the account that was NOT split */}
-        <div className="space-y-1">
-          <div className="font-semibold text-green-700">
-            <span className="text-xs text-gray-500 mr-1">Wn:</span>
-            <span className="font-mono">
-              {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-              {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-          </div>
-        </div>
+        {/* Pokaż stronę Wn dla split lub zwykłej tylko gdy amount > 0 */}
+        {typeof transaction.debit_amount === 'number'
+          ? (transaction.debit_amount > 0 && (
+              <div className="space-y-1">
+                <div className="font-semibold text-green-700">
+                  <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                  <span className="font-mono">
+                    {transaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                </div>
+              </div>
+            ))
+          : (transaction.amount > 0 && (
+              <div className="space-y-1">
+                <div className="font-semibold text-green-700">
+                  <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                  <span className="font-mono">
+                    {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                </div>
+              </div>
+            ))
+        }
       </TableCell>
       <TableCell>
-        <div className="space-y-1">
-          <div className="font-semibold text-red-700">
-            <span className="text-xs text-gray-500 mr-1">Ma:</span>
-            <span className="font-mono">
-              {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-              {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-          </div>
-        </div>
+        {/* Pokaż stronę Ma dla split lub zwykłej tylko gdy amount > 0 */}
+        {typeof transaction.credit_amount === 'number'
+          ? (transaction.credit_amount > 0 && (
+              <div className="space-y-1">
+                <div className="font-semibold text-red-700">
+                  <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                  <span className="font-mono">
+                    {transaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                </div>
+              </div>
+            ))
+          : (transaction.amount > 0 && (
+              <div className="space-y-1">
+                <div className="font-semibold text-red-700">
+                  <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                  <span className="font-mono">
+                    {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                </div>
+              </div>
+            ))
+        }
       </TableCell>
       <TableCell>{transaction.settlement_type}</TableCell>
       <TableCell>
@@ -174,10 +212,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           {subTransaction.description}
         </div>
       </TableCell>
-      {/* Wyświetlamy tylko Winien jeśli debit_amount > 0 */}
+      {/* Pokaż stronę Winien tylko jeśli debit_amount > 0 */}
       <TableCell>
         <div className="pl-8 space-y-1">
-          {subTransaction.debit_amount !== undefined && subTransaction.debit_amount > 0 && (
+          {(typeof subTransaction.debit_amount === 'number' && subTransaction.debit_amount > 0) && (
             <>
               <div className="font-semibold text-green-700">
                 <span className="text-xs text-gray-500 mr-1">Wn:</span>
@@ -193,10 +231,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           )}
         </div>
       </TableCell>
-      {/* Wyświetlamy tylko Ma jeśli credit_amount > 0 */}
+      {/* Pokaż stronę Ma tylko jeśli credit_amount > 0 */}
       <TableCell>
         <div className="pl-8 space-y-1">
-          {subTransaction.credit_amount !== undefined && subTransaction.credit_amount > 0 && (
+          {(typeof subTransaction.credit_amount === 'number' && subTransaction.credit_amount > 0) && (
             <>
               <div className="font-semibold text-red-700">
                 <span className="text-xs text-gray-500 mr-1">Ma:</span>
@@ -278,3 +316,4 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
 };
 
 export default KpirTable;
+
