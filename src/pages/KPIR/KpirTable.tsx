@@ -26,8 +26,13 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
   // Filtrujemy tylko operacje główne - ukrywamy sklonowane operacje (subtransakcje)
+  // oraz operacje bez opisów
   const mainTransactions = React.useMemo(() => {
-    return transactions.filter(transaction => !transaction.parent_transaction_id);
+    return transactions.filter(transaction => 
+      !transaction.parent_transaction_id && 
+      transaction.description && 
+      transaction.description.trim() !== ''
+    );
   }, [transactions]);
 
   if (loading) {
