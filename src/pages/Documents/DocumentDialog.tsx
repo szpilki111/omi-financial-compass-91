@@ -302,29 +302,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         // Insert new/updated transactions only if there are any
         if (transactions.length > 0) {
           const transactionsToInsert = transactions.map(t => {
-            // CRITICAL FIX: Properly calculate the main amount field
-            let mainAmount = t.amount;
-            
-            // If debit_amount and credit_amount exist, use the non-zero one as main amount
-            if (t.debit_amount !== undefined && t.credit_amount !== undefined) {
-              if (t.debit_amount > 0) {
-                mainAmount = t.debit_amount;
-              } else if (t.credit_amount > 0) {
-                mainAmount = t.credit_amount;
-              }
-            } else if (t.debit_amount !== undefined) {
-              mainAmount = t.debit_amount;
-            } else if (t.credit_amount !== undefined) {
-              mainAmount = t.credit_amount;
-            }
-
+            // CRITICAL FIX: Zawsze explicitnie przypisujemy wartości amount i oba pola stron, bez "magicznego" fallbackowania.
+            // amount pole zostaje domyślną podstawową wartością (historycznie), debit_amount i credit_amount zawsze osobno
             return {
               document_id: documentId,
               debit_account_id: t.debit_account_id,
               credit_account_id: t.credit_account_id,
-              amount: mainAmount, // FIXED: Use properly calculated amount
-              debit_amount: t.debit_amount || mainAmount,
-              credit_amount: t.credit_amount || mainAmount,
+              amount: t.amount, // amount zachowujemy jako podstawowe pole (histori compatibility/prezentacja)
+              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
               description: t.description,
               settlement_type: t.settlement_type,
               date: format(data.document_date, 'yyyy-MM-dd'),
