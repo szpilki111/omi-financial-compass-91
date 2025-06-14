@@ -1,6 +1,133 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Funkcja diagnostyczna - sprawdza integralność danych kont w transakcjach
+ */
+export const diagnoseDatabaseAccountIntegrity = async (
+  locationId: string | null | undefined,
+  dateFrom?: string,
+  dateTo?: string
+) => {
+  try {
+    console.log('🔍 ROZPOCZYNAM DIAGNOSTYKĘ INTEGRALNOŚCI KONT');
+    console.log('='.repeat(80));
+
+    // Pobierz transakcje z określonymi filtrami
+    let query = supabase
+      .from('transactions')
+      .select('id, debit_account_id, credit_account_id, amount, description, document_number')
+      .order('date', { ascending: false });
+
+    if (locationId) {
+      query = query.eq('location_id', locationId);
+    }
+    if (dateFrom) {
+      query = query.gte('date', dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte('date', dateTo);
+    }
+
+    const { data: transactions, error: transError } = await query;
+    if (transError) throw transError;
+
+    console.log(`📊 Znaleziono ${transactions?.length || 0} transakcji`);
+
+    // Pobierz wszystkie konta
+    const { data: accounts, error: accError } = await supabase
+      .from('accounts')
+      .select('id, number, name');
+    if (accError) throw accError;
+
+    console.log(`📊 Znaleziono ${accounts?.length || 0} kont w bazie`);
+
+    // Utwórz zbiory ID kont
+    const accountIds = new Set(accounts.map(acc => acc.id));
+    const allDebitIds = new Set(transactions?.map(t => t.debit_account_id) || []);
+    const allCreditIds = new Set(transactions?.map(t => t.credit_account_id) || []);
+
+    // Znajdź brakujące konta
+    const missingDebitIds = [...allDebitIds].filter(id => !accountIds.has(id));
+    const missingCreditIds = [...allCreditIds].filter(id => !accountIds.has(id));
+
+    console.log('\n🚨 ANALIZA BRAKUJĄCYCH KONT:');
+    console.log(`Brakujące konta WN: ${missingDebitIds.length}`);
+    console.log(`Brakujące konta MA: ${missingCreditIds.length}`);
+
+    if (missingDebitIds.length > 0) {
+      console.log('\n❌ BRAKUJĄCE KONTA WN (debit):');
+      missingDebitIds.forEach(id => {
+        const affectedTransactions = transactions?.filter(t => t.debit_account_id === id) || [];
+        console.log(`  ID: ${id} (wpływa na ${affectedTransactions.length} transakcji)`);
+        affectedTransactions.slice(0, 3).forEach(t => {
+          console.log(`    - Transakcja: ${t.document_number} - ${t.description} (${t.amount} zł)`);
+        });
+      });
+    }
+
+    if (missingCreditIds.length > 0) {
+      console.log('\n❌ BRAKUJĄCE KONTA MA (credit):');
+      missingCreditIds.forEach(id => {
+        const affectedTransactions = transactions?.filter(t => t.credit_account_id === id) || [];
+        console.log(`  ID: ${id} (wpływa na ${affectedTransactions.length} transakcji)`);
+        affectedTransactions.slice(0, 3).forEach(t => {
+          console.log(`    - Transakcja: ${t.document_number} - ${t.description} (${t.amount} zł)`);
+        });
+      });
+    }
+
+    // Sprawdź czy są duplikaty numerów kont
+    const accountNumbers = accounts.map(acc => acc.number);
+    const duplicateNumbers = accountNumbers.filter((num, index) => accountNumbers.indexOf(num) !== index);
+    
+    if (duplicateNumbers.length > 0) {
+      console.log('\n⚠️ DUPLIKATY NUMERÓW KONT:');
+      duplicateNumbers.forEach(num => {
+        const duplicates = accounts.filter(acc => acc.number === num);
+        console.log(`  Numer ${num}:`);
+        duplicates.forEach(acc => console.log(`    - ID: ${acc.id}, Nazwa: ${acc.name}`));
+      });
+    }
+
+    // Sprawdź konta przychodowe (7xx) w transakcjach
+    const incomeAccountsUsed = accounts.filter(acc => 
+      acc.number.startsWith('7') && 
+      (allDebitIds.has(acc.id) || allCreditIds.has(acc.id))
+    );
+
+    console.log('\n💰 KONTA PRZYCHODOWE (7xx) UŻYWANE W TRANSAKCJACH:');
+    incomeAccountsUsed.forEach(acc => {
+      const debitTransactions = transactions?.filter(t => t.debit_account_id === acc.id) || [];
+      const creditTransactions = transactions?.filter(t => t.credit_account_id === acc.id) || [];
+      
+      console.log(`  ${acc.number} - ${acc.name}:`);
+      console.log(`    WN (debet): ${debitTransactions.length} transakcji`);
+      console.log(`    MA (kredyt): ${creditTransactions.length} transakcji`);
+      
+      // Pokaż przykłady transakcji kredytowych (powinny być przychodami)
+      if (creditTransactions.length > 0) {
+        console.log(`    Przykłady MA (przychody):`);
+        creditTransactions.slice(0, 2).forEach(t => {
+          console.log(`      - ${t.document_number}: ${t.amount} zł - ${t.description}`);
+        });
+      }
+    });
+
+    return {
+      totalTransactions: transactions?.length || 0,
+      totalAccounts: accounts?.length || 0,
+      missingDebitAccounts: missingDebitIds.length,
+      missingCreditAccounts: missingCreditIds.length,
+      duplicateNumbers: duplicateNumbers.length,
+      incomeAccountsCount: incomeAccountsUsed.length
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd podczas diagnostyki:', error);
+    return null;
+  }
+};
 
 /**
  * Oblicza podsumowanie finansowe na podstawie transakcji dla określonej lokalizacji i okresu
@@ -11,6 +138,11 @@ export const calculateFinancialSummary = async (
   dateTo?: string
 ) => {
   try {
+    // URUCHOM DIAGNOSTYKĘ PRZED GŁÓWNYM OBLICZENIEM
+    console.log('🔬 Uruchamiam diagnostykę integralności danych...');
+    await diagnoseDatabaseAccountIntegrity(locationId, dateFrom, dateTo);
+    console.log('🔬 Diagnostyka zakończona, przechodzę do głównych obliczeń...\n');
+
     let query = supabase
       .from('transactions')
       .select(`
