@@ -524,7 +524,7 @@ export type Database = {
           is_split_transaction: boolean | null
           location_id: string
           parent_transaction_id: string | null
-          settlement_type: string
+          settlement_type: string | null
           updated_at: string
           user_id: string
         }
@@ -545,7 +545,7 @@ export type Database = {
           is_split_transaction?: boolean | null
           location_id: string
           parent_transaction_id?: string | null
-          settlement_type: string
+          settlement_type?: string | null
           updated_at?: string
           user_id: string
         }
@@ -566,7 +566,7 @@ export type Database = {
           is_split_transaction?: boolean | null
           location_id?: string
           parent_transaction_id?: string | null
-          settlement_type?: string
+          settlement_type?: string | null
           updated_at?: string
           user_id?: string
         }
