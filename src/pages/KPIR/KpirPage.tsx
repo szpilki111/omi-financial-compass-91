@@ -15,6 +15,7 @@ import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
+import { ArrowLeft } from "lucide-react";
 
 import DocumentDialog from '@/pages/Documents/DocumentDialog'; // <-- importujemy okno edycji dokumentu
 
@@ -265,6 +266,16 @@ const KpirPage: React.FC = () => {
           <PageTitle 
             title="Lista operacji"
             subtitle="Przeglądaj operacje"
+            actions={
+              <Button
+                variant="outline"
+                onClick={() => navigate("/dokumenty")}
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Powrót do listy dokumentów
+              </Button>
+            }
           />
         </div>
 
