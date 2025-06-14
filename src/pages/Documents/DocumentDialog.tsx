@@ -523,28 +523,30 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
           
-          // If this is a cloned transaction, preserve the cloned properties and restrictions
-          if (isClonedTransaction && originalTransaction.isCloned) {
+          // Jeśli to była rozdzielona transakcja, zachowaj jej split
+          if (originalTransaction.isCloned && originalTransaction.clonedType) {
             const finalTransaction = {
               ...transactionWithAccountNumbers[0],
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
-            
-            // Enforce the cloned restrictions - keep the opposite side at 0
+
+            // Wymusz logikę splitu:
             if (originalTransaction.clonedType === 'debit') {
-              // For cloned debit transactions, keep credit_amount at 0
+              // To rozdzielona strona Winien: kwota MA musi być 0
               finalTransaction.credit_amount = 0;
+              // amount i debit_amount są ustawione z formularza
               finalTransaction.amount = finalTransaction.debit_amount || 0;
             } else if (originalTransaction.clonedType === 'credit') {
-              // For cloned credit transactions, keep debit_amount at 0
+              // To rozdzielona strona Ma: kwota WINIEN musi być 0
               finalTransaction.debit_amount = 0;
+              // amount i credit_amount są ustawione z formularza
               finalTransaction.amount = finalTransaction.credit_amount || 0;
             }
-            
+
             updated[editingTransactionIndex] = finalTransaction;
           } else {
-            // For regular transactions, use the updated transaction as is
+            // Dla zwykłych transakcji, zapisz jak przyszło z formularza
             updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
           
