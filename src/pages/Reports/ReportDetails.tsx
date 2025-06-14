@@ -112,7 +112,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       
       // Oblicz finansowe podsumowanie zgodnie z określonymi kontami:
       // - Przychody: konta 700-799 i 200-299 po stronie KREDYTU
-      // - Koszty: konta 400-499 i 200-299 po stronie DEBETU
+      // - Koszty: konta 400-499 po stronie DEBETU
       const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
       
       console.log('Obliczone podsumowanie:', summary);
@@ -341,7 +341,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
-              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499, 200-299 po stronie debetu)"
+              title="Przelicza przychody (konta 700-799, 200-299 po stronie kredytu) i koszty (konta 400-499 po stronie debetu)"
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
@@ -367,7 +367,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                 </p>
                 <p className="text-sm text-omi-gray-400 mb-4">
                   Przychody będą obliczone z kont 700-799 i 200-299 (strona kredytu)<br/>
-                  Koszty będą obliczone z kont 400-499 i 200-299 (strona debetu)
+                  Koszty będą obliczone z kont 400-499 (strona debetu)
                 </p>
                 <Button onClick={handleRefreshSums} disabled={isRefreshing}>
                   {isRefreshing ? (
