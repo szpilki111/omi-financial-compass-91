@@ -41,6 +41,8 @@ const TransactionEditDialog = ({
     credit_amount: 0,
   });
 
+  const locationId = transaction?.location_id || user?.location;
+
   useEffect(() => {
     if (transaction) {
       setForm({
@@ -206,6 +208,7 @@ const TransactionEditDialog = ({
                 <AccountCombobox
                   value={form.debit_account_id}
                   onChange={(id) => handleAccountChange('debit_account_id', id)}
+                  locationId={locationId}
                 />
               )}
             </div>
@@ -236,6 +239,7 @@ const TransactionEditDialog = ({
                 <AccountCombobox
                   value={form.credit_account_id}
                   onChange={(id) => handleAccountChange('credit_account_id', id)}
+                  locationId={locationId}
                 />
               )}
             </div>

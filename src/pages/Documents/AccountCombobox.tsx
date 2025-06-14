@@ -24,9 +24,10 @@ interface AccountComboboxProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  locationId?: string;
 }
 
-export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChange, disabled }) => {
+export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChange, disabled, locationId }) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -34,7 +35,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
   const [displayedAccountName, setDisplayedAccountName] = useState('');
 
   useEffect(() => {
-    if (value) {
+    if (value && locationId) {
       const selectedInList = accounts.find(acc => acc.id === value);
       if (selectedInList) {
         setDisplayedAccountName(`${selectedInList.number} - ${selectedInList.name}`);
@@ -42,20 +43,27 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
       }
 
       const fetchInitialAccount = async () => {
+        // We use an inner join to ensure the account is valid for the location
         const { data } = await supabase
           .from('accounts')
-          .select('id, number, name')
+          .select('id, number, name, location_accounts!inner(location_id)')
           .eq('id', value)
-          .single();
+          .eq('location_accounts.location_id', locationId)
+          .maybeSingle();
+
         if (data) {
           setDisplayedAccountName(`${data.number} - ${data.name}`);
+        } else {
+          // The selected account is not valid for this location, so we clear the display.
+          // We don't call onChange here to avoid unintended form state changes.
+          setDisplayedAccountName('');
         }
       };
       fetchInitialAccount();
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, accounts]);
+  }, [value, accounts, locationId]);
 
   useEffect(() => {
     if (!open) {
@@ -66,12 +74,37 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
       setAccounts([]);
       return;
     }
+    if (!locationId) {
+      setAccounts([]);
+      return;
+    }
 
     const fetchAccounts = async () => {
       setLoading(true);
+
+      const { data: locationAccountData, error: locationAccountError } = await supabase
+        .from('location_accounts')
+        .select('account_id')
+        .eq('location_id', locationId);
+      
+      if (locationAccountError) {
+        console.error('Error fetching location accounts:', locationAccountError);
+        setAccounts([]);
+        setLoading(false);
+        return;
+      }
+
+      const accountIds = locationAccountData.map(la => la.account_id);
+      if (accountIds.length === 0) {
+        setAccounts([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('accounts')
         .select('id, number, name, type')
+        .in('id', accountIds)
         .or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`)
         .order('number', { ascending: true })
         .limit(50);
@@ -90,7 +123,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, open]);
+  }, [searchTerm, open, locationId]);
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
@@ -122,11 +155,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
           />
           <CommandList>
             {loading && <CommandEmpty>Szukanie...</CommandEmpty>}
-            {searchTerm.length >= 2 && !loading && accounts.length === 0 && (
-              <CommandEmpty>Nie znaleziono kont.</CommandEmpty>
-            )}
-            {searchTerm.length < 2 && !loading && (
+            {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
+            {locationId && searchTerm.length < 2 && !loading && (
                <CommandEmpty>Wpisz co najmniej 2 znaki, aby wyszukać.</CommandEmpty>
+            )}
+            {locationId && searchTerm.length >= 2 && !loading && accounts.length === 0 && (
+              <CommandEmpty>Nie znaleziono kont dla tej lokalizacji.</CommandEmpty>
             )}
             <CommandGroup>
               {accounts.map((account) => (
