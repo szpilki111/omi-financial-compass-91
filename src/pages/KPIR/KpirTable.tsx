@@ -22,30 +22,42 @@ interface KpirTableProps {
 
 const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTransaction, onShowDocument }) => {
   const { user } = useAuth();
-  
-  // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może edytować operacji)
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
-  // GROUPING & FILTROWANIE: sub-transakcje są pokazywane tylko zagnieżdżone
+  // ZGRUPOWANIE: podpinamy subtransakcje do rodzica, a jako główne pokazujemy
+  // tylko te, które NIE są rodzicem splitów lub nie mają subtransakcji
   const groupedTransactions = React.useMemo(() => {
     const grouped: { [key: string]: KpirTransaction[] } = {};
-    // FILTRUJEMY: parentTransactions to TYLKO transakcje bez parent_transaction_id
+    // Rodzice splitów (czyli transakcje które mają pod-transakcje)
+    const splitParentIds = new Set<string>();
+    // Min. lista rodziców
     const parentTransactions: KpirTransaction[] = [];
 
+    // Grupuj subtransakcje
     transactions.forEach(transaction => {
       if (transaction.parent_transaction_id) {
-        // Sub-transakcje grupujemy po parent_transaction_id
         if (!grouped[transaction.parent_transaction_id]) {
           grouped[transaction.parent_transaction_id] = [];
         }
         grouped[transaction.parent_transaction_id].push(transaction);
-      } else {
-        // TYLKO transakcje bez parent_transaction_id trafiają do głównej listy
-        parentTransactions.push(transaction);
+        splitParentIds.add(transaction.parent_transaction_id);
       }
     });
 
-    return { grouped, parentTransactions };
+    // FILTRUJEMY: NIE pokazujemy "głównych" splitów (czyli takich, które są rodzicem pod-transakcji)
+    transactions.forEach(transaction => {
+      if (!transaction.parent_transaction_id) {
+        // Jeśli NIE jest splitem z subtransakcjami => pokaż normalnie
+        if (!splitParentIds.has(transaction.id)) {
+          parentTransactions.push(transaction);
+        } else {
+          // Jeśli jest split-parentem, dodajemy go żeby był nagłówkiem dla subtransakcji (ale bez kwot!)
+          parentTransactions.push(transaction);
+        }
+      }
+    });
+
+    return { grouped, parentTransactions, splitParentIds };
   }, [transactions]);
 
   if (loading) {
@@ -64,126 +76,147 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
     );
   }
 
-  const renderParentTransactionRow = (transaction: KpirTransaction) => (
-    <TableRow key={transaction.id} className="hover:bg-omi-100">
-      <TableCell>{transaction.formattedDate}</TableCell>
-      <TableCell>{transaction.document_number || '-'}</TableCell>
-      <TableCell>
-        <div className="flex items-center">
-          {transaction.is_split_transaction && (
-            <Split className="h-4 w-4 text-orange-500 mr-2" />
+  // Modyfikacja: Jeśli dana transakcja jest parentem split (ma subtransakcje), NIE pokazujemy jej kwot, tylko opis/nr i podpinamy pod nią subtransakcje
+  const renderParentTransactionRow = (transaction: KpirTransaction) => {
+    const subTransactions = groupedTransactions.grouped[transaction.id] || [];
+    const isSplitParent = subTransactions.length > 0;
+
+    return (
+      <React.Fragment key={transaction.id}>
+        <TableRow className="hover:bg-omi-100">
+          <TableCell>{transaction.formattedDate}</TableCell>
+          <TableCell>{transaction.document_number || '-'}</TableCell>
+          <TableCell>
+            <div className="flex items-center">
+              {isSplitParent && (
+                <Split className="h-4 w-4 text-orange-500 mr-2" />
+              )}
+              {transaction.description}
+            </div>
+          </TableCell>
+          {/* KWOTY oraz konta - pokazujemy TYLKO jeśli NIE jest splitem z subtransakcjami */}
+          {isSplitParent ? (
+            <>
+              <TableCell colSpan={2} className="text-xs text-gray-400 italic text-center">
+                <span>Podzielona transakcja – kwoty poniżej</span>
+              </TableCell>
+            </>
+          ) : (
+            <>
+              <TableCell>
+                {typeof transaction.debit_amount === 'number'
+                  ? (transaction.debit_amount > 0 && (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-green-700">
+                          <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                          <span className="font-mono">
+                            {transaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                            {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                        </div>
+                      </div>
+                    ))
+                  : (transaction.amount > 0 && (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-green-700">
+                          <span className="text-xs text-gray-500 mr-1">Wn:</span>
+                          <span className="font-mono">
+                            {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                            {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                        </div>
+                      </div>
+                    ))
+                }
+              </TableCell>
+              <TableCell>
+                {typeof transaction.credit_amount === 'number'
+                  ? (transaction.credit_amount > 0 && (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-red-700">
+                          <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                          <span className="font-mono">
+                            {transaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                            {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                        </div>
+                      </div>
+                    ))
+                  : (transaction.amount > 0 && (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-red-700">
+                          <span className="text-xs text-gray-500 mr-1">Ma:</span>
+                          <span className="font-mono">
+                            {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                            {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                        </div>
+                      </div>
+                    ))
+                }
+              </TableCell>
+            </>
           )}
-          {transaction.description}
-        </div>
-      </TableCell>
-      <TableCell>
-        {/* Pokaż stronę Wn dla split lub zwykłej tylko gdy amount > 0 */}
-        {typeof transaction.debit_amount === 'number'
-          ? (transaction.debit_amount > 0 && (
-              <div className="space-y-1">
-                <div className="font-semibold text-green-700">
-                  <span className="text-xs text-gray-500 mr-1">Wn:</span>
-                  <span className="font-mono">
-                    {transaction.debit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600">
-                  {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-                </div>
-              </div>
-            ))
-          : (transaction.amount > 0 && (
-              <div className="space-y-1">
-                <div className="font-semibold text-green-700">
-                  <span className="text-xs text-gray-500 mr-1">Wn:</span>
-                  <span className="font-mono">
-                    {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600">
-                  {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-                </div>
-              </div>
-            ))
-        }
-      </TableCell>
-      <TableCell>
-        {/* Pokaż stronę Ma dla split lub zwykłej tylko gdy amount > 0 */}
-        {typeof transaction.credit_amount === 'number'
-          ? (transaction.credit_amount > 0 && (
-              <div className="space-y-1">
-                <div className="font-semibold text-red-700">
-                  <span className="text-xs text-gray-500 mr-1">Ma:</span>
-                  <span className="font-mono">
-                    {transaction.credit_amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600">
-                  {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-                </div>
-              </div>
-            ))
-          : (transaction.amount > 0 && (
-              <div className="space-y-1">
-                <div className="font-semibold text-red-700">
-                  <span className="text-xs text-gray-500 mr-1">Ma:</span>
-                  <span className="font-mono">
-                    {transaction.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
-                    {transaction.currency !== 'PLN' && ` ${transaction.currency}`}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600">
-                  {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
-                </div>
-              </div>
-            ))
-        }
-      </TableCell>
-      <TableCell>{transaction.settlement_type}</TableCell>
-      <TableCell>
-        {transaction.currency}
-        {transaction.currency !== 'PLN' && transaction.exchange_rate && (
-          <span className="text-xs text-omi-gray-500 block">
-            kurs: {transaction.exchange_rate.toFixed(4)}
-          </span>
+          <TableCell>{transaction.settlement_type}</TableCell>
+          <TableCell>
+            {transaction.currency}
+            {transaction.currency !== 'PLN' && transaction.exchange_rate && (
+              <span className="text-xs text-omi-gray-500 block">
+                kurs: {transaction.exchange_rate.toFixed(4)}
+              </span>
+            )}
+          </TableCell>
+          <TableCell>
+            {transaction.document ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onShowDocument?.(transaction.document)}
+                title="Edytuj dokument"
+              >
+                <span className="sr-only">Edytuj dokument</span>
+                {/* Ikona search (lupa) */}
+                <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </Button>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Brak</span>
+            )}
+          </TableCell>
+          {!isAdmin && (
+            <TableCell>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEditTransaction?.(transaction)}
+                className="h-8 w-8 p-0"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TableCell>
+          )}
+        </TableRow>
+        {/* Renderuj subtransakcje jeżeli istnieją */}
+        {subTransactions.map((subTransaction, index) =>
+          renderSubTransactionRow(subTransaction, index === subTransactions.length - 1)
         )}
-      </TableCell>
-      <TableCell>
-        {transaction.document ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onShowDocument?.(transaction.document)}
-            title="Edytuj dokument"
-          >
-            <span className="sr-only">Edytuj dokument</span>
-            {/* Ikona search (lupa) */}
-            <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </Button>
-        ) : (
-          <span className="text-xs text-gray-400 italic">Brak</span>
-        )}
-      </TableCell>
-      {!isAdmin && (
-        <TableCell>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEditTransaction?.(transaction)}
-            className="h-8 w-8 p-0"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-        </TableCell>
-      )}
-    </TableRow>
-  );
+      </React.Fragment>
+    );
+  };
 
   const renderSubTransactionRow = (subTransaction: KpirTransaction, isLast = false) => (
     <TableRow key={subTransaction.id} className="hover:bg-omi-100 bg-blue-50/30">
@@ -297,18 +330,15 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onEditTran
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groupedTransactions.parentTransactions.map((transaction) => {
-            const subTransactions = groupedTransactions.grouped[transaction.id] || [];
-            
-            return (
-              <React.Fragment key={transaction.id}>
-                {renderParentTransactionRow(transaction)}
-                {subTransactions.map((subTransaction, index) => 
-                  renderSubTransactionRow(subTransaction, index === subTransactions.length - 1)
-                )}
-              </React.Fragment>
-            );
-          })}
+          {groupedTransactions.parentTransactions
+            // Ostateczna filtracja: jeśli dany rodzic jest split-parentem, pokazujemy go tylko raz z subtransakcjami (patrz wyżej)
+            .filter(transaction => {
+              // Jeśli jest split-parentem (ma subtransakcje), renderujemy go tylko raz razem z subtransakcjami
+              // (dzięki temu nie ma podwojeń)
+              return true;
+            })
+            .map(transaction => renderParentTransactionRow(transaction))
+          }
         </TableBody>
       </Table>
     </div>
