@@ -80,21 +80,17 @@ export const calculateFinancialSummary = async (
       credit_amount: t.credit_amount
     })));
 
-    // Nowa funkcja do sprawdzania kont - zamienia tekst na liczby
+    // Uproszczona funkcja do sprawdzania kont - porównuje tylko pierwszą cyfrę
     const isPnlIncomeAccount = (accountNum: string) => {
       if (!accountNum) return false;
       
-      // Weź pierwsze 3 znaki numeru konta
-      const firstThreeChars = accountNum.substring(0, 3);
-      console.log(`Sprawdzam konto przychodowe: ${accountNum} -> pierwsze 3 znaki: "${firstThreeChars}"`);
+      // Weź pierwszą cyfrę numeru konta
+      const firstDigit = accountNum.charAt(0);
+      console.log(`Sprawdzam konto przychodowe: ${accountNum} -> pierwsza cyfra: "${firstDigit}"`);
       
-      // Zamień na liczbę
-      const accountPrefix = parseInt(firstThreeChars, 10);
-      console.log(`Zamienione na liczbę: ${accountPrefix}`);
-      
-      // Sprawdź czy to konto 7xx (700-799)
-      const isIncome = accountPrefix >= 700 && accountPrefix <= 799;
-      console.log(`Czy to konto przychodowe (700-799)? ${isIncome}`);
+      // Sprawdź czy to cyfra 7 (konta 7xx)
+      const isIncome = firstDigit === '7';
+      console.log(`Czy to konto przychodowe (7xx)? ${isIncome}`);
       
       return isIncome;
     };
@@ -102,17 +98,13 @@ export const calculateFinancialSummary = async (
     const isPnlExpenseAccount = (accountNum: string) => {
       if (!accountNum) return false;
       
-      // Weź pierwsze 3 znaki numeru konta
-      const firstThreeChars = accountNum.substring(0, 3);
-      console.log(`Sprawdzam konto kosztowe: ${accountNum} -> pierwsze 3 znaki: "${firstThreeChars}"`);
+      // Weź pierwszą cyfrę numeru konta
+      const firstDigit = accountNum.charAt(0);
+      console.log(`Sprawdzam konto kosztowe: ${accountNum} -> pierwsza cyfra: "${firstDigit}"`);
       
-      // Zamień na liczbę
-      const accountPrefix = parseInt(firstThreeChars, 10);
-      console.log(`Zamienione na liczbę: ${accountPrefix}`);
-      
-      // Sprawdź czy to konto 4xx (400-499)
-      const isExpense = accountPrefix >= 400 && accountPrefix <= 499;
-      console.log(`Czy to konto kosztowe (400-499)? ${isExpense}`);
+      // Sprawdź czy to cyfra 4 (konta 4xx)
+      const isExpense = firstDigit === '4';
+      console.log(`Czy to konto kosztowe (4xx)? ${isExpense}`);
       
       return isExpense;
     };
