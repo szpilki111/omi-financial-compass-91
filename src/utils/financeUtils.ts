@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -73,6 +74,7 @@ export const calculateFinancialSummary = async (
 
     console.log('Sformatowane transakcje z numerami kont:', formattedTransactions.map(t => ({
       id: t.id,
+      document_number: t.document_number,
       debitAccount: t.debitAccount?.number,
       creditAccount: t.creditAccount?.number,
       amount: t.amount,
@@ -107,46 +109,56 @@ export const calculateFinancialSummary = async (
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
-      console.log(`\n📝 TRANSAKCJA ${transaction.id}:`);
+      console.log(`\n📝 TRANSAKCJA ${transaction.id} (${transaction.document_number}):`);
       console.log(`   WN (debet): ${debitAccountNumber} | MA (kredyt): ${creditAccountNumber}`);
-      console.log(`   DANE KWOT: amount: ${transaction.amount}, debit_amount: ${transaction.debit_amount ?? 'brak'}, credit_amount: ${transaction.credit_amount ?? 'brak'}`);
+      console.log(`   KWOTY: amount=${transaction.amount}, debit_amount=${transaction.debit_amount ?? 'null'}, credit_amount=${transaction.credit_amount ?? 'null'}`);
 
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      const isIncome = isIncomeAccount(creditAccountNumber);
-      const isExpense = isExpenseAccount(debitAccountNumber);
+      // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx)
+      const creditIsIncome = isIncomeAccount(creditAccountNumber);
+      console.log(`   Konto kredytowe ${creditAccountNumber} to przychód: ${creditIsIncome}`);
 
-      // Przychód: tylko jeśli to transakcja przychodowa (kredyt 7xx), a nie wewnętrzna kosztowo-przychodowa
-      if (isIncome && !isExpense) {
-        transactionIncome = (transaction.credit_amount && transaction.credit_amount > 0)
-          ? transaction.credit_amount
-          : transaction.amount;
-        console.log(`   ✅ PRZYCHÓD: +${transactionIncome} zł (konto MA: ${creditAccountNumber})`);
-      }
-      // Koszt: tylko jeśli to transakcja kosztowa (debet 4xx), a nie wewnętrzna
-      else if (isExpense && !isIncome) {
-        transactionExpense = (transaction.debit_amount && transaction.debit_amount > 0)
-          ? transaction.debit_amount
-          : transaction.amount;
-        console.log(`   ✅ KOSZT: +${transactionExpense} zł (konto WN: ${debitAccountNumber})`);
-      }
-      // Transakcje, które nie wpływają na wynik finansowy lub są wewnętrzne
-      else {
-        if (isIncome && isExpense) {
-          console.log(`   ℹ️ Transakcja wewnętrzna (np. 4xx/7xx) - nie wpływa na P&L`);
+      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx)  
+      const debitIsExpense = isExpenseAccount(debitAccountNumber);
+      console.log(`   Konto debetowe ${debitAccountNumber} to koszt: ${debitIsExpense}`);
+
+      // PRZYCHODY: konto 7xx po stronie kredytu (MA)
+      if (creditIsIncome) {
+        // Użyj credit_amount jeśli jest > 0, w przeciwnym razie użyj amount
+        if (transaction.credit_amount != null && transaction.credit_amount > 0) {
+          transactionIncome = transaction.credit_amount;
+          console.log(`   ✅ PRZYCHÓD (z credit_amount): +${transactionIncome} zł`);
         } else {
-          console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
+          transactionIncome = transaction.amount;
+          console.log(`   ✅ PRZYCHÓD (z amount): +${transactionIncome} zł`);
         }
+      }
+
+      // KOSZTY: konto 4xx po stronie debetu (WN)
+      if (debitIsExpense) {
+        // Użyj debit_amount jeśli jest > 0, w przeciwnym razie użyj amount
+        if (transaction.debit_amount != null && transaction.debit_amount > 0) {
+          transactionExpense = transaction.debit_amount;
+          console.log(`   ✅ KOSZT (z debit_amount): +${transactionExpense} zł`);
+        } else {
+          transactionExpense = transaction.amount;
+          console.log(`   ✅ KOSZT (z amount): +${transactionExpense} zł`);
+        }
+      }
+
+      // Jeśli ani przychód ani koszt
+      if (!creditIsIncome && !debitIsExpense) {
+        console.log(`   ℹ️ Transakcja bilansowa - nie wpływa na P&L`);
       }
 
       // Dodaj do sum całkowitych
       income += transactionIncome;
       expense += transactionExpense;
 
-      if (transactionIncome > 0 || transactionExpense > 0) {
-        console.log(`   📊 Zmiana w P&L: Przychody: ${transactionIncome}, Koszty: ${transactionExpense}`);
-      }
+      console.log(`   📊 Dodano do P&L: Przychody: +${transactionIncome}, Koszty: +${transactionExpense}`);
+      console.log(`   📊 Suma do tej pory: Przychody: ${income}, Koszty: ${expense}`);
     });
 
     console.log('\n' + '='.repeat(80));
