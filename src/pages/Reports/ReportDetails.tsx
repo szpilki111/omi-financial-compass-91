@@ -402,7 +402,7 @@ const ReportDetails = () => {
         {canApprove && reportData.status === 'submitted' && (
           <ReportApprovalActions
             reportId={id!}
-            onStatusChange={() => {
+            onApprovalComplete={() => {
               refetch();
               queryClient.invalidateQueries({ queryKey: ['reports'] });
             }}

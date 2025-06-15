@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +10,11 @@ import AnnualReportsList from './AnnualReportsList';
 
 const ReportsPage = () => {
   const [activeTab, setActiveTab] = useState('monthly');
+  const navigate = useNavigate();
+
+  const handleReportSelect = (reportId: string) => {
+    navigate(`/reports/${reportId}`);
+  };
 
   return (
     <MainLayout>
@@ -28,7 +34,7 @@ const ReportsPage = () => {
           </TabsList>
           
           <TabsContent value="monthly" className="mt-6">
-            <ReportsList />
+            <ReportsList onReportSelect={handleReportSelect} />
           </TabsContent>
           
           <TabsContent value="annual" className="mt-6">
