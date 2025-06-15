@@ -147,7 +147,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
             <TableHead>Okres</TableHead>
             <TableHead className="text-right">Przychody</TableHead>
             <TableHead className="text-right">Rozchody</TableHead>
-            <TableHead className="text-right">Bilans</TableHead>
+            <TableHead className="text-right">Saldo</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Złożony przez</TableHead>
             <TableHead className="text-right">Akcje</TableHead>
