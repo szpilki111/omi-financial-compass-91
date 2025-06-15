@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentTable from './DocumentTable';
@@ -111,6 +110,10 @@ const DocumentsPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleSearchAccounts = () => {
+    navigate('/wyszukaj-konta');
+  };
+
   const handleSearchOperations = () => {
     navigate('/kpir');
   };
@@ -131,7 +134,11 @@ const DocumentsPage = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
           <div className="flex gap-2">
-            <Button onClick={handleSearchOperations} variant="outline" className="flex items-center gap-2">
+            <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
+              <Calculator className="h-4 w-4" />
+              Wyszukaj konta
+            </Button>
+            <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               Wyszukaj operacje
             </Button>
