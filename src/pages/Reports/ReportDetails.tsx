@@ -422,10 +422,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
             onGenerateStart={() => setIsGeneratingPDF(true)}
             onGenerateEnd={() => setIsGeneratingPDF(false)}
           />
-          <Button variant="outline" onClick={() => {}}>
-            <FileIcon className="mr-2 h-4 w-4" />
-            Eksportuj do Excel
-          </Button>
         </div>
       </div>
     </div>
