@@ -27,15 +27,15 @@ const AccountsImport: React.FC = () => {
     const firstDigit = accountNumber.charAt(0);
     
     switch (firstDigit) {
-      case '1': return 'assets'; // Aktywa
+      case '1': return 'assets'; // Środki trwałe i obrotowe
       case '2': return 'liabilities'; // Zobowiązania i rozrachunki
-      case '3': return 'equity'; // Fundusze i rezerwy
-      case '4': return 'expense'; // Koszty działalności
-      case '5': return 'expense'; // Koszty według rodzajów
-      case '6': return 'assets'; // Produkty, towary i usługi
-      case '7': return 'income'; // Przychody
-      case '8': return 'results'; // Rozliczenie wyniku finansowego
-      case '9': return 'off_balance'; // Konta pozabilansowe
+      case '3': return 'equity'; // Kapitały własne i fundusze
+      case '4': return 'expense'; // Koszty według rodzaju
+      case '5': return 'expense'; // Koszty według miejsc powstawania
+      case '6': return 'assets'; // Produkty i usługi
+      case '7': return 'income'; // Przychody operacyjne
+      case '8': return 'results'; // Wyniki finansowe
+      case '9': return 'off_balance'; // Rozrachunki międzyokresowe
       default: return 'other';
     }
   };
@@ -230,16 +230,16 @@ const AccountsImport: React.FC = () => {
         </div>
 
         <div className="bg-blue-50 p-4 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-2">Automatyczne określanie typów kont:</h4>
+          <h4 className="font-medium text-blue-900 mb-2">Automatyczne określanie typów kont według PKR:</h4>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li><strong>1xx:</strong> Aktywa (majątek trwały)</li>
+            <li><strong>1xx:</strong> Środki trwałe i obrotowe (aktywa)</li>
             <li><strong>2xx:</strong> Zobowiązania i rozrachunki</li>
-            <li><strong>3xx:</strong> Fundusze i rezerwy</li>
-            <li><strong>4xx, 5xx:</strong> Koszty działalności</li>
-            <li><strong>6xx:</strong> Aktywa (produkty, towary)</li>
-            <li><strong>7xx:</strong> Przychody</li>
-            <li><strong>8xx:</strong> Rozliczenie wyniku</li>
-            <li><strong>9xx:</strong> Konta pozabilansowe</li>
+            <li><strong>3xx:</strong> Kapitały własne i fundusze</li>
+            <li><strong>4xx, 5xx:</strong> Koszty według rodzaju i miejsc powstawania</li>
+            <li><strong>6xx:</strong> Produkty i usługi (aktywa obrotowe)</li>
+            <li><strong>7xx:</strong> Przychody operacyjne</li>
+            <li><strong>8xx:</strong> Wyniki finansowe</li>
+            <li><strong>9xx:</strong> Rozrachunki międzyokresowe</li>
           </ul>
         </div>
       </CardContent>
