@@ -13,6 +13,7 @@ import { pl } from 'date-fns/locale';
 import AccountSelector from './AccountSelector';
 import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
+import DocumentDialog from '@/pages/Documents/DocumentDialog';
 
 interface Account {
   id: string;
@@ -47,6 +48,8 @@ const AccountSearchPage = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showTurnover, setShowTurnover] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
+  const [editingDocument, setEditingDocument] = useState<any>(null);
 
   // Fetch accounts
   const { data: accounts } = useQuery({
@@ -92,6 +95,24 @@ const AccountSearchPage = () => {
       return data as Transaction[];
     },
     enabled: !!selectedAccount,
+  });
+
+  // Fetch document for editing
+  const { data: documentData, refetch: refetchDocument } = useQuery({
+    queryKey: ['document', editingDocument?.id],
+    queryFn: async () => {
+      if (!editingDocument?.id) return null;
+      
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', editingDocument.id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!editingDocument?.id,
   });
 
   // Calculate totals
@@ -158,8 +179,36 @@ const AccountSearchPage = () => {
     });
   }, [transactions, selectedMonth]);
 
-  const handleEditDocument = (documentId: string) => {
-    navigate(`/dokumenty?edit=${documentId}`);
+  const handleEditDocument = async (documentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', documentId)
+        .single();
+      
+      if (error) throw error;
+      
+      setEditingDocument(data);
+      setIsDocumentDialogOpen(true);
+    } catch (error) {
+      console.error('Error fetching document:', error);
+    }
+  };
+
+  const handleDocumentUpdated = () => {
+    // Refresh the transactions list after document update
+    if (selectedAccount) {
+      // This will trigger a refetch of the transactions query
+      window.location.reload();
+    }
+    setIsDocumentDialogOpen(false);
+    setEditingDocument(null);
+  };
+
+  const handleCloseDocumentDialog = () => {
+    setIsDocumentDialogOpen(false);
+    setEditingDocument(null);
   };
 
   return (
@@ -297,6 +346,14 @@ const AccountSearchPage = () => {
           </>
         )}
       </div>
+
+      {/* Document Dialog */}
+      <DocumentDialog
+        isOpen={isDocumentDialogOpen}
+        onClose={handleCloseDocumentDialog}
+        onDocumentCreated={handleDocumentUpdated}
+        document={documentData}
+      />
     </MainLayout>
   );
 };
