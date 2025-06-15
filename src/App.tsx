@@ -16,6 +16,7 @@ import KpirPage from "./pages/KPIR/KpirPage";
 import Reports from "./pages/Reports";
 import DataVisualization from "./pages/DataVisualization";
 import DocumentsPage from "./pages/Documents/DocumentsPage";
+import AccountSearchPage from "./pages/AccountSearch/AccountSearchPage";
 import { AdministrationPage } from "./pages/Administration";
 
 // Protected Route Component
@@ -91,6 +92,13 @@ const App = () => (
             <Route path="/reports/:reportId" element={
               <ProtectedRoute>
                 <Reports />
+              </ProtectedRoute>
+            } />
+
+            {/* Account Search route */}
+            <Route path="/konta" element={
+              <ProtectedRoute>
+                <AccountSearchPage />
               </ProtectedRoute>
             } />
             

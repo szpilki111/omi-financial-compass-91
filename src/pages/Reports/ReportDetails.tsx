@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -105,8 +104,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
         updated_at: reportData.updated_at,
         submitted_by: reportData.submitted_by,
         location: reportData.location || { name: 'Unknown' },
-        submitted_by_profile: reportData.submitted_by_profile && typeof reportData.submitted_by_profile === 'object' && 'email' in reportData.submitted_by_profile 
-          ? { email: reportData.submitted_by_profile.email }
+        submitted_by_profile: reportData.submitted_by_profile && 
+          typeof reportData.submitted_by_profile === 'object' && 
+          reportData.submitted_by_profile !== null &&
+          'email' in reportData.submitted_by_profile 
+          ? { email: (reportData.submitted_by_profile as any).email }
           : null
       };
       
