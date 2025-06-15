@@ -13,6 +13,7 @@ import KpirSummary from '../KPIR/components/KpirSummary';
 import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
+import { Report } from '@/types/reports';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -46,7 +47,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .single();
 
       if (error) throw error;
-      return data;
+      
+      // Cast the data to the proper Report type to ensure status is properly typed
+      return data as Report;
     },
     enabled: !!reportId
   });
