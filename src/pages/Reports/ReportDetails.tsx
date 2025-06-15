@@ -195,7 +195,7 @@ const ReportDetails = () => {
       <MainLayout>
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Raport nie został znaleziony</h2>
-          <Button onClick={() => navigate('/raporty')}>
+          <Button onClick={() => navigate('/reports')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Powrót do listy raportów
           </Button>
@@ -213,7 +213,7 @@ const ReportDetails = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate('/raporty')}>
+            <Button variant="outline" onClick={() => navigate('/reports')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Powrót
             </Button>
