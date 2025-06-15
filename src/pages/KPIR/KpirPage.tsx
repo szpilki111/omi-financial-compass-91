@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FilePlus2, Download, Upload, FileDown, FileUp, Search, TestTube } from 'lucide-react';
+import { FilePlus2, Download, Upload, FileDown, FileUp, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import KpirOperationDialog from './KpirOperationDialog';
 import KpirEditDialog from './KpirEditDialog';
@@ -13,13 +13,11 @@ import KpirDocumentDialog from './KpirDocumentDialog';
 import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
-import KpirSummary from './components/KpirSummary';
-import Phase1TestPanel from './components/Phase1TestPanel';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { calculateFinancialSummary, calculateOpeningBalance } from '@/utils/financeUtils';
+import { calculateFinancialSummary } from '@/utils/financeUtils';
 import { ArrowLeft } from "lucide-react";
 
-import DocumentDialog from '@/pages/Documents/DocumentDialog';
+import DocumentDialog from '@/pages/Documents/DocumentDialog'; // <-- importujemy okno edycji dokumentu
 
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
@@ -31,8 +29,8 @@ const KpirPage: React.FC = () => {
   const [showNewOperationDialog, setShowNewOperationDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [showTestPanel, setShowTestPanel] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
+  // Nowy stan dla edycji dokumentu:
   const [selectedDocumentToEdit, setSelectedDocumentToEdit] = useState<{
     id: string;
     document_number: string;
@@ -48,13 +46,11 @@ const KpirPage: React.FC = () => {
     search: '',
   });
 
-  // Rozszerzone podsumowanie finansowe z saldami
-  const [financialSummary, setFinancialSummary] = useState({
+  // Podsumowanie miesięczne
+  const [monthlySummary, setMonthlySummary] = useState({
     income: 0,
     expense: 0,
-    balance: 0,
-    openingBalance: 0,
-    closingBalance: 0
+    balance: 0
   });
 
   // Sprawdź, czy użytkownik jest adminem lub prowincjałem (nie może dodawać operacji)
@@ -145,7 +141,7 @@ const KpirPage: React.FC = () => {
 
       setTransactions(mappedTransactions);
 
-      // Oblicz rozszerzone podsumowanie finansowe z saldami
+      // Oblicz podsumowanie finansowe
       const locationId = user?.location || undefined;
       const summary = await calculateFinancialSummary(
         locationId,
@@ -153,29 +149,10 @@ const KpirPage: React.FC = () => {
         filters.dateTo
       );
 
-      // Oblicz saldo początkowe jeśli jest określona data początkowa
-      let openingBalance = 0;
-      if (filters.dateFrom) {
-        openingBalance = await calculateOpeningBalance(locationId, filters.dateFrom);
-      }
-
-      // Oblicz saldo końcowe
-      const closingBalance = openingBalance + summary.balance;
-
-      setFinancialSummary({
+      setMonthlySummary({
         income: summary.income,
         expense: summary.expense,
-        balance: summary.balance,
-        openingBalance,
-        closingBalance
-      });
-
-      console.log('📊 Podsumowanie finansowe KPIR:', {
-        income: summary.income,
-        expense: summary.expense,
-        balance: summary.balance,
-        openingBalance,
-        closingBalance
+        balance: summary.balance
       });
 
     } catch (error) {
@@ -285,47 +262,24 @@ const KpirPage: React.FC = () => {
 
   return (
     <MainLayout>
+      
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <PageTitle 
             title="Lista operacji"
             subtitle="Przeglądaj operacje"
             actions={
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowTestPanel(!showTestPanel)}
-                  className="gap-2"
-                >
-                  <TestTube className="w-4 h-4" />
-                  {showTestPanel ? "Ukryj testy" : "Panel testowy"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/dokumenty")}
-                  className="gap-2"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Powrót do listy dokumentów
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => navigate("/dokumenty")}
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Powrót do listy dokumentów
+              </Button>
             }
           />
         </div>
-
-        {/* Panel testowy Fazy 1 */}
-        {showTestPanel && (
-          <Phase1TestPanel />
-        )}
-
-        {/* Komponent podsumowania finansowego */}
-        <KpirSummary
-          income={financialSummary.income}
-          expense={financialSummary.expense}
-          balance={financialSummary.balance}
-          openingBalance={filters.dateFrom ? financialSummary.openingBalance : undefined}
-          closingBalance={filters.dateFrom ? financialSummary.closingBalance : undefined}
-        />
 
         <div className="bg-white p-4 rounded-lg shadow-sm border border-omi-gray-200">
           <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
@@ -379,12 +333,13 @@ const KpirPage: React.FC = () => {
                 </div>
               </div>
             </form>
+            
           </div>
           
           <KpirTable 
             transactions={transactions} 
             loading={loading} 
-            onShowDocument={handleEditDocument}
+            onShowDocument={handleEditDocument} // <--- WAŻNE: przekazujemy handler edycji, nie podglądu
           />
         </div>
       </div>
@@ -398,6 +353,7 @@ const KpirPage: React.FC = () => {
         />
       )}
 
+      {/* Dialog do edycji operacji - tylko dla ekonomów */}
       {!isAdmin && showEditDialog && (
         <KpirEditDialog
           open={showEditDialog}
@@ -407,6 +363,7 @@ const KpirPage: React.FC = () => {
         />
       )}
 
+      {/* Dialog do importowania operacji - tylko dla ekonomów */}
       {!isAdmin && showImportDialog && (
         <KpirImportDialog
           open={showImportDialog}
@@ -415,6 +372,7 @@ const KpirPage: React.FC = () => {
         />
       )}
 
+      {/* Okno edycji dokumentu */}
       {showDocumentEditDialog && selectedDocumentToEdit && (
         <DocumentDialog
           isOpen={showDocumentEditDialog}
@@ -423,6 +381,8 @@ const KpirPage: React.FC = () => {
           document={selectedDocumentToEdit}
         />
       )}
+
+      {/* Usuwamy KpirDocumentDialog, bo już nie pokazujemy podglądu */}
     </MainLayout>
   );
 };

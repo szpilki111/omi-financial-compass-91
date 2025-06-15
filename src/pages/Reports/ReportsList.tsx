@@ -20,7 +20,6 @@ import { Spinner } from '@/components/ui/Spinner';
 
 interface ReportsListProps {
   onReportSelect: (reportId: string) => void;
-  reportType?: 'monthly' | 'annual';
 }
 
 const getStatusBadgeProps = (status: Report['status']) => {
@@ -58,16 +57,13 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
-const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 'monthly' }) => {
+const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   const { data: reports, isLoading, error } = useQuery({
-    queryKey: ['reports', reportType],
+    queryKey: ['reports'],
     queryFn: async () => {
-      console.log('=== ROZPOCZĘCIE POBIERANIA RAPORTÓW ===');
-      console.log('Typ raportu:', reportType);
-      
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
-
+      
       let query = supabase.from('reports').select(`
         *,
         location:locations(name),
@@ -75,51 +71,27 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         reviewed_by_profile:profiles!reviewed_by(name)
       `);
       
-      // Mapowanie typów raportów - raporty "standard" traktujemy jako miesięczne
-      console.log('=== FILTROWANIE PO TYPIE RAPORTU ===');
-      if (reportType === 'monthly') {
-        // Dla raportów miesięcznych szukamy typu 'standard'
-        console.log('Szukamy raportów miesięcznych (typu standard)');
-        query = query.eq('report_type', 'standard');
-      } else if (reportType === 'annual') {
-        // Dla raportów rocznych szukamy typu 'annual'
-        console.log('Szukamy raportów rocznych (typu annual)');
-        query = query.eq('report_type', 'annual');
-      }
-      
-      // Jeśli użytkownik to ekonom, filtruj po lokalizacji
       if (userRole === 'ekonom') {
         const { data: locationId } = await supabase.rpc('get_user_location_id');
-        console.log('ID lokalizacji użytkownika (ekonom):', locationId);
+        console.log('ID lokalizacji użytkownika:', locationId);
         
         if (locationId) {
           query = query.eq('location_id', locationId);
-          console.log('Dodano filtr lokalizacji:', locationId);
         }
       }
       
-      console.log('=== WYKONYWANIE ZAPYTANIA ===');
       const { data: reportsData, error: reportsError } = await query.order('created_at', { ascending: false });
       
-      if (reportsError) {
-        console.error('Błąd pobierania raportów:', reportsError);
-        throw reportsError;
-      }
-      
-      console.log('=== WYNIKI ZAPYTANIA ===');
-      console.log('Liczba znalezionych raportów:', reportsData?.length || 0);
-      console.log('Znalezione raporty:', reportsData);
+      if (reportsError) throw reportsError;
+      console.log('Pobrane raporty:', reportsData);
 
+      // Jeśli nie ma raportów, zwróć pustą tablicę
       if (!reportsData || reportsData.length === 0) {
-        console.log('=== BRAK RAPORTÓW ===');
         return [];
       }
 
-      // Pobierz szczegóły raportów
-      console.log('=== POBIERANIE SZCZEGÓŁÓW RAPORTÓW ===');
+      // Pobierz szczegóły finansowe dla wszystkich raportów w osobnym zapytaniu
       const reportIds = reportsData.map(report => report.id);
-      console.log('ID raportów do pobrania szczegółów:', reportIds);
-      
       const { data: reportDetails, error: detailsError } = await supabase
         .from('report_details')
         .select('*')
@@ -127,10 +99,11 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
 
       if (detailsError) {
         console.error('Błąd pobierania szczegółów raportów:', detailsError);
-      } else {
-        console.log('Pobrane szczegóły raportów:', reportDetails);
       }
 
+      console.log('Pobrane szczegóły raportów:', reportDetails);
+
+      // Stwórz mapę szczegółów według report_id
       const detailsMap = new Map();
       if (reportDetails) {
         reportDetails.forEach(detail => {
@@ -138,6 +111,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         });
       }
 
+      // Połącz raporty ze szczegółami
       const transformedData = reportsData.map((report: any) => {
         const details = detailsMap.get(report.id);
         return {
@@ -146,10 +120,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         };
       }) as Report[];
       
-      console.log('=== KOŃCOWE DANE ===');
       console.log('Przekształcone dane raportów:', transformedData);
-      console.log('Liczba końcowych raportów:', transformedData.length);
-      
       return transformedData;
     }
   });
@@ -157,15 +128,11 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
   if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
   
   if (error) return <div className="text-red-600 p-4">Błąd ładowania raportów: {(error as Error).message}</div>;
-
-  const reportTypeText = reportType === 'monthly' ? 'miesięcznych' : 'rocznych';
-
-  if (!reports || reports.length === 0) {
+  
+  if (!reports?.length) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-        <p className="text-omi-gray-500 mb-4">Brak raportów {reportTypeText} do wyświetlenia.</p>
-        <p className="text-sm text-gray-400">Sprawdź konsolę przeglądarki po szczegółowe logi debugowania.</p>
-        <p className="text-xs text-gray-300 mt-2">Typ raportu: {reportType}</p>
+      <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+        <p className="text-omi-gray-500 mb-4">Brak raportów do wyświetlenia.</p>
       </div>
     );
   }
@@ -173,15 +140,14 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <Table>
-        <TableCaption>Lista raportów {reportTypeText} z danymi finansowymi</TableCaption>
+        <TableCaption>Lista raportów z danymi finansowymi</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Placówka</TableHead>
             <TableHead>Okres</TableHead>
-            <TableHead className="text-right">Saldo początkowe</TableHead>
             <TableHead className="text-right">Przychody</TableHead>
             <TableHead className="text-right">Rozchody</TableHead>
-            <TableHead className="text-right">Saldo końcowe</TableHead>
+            <TableHead className="text-right">Bilans</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Złożony przez</TableHead>
             <TableHead className="text-right">Akcje</TableHead>
@@ -193,11 +159,6 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
               <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
               <TableCell>{report.period}</TableCell>
               <TableCell className="text-right font-mono">
-                <span className="text-blue-700">
-                  {formatCurrency(report.report_details?.opening_balance)}
-                </span>
-              </TableCell>
-              <TableCell className="text-right font-mono">
                 <span className="text-green-700">
                   {formatCurrency(report.report_details?.income_total)}
                 </span>
@@ -208,8 +169,8 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
                 </span>
               </TableCell>
               <TableCell className="text-right font-mono font-semibold">
-                <span className={report.report_details?.closing_balance && report.report_details.closing_balance >= 0 ? 'text-green-700' : 'text-red-700'}>
-                  {formatCurrency(report.report_details?.closing_balance)}
+                <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
+                  {formatCurrency(report.report_details?.balance)}
                 </span>
               </TableCell>
               <TableCell>

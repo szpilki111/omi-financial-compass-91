@@ -299,90 +299,33 @@ export type Database = {
           },
         ]
       }
-      report_account_details: {
-        Row: {
-          account_id: string
-          account_name: string
-          account_number: string
-          account_type: string
-          created_at: string | null
-          id: string
-          report_id: string
-          total_amount: number
-          updated_at: string | null
-        }
-        Insert: {
-          account_id: string
-          account_name: string
-          account_number: string
-          account_type: string
-          created_at?: string | null
-          id?: string
-          report_id: string
-          total_amount?: number
-          updated_at?: string | null
-        }
-        Update: {
-          account_id?: string
-          account_name?: string
-          account_number?: string
-          account_type?: string
-          created_at?: string | null
-          id?: string
-          report_id?: string
-          total_amount?: number
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "report_account_details_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "report_account_details_report_id_fkey"
-            columns: ["report_id"]
-            isOneToOne: false
-            referencedRelation: "reports"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       report_details: {
         Row: {
           balance: number
-          closing_balance: number | null
           created_at: string
           expense_total: number
           id: string
           income_total: number
-          opening_balance: number | null
           report_id: string
           settlements_total: number
           updated_at: string
         }
         Insert: {
           balance?: number
-          closing_balance?: number | null
           created_at?: string
           expense_total?: number
           id?: string
           income_total?: number
-          opening_balance?: number | null
           report_id: string
           settlements_total?: number
           updated_at?: string
         }
         Update: {
           balance?: number
-          closing_balance?: number | null
           created_at?: string
           expense_total?: number
           id?: string
           income_total?: number
-          opening_balance?: number | null
           report_id?: string
           settlements_total?: number
           updated_at?: string
@@ -731,15 +674,7 @@ export type Database = {
       }
     }
     Enums: {
-      report_type:
-        | "standard"
-        | "zos"
-        | "bilans"
-        | "rzis"
-        | "jpk"
-        | "analiza"
-        | "monthly"
-        | "annual"
+      report_type: "standard" | "zos" | "bilans" | "rzis" | "jpk" | "analiza"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -855,16 +790,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      report_type: [
-        "standard",
-        "zos",
-        "bilans",
-        "rzis",
-        "jpk",
-        "analiza",
-        "monthly",
-        "annual",
-      ],
+      report_type: ["standard", "zos", "bilans", "rzis", "jpk", "analiza"],
     },
   },
 } as const

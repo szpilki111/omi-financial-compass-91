@@ -3,7 +3,7 @@ export interface Report {
   id: string;
   title: string;
   period: string;
-  month: number | null;
+  month: number;
   year: number;
   status: 'draft' | 'submitted' | 'approved' | 'to_be_corrected';
   location_id: string;
@@ -14,7 +14,7 @@ export interface Report {
   comments: string | null;
   created_at: string;
   updated_at: string;
-  report_type: 'monthly' | 'annual' | 'standard';
+  report_type: 'standard';
   location?: {
     name: string;
   };
@@ -30,21 +30,19 @@ export interface Report {
     expense_total: number;
     balance: number;
     settlements_total: number;
-    opening_balance: number;
-    closing_balance: number;
   };
 }
 
 export interface ReportFormData {
-  month: number | null;
+  month: number;
   year: number;
-  report_type: 'monthly' | 'annual' | 'standard';
+  report_type: 'standard';
 }
 
 export interface ReportSection {
   id: string;
   name: string;
-  report_type: 'monthly' | 'annual' | 'standard';
+  report_type: 'standard';
   section_order: number;
 }
 
@@ -93,20 +91,6 @@ export interface ReportDetails {
   expense_total: number;
   balance: number;
   settlements_total: number;
-  opening_balance: number;
-  closing_balance: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ReportAccountDetails {
-  id: string;
-  report_id: string;
-  account_id: string;
-  account_number: string;
-  account_name: string;
-  account_type: 'income' | 'expense';
-  total_amount: number;
   created_at: string;
   updated_at: string;
 }
@@ -119,8 +103,6 @@ export interface ReportDetailsRow {
   expense_total: number;
   balance: number;
   settlements_total: number;
-  opening_balance: number;
-  closing_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -132,8 +114,6 @@ export interface ReportDetailsInsert {
   expense_total?: number;
   balance?: number;
   settlements_total?: number;
-  opening_balance?: number;
-  closing_balance?: number;
 }
 
 // Typ dla operacji update na tabeli report_details
@@ -143,7 +123,5 @@ export interface ReportDetailsUpdate {
   expense_total?: number;
   balance?: number;
   settlements_total?: number;
-  opening_balance?: number;
-  closing_balance?: number;
   updated_at?: string;
 }

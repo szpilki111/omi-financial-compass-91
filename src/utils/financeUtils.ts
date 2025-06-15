@@ -130,189 +130,7 @@ export const diagnoseDatabaseAccountIntegrity = async (
 };
 
 /**
- * Rozszerzona funkcja analizy kont - zwraca szczegółowe informacje o kontach używanych w transakcjach
- */
-export const getDetailedAccountBreakdown = async (
-  locationId: string | null | undefined,
-  dateFrom?: string,
-  dateTo?: string
-) => {
-  try {
-    console.log('🔍 ROZPOCZYNAM SZCZEGÓŁOWĄ ANALIZĘ KONT');
-    
-    let query = supabase
-      .from('transactions')
-      .select(`
-        id,
-        date,
-        amount,
-        debit_account_id,
-        credit_account_id,
-        debit_amount,
-        credit_amount,
-        description,
-        document_number
-      `)
-      .order('date', { ascending: false });
-
-    if (locationId) {
-      query = query.eq('location_id', locationId);
-    }
-    if (dateFrom) {
-      query = query.gte('date', dateFrom);
-    }
-    if (dateTo) {
-      query = query.lte('date', dateTo);
-    }
-
-    const { data: transactions, error: transError } = await query;
-    if (transError) throw transError;
-
-    // Pobierz konta przypisane do lokalizacji
-    let accountsQuery = supabase
-      .from('accounts')
-      .select(`
-        id, 
-        number, 
-        name,
-        type,
-        location_accounts!inner(location_id)
-      `);
-
-    if (locationId) {
-      accountsQuery = accountsQuery.eq('location_accounts.location_id', locationId);
-    }
-
-    const { data: accounts, error: accountsError } = await accountsQuery;
-    if (accountsError) throw accountsError;
-
-    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, acc]));
-
-    // Grupuj transakcje według kont i typów
-    const accountDetails: Record<string, {
-      account_id: string;
-      account_number: string;
-      account_name: string;
-      account_type: string;
-      debit_total: number;
-      credit_total: number;
-      debit_transactions: number;
-      credit_transactions: number;
-      net_balance: number;
-      transaction_count: number;
-    }> = {};
-
-    transactions?.forEach(transaction => {
-      const debitAccount = accountsMap.get(transaction.debit_account_id);
-      const creditAccount = accountsMap.get(transaction.credit_account_id);
-
-      const debitAmount = transaction.debit_amount || transaction.amount;
-      const creditAmount = transaction.credit_amount || transaction.amount;
-
-      // Analiza konta debetowego (WN)
-      if (debitAccount) {
-        const key = `${debitAccount.id}_debit`;
-        if (!accountDetails[key]) {
-          accountDetails[key] = {
-            account_id: debitAccount.id,
-            account_number: debitAccount.number,
-            account_name: debitAccount.name,
-            account_type: debitAccount.type,
-            debit_total: 0,
-            credit_total: 0,
-            debit_transactions: 0,
-            credit_transactions: 0,
-            net_balance: 0,
-            transaction_count: 0
-          };
-        }
-        accountDetails[key].debit_total += debitAmount;
-        accountDetails[key].debit_transactions += 1;
-        accountDetails[key].transaction_count += 1;
-      }
-
-      // Analiza konta kredytowego (MA)
-      if (creditAccount) {
-        const key = `${creditAccount.id}_credit`;
-        if (!accountDetails[key]) {
-          accountDetails[key] = {
-            account_id: creditAccount.id,
-            account_number: creditAccount.number,
-            account_name: creditAccount.name,
-            account_type: creditAccount.type,
-            debit_total: 0,
-            credit_total: 0,
-            debit_transactions: 0,
-            credit_transactions: 0,
-            net_balance: 0,
-            transaction_count: 0
-          };
-        }
-        accountDetails[key].credit_total += creditAmount;
-        accountDetails[key].credit_transactions += 1;
-        accountDetails[key].transaction_count += 1;
-      }
-    });
-
-    // Oblicz saldo netto dla każdego konta
-    Object.values(accountDetails).forEach(account => {
-      // Dla kont aktywów (1xx, 6xx) i kosztów (4xx, 5xx): WN zwiększa saldo
-      // Dla kont zobowiązań (2xx), kapitałów (3xx) i przychodów (7xx): MA zwiększa saldo
-      const isAssetOrExpense = account.account_number.startsWith('1') || 
-                              account.account_number.startsWith('4') || 
-                              account.account_number.startsWith('5') ||
-                              account.account_number.startsWith('6');
-      
-      if (isAssetOrExpense) {
-        account.net_balance = account.debit_total - account.credit_total;
-      } else {
-        account.net_balance = account.credit_total - account.debit_total;
-      }
-    });
-
-    return Object.values(accountDetails);
-
-  } catch (error) {
-    console.error('❌ Błąd podczas szczegółowej analizy kont:', error);
-    return [];
-  }
-};
-
-/**
- * Oblicza saldo początkowe na podstawie wszystkich transakcji przed okresem sprawozdawczym
- * Ulepszona wersja z lepszą obsługą błędów i logowaniem
- */
-export const calculateOpeningBalance = async (
-  locationId: string | null | undefined,
-  dateFrom: string
-) => {
-  try {
-    console.log(`🔍 OBLICZANIE SALDO POCZĄTKOWEGO na dzień: ${dateFrom}`);
-    
-    // Pobierz wszystkie transakcje przed okresem sprawozdawczym
-    const dateBefore = new Date(dateFrom);
-    dateBefore.setDate(dateBefore.getDate() - 1);
-    const dateBeforeStr = dateBefore.toISOString().split('T')[0];
-    
-    console.log(`📅 Obliczam saldo skumulowane do dnia: ${dateBeforeStr}`);
-    
-    const summary = await calculateFinancialSummary(locationId, undefined, dateBeforeStr);
-    
-    console.log(`📊 Saldo początkowe obliczone: ${summary.balance} PLN`);
-    console.log(`  - Przychody skumulowane: ${summary.income} PLN`);
-    console.log(`  - Rozchody skumulowane: ${summary.expense} PLN`);
-    
-    return summary.balance;
-    
-  } catch (error) {
-    console.error('❌ Błąd podczas obliczania saldo początkowego:', error);
-    return 0;
-  }
-};
-
-/**
  * Oblicza podsumowanie finansowe na podstawie transakcji dla określonej lokalizacji i okresu
- * Rozszerzona wersja z ulepszoną obsługą sald i lepszym logowaniem
  */
 export const calculateFinancialSummary = async (
   locationId: string | null | undefined,
@@ -320,10 +138,6 @@ export const calculateFinancialSummary = async (
   dateTo?: string
 ) => {
   try {
-    console.log('🔍 ROZPOCZYNAM OBLICZANIE PODSUMOWANIA FINANSOWEGO');
-    console.log(`📍 Lokalizacja ID: ${locationId || 'wszystkie'}`);
-    console.log(`📅 Okres: ${dateFrom || 'początek'} - ${dateTo || 'koniec'}`);
-
     let query = supabase
       .from('transactions')
       .select(`
@@ -364,8 +178,6 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
-    console.log(`📊 Znaleziono ${data?.length || 0} transakcji`);
-
     // Pobierz konta TYLKO przypisane do lokalizacji
     let accountsQuery = supabase
       .from('accounts')
@@ -373,7 +185,6 @@ export const calculateFinancialSummary = async (
         id, 
         number, 
         name,
-        type,
         location_accounts!inner(location_id)
       `);
 
@@ -388,9 +199,7 @@ export const calculateFinancialSummary = async (
       throw accountsError;
     }
 
-    console.log(`📈 Znaleziono ${accounts?.length || 0} kont przypisanych do lokalizacji`);
-
-    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, acc]));
+    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
 
     const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => {
       const debitAccount = accountsMap.get(transaction.debit_account_id);
@@ -413,45 +222,20 @@ export const calculateFinancialSummary = async (
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('4') || accountNum.startsWith('5') || accountNum === '200';
+      return accountNum.startsWith('4') || accountNum === '200';
     };
 
     let income = 0;
     let expense = 0;
-    const accountBreakdown: Record<string, { 
-      account_id: string; 
-      account_number: string; 
-      account_name: string; 
-      account_type: string;
-      income: number; 
-      expense: number;
-      debit_total: number;
-      credit_total: number;
-      net_balance: number;
-      transaction_count: number;
-    }> = {};
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
-      console.log('⚠️ Brak transakcji do analizy');
-      return { 
-        income: 0, 
-        expense: 0, 
-        balance: 0, 
-        transactions: [], 
-        accountBreakdown: [],
-        detailedAccountBreakdown: []
-      };
+      return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
-
-    console.log('🔄 Rozpoczynam analizę transakcji...');
 
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
-      const debitAccount = accountsMap.get(transaction.debit_account_id);
-      const creditAccount = accountsMap.get(transaction.credit_account_id);
-      
-      const debitAccountNumber = debitAccount?.number || '';
-      const creditAccountNumber = creditAccount?.number || '';
+      const debitAccountNumber = transaction.debitAccount?.number || '';
+      const creditAccountNumber = transaction.creditAccount?.number || '';
 
       let transactionIncome = 0;
       let transactionExpense = 0;
@@ -459,63 +243,27 @@ export const calculateFinancialSummary = async (
       // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx lub 200)
       const creditIsIncome = isIncomeAccount(creditAccountNumber);
 
-      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx, 5xx lub 200)  
+      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx lub 200)  
       const debitIsExpense = isExpenseAccount(debitAccountNumber);
 
       // PRZYCHODY: konto 7xx lub 200 po stronie kredytu (MA)
-      if (creditIsIncome && creditAccount) {
+      if (creditIsIncome) {
+        // Użyj credit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.credit_amount != null && transaction.credit_amount > 0) {
           transactionIncome = transaction.credit_amount;
         } else {
           transactionIncome = transaction.amount;
         }
-
-        const accountKey = `${transaction.credit_account_id}_income`;
-        if (!accountBreakdown[accountKey]) {
-          accountBreakdown[accountKey] = {
-            account_id: transaction.credit_account_id,
-            account_number: creditAccountNumber,
-            account_name: creditAccount.name || 'Nieznane konto',
-            account_type: creditAccount.type || 'income',
-            income: 0,
-            expense: 0,
-            debit_total: 0,
-            credit_total: 0,
-            net_balance: 0,
-            transaction_count: 0
-          };
-        }
-        accountBreakdown[accountKey].income += transactionIncome;
-        accountBreakdown[accountKey].credit_total += transactionIncome;
-        accountBreakdown[accountKey].transaction_count += 1;
       }
 
-      // KOSZTY: konto 4xx, 5xx lub 200 po stronie debetu (WN)
-      if (debitIsExpense && debitAccount) {
+      // KOSZTY: konto 4xx lub 200 po stronie debetu (WN)
+      if (debitIsExpense) {
+        // Użyj debit_amount jeśli jest > 0, w przeciwnym razie użyj amount
         if (transaction.debit_amount != null && transaction.debit_amount > 0) {
           transactionExpense = transaction.debit_amount;
         } else {
           transactionExpense = transaction.amount;
         }
-
-        const accountKey = `${transaction.debit_account_id}_expense`;
-        if (!accountBreakdown[accountKey]) {
-          accountBreakdown[accountKey] = {
-            account_id: transaction.debit_account_id,
-            account_number: debitAccountNumber,
-            account_name: debitAccount.name || 'Nieznane konto',
-            account_type: debitAccount.type || 'expense',
-            income: 0,
-            expense: 0,
-            debit_total: 0,
-            credit_total: 0,
-            net_balance: 0,
-            transaction_count: 0
-          };
-        }
-        accountBreakdown[accountKey].expense += transactionExpense;
-        accountBreakdown[accountKey].debit_total += transactionExpense;
-        accountBreakdown[accountKey].transaction_count += 1;
       }
 
       // Dodaj do sum całkowitych
@@ -523,274 +271,17 @@ export const calculateFinancialSummary = async (
       expense += transactionExpense;
     });
 
-    // Oblicz saldo netto dla każdego konta
-    Object.values(accountBreakdown).forEach(account => {
-      account.net_balance = account.credit_total - account.debit_total;
-    });
-
     const balance = income - expense;
-
-    console.log('✅ ZAKOŃCZONO OBLICZANIE PODSUMOWANIA FINANSOWEGO');
-    console.log(`💰 Przychody: ${income.toFixed(2)} PLN`);
-    console.log(`💸 Rozchody: ${expense.toFixed(2)} PLN`);
-    console.log(`⚖️ Saldo: ${balance.toFixed(2)} PLN`);
-    console.log(`📊 Konta w rozbiciu: ${Object.keys(accountBreakdown).length}`);
-
-    // Pobierz szczegółowy podział kont
-    const detailedAccountBreakdown = await getDetailedAccountBreakdown(locationId, dateFrom, dateTo);
 
     return {
       income,
       expense,
       balance,
-      transactions: formattedTransactions,
-      accountBreakdown: Object.values(accountBreakdown),
-      detailedAccountBreakdown
+      transactions: formattedTransactions
     };
   } catch (error) {
-    console.error('❌ Błąd podczas obliczania podsumowania finansowego:', error);
-    return { 
-      income: 0, 
-      expense: 0, 
-      balance: 0, 
-      transactions: [], 
-      accountBreakdown: [],
-      detailedAccountBreakdown: []
-    };
-  }
-};
-
-/**
- * Oblicza saldo zamknięcia dla poprzedniego okresu z ulepszoną logiką
- */
-export const calculatePreviousPeriodClosingBalance = async (
-  locationId: string,
-  year: number,
-  month?: number
-) => {
-  try {
-    let prevYear = year;
-    let prevMonth = month;
-
-    if (month) {
-      // Dla raportu miesięcznego - poprzedni miesiąc
-      if (month === 1) {
-        prevYear = year - 1;
-        prevMonth = 12;
-      } else {
-        prevMonth = month - 1;
-      }
-    } else {
-      // Dla raportu rocznego - poprzedni rok
-      prevYear = year - 1;
-    }
-
-    console.log(`🔍 Szukam saldo zamknięcia dla: ${prevYear}${prevMonth ? `/${prevMonth.toString().padStart(2, '0')}` : ''}`);
-
-    // Szukaj raportu z poprzedniego okresu
-    let query = supabase
-      .from('reports')
-      .select('id, report_details(closing_balance)')
-      .eq('location_id', locationId)
-      .eq('year', prevYear)
-      .eq('status', 'approved'); // Tylko zatwierdzone raporty
-
-    if (prevMonth) {
-      query = query.eq('month', prevMonth).eq('report_type', 'monthly');
-    } else {
-      query = query.eq('report_type', 'annual');
-    }
-
-    const { data: prevReports, error } = await query.single();
-
-    if (!error && prevReports?.report_details?.closing_balance !== null) {
-      const closingBalance = Number(prevReports.report_details.closing_balance) || 0;
-      console.log('✅ Znaleziono poprzedni raport z saldo zamknięcia:', closingBalance);
-      return closingBalance;
-    }
-
-    console.log('⚠️ Nie znaleziono poprzedniego zatwierdzonego raportu, obliczam saldo na podstawie transakcji');
-
-    // Jeśli nie ma poprzedniego raportu, oblicz saldo na podstawie wszystkich transakcji do końca poprzedniego okresu
-    let dateTo: string;
-    if (prevMonth) {
-      const lastDayOfPrevMonth = new Date(prevYear, prevMonth, 0);
-      dateTo = lastDayOfPrevMonth.toISOString().split('T')[0];
-    } else {
-      dateTo = `${prevYear}-12-31`;
-    }
-
-    // Oblicz skumulowane saldo od początku działalności do końca poprzedniego okresu
-    const summary = await calculateFinancialSummary(locationId, undefined, dateTo);
-    
-    console.log(`📊 Obliczone saldo na podstawie transakcji do ${dateTo}:`, summary.balance);
-    return summary.balance;
-
-  } catch (error) {
-    console.error('❌ Błąd podczas pobierania poprzedniego saldo:', error);
-    return 0;
-  }
-};
-
-/**
- * Pobiera szczegółowy podział kont według numerów (700, 400, 200) dla raportów
- */
-export const getDetailedAccountSummaryForReport = async (
-  locationId: string | null | undefined,
-  dateFrom?: string,
-  dateTo?: string
-) => {
-  try {
-    console.log('🔍 POBIERANIE SZCZEGÓŁOWEGO PODZIAŁU KONT DLA RAPORTU');
-    
-    let query = supabase
-      .from('transactions')
-      .select(`
-        id,
-        date,
-        amount,
-        debit_account_id,
-        credit_account_id,
-        debit_amount,
-        credit_amount,
-        description,
-        document_number
-      `)
-      .order('date', { ascending: false });
-
-    if (locationId) {
-      query = query.eq('location_id', locationId);
-    }
-    if (dateFrom) {
-      query = query.gte('date', dateFrom);
-    }
-    if (dateTo) {
-      query = query.lte('date', dateTo);
-    }
-
-    const { data: transactions, error: transError } = await query;
-    if (transError) throw transError;
-
-    // Pobierz konta przypisane do lokalizacji
-    let accountsQuery = supabase
-      .from('accounts')
-      .select(`
-        id, 
-        number, 
-        name,
-        type,
-        location_accounts!inner(location_id)
-      `);
-
-    if (locationId) {
-      accountsQuery = accountsQuery.eq('location_accounts.location_id', locationId);
-    }
-
-    const { data: accounts, error: accountsError } = await accountsQuery;
-    if (accountsError) throw accountsError;
-
-    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, acc]));
-
-    // Zdefiniuj kluczowe konta
-    const keyAccounts = {
-      income_700: accounts.filter(acc => acc.number.startsWith('7')),
-      income_200: accounts.filter(acc => acc.number === '200'),
-      expense_400: accounts.filter(acc => acc.number.startsWith('4')),
-      expense_200: accounts.filter(acc => acc.number === '200')
-    };
-
-    // Oblicz sumy dla każdego typu konta
-    const accountSummary = {
-      income_700_total: 0,
-      income_700_details: [] as Array<{account_number: string, account_name: string, amount: number}>,
-      income_200_total: 0,
-      expense_400_total: 0,
-      expense_400_details: [] as Array<{account_number: string, account_name: string, amount: number}>,
-      expense_200_total: 0,
-      total_income: 0,
-      total_expense: 0,
-      net_balance: 0
-    };
-
-    const accountTotals = new Map<string, number>();
-
-    transactions?.forEach(transaction => {
-      const debitAccount = accountsMap.get(transaction.debit_account_id);
-      const creditAccount = accountsMap.get(transaction.credit_account_id);
-      
-      const debitAmount = transaction.debit_amount || transaction.amount;
-      const creditAmount = transaction.credit_amount || transaction.amount;
-
-      // Przychody z kont 7xx (kredyt)
-      if (creditAccount && creditAccount.number.startsWith('7')) {
-        const key = `credit_${creditAccount.id}`;
-        accountTotals.set(key, (accountTotals.get(key) || 0) + creditAmount);
-        accountSummary.income_700_total += creditAmount;
-      }
-
-      // Przychody z konta 200 (kredyt)
-      if (creditAccount && creditAccount.number === '200') {
-        accountSummary.income_200_total += creditAmount;
-      }
-
-      // Koszty z kont 4xx (debet)
-      if (debitAccount && debitAccount.number.startsWith('4')) {
-        const key = `debit_${debitAccount.id}`;
-        accountTotals.set(key, (accountTotals.get(key) || 0) + debitAmount);
-        accountSummary.expense_400_total += debitAmount;
-      }
-
-      // Koszty z konta 200 (debet)
-      if (debitAccount && debitAccount.number === '200') {
-        accountSummary.expense_200_total += debitAmount;
-      }
-    });
-
-    // Przygotuj szczegóły dla kont 700
-    keyAccounts.income_700.forEach(account => {
-      const amount = accountTotals.get(`credit_${account.id}`) || 0;
-      if (amount > 0) {
-        accountSummary.income_700_details.push({
-          account_number: account.number,
-          account_name: account.name,
-          amount
-        });
-      }
-    });
-
-    // Przygotuj szczegóły dla kont 400
-    keyAccounts.expense_400.forEach(account => {
-      const amount = accountTotals.get(`debit_${account.id}`) || 0;
-      if (amount > 0) {
-        accountSummary.expense_400_details.push({
-          account_number: account.number,
-          account_name: account.name,
-          amount
-        });
-      }
-    });
-
-    // Oblicz sumy całkowite
-    accountSummary.total_income = accountSummary.income_700_total + accountSummary.income_200_total;
-    accountSummary.total_expense = accountSummary.expense_400_total + accountSummary.expense_200_total;
-    accountSummary.net_balance = accountSummary.total_income - accountSummary.total_expense;
-
-    console.log('📊 Szczegółowy podział kont:', accountSummary);
-    return accountSummary;
-
-  } catch (error) {
-    console.error('❌ Błąd podczas pobierania szczegółowego podziału kont:', error);
-    return {
-      income_700_total: 0,
-      income_700_details: [],
-      income_200_total: 0,
-      expense_400_total: 0,
-      expense_400_details: [],
-      expense_200_total: 0,
-      total_income: 0,
-      total_expense: 0,
-      net_balance: 0
-    };
+    console.error('Błąd podczas obliczania podsumowania finansowego:', error);
+    return { income: 0, expense: 0, balance: 0, transactions: [] };
   }
 };
 
@@ -811,12 +302,12 @@ export const getReportFinancialDetails = async (reportId: string) => {
     
     if (reportDetailsError) {
       console.error('Błąd podczas pobierania szczegółów raportu:', reportDetailsError);
-      return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0, closingBalance: 0 };
+      return { income: 0, expense: 0, balance: 0, settlements: 0 };
     }
     
     if (!reportDetails) {
       console.log('Nie znaleziono szczegółów raportu w report_details, zwracam zerowe wartości');
-      return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0, closingBalance: 0 };
+      return { income: 0, expense: 0, balance: 0, settlements: 0 };
     }
     
     // Jeśli znaleziono szczegóły, zwróć je
@@ -824,28 +315,20 @@ export const getReportFinancialDetails = async (reportId: string) => {
       income: Number(reportDetails.income_total) || 0,
       expense: Number(reportDetails.expense_total) || 0,
       balance: Number(reportDetails.balance) || 0,
-      settlements: Number(reportDetails.settlements_total) || 0,
-      openingBalance: Number(reportDetails.opening_balance) || 0,
-      closingBalance: Number(reportDetails.closing_balance) || 0
+      settlements: Number(reportDetails.settlements_total) || 0
     };
   } catch (error) {
     console.error('Błąd podczas pobierania szczegółów finansowych raportu:', error);
-    return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0, closingBalance: 0 };
+    return { income: 0, expense: 0, balance: 0, settlements: 0 };
   }
 };
 
 /**
- * Aktualizuje szczegóły finansowe raportu wraz z saldem początkowym i końcowym
+ * Aktualizuje szczegóły finansowe raportu
  */
 export const updateReportDetails = async (
   reportId: string, 
-  financialSummary: { 
-    income: number; 
-    expense: number; 
-    balance: number;
-    openingBalance?: number;
-    closingBalance?: number;
-  }
+  financialSummary: { income: number, expense: number, balance: number }
 ) => {
   try {
     console.log(`Aktualizacja szczegółów raportu ${reportId} z danymi:`, financialSummary);
@@ -856,8 +339,6 @@ export const updateReportDetails = async (
       .select('id')
       .eq('report_id', reportId);
       
-    const closingBalance = (financialSummary.openingBalance || 0) + financialSummary.balance;
-      
     if (existingDetails && existingDetails.length > 0) {
       // Aktualizuj istniejące szczegóły
       const { data, error } = await supabase
@@ -866,8 +347,6 @@ export const updateReportDetails = async (
           income_total: financialSummary.income,
           expense_total: financialSummary.expense,
           balance: financialSummary.balance,
-          opening_balance: financialSummary.openingBalance || 0,
-          closing_balance: closingBalance,
           updated_at: new Date().toISOString()
         })
         .eq('report_id', reportId);
@@ -888,8 +367,6 @@ export const updateReportDetails = async (
           income_total: financialSummary.income,
           expense_total: financialSummary.expense,
           balance: financialSummary.balance,
-          opening_balance: financialSummary.openingBalance || 0,
-          closing_balance: closingBalance,
           settlements_total: 0
         })
         .select()
@@ -910,160 +387,35 @@ export const updateReportDetails = async (
 };
 
 /**
- * Zapisuje szczegółowe informacje o kontach dla raportu
- */
-export const saveReportAccountDetails = async (
-  reportId: string,
-  accountBreakdown: Array<{
-    account_id: string;
-    account_number: string;
-    account_name: string;
-    account_type?: string;
-    income: number;
-    expense: number;
-    debit_total?: number;
-    credit_total?: number;
-    net_balance?: number;
-    transaction_count?: number;
-  }>
-) => {
-  try {
-    console.log(`💾 Zapisywanie szczegółów kont dla raportu: ${reportId}`);
-    
-    // Usuń stare szczegóły kont dla tego raportu
-    await supabase
-      .from('report_account_details')
-      .delete()
-      .eq('report_id', reportId);
-
-    // Dodaj nowe szczegóły kont
-    for (const account of accountBreakdown) {
-      if (account.income > 0) {
-        await supabase
-          .from('report_account_details')
-          .insert({
-            report_id: reportId,
-            account_id: account.account_id,
-            account_number: account.account_number,
-            account_name: account.account_name,
-            account_type: 'income',
-            total_amount: account.income
-          });
-      }
-      
-      if (account.expense > 0) {
-        await supabase
-          .from('report_account_details')
-          .insert({
-            report_id: reportId,
-            account_id: account.account_id,
-            account_number: account.account_number,
-            account_name: account.account_name,
-            account_type: 'expense',
-            total_amount: account.expense
-          });
-      }
-    }
-    
-    console.log('✅ Pomyślnie zapisano szczegóły kont dla raportu');
-  } catch (error) {
-    console.error('❌ Błąd podczas zapisywania szczegółów kont:', error);
-    throw error;
-  }
-};
-
-/**
  * Oblicza i zapisuje automatycznie podsumowanie finansowe dla nowego raportu
- * Z ulepszoną obsługą sald początkowych i końcowych oraz szczegółowym podziałem kont
  */
 export const calculateAndSaveReportSummary = async (
   reportId: string,
   locationId: string,
-  month: number | null,
+  month: number,
   year: number
 ) => {
   try {
-    console.log(`🔄 Automatyczne obliczanie i zapisywanie podsumowania dla raportu ${reportId}`);
-    console.log(`📅 Okres: ${year}${month ? `/${month.toString().padStart(2, '0')}` : ' (cały rok)'}`);
+    console.log(`Automatyczne obliczanie i zapisywanie podsumowania dla raportu ${reportId}`);
     
-    let dateFrom: string;
-    let dateTo: string;
+    // Oblicz daty na podstawie miesiąca i roku
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const lastDayOfMonth = new Date(year, month, 0);
     
-    if (month) {
-      // Raport miesięczny
-      const firstDayOfMonth = new Date(year, month - 1, 1);
-      const lastDayOfMonth = new Date(year, month, 0);
-      dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      dateTo = lastDayOfMonth.toISOString().split('T')[0];
-    } else {
-      // Raport roczny
-      dateFrom = `${year}-01-01`;
-      dateTo = `${year}-12-31`;
-    }
+    const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+    const dateTo = lastDayOfMonth.toISOString().split('T')[0];
     
-    console.log(`📊 Okres analizy: ${dateFrom} - ${dateTo}`);
-    
-    // Pobierz saldo początkowe z poprzedniego okresu
-    const openingBalance = await calculatePreviousPeriodClosingBalance(locationId, year, month);
-    
-    // Oblicz finansowe podsumowanie dla bieżącego okresu
+    // Oblicz finansowe podsumowanie
     const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
     
-    // Pobierz szczegółowy podział kont
-    const detailedAccountSummary = await getDetailedAccountSummaryForReport(locationId, dateFrom, dateTo);
-    
     // Zapisz szczegóły raportu w bazie danych
-    await updateReportDetails(reportId, {
-      ...summary,
-      openingBalance
-    });
+    await updateReportDetails(reportId, summary);
     
-    // Zapisz szczegółowe informacje o kontach
-    if (summary.accountBreakdown && summary.accountBreakdown.length > 0) {
-      await saveReportAccountDetails(reportId, summary.accountBreakdown);
-    }
-    
-    const closingBalance = openingBalance + summary.balance;
-    
-    console.log('✅ Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
-    console.log(`💰 Saldo początkowe: ${openingBalance.toFixed(2)} PLN`);
-    console.log(`📈 Przychody okresu: ${summary.income.toFixed(2)} PLN`);
-    console.log(`  - Konta 7xx: ${detailedAccountSummary.income_700_total.toFixed(2)} PLN`);
-    console.log(`  - Konto 200: ${detailedAccountSummary.income_200_total.toFixed(2)} PLN`);
-    console.log(`📉 Rozchody okresu: ${summary.expense.toFixed(2)} PLN`);
-    console.log(`  - Konta 4xx: ${detailedAccountSummary.expense_400_total.toFixed(2)} PLN`);
-    console.log(`  - Konto 200: ${detailedAccountSummary.expense_200_total.toFixed(2)} PLN`);
-    console.log(`⚖️ Saldo okresu: ${summary.balance.toFixed(2)} PLN`);
-    console.log(`🎯 Saldo końcowe: ${closingBalance.toFixed(2)} PLN`);
-    
-    return { 
-      ...summary, 
-      openingBalance,
-      closingBalance,
-      detailedAccountSummary
-    };
+    console.log('Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
+    return summary;
   } catch (error) {
-    console.error('❌ Błąd podczas automatycznego obliczania podsumowania:', error);
+    console.error('Błąd podczas automatycznego obliczania podsumowania:', error);
     // Nie rzucaj błędu, aby nie blokować tworzenia raportu
-    return { 
-      income: 0, 
-      expense: 0, 
-      balance: 0, 
-      openingBalance: 0,
-      closingBalance: 0,
-      accountBreakdown: [],
-      detailedAccountBreakdown: [],
-      detailedAccountSummary: {
-        income_700_total: 0,
-        income_700_details: [],
-        income_200_total: 0,
-        expense_400_total: 0,
-        expense_400_details: [],
-        expense_200_total: 0,
-        total_income: 0,
-        total_expense: 0,
-        net_balance: 0
-      }
-    };
+    return { income: 0, expense: 0, balance: 0 };
   }
 };

@@ -1,415 +1,408 @@
-
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/Spinner';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getReportFinancialDetails, calculateFinancialSummary, updateReportDetails } from '@/utils/financeUtils';
+import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import KpirSummary from '../KPIR/components/KpirSummary';
 import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
-import { ArrowLeft, FileText, Calendar, MapPin, Edit, Save, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { getReportFinancialDetails, calculateAndSaveReportSummary } from '@/utils/financeUtils';
 
-const ReportDetails = () => {
-  const { id } = useParams<{ id: string }>();
+interface ReportDetailsProps {
+  reportId?: string;
+}
+
+const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId }) => {
+  const { reportId: paramReportId } = useParams<{ reportId: string }>();
+  const reportId = propReportId || paramReportId;
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [isEditingComments, setIsEditingComments] = useState(false);
-  const [editedComments, setEditedComments] = useState('');
-  const [financialDetails, setFinancialDetails] = useState({
-    income: 0,
-    expense: 0,
-    balance: 0,
-    settlements: 0,
-    openingBalance: 0,
-    closingBalance: 0
-  });
+  const { user, canApproveReports } = useAuth();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch report data
-  const { data: reportData, isLoading, refetch } = useQuery({
-    queryKey: ['report', id],
+  // Pobieranie danych raportu
+  const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
+    queryKey: ['report', reportId],
     queryFn: async () => {
-      if (!id) throw new Error('Report ID is required');
-      
+      if (!reportId) return null;
+
       const { data, error } = await supabase
         .from('reports')
         .select(`
           *,
-          locations(name),
-          submitted_by_profile:profiles!reports_submitted_by_fkey(name)
+          location:locations(*),
+          submitted_by_profile:profiles!submitted_by(*),
+          reviewed_by_profile:profiles!reviewed_by(*)
         `)
-        .eq('id', id)
+        .eq('id', reportId)
         .single();
 
       if (error) throw error;
       return data;
     },
-    enabled: !!id
+    enabled: !!reportId
   });
 
-  // Fetch financial details
-  useEffect(() => {
-    if (id) {
-      getReportFinancialDetails(id).then(details => {
-        setFinancialDetails(details);
-      });
-    }
-  }, [id]);
+  // Pobieranie szczegółów finansowych raportu
+  const { data: financialDetails, isLoading: isLoadingFinancial, refetch: refetchFinancial } = useQuery({
+    queryKey: ['report_financial', reportId],
+    queryFn: async () => {
+      if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0 };
+      return await getReportFinancialDetails(reportId);
+    },
+    enabled: !!reportId
+  });
 
-  const updateCommentsMutation = useMutation({
-    mutationFn: async (newComments: string) => {
-      if (!id) throw new Error('Report ID is required');
+  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
+  const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
+
+  // Sprawdź, czy raport jest zablokowany (złożony lub zatwierdzony)
+  const isReportLocked = report?.status === 'submitted' || report?.status === 'approved';
+
+  // Sprawdź, czy sumy zostały już przeliczone (czy są inne niż wszystkie zerowe)
+  const hasCalculatedSums = financialDetails && (
+    financialDetails.income !== 0 || 
+    financialDetails.expense !== 0 || 
+    financialDetails.balance !== 0
+  );
+
+  // Funkcja do odświeżania sum raportu - przelicza przychody i koszty zgodnie z określonymi kontami
+  const handleRefreshSums = async () => {
+    if (!reportId || isReportLocked) {
+      if (isReportLocked) {
+        toast({
+          title: "Działanie zablokowane",
+          description: "Nie można przeliczać sum dla złożonych lub zatwierdzonych raportów.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+    
+    setIsRefreshing(true);
+    
+    try {
+      console.log('Rozpoczynam przeliczanie sum dla raportu:', reportId);
       
+      // Pobierz dane raportu
+      const { data: report, error: reportError } = await supabase
+        .from('reports')
+        .select('month, year, location_id')
+        .eq('id', reportId)
+        .single();
+        
+      if (reportError) throw reportError;
+      
+      console.log('Dane raportu:', report);
+      
+      // Oblicz daty na podstawie miesiąca i roku
+      const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
+      const lastDayOfMonth = new Date(report.year, report.month, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      
+      console.log('Okres przeliczania:', dateFrom, 'do', dateTo);
+      console.log('Lokalizacja:', report.location_id);
+      
+      // Oblicz finansowe podsumowanie zgodnie z określonymi kontami:
+      // - Przychody: konta 700-799 i 200-299 po stronie KREDYTU
+      // - Koszty: konta 400-499 po stronie DEBETU
+      const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
+      
+      console.log('Obliczone podsumowanie:', summary);
+      
+      // Aktualizuj szczegóły raportu w bazie danych
+      await updateReportDetails(reportId, summary);
+      
+      // Odśwież dane bez reload strony
+      await refetchFinancial();
+      
+      toast({
+        title: "Sumy przeliczone",
+        description: `Przychody: ${summary.income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Koszty: ${summary.expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`,
+      });
+    } catch (error) {
+      console.error('Błąd podczas odświeżania sum:', error);
+      toast({
+        title: "Błąd",
+        description: "Wystąpił problem podczas przeliczania sum.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
+  // Funkcja do składania raportu
+  const handleSubmitReport = async () => {
+    if (!reportId) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Zaktualizuj status raportu
       const { error } = await supabase
         .from('reports')
-        .update({ 
-          comments: newComments,
-          updated_at: new Date().toISOString()
+        .update({
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          submitted_by: (await supabase.auth.getUser()).data.user?.id,
+          // Wyczyść poprzednie komentarze przy ponownym złożeniu
+          comments: null,
+          reviewed_at: null,
+          reviewed_by: null
         })
-        .eq('id', id);
-      
+        .eq('id', reportId);
+        
       if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['report', id] });
-      setIsEditingComments(false);
-      toast({
-        title: "Sukces",
-        description: "Komentarze zostały zaktualizowane",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Błąd",
-        description: "Nie udało się zaktualizować komentarzy",
-        variant: "destructive",
-      });
-    }
-  });
-
-  const recalculateMutation = useMutation({
-    mutationFn: async () => {
-      if (!id || !reportData) throw new Error('Report data is required');
       
-      return await calculateAndSaveReportSummary(
-        id,
-        reportData.location_id,
-        reportData.month,
-        reportData.year
-      );
-    },
-    onSuccess: (newDetails) => {
-      setFinancialDetails({
-        income: newDetails.income,
-        expense: newDetails.expense,
-        balance: newDetails.balance,
-        settlements: 0,
-        openingBalance: newDetails.openingBalance || 0,
-        closingBalance: newDetails.closingBalance || 0
-      });
-      refetch();
+      // Odśwież dane raportu bez reload strony
+      await refetchReport();
+      
       toast({
-        title: "Sukces",
-        description: "Dane finansowe zostały przeliczone",
+        title: "Raport złożony",
+        description: "Raport został złożony do sprawdzenia.",
       });
-    },
-    onError: (error: any) => {
+      window.location.reload();
+    } catch (error) {
+      console.error('Błąd podczas składania raportu:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się przeliczyć danych finansowych",
+        description: "Wystąpił problem podczas składania raportu.",
         variant: "destructive",
       });
-    }
-  });
-
-  const handleEditComments = () => {
-    setEditedComments(reportData?.comments || '');
-    setIsEditingComments(true);
-  };
-
-  const handleSaveComments = () => {
-    updateCommentsMutation.mutate(editedComments);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditingComments(false);
-    setEditedComments('');
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: 'PLN'
-    }).format(amount);
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'default';
-      case 'rejected':
-        return 'destructive';
-      case 'submitted':
-        return 'secondary';
-      default:
-        return 'outline';
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getStatusText = (status: string) => {
+  const handleApprovalComplete = async () => {
+    // Odśwież dane raportu bez reload całej strony
+    await refetchReport();
+  };
+
+  if (isLoadingReport || isLoadingFinancial) {
+    return (
+      <div className="flex justify-center p-8">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="p-8">
+        <h2 className="text-2xl font-bold mb-4">Raport nie został znaleziony</h2>
+        <Button onClick={() => navigate('/reports')}>
+          <ArrowLeftIcon className="mr-2 h-4 w-4" />
+          Powrót do listy raportów
+        </Button>
+      </div>
+    );
+  }
+
+  // Formatowanie wartości walutowych
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
+  };
+
+  // Formatowanie statusu raportu
+  const getStatusLabel = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'Szkic';
+        return 'Roboczy';
       case 'submitted':
-        return 'Wysłany';
+        return 'Złożony';
       case 'approved':
         return 'Zatwierdzony';
-      case 'rejected':
-        return 'Odrzucony';
+      case 'to_be_corrected':
+        return 'Do poprawy';
       default:
-        return 'Nieznany';
+        return status;
     }
   };
 
-  if (isLoading) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </MainLayout>
-    );
-  }
-
-  if (!reportData) {
-    return (
-      <MainLayout>
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Raport nie został znaleziony</h2>
-          <Button onClick={() => navigate('/reports')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Powrót do listy raportów
-          </Button>
-        </div>
-      </MainLayout>
-    );
-  }
-
-  const canEdit = user?.role === 'admin' || user?.role === 'prowincjal' || reportData.submitted_by === user?.id;
-  const canApprove = user?.role === 'admin' || user?.role === 'prowincjal';
+  // Określenie klasy CSS dla statusu
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return 'text-yellow-600';
+      case 'submitted':
+        return 'text-blue-600';
+      case 'approved':
+        return 'text-green-600';
+      case 'to_be_corrected':
+        return 'text-orange-600';
+      default:
+        return '';
+    }
+  };
 
   return (
-    <MainLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate('/reports')}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Powrót
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">{report.title}</h1>
+          <p className="text-omi-gray-500">
+            Status: <span className={getStatusClass(report.status)}>{getStatusLabel(report.status)}</span>
+          </p>
+        </div>
+        
+        <div className="flex gap-2">
+          {(report.status === 'draft' || canResubmit) && user?.role === 'ekonom' && (
+            <Button onClick={handleSubmitReport} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+              {report.status === 'to_be_corrected' ? 'Popraw i złóż ponownie' : 'Złóż raport'}
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{reportData.title}</h1>
-              <p className="text-gray-600">
-                {reportData.report_type === 'monthly' ? 'Raport miesięczny' : 'Raport roczny'} • {reportData.period}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={getStatusBadgeVariant(reportData.status)}>
-              {getStatusText(reportData.status)}
-            </Badge>
-            {canEdit && reportData.status === 'draft' && (
-              <Button
-                onClick={() => recalculateMutation.mutate()}
-                disabled={recalculateMutation.isPending}
-                variant="outline"
-                size="sm"
-              >
-                Przelicz dane
-              </Button>
-            )}
-          </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h2 className="text-lg font-semibold mb-2">Placówka:</h2>
+          <p>{report.location?.name || 'Nieznana placówka'}</p>
+          
+          <h2 className="text-lg font-semibold mt-4 mb-2">Okres:</h2>
+          <p>{report.period}</p>
         </div>
 
-        {/* Report Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Informacje o raporcie
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div>
-                <label className="text-sm font-medium text-gray-600">Typ raportu:</label>
-                <p className="text-gray-900">
-                  {reportData.report_type === 'monthly' ? 'Miesięczny' : 'Roczny'}
-                </p>
-              </div>
+        <div>
+          {report.status !== 'draft' && (
+            <>
+              <h2 className="text-lg font-semibold mb-2">Data złożenia:</h2>
+              <p>
+                {report.submitted_at
+                  ? new Date(report.submitted_at).toLocaleDateString('pl-PL')
+                  : 'Nie złożono'}
+              </p>
               
-              <div>
-                <label className="text-sm font-medium text-gray-600">Okres:</label>
-                <p className="flex items-center gap-1 text-gray-900">
-                  <Calendar className="h-4 w-4" />
-                  {reportData.period}
-                </p>
-              </div>
+              <h2 className="text-lg font-semibold mt-4 mb-2">Złożony przez:</h2>
+              <p>{report.submitted_by_profile?.name || 'Nieznany'}</p>
+            </>
+          )}
+          
+          {(report.status === 'approved' || report.status === 'to_be_corrected') && (
+            <>
+              <h2 className="text-lg font-semibold mt-4 mb-2">Data weryfikacji:</h2>
+              <p>
+                {report.reviewed_at
+                  ? new Date(report.reviewed_at).toLocaleDateString('pl-PL')
+                  : 'Nie zweryfikowano'}
+              </p>
               
-              <div>
-                <label className="text-sm font-medium text-gray-600">Lokalizacja:</label>
-                <p className="flex items-center gap-1 text-gray-900">
-                  <MapPin className="h-4 w-4" />
-                  {reportData.locations?.name || 'Nieznana'}
-                </p>
-              </div>
+              <h2 className="text-lg font-semibold mt-4 mb-2">Zweryfikowany przez:</h2>
+              <p>{report.reviewed_by_profile?.name || 'Nieznany'}</p>
 
-              <div>
-                <label className="text-sm font-medium text-gray-600">Utworzony przez:</label>
-                <p className="text-gray-900">
-                  {reportData.submitted_by_profile?.name || 'Nieznany użytkownik'}
-                </p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-600">Data utworzenia:</label>
-                <p className="text-gray-900">
-                  {format(new Date(reportData.created_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}
-                </p>
-              </div>
-
-              {reportData.updated_at !== reportData.created_at && (
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Ostatnia aktualizacja:</label>
-                  <p className="text-gray-900">
-                    {format(new Date(reportData.updated_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}
-                  </p>
-                </div>
+              {report.comments && (
+                <>
+                  <h2 className="text-lg font-semibold mt-4 mb-2">Komentarze:</h2>
+                  <p className="text-sm bg-gray-100 p-3 rounded">{report.comments}</p>
+                </>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </>
+          )}
+        </div>
+      </div>
 
-        {/* Financial Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Podsumowanie finansowe</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <label className="text-sm font-medium text-blue-600">Saldo początkowe:</label>
-                <p className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(financialDetails.openingBalance)}
-                </p>
-              </div>
+      {/* Sekcja zatwierdzania dla admina i prowincjała - używamy canApproveReports z kontekstu */}
+      {canApproveReports && report?.status === 'submitted' && (
+        <ReportApprovalActions 
+          reportId={reportId!} 
+          onApprovalComplete={handleApprovalComplete}
+        />
+      )}
+      
+      {/* Wyświetlenie komentarzy dla raportów do poprawy */}
+      {report.status === 'to_be_corrected' && report.comments && (
+        <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-orange-800 mb-2">Komentarze do poprawek</h3>
+          <p className="text-orange-700">{report.comments}</p>
+          {report.reviewed_by_profile && (
+            <p className="text-sm text-orange-600 mt-2">
+              Autor komentarza: {report.reviewed_by_profile.name}
+            </p>
+          )}
+        </div>
+      )}
 
-              <div className="bg-green-50 p-4 rounded-lg">
-                <label className="text-sm font-medium text-green-600">Przychody:</label>
-                <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(financialDetails.income)}
-                </p>
-              </div>
-              
-              <div className="bg-red-50 p-4 rounded-lg">
-                <label className="text-sm font-medium text-red-600">Rozchody:</label>
-                <p className="text-2xl font-bold text-red-600">
-                  {formatCurrency(financialDetails.expense)}
-                </p>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <label className="text-sm font-medium text-gray-600">Saldo okresu:</label>
-                <p className={`text-2xl font-bold ${financialDetails.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(financialDetails.balance)}
-                </p>
-              </div>
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
+          {!isReportLocked && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshSums} 
+              disabled={isRefreshing}
+              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie."
+            >
+              {isRefreshing ? (
+                <Spinner size="sm" className="mr-2" />
+              ) : (
+                <RefreshCcwIcon size={16} className="mr-2" />
+              )}
+              Przelicz sumy
+            </Button>
+          )}
+          {isReportLocked && (
+            <p className="text-sm text-omi-gray-500 italic">
+              Sumy są zablokowane dla {report.status === 'submitted' ? 'złożonych' : 'zatwierdzonych'} raportów
+            </p>
+          )}
+        </div>
 
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <label className="text-sm font-medium text-purple-600">Saldo końcowe:</label>
-                <p className={`text-2xl font-bold ${financialDetails.closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(financialDetails.closingBalance)}
+        {financialDetails && (
+          <>
+            {!hasCalculatedSums && !isReportLocked ? (
+              <div className="text-center py-8">
+                <p className="text-omi-gray-500 mb-4">
+                  Sumy nie zostały jeszcze przeliczone dla tego raportu.
                 </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Comments */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Komentarze
-              {canEdit && reportData.status === 'draft' && !isEditingComments && (
-                <Button variant="outline" size="sm" onClick={handleEditComments}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edytuj
+                <p className="text-sm text-omi-gray-400 mb-4">
+                  Przychody i koszty są obliczane na podstawie kont wynikowych (7xx, 4xx) oraz rozrachunkowych (2xx).<br/>
+                  Kliknij przycisk, aby wygenerować podsumowanie.
+                </p>
+                <Button onClick={handleRefreshSums} disabled={isRefreshing}>
+                  {isRefreshing ? (
+                    <Spinner size="sm" className="mr-2" />
+                  ) : (
+                    <RefreshCcwIcon size={16} className="mr-2" />
+                  )}
+                  Przelicz sumy teraz
                 </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isEditingComments ? (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="comments">Komentarze</Label>
-                  <Textarea
-                    id="comments"
-                    value={editedComments}
-                    onChange={(e) => setEditedComments(e.target.value)}
-                    placeholder="Dodaj komentarze do raportu..."
-                    rows={4}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleSaveComments}
-                    disabled={updateCommentsMutation.isPending}
-                    size="sm"
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Zapisz
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleCancelEdit}
-                    size="sm"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Anuluj
-                  </Button>
-                </div>
               </div>
             ) : (
-              <div className="text-gray-700">
-                {reportData.comments || 'Brak komentarzy'}
-              </div>
+              <KpirSummary 
+                income={financialDetails.income}
+                expense={financialDetails.expense}
+                balance={financialDetails.balance}
+              />
             )}
-          </CardContent>
-        </Card>
-
-        {/* Approval Actions */}
-        {canApprove && reportData.status === 'submitted' && (
-          <ReportApprovalActions
-            reportId={id!}
-            onApprovalComplete={() => {
-              refetch();
-              queryClient.invalidateQueries({ queryKey: ['reports'] });
-            }}
-          />
+          </>
         )}
       </div>
-    </MainLayout>
+
+      <div className="flex justify-between">
+        
+        <div className="space-x-2">
+          <Button variant="outline" onClick={() => {}}>
+            <FileTextIcon className="mr-2 h-4 w-4" />
+            Eksportuj do PDF
+          </Button>
+          <Button variant="outline" onClick={() => {}}>
+            <FileIcon className="mr-2 h-4 w-4" />
+            Eksportuj do Excel
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
 

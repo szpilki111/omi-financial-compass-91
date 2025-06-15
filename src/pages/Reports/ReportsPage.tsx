@@ -1,91 +1,110 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { FileText, Plus } from 'lucide-react';
 import ReportsList from './ReportsList';
-import AnnualReportsList from './AnnualReportsList';
 import ReportForm from './ReportForm';
+import ReportDetails from './ReportDetails';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 const ReportsPage = () => {
-  const [showAnnualReports, setShowAnnualReports] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const navigate = useNavigate();
+  const { canCreateReports } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [isCreatingReport, setIsCreatingReport] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
+  const { toast } = useToast();
 
-  const handleReportSelect = (reportId: string) => {
-    navigate(`/reports/${reportId}`);
+  // Sprawdź parametr URL przy załadowaniu komponentu
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'new' && canCreateReports) {
+      handleNewReport();
+    }
+  }, [searchParams, canCreateReports]);
+
+  const handleReportCreated = () => {
+    setIsCreatingReport(false);
+    setViewMode('list');
+    // Usuń parametr z URL
+    navigate('/reports', { replace: true });
+    toast({
+      title: "Sukces",
+      description: "Raport został utworzony pomyślnie.",
+      variant: "default",
+    });
   };
 
-  const handleCreateSuccess = () => {
-    setShowCreateDialog(false);
-    // Refresh the page to show the new report
-    window.location.reload();
+  const handleReportSelected = (reportId: string) => {
+    setSelectedReportId(reportId);
+    setIsCreatingReport(false);
+    setViewMode('view');
   };
 
-  const handleCreateCancel = () => {
-    setShowCreateDialog(false);
+  const handleNewReport = () => {
+    setIsCreatingReport(true);
+    setSelectedReportId(null);
+    setViewMode('edit');
   };
 
-  if (showAnnualReports) {
-    return (
-      <MainLayout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <PageTitle title="Raporty roczne" />
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAnnualReports(false)}
-            >
-              Powrót do raportów miesięcznych
-            </Button>
-          </div>
-          <AnnualReportsList />
-        </div>
-      </MainLayout>
-    );
-  }
+  const handleCancel = () => {
+    setIsCreatingReport(false);
+    setSelectedReportId(null);
+    setViewMode('list');
+    // Usuń parametr z URL
+    navigate('/reports', { replace: true });
+  };
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <PageTitle title="Raporty miesięczne" />
-          <div className="flex gap-2">
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Utwórz raport miesięczny
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Utwórz nowy raport miesięczny</DialogTitle>
-                </DialogHeader>
-                <ReportForm
-                  reportType="monthly"
-                  onSuccess={handleCreateSuccess}
-                  onCancel={handleCreateCancel}
-                />
-              </DialogContent>
-            </Dialog>
-            
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center">
+          {viewMode !== 'list' && (
             <Button 
-              variant="outline" 
-              onClick={() => setShowAnnualReports(true)}
-              className="flex items-center gap-2"
+              variant="ghost" 
+              onClick={handleCancel} 
+              className="mr-2"
             >
-              <FileText className="h-4 w-4" />
-              Raporty roczne
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Powrót
             </Button>
-          </div>
+          )}
+          <PageTitle title="Raportowanie" />
         </div>
-        
-        <ReportsList onReportSelect={handleReportSelect} reportType="monthly" />
+        {/* Przycisk "Nowy raport" tylko dla ekonomów */}
+        {viewMode === 'list' && canCreateReports && (
+          <Button onClick={handleNewReport} className="flex items-center gap-2">
+            <PlusCircle className="h-4 w-4" />
+            Nowy raport
+          </Button>
+        )}
       </div>
+
+      {viewMode === 'edit' && (
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">
+            {isCreatingReport ? 'Nowy raport' : 'Edycja raportu'}
+          </h2>
+          <ReportForm 
+            reportId={selectedReportId || undefined} 
+            onSuccess={handleReportCreated} 
+            onCancel={handleCancel} 
+          />
+        </div>
+      )}
+      
+      {viewMode === 'view' && selectedReportId && (
+        <ReportDetails reportId={selectedReportId} />
+      )}
+      
+      {viewMode === 'list' && (
+        <ReportsList onReportSelect={handleReportSelected} />
+      )}
     </MainLayout>
   );
 };

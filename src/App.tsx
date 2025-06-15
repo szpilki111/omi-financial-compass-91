@@ -13,10 +13,9 @@ import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
-import { ReportsPage, ReportDetails } from "./pages/Reports";
+import Reports from "./pages/Reports";
 import DataVisualization from "./pages/DataVisualization";
 import DocumentsPage from "./pages/Documents/DocumentsPage";
-import AccountSearchPage from "./pages/AccountSearch/AccountSearchPage";
 import { AdministrationPage } from "./pages/Administration";
 
 // Protected Route Component
@@ -76,19 +75,12 @@ const App = () => (
             {/* Reports routes */}
             <Route path="/reports" element={
               <ProtectedRoute>
-                <ReportsPage />
+                <Reports />
               </ProtectedRoute>
             } />
-            <Route path="/reports/:id" element={
+            <Route path="/reports/:reportId" element={
               <ProtectedRoute>
-                <ReportDetails />
-              </ProtectedRoute>
-            } />
-
-            {/* Account Search route */}
-            <Route path="/konta" element={
-              <ProtectedRoute>
-                <AccountSearchPage />
+                <Reports />
               </ProtectedRoute>
             } />
             
