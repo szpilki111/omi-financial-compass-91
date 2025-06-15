@@ -9,10 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, FileText, Calendar, MapPin, TrendingUp, TrendingDown, Edit } from 'lucide-react';
+import { Search, FileText, Calendar, MapPin, TrendingUp, TrendingDown, Edit, BarChart3, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import AccountNameEditDialog from './AccountNameEditDialog';
+import MonthlyTurnoversDialog from './MonthlyTurnoversDialog';
+import OperationDetailsDialog from './OperationDetailsDialog';
 
 interface Account {
   id: string;
@@ -52,6 +54,10 @@ const AccountSearchPage = () => {
   const [operationsLoading, setOperationsLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [accountToEdit, setAccountToEdit] = useState<Account | null>(null);
+  const [turnoversDialogOpen, setTurnoversDialogOpen] = useState(false);
+  const [operationDetailsOpen, setOperationDetailsOpen] = useState(false);
+  const [selectedOperation, setSelectedOperation] = useState<Operation | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Check if user can edit account names
   const canEditAccountNames = user?.role === 'admin' || user?.role === 'prowincjal';
@@ -64,7 +70,6 @@ const AccountSearchPage = () => {
 
     setLoading(true);
     try {
-      // Search in the accounts table with location join
       const { data: accountsData, error: accountsError } = await supabase
         .from('accounts')
         .select(`
@@ -81,7 +86,6 @@ const AccountSearchPage = () => {
 
       if (accountsError) throw accountsError;
 
-      // Transform the data to match our interface
       const transformedAccounts = (accountsData || []).map(account => ({
         ...account,
         location: Array.isArray(account.location) ? account.location[0] : account.location
@@ -105,13 +109,12 @@ const AccountSearchPage = () => {
     setOperationsLoading(true);
     
     try {
-      // Search for transactions related to this account
+      // Pobierz wszystkie operacje dla tego konta
       const { data, error } = await supabase
-        .from('transactions')
+        .from('kpir_operations')
         .select(`
           id,
           document_id,
-          account_number,
           description,
           amount,
           transaction_type,
@@ -124,9 +127,9 @@ const AccountSearchPage = () => {
 
       if (error) throw error;
       
-      // Transform the data to match our interface
       const transformedOperations = (data || []).map(operation => ({
         ...operation,
+        account_number: account.number,
         location: Array.isArray(operation.location) ? operation.location[0] : operation.location,
         document: Array.isArray(operation.document) ? operation.document[0] : operation.document
       }));
@@ -150,15 +153,22 @@ const AccountSearchPage = () => {
   };
 
   const handleAccountUpdated = (updatedAccount: Account) => {
-    // Update accounts list
     setAccounts(accounts.map(acc => 
       acc.id === updatedAccount.id ? updatedAccount : acc
     ));
     
-    // Update selected account if it's the one being edited
     if (selectedAccount?.id === updatedAccount.id) {
       setSelectedAccount(updatedAccount);
     }
+  };
+
+  const handleShowTurnovers = () => {
+    setTurnoversDialogOpen(true);
+  };
+
+  const handleShowOperationDetails = (operation: Operation) => {
+    setSelectedOperation(operation);
+    setOperationDetailsOpen(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -168,20 +178,27 @@ const AccountSearchPage = () => {
     }).format(amount);
   };
 
+  const getCurrentYearOperations = () => {
+    return operations.filter(op => new Date(op.date).getFullYear() === selectedYear);
+  };
+
   const getTotalAmount = () => {
-    return operations.reduce((sum, op) => {
+    const yearOperations = getCurrentYearOperations();
+    return yearOperations.reduce((sum, op) => {
       return sum + (op.transaction_type === 'income' ? op.amount : -op.amount);
     }, 0);
   };
 
   const getIncomeTotal = () => {
-    return operations
+    const yearOperations = getCurrentYearOperations();
+    return yearOperations
       .filter(op => op.transaction_type === 'income')
       .reduce((sum, op) => sum + op.amount, 0);
   };
 
   const getExpenseTotal = () => {
-    return operations
+    const yearOperations = getCurrentYearOperations();
+    return yearOperations
       .filter(op => op.transaction_type === 'expense')
       .reduce((sum, op) => sum + op.amount, 0);
   };
@@ -266,13 +283,37 @@ const AccountSearchPage = () => {
         {/* Selected Account Operations */}
         {selectedAccount && (
           <div className="space-y-4">
+            {/* Year Selector and Turnovers Button */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm font-medium">Rok:</label>
+                    <select 
+                      value={selectedYear} 
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="border rounded px-3 py-1"
+                    >
+                      {[2024, 2023, 2022, 2021, 2020].map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button onClick={handleShowTurnovers} className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Obroty
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Łączne przychody</p>
+                      <p className="text-sm font-medium text-gray-600">Łączne przychody {selectedYear}</p>
                       <p className="text-2xl font-bold text-green-600">
                         {formatCurrency(getIncomeTotal())}
                       </p>
@@ -286,7 +327,7 @@ const AccountSearchPage = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Łączne rozchody</p>
+                      <p className="text-sm font-medium text-gray-600">Łączne rozchody {selectedYear}</p>
                       <p className="text-2xl font-bold text-red-600">
                         {formatCurrency(getExpenseTotal())}
                       </p>
@@ -300,7 +341,7 @@ const AccountSearchPage = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Saldo</p>
+                      <p className="text-sm font-medium text-gray-600">Saldo {selectedYear}</p>
                       <p className={`text-2xl font-bold ${getTotalAmount() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatCurrency(getTotalAmount())}
                       </p>
@@ -315,7 +356,7 @@ const AccountSearchPage = () => {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  Operacje dla konta {selectedAccount.number} - {selectedAccount.name}
+                  Operacje dla konta {selectedAccount.number} - {selectedAccount.name} ({selectedYear})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -324,9 +365,9 @@ const AccountSearchPage = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
                     <p>Ładowanie operacji...</p>
                   </div>
-                ) : operations.length > 0 ? (
+                ) : getCurrentYearOperations().length > 0 ? (
                   <div className="space-y-2">
-                    {operations.map((operation) => (
+                    {getCurrentYearOperations().map((operation) => (
                       <div key={operation.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
@@ -350,26 +391,35 @@ const AccountSearchPage = () => {
                               </span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className={`text-lg font-bold ${
-                              operation.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {operation.transaction_type === 'income' ? '+' : '-'}{formatCurrency(operation.amount)}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleShowOperationDetails(operation)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <div className="text-right">
+                              <p className={`text-lg font-bold ${
+                                operation.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {operation.transaction_type === 'income' ? '+' : '-'}{formatCurrency(operation.amount)}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-8">Brak operacji dla tego konta</p>
+                  <p className="text-gray-500 text-center py-8">Brak operacji dla tego konta w {selectedYear} roku</p>
                 )}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Account Name Edit Dialog */}
+        {/* Dialogs */}
         <AccountNameEditDialog
           account={accountToEdit}
           isOpen={editDialogOpen}
@@ -378,6 +428,23 @@ const AccountSearchPage = () => {
             setAccountToEdit(null);
           }}
           onAccountUpdated={handleAccountUpdated}
+        />
+
+        <MonthlyTurnoversDialog
+          account={selectedAccount}
+          operations={getCurrentYearOperations()}
+          year={selectedYear}
+          isOpen={turnoversDialogOpen}
+          onClose={() => setTurnoversDialogOpen(false)}
+        />
+
+        <OperationDetailsDialog
+          operation={selectedOperation}
+          isOpen={operationDetailsOpen}
+          onClose={() => {
+            setOperationDetailsOpen(false);
+            setSelectedOperation(null);
+          }}
         />
       </div>
     </MainLayout>
