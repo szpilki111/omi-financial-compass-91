@@ -52,75 +52,61 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 justify-between">
+    <header className="symfonia-window">
+      {/* Title bar */}
+      <div className="symfonia-titlebar mb-1">
+        <div className="flex justify-between items-center">
           <div className="flex items-center">
-            <Link to="/" className="flex-shrink-0 flex items-center">
-              <img
-                className="h-8 w-auto"
-                src="/placeholder.svg"
-                alt="Logo OMI"
-              />
-              <span className="ml-2 text-lg font-semibold text-omi-500">
-                Finanse OMI
-              </span>
-            </Link>
-            
-            {/* Menu nawigacyjne */}
-            {user && (
-              <nav className="hidden md:ml-6 md:flex md:space-x-4">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                    ${
-                      location.pathname === item.path
-                        ? 'text-omi-600 bg-gray-100'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-              </nav>
-            )}
+            <span className="text-white font-bold text-sm">
+              Finanse OMI - System Raportowania
+            </span>
           </div>
-          
-          {/* Przyciski z prawej */}
-          <div className="flex items-center">
-            {user ? (
-              <div className="flex items-center ml-4 md:ml-6">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-omi-300 text-white">
-                          {getInitial()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Moje konto</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => logout()}>
-                      Wyloguj
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ) : (
-              <Link to="/login">
-                <Button variant="default" size="sm">
-                  Logowanie
-                </Button>
-              </Link>
-            )}
-          </div>
+          {user && (
+            <div className="flex items-center text-white text-xs">
+              <span className="mr-4">Użytkownik: {user.name || user.email}</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Menu bar */}
+      {user && (
+        <div className="symfonia-menubar">
+          <div className="flex justify-between items-center">
+            <nav className="flex">
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`symfonia-menu-item ${
+                    location.pathname === item.path ? 'font-bold' : ''
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </nav>
+            
+            {/* User menu */}
+            <div className="flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="symfonia-button text-xs">
+                    {getInitial()} ▼
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="symfonia-window no-modern-style">
+                  <DropdownMenuLabel className="symfonia-label">Moje konto</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => logout()} className="symfonia-menu-item">
+                    Wyloguj
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

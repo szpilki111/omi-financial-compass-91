@@ -43,6 +43,17 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Symfonia style colors */
+    --symfonia-gray-light: #f0f0f0;
+    --symfonia-gray-medium: #c0c0c0;
+    --symfonia-gray-dark: #808080;
+    --symfonia-gray-darker: #404040;
+    --symfonia-blue: #000080;
+    --symfonia-button-face: #c0c0c0;
+    --symfonia-button-shadow: #808080;
+    --symfonia-button-highlight: #ffffff;
+    --symfonia-button-dark-shadow: #404040;
   }
 
   * {
@@ -50,57 +61,197 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground;
+    font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 11px;
+    background-color: var(--symfonia-gray-medium);
+    color: #000000;
   }
 
-  /* Custom table styles for a Symfonia-like look */
-  .omi-table {
-    @apply w-full border border-omi-gray-300;
+  /* Symfonia-style window and containers */
+  .symfonia-window {
+    background-color: var(--symfonia-gray-medium);
+    border: 2px outset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+    padding: 4px;
   }
 
-  .omi-table th {
-    @apply bg-omi-gray-200 text-omi-gray-700 font-bold text-left p-2 border-b border-omi-gray-300;
+  .symfonia-panel {
+    background-color: var(--symfonia-gray-medium);
+    border: 1px inset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-shadow) var(--symfonia-button-highlight) var(--symfonia-button-highlight) var(--symfonia-button-shadow);
+    padding: 8px;
   }
 
-  .omi-table td {
-    @apply p-2 border-b border-omi-gray-200;
+  /* Symfonia-style buttons */
+  .symfonia-button {
+    background-color: var(--symfonia-button-face);
+    border: 2px outset var(--symfonia-button-face);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+    color: #000000;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    font-weight: normal;
+    padding: 4px 12px;
+    cursor: pointer;
+    text-align: center;
+    min-height: 23px;
+    box-sizing: border-box;
   }
 
-  .omi-table tr:nth-child(even) {
-    @apply bg-omi-gray-100;
+  .symfonia-button:hover {
+    background-color: #d4d0c8;
   }
 
-  .omi-table tr:hover {
-    @apply bg-omi-200;
+  .symfonia-button:active {
+    border: 2px inset var(--symfonia-button-face);
+    border-color: var(--symfonia-button-shadow) var(--symfonia-button-highlight) var(--symfonia-button-highlight) var(--symfonia-button-shadow);
+    padding: 5px 11px 3px 13px;
   }
 
-  /* Form styles */
-  .omi-form-label {
-    @apply block text-sm font-medium text-omi-gray-700 mb-1;
+  .symfonia-button:disabled {
+    color: var(--symfonia-button-shadow);
+    background-color: var(--symfonia-button-face);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
   }
 
-  .omi-form-input {
-    @apply block w-full rounded-md border border-omi-gray-300 p-2 text-omi-gray-800 focus:border-omi-300 focus:outline-none;
+  /* Symfonia-style inputs */
+  .symfonia-input {
+    background-color: #ffffff;
+    border: 2px inset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-shadow) var(--symfonia-button-highlight) var(--symfonia-button-highlight) var(--symfonia-button-shadow);
+    color: #000000;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    padding: 2px 4px;
+    min-height: 19px;
+    box-sizing: border-box;
   }
 
-  .omi-form-select {
-    @apply block w-full rounded-md border border-omi-gray-300 p-2 text-omi-gray-800 focus:border-omi-300 focus:outline-none;
+  .symfonia-input:focus {
+    outline: 1px dotted #000000;
+    outline-offset: -3px;
   }
 
-  /* Button styles */
-  .omi-btn {
-    @apply px-4 py-2 rounded-md font-medium focus:outline-none;
+  /* Symfonia-style tables */
+  .symfonia-table {
+    background-color: #ffffff;
+    border: 2px inset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-shadow) var(--symfonia-button-highlight) var(--symfonia-button-highlight) var(--symfonia-button-shadow);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
   }
 
-  .omi-btn-primary {
-    @apply bg-omi-500 text-white hover:bg-omi-600;
+  .symfonia-table th {
+    background-color: var(--symfonia-gray-medium);
+    border: 1px outset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+    color: #000000;
+    font-weight: normal;
+    text-align: left;
+    padding: 3px 6px;
+    font-size: 11px;
   }
 
-  .omi-btn-secondary {
-    @apply bg-omi-gray-200 text-omi-gray-800 hover:bg-omi-gray-300;
+  .symfonia-table td {
+    background-color: #ffffff;
+    border-right: 1px solid var(--symfonia-gray-dark);
+    border-bottom: 1px solid var(--symfonia-gray-dark);
+    padding: 2px 4px;
+    font-size: 11px;
   }
 
-  .omi-btn-sm {
-    @apply px-2 py-1 text-sm;
+  .symfonia-table tr:hover td {
+    background-color: #316ac5;
+    color: #ffffff;
   }
-}
+
+  .symfonia-table tr.selected td {
+    background-color: #316ac5;
+    color: #ffffff;
+  }
+
+  /* Symfonia-style header/title bar */
+  .symfonia-titlebar {
+    background: linear-gradient(90deg, #0054e3 0%, #0054e3 100%);
+    color: #ffffff;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border: 1px outset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+  }
+
+  /* Symfonia-style menu bar */
+  .symfonia-menubar {
+    background-color: var(--symfonia-gray-medium);
+    border-bottom: 1px solid var(--symfonia-button-shadow);
+    padding: 2px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+  }
+
+  .symfonia-menu-item {
+    display: inline-block;
+    padding: 4px 8px;
+    color: #000000;
+    text-decoration: none;
+    border: 1px solid transparent;
+  }
+
+  .symfonia-menu-item:hover {
+    border: 1px outset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+    background-color: var(--symfonia-button-face);
+  }
+
+  .symfonia-menu-item:active {
+    border: 1px inset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-shadow) var(--symfonia-button-highlight) var(--symfonia-button-highlight) var(--symfonia-button-shadow);
+  }
+
+  /* Symfonia-style status bar */
+  .symfonia-statusbar {
+    background-color: var(--symfonia-gray-medium);
+    border-top: 1px solid var(--symfonia-button-highlight);
+    padding: 2px 6px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    color: #000000;
+  }
+
+  /* Override modern styles for classic look */
+  .symfonia-container {
+    background-color: var(--symfonia-gray-medium);
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+  }
+
+  /* Card/Panel overrides */
+  .symfonia-card {
+    background-color: var(--symfonia-gray-medium);
+    border: 2px outset var(--symfonia-gray-medium);
+    border-color: var(--symfonia-button-highlight) var(--symfonia-button-shadow) var(--symfonia-button-shadow) var(--symfonia-button-highlight);
+    border-radius: 0;
+    padding: 8px;
+    box-shadow: none;
+  }
+
+  /* Form labels */
+  .symfonia-label {
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    font-weight: normal;
+    color: #000000;
+    margin-bottom: 2px;
+    display: block;
+  }
+
+  /* Remove modern rounded corners and shadows */
+  .no-modern-style {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
