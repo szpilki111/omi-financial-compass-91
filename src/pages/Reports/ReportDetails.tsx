@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import KpirSummary from '../KPIR/components/KpirSummary';
 import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
+import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -395,6 +396,16 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           </>
         )}
       </div>
+
+      {/* Nowa sekcja ze szczegółową rozpiską kont */}
+      {report && (
+        <ReportAccountsBreakdown
+          reportId={reportId!}
+          locationId={report.location_id}
+          month={report.month}
+          year={report.year}
+        />
+      )}
 
       <div className="flex justify-between">
         
