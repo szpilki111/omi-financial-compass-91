@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, TrendingUp, Eye, Edit } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, Eye, Edit, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -66,7 +66,7 @@ const AccountSearchPage = () => {
       if (error) throw error;
       return data as Account[];
     },
-    enabled: searchTerm.length >= 2,
+    enabled: searchTerm.length >= 2 && !selectedAccount,
   });
 
   // Fetch transactions for selected account
@@ -179,6 +179,26 @@ const AccountSearchPage = () => {
     });
   }, [transactions, selectedMonth]);
 
+  const handleSelectAccount = (account: Account) => {
+    setSelectedAccount(account);
+    setSearchTerm(`${account.number} - ${account.name}`);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedAccount(null);
+    setSearchTerm('');
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // If user modifies the search term and we have a selected account, clear it
+    if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
+      setSelectedAccount(null);
+    }
+  };
+
   const handleEditDocument = async (documentId: string) => {
     try {
       const { data, error } = await supabase
@@ -234,11 +254,23 @@ const AccountSearchPage = () => {
             <div className="flex gap-4 items-end">
               <div className="flex-1">
                 <label className="block text-sm font-medium mb-2">Numer konta</label>
-                <Input
-                  placeholder="Wpisz co najmniej 2 cyfry..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    placeholder="Wpisz co najmniej 2 cyfry..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                  />
+                  {selectedAccount && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearSelection}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Rok</label>
@@ -251,11 +283,11 @@ const AccountSearchPage = () => {
               </div>
             </div>
             
-            {accounts && accounts.length > 0 && (
+            {accounts && accounts.length > 0 && !selectedAccount && (
               <AccountSelector
                 accounts={accounts}
                 selectedAccount={selectedAccount}
-                onSelectAccount={setSelectedAccount}
+                onSelectAccount={handleSelectAccount}
               />
             )}
           </CardContent>

@@ -21,6 +21,11 @@ const AccountSelector: React.FC<AccountSelectorProps> = ({
   selectedAccount,
   onSelectAccount,
 }) => {
+  // Don't show the selector if an account is already selected
+  if (selectedAccount) {
+    return null;
+  }
+
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium">Wybierz konto:</label>
@@ -28,19 +33,14 @@ const AccountSelector: React.FC<AccountSelectorProps> = ({
         {accounts.map((account) => (
           <Button
             key={account.id}
-            variant={selectedAccount?.id === account.id ? "default" : "outline"}
+            variant="outline"
             className="justify-start h-auto p-3"
             onClick={() => onSelectAccount(account)}
           >
-            <div className="flex items-center gap-2 w-full">
-              {selectedAccount?.id === account.id && (
-                <Check className="h-4 w-4 text-white" />
-              )}
-              <div className="text-left flex-1">
-                <div className="font-medium">{account.number}</div>
-                <div className="text-sm opacity-70">{account.name}</div>
-                <div className="text-xs opacity-50">{account.type}</div>
-              </div>
+            <div className="text-left flex-1">
+              <div className="font-medium">{account.number}</div>
+              <div className="text-sm opacity-70">{account.name}</div>
+              <div className="text-xs opacity-50">{account.type}</div>
             </div>
           </Button>
         ))}
