@@ -6,7 +6,7 @@ import ReportsList from './ReportsList';
 import ReportForm from './ReportForm';
 import ReportDetails from './ReportDetails';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, ArrowLeft } from 'lucide-react';
+import { PlusCircle, ArrowLeft, Calendar, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -18,12 +18,17 @@ const ReportsPage = () => {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
+  const [reportType, setReportType] = useState<'monthly' | 'annual'>('monthly');
   const { toast } = useToast();
 
   // Sprawdź parametr URL przy załadowaniu komponentu
   useEffect(() => {
     const action = searchParams.get('action');
+    const type = searchParams.get('type') as 'monthly' | 'annual';
     if (action === 'new' && canCreateReports) {
+      if (type && (type === 'monthly' || type === 'annual')) {
+        setReportType(type);
+      }
       handleNewReport();
     }
   }, [searchParams, canCreateReports]);
@@ -46,7 +51,8 @@ const ReportsPage = () => {
     setViewMode('view');
   };
 
-  const handleNewReport = () => {
+  const handleNewReport = (type: 'monthly' | 'annual' = 'monthly') => {
+    setReportType(type);
     setIsCreatingReport(true);
     setSelectedReportId(null);
     setViewMode('edit');
@@ -56,6 +62,7 @@ const ReportsPage = () => {
     setIsCreatingReport(false);
     setSelectedReportId(null);
     setViewMode('list');
+    setReportType('monthly');
     // Usuń parametr z URL
     navigate('/reports', { replace: true });
   };
@@ -76,22 +83,34 @@ const ReportsPage = () => {
           )}
           <PageTitle title="Raportowanie" />
         </div>
-        {/* Przycisk "Nowy raport" tylko dla ekonomów */}
+        {/* Przyciski "Nowy raport" tylko dla ekonomów */}
         {viewMode === 'list' && canCreateReports && (
-          <Button onClick={handleNewReport} className="flex items-center gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Nowy raport
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => handleNewReport('monthly')} className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Raport miesięczny
+            </Button>
+            <Button 
+              onClick={() => handleNewReport('annual')} 
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              Raport roczny
+            </Button>
+          </div>
         )}
       </div>
 
       {viewMode === 'edit' && (
         <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">
-            {isCreatingReport ? 'Nowy raport' : 'Edycja raportu'}
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            {reportType === 'annual' ? <Calendar className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+            {isCreatingReport ? `Nowy raport ${reportType === 'annual' ? 'roczny' : 'miesięczny'}` : 'Edycja raportu'}
           </h2>
           <ReportForm 
             reportId={selectedReportId || undefined} 
+            reportType={reportType}
             onSuccess={handleReportCreated} 
             onCancel={handleCancel} 
           />

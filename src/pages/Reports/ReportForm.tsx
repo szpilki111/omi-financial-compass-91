@@ -1,175 +1,222 @@
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { calculateAndSaveReportSummary } from '@/utils/financeUtils';
+import { Calendar, FileText, Loader2 } from 'lucide-react';
 
 interface ReportFormProps {
   reportId?: string;
+  reportType?: 'monthly' | 'annual';
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-interface Location {
-  id: string;
-  name: string;
-}
-
-const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
+const ReportForm: React.FC<ReportFormProps> = ({ 
+  reportId, 
+  reportType = 'monthly',
+  onSuccess, 
+  onCancel 
+}) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [loading, setLoading] = useState(false);
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
   
-  const [reportType, setReportType] = useState<'monthly' | 'annual'>('monthly');
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Pobierz role użytkownika i lokalizacje
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_role');
-      if (error) throw error;
-      return data;
-    }
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    location_id: user?.location || '',
+    year: new Date().getFullYear(),
+    month: reportType === 'monthly' ? new Date().getMonth() + 1 : null,
+    report_type: reportType,
+    status: 'draft' as const
   });
 
-  // Pobierz dostępne lokalizacje
-  const { data: locations, isLoading: locationsLoading } = useQuery({
-    queryKey: ['locations'],
-    queryFn: async () => {
-      let query = supabase.from('locations').select('id, name').order('name');
-      
-      // Jeśli użytkownik to ekonom, pokaż tylko jego lokalizację
-      if (userRole === 'ekonom') {
-        const { data: userLocationId } = await supabase.rpc('get_user_location_id');
-        if (userLocationId) {
-          query = query.eq('id', userLocationId);
-        }
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Location[];
-    },
-    enabled: !!userRole
-  });
-
-  // Ustaw domyślną lokalizację dla ekonoma
   useEffect(() => {
-    if (userRole === 'ekonom' && locations && locations.length > 0) {
-      setSelectedLocationId(locations[0].id);
+    fetchLocations();
+    if (reportId) {
+      fetchReportDetails();
     }
-  }, [userRole, locations]);
+  }, [reportId]);
 
-  // Sprawdź czy raport już istnieje
-  const checkReportExists = async (locationId: string, year: number, month?: number) => {
-    let query = supabase
-      .from('reports')
-      .select('id')
-      .eq('location_id', locationId)
-      .eq('year', year)
-      .eq('report_type', reportType);
-      
-    if (reportType === 'monthly' && month) {
-      query = query.eq('month', month);
+  const fetchLocations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name');
+
+      if (error) throw error;
+      setLocations(data || []);
+    } catch (error) {
+      console.error('Error fetching locations:', error);
     }
-    
-    const { data } = await query;
-    return data && data.length > 0;
   };
 
-  const createReportMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedLocationId) {
-        throw new Error('Wybierz lokalizację');
-      }
+  const fetchReportDetails = async () => {
+    if (!reportId) return;
 
-      // Sprawdź czy raport już istnieje
-      const exists = await checkReportExists(
-        selectedLocationId, 
-        selectedYear, 
-        reportType === 'monthly' ? selectedMonth : undefined
-      );
-      
-      if (exists) {
-        throw new Error(`Raport ${reportType === 'monthly' ? 'miesięczny' : 'roczny'} już istnieje dla tego okresu`);
-      }
-
-      const monthName = reportType === 'monthly' 
-        ? new Date(selectedYear, selectedMonth - 1).toLocaleDateString('pl-PL', { month: 'long' })
-        : '';
-      
-      const period = reportType === 'monthly' 
-        ? `${monthName} ${selectedYear}`
-        : `${selectedYear}`;
-      
-      const title = reportType === 'monthly'
-        ? `Raport miesięczny - ${period}`
-        : `Raport roczny - ${period}`;
-
-      // Utwórz raport
-      const { data: newReport, error } = await supabase
+    try {
+      const { data, error } = await supabase
         .from('reports')
-        .insert({
-          title,
-          period,
-          month: reportType === 'monthly' ? selectedMonth : null,
-          year: selectedYear,
-          status: 'draft',
-          location_id: selectedLocationId,
-          report_type: reportType
-        })
-        .select()
+        .select('*')
+        .eq('id', reportId)
         .single();
 
       if (error) throw error;
 
-      // Automatycznie oblicz i zapisz podsumowanie finansowe
-      await calculateAndSaveReportSummary(
-        newReport.id,
-        selectedLocationId,
-        reportType === 'monthly' ? selectedMonth : null,
-        selectedYear
-      );
-
-      return newReport;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
-      toast({
-        title: "Sukces",
-        description: `Raport ${reportType === 'monthly' ? 'miesięczny' : 'roczny'} został utworzony pomyślnie`,
-      });
-      onSuccess();
-    },
-    onError: (error: any) => {
+      if (data) {
+        setFormData({
+          title: data.title,
+          description: data.description || '',
+          location_id: data.location_id,
+          year: data.year,
+          month: data.month,
+          report_type: data.report_type as 'monthly' | 'annual',
+          status: data.status as 'draft'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching report details:', error);
       toast({
         title: "Błąd",
-        description: error.message || "Wystąpił błąd podczas tworzenia raportu",
+        description: "Nie udało się pobrać szczegółów raportu",
         variant: "destructive",
       });
     }
-  });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
+    setLoading(true);
+
     try {
-      await createReportMutation.mutateAsync();
+      // Walidacja
+      if (!formData.title.trim()) {
+        throw new Error('Tytuł raportu jest wymagany');
+      }
+
+      if (!formData.location_id) {
+        throw new Error('Lokalizacja jest wymagana');
+      }
+
+      if (formData.report_type === 'monthly' && !formData.month) {
+        throw new Error('Miesiąc jest wymagany dla raportu miesięcznego');
+      }
+
+      // Sprawdź czy raport już istnieje dla tego okresu
+      let duplicateQuery = supabase
+        .from('reports')
+        .select('id')
+        .eq('location_id', formData.location_id)
+        .eq('year', formData.year)
+        .eq('report_type', formData.report_type);
+
+      if (formData.report_type === 'monthly' && formData.month) {
+        duplicateQuery = duplicateQuery.eq('month', formData.month);
+      }
+
+      if (reportId) {
+        duplicateQuery = duplicateQuery.neq('id', reportId);
+      }
+
+      const { data: existingReports, error: duplicateError } = await duplicateQuery;
+
+      if (duplicateError) throw duplicateError;
+
+      if (existingReports && existingReports.length > 0) {
+        const periodText = formData.report_type === 'monthly' 
+          ? `${formData.month}/${formData.year}`
+          : `${formData.year}`;
+        throw new Error(`Raport ${formData.report_type === 'monthly' ? 'miesięczny' : 'roczny'} dla okresu ${periodText} już istnieje`);
+      }
+
+      if (reportId) {
+        // Aktualizacja istniejącego raportu
+        const { error: updateError } = await supabase
+          .from('reports')
+          .update({
+            title: formData.title,
+            description: formData.description,
+            location_id: formData.location_id,
+            year: formData.year,
+            month: formData.report_type === 'monthly' ? formData.month : null,
+            report_type: formData.report_type,
+            status: formData.status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reportId);
+
+        if (updateError) throw updateError;
+
+        // Przelicz podsumowanie finansowe
+        await calculateAndSaveReportSummary(
+          reportId,
+          formData.location_id,
+          formData.report_type === 'monthly' ? formData.month : null,
+          formData.year
+        );
+
+      } else {
+        // Tworzenie nowego raportu
+        const { data: newReport, error: insertError } = await supabase
+          .from('reports')
+          .insert({
+            title: formData.title,
+            description: formData.description,
+            location_id: formData.location_id,
+            year: formData.year,
+            month: formData.report_type === 'monthly' ? formData.month : null,
+            report_type: formData.report_type,
+            status: formData.status,
+            created_by: user?.id
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        // Automatycznie oblicz i zapisz podsumowanie finansowe
+        if (newReport) {
+          await calculateAndSaveReportSummary(
+            newReport.id,
+            formData.location_id,
+            formData.report_type === 'monthly' ? formData.month : null,
+            formData.year
+          );
+        }
+      }
+
+      onSuccess();
+    } catch (error: any) {
+      console.error('Error saving report:', error);
+      toast({
+        title: "Błąd",
+        description: error.message || "Nie udało się zapisać raportu",
+        variant: "destructive",
+      });
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
   const months = [
     { value: 1, label: 'Styczeń' },
     { value: 2, label: 'Luty' },
@@ -185,44 +232,44 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     { value: 12, label: 'Grudzień' }
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
-
-  if (locationsLoading) {
-    return <div>Ładowanie...</div>;
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tworzenie nowego raportu</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {formData.report_type === 'annual' ? (
+            <Calendar className="h-5 w-5" />
+          ) : (
+            <FileText className="h-5 w-5" />
+          )}
+          {reportId ? 'Edytuj raport' : `Utwórz raport ${formData.report_type === 'annual' ? 'roczny' : 'miesięczny'}`}
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Typ raportu */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Typ raportu</label>
-            <Select value={reportType} onValueChange={(value: 'monthly' | 'annual') => setReportType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">Miesięczny</SelectItem>
-                <SelectItem value="annual">Roczny</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Lokalizacja - tylko dla adminów */}
-          {userRole === 'admin' && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Lokalizacja</label>
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <Label htmlFor="title">Tytuł raportu *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => handleInputChange('title', e.target.value)}
+                placeholder={`Raport ${formData.report_type === 'annual' ? 'roczny' : 'miesięczny'} ${formData.year}${formData.report_type === 'monthly' && formData.month ? `/${formData.month.toString().padStart(2, '0')}` : ''}`}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location">Lokalizacja *</Label>
+              <Select
+                value={formData.location_id}
+                onValueChange={(value) => handleInputChange('location_id', value)}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Wybierz lokalizację" />
                 </SelectTrigger>
                 <SelectContent>
-                  {locations?.map((location) => (
+                  {locations.map((location) => (
                     <SelectItem key={location.id} value={location.id}>
                       {location.name}
                     </SelectItem>
@@ -230,53 +277,68 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          {/* Rok */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Rok</label>
-            <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
-                    {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Miesiąc - tylko dla raportów miesięcznych */}
-          {reportType === 'monthly' && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Miesiąc</label>
-              <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
+              <Label htmlFor="year">Rok *</Label>
+              <Select
+                value={formData.year.toString()}
+                onValueChange={(value) => handleInputChange('year', parseInt(value))}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {months.map((month) => (
-                    <SelectItem key={month.value} value={month.value.toString()}>
-                      {month.label}
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          <div className="flex justify-end gap-2 pt-4">
+            {formData.report_type === 'monthly' && (
+              <div className="space-y-2">
+                <Label htmlFor="month">Miesiąc *</Label>
+                <Select
+                  value={formData.month?.toString() || ''}
+                  onValueChange={(value) => handleInputChange('month', parseInt(value))}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Wybierz miesiąc" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((month) => (
+                      <SelectItem key={month.value} value={month.value.toString()}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Opis</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              placeholder="Dodatkowy opis raportu..."
+              rows={3}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onCancel}>
               Anuluj
             </Button>
-            <Button 
-              type="submit" 
-              disabled={isSubmitting || !selectedLocationId}
-            >
-              {isSubmitting ? 'Tworzenie...' : 'Utwórz raport'}
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {reportId ? 'Zaktualizuj' : 'Utwórz'} raport
             </Button>
           </div>
         </form>
