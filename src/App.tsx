@@ -13,7 +13,7 @@ import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
 import KpirPage from "./pages/KPIR/KpirPage";
-import Reports from "./pages/Reports";
+import { ReportsPage, ReportDetails } from "./pages/Reports";
 import DataVisualization from "./pages/DataVisualization";
 import DocumentsPage from "./pages/Documents/DocumentsPage";
 import AccountSearchPage from "./pages/AccountSearch/AccountSearchPage";
@@ -76,22 +76,12 @@ const App = () => (
             {/* Reports routes */}
             <Route path="/reports" element={
               <ProtectedRoute>
-                <Reports />
+                <ReportsPage />
               </ProtectedRoute>
             } />
-            <Route path="/reports/nowy" element={
+            <Route path="/reports/:id" element={
               <ProtectedRoute>
-                <Reports />
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/roczny" element={
-              <ProtectedRoute>
-                <Reports />
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/:reportId" element={
-              <ProtectedRoute>
-                <Reports />
+                <ReportDetails />
               </ProtectedRoute>
             } />
 
