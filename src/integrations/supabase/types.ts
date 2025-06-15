@@ -672,6 +672,30 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          windows98_style: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          windows98_style?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          windows98_style?: boolean
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -15,20 +15,19 @@ const SettingsPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Pobierz ustawienia użytkownika
+  // Fetch user settings using RPC function
   const { data: settings, isLoading } = useQuery({
     queryKey: ['user-settings', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       
       const { data, error } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', user.id)
+        .rpc('get_user_setting', { p_user_id: user.id })
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (error) {
+        // If no settings exist yet, return default
+        return { windows98_style: false };
       }
 
       return data || { windows98_style: false };
@@ -36,20 +35,16 @@ const SettingsPage = () => {
     enabled: !!user?.id
   });
 
-  // Mutacja do zapisywania ustawień
+  // Mutation to save settings using RPC function
   const updateSettingsMutation = useMutation({
     mutationFn: async (newSettings: { windows98_style: boolean }) => {
       if (!user?.id) throw new Error('Brak użytkownika');
 
       const { data, error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          windows98_style: newSettings.windows98_style,
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+        .rpc('upsert_user_setting', {
+          p_user_id: user.id,
+          p_windows98_style: newSettings.windows98_style
+        });
 
       if (error) throw error;
       return data;
@@ -60,7 +55,7 @@ const SettingsPage = () => {
         title: "Sukces",
         description: "Ustawienia zostały zapisane",
       });
-      // Odśwież stronę aby zastosować nowy styl
+      // Reload page to apply new style
       window.location.reload();
     },
     onError: (error) => {
