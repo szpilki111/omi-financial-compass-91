@@ -116,18 +116,18 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
   const categorizeAccount = (accountNumber: string, side: 'debit' | 'credit'): 'income' | 'expense' | 'settlement' | 'other' => {
     const firstDigit = accountNumber.charAt(0);
     
-    // Przychody: konta 7xx po stronie kredytowej i 2xx po stronie kredytowej
+    // Przychody: konta 7xx po stronie kredytowej ORAZ konta 2xx po stronie kredytowej
     if ((firstDigit === '7' && side === 'credit') || (firstDigit === '2' && side === 'credit')) {
       return 'income';
     }
     
-    // Koszty: konta 4xx po stronie debetowej
-    if (firstDigit === '4' && side === 'debit') {
+    // Koszty: konta 4xx po stronie debetowej ORAZ konta 2xx po stronie debetowej
+    if ((firstDigit === '4' && side === 'debit') || (firstDigit === '2' && side === 'debit')) {
       return 'expense';
     }
     
-    // Rozrachunki: głównie konta 2xx i 3xx
-    if (firstDigit === '2' || firstDigit === '3') {
+    // Rozrachunki: głównie konta 3xx
+    if (firstDigit === '3') {
       return 'settlement';
     }
     
