@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -280,6 +281,7 @@ export const getDetailedAccountBreakdown = async (
 
 /**
  * Oblicza saldo początkowe na podstawie wszystkich transakcji przed okresem sprawozdawczym
+ * Ulepszona wersja z lepszą obsługą błędów i logowaniem
  */
 export const calculateOpeningBalance = async (
   locationId: string | null | undefined,
@@ -293,9 +295,14 @@ export const calculateOpeningBalance = async (
     dateBefore.setDate(dateBefore.getDate() - 1);
     const dateBeforeStr = dateBefore.toISOString().split('T')[0];
     
+    console.log(`📅 Obliczam saldo skumulowane do dnia: ${dateBeforeStr}`);
+    
     const summary = await calculateFinancialSummary(locationId, undefined, dateBeforeStr);
     
     console.log(`📊 Saldo początkowe obliczone: ${summary.balance} PLN`);
+    console.log(`  - Przychody skumulowane: ${summary.income} PLN`);
+    console.log(`  - Rozchody skumulowane: ${summary.expense} PLN`);
+    
     return summary.balance;
     
   } catch (error) {
@@ -306,7 +313,7 @@ export const calculateOpeningBalance = async (
 
 /**
  * Oblicza podsumowanie finansowe na podstawie transakcji dla określonej lokalizacji i okresu
- * Z rozszerzonymi informacjami o kontach i lepszą obsługą sald
+ * Rozszerzona wersja z ulepszoną obsługą sald i lepszym logowaniem
  */
 export const calculateFinancialSummary = async (
   locationId: string | null | undefined,
@@ -314,6 +321,10 @@ export const calculateFinancialSummary = async (
   dateTo?: string
 ) => {
   try {
+    console.log('🔍 ROZPOCZYNAM OBLICZANIE PODSUMOWANIA FINANSOWEGO');
+    console.log(`📍 Lokalizacja ID: ${locationId || 'wszystkie'}`);
+    console.log(`📅 Okres: ${dateFrom || 'początek'} - ${dateTo || 'koniec'}`);
+
     let query = supabase
       .from('transactions')
       .select(`
@@ -354,6 +365,8 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
+    console.log(`📊 Znaleziono ${data?.length || 0} transakcji`);
+
     // Pobierz konta TYLKO przypisane do lokalizacji
     let accountsQuery = supabase
       .from('accounts')
@@ -375,6 +388,8 @@ export const calculateFinancialSummary = async (
     if (accountsError) {
       throw accountsError;
     }
+
+    console.log(`📈 Znaleziono ${accounts?.length || 0} kont przypisanych do lokalizacji`);
 
     const accountsMap = new Map(accounts.map((acc: any) => [acc.id, acc]));
 
@@ -418,6 +433,7 @@ export const calculateFinancialSummary = async (
     }> = {};
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
+      console.log('⚠️ Brak transakcji do analizy');
       return { 
         income: 0, 
         expense: 0, 
@@ -427,6 +443,8 @@ export const calculateFinancialSummary = async (
         detailedAccountBreakdown: []
       };
     }
+
+    console.log('🔄 Rozpoczynam analizę transakcji...');
 
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
@@ -513,6 +531,12 @@ export const calculateFinancialSummary = async (
 
     const balance = income - expense;
 
+    console.log('✅ ZAKOŃCZONO OBLICZANIE PODSUMOWANIA FINANSOWEGO');
+    console.log(`💰 Przychody: ${income.toFixed(2)} PLN`);
+    console.log(`💸 Rozchody: ${expense.toFixed(2)} PLN`);
+    console.log(`⚖️ Saldo: ${balance.toFixed(2)} PLN`);
+    console.log(`📊 Konta w rozbiciu: ${Object.keys(accountBreakdown).length}`);
+
     // Pobierz szczegółowy podział kont
     const detailedAccountBreakdown = await getDetailedAccountBreakdown(locationId, dateFrom, dateTo);
 
@@ -525,7 +549,7 @@ export const calculateFinancialSummary = async (
       detailedAccountBreakdown
     };
   } catch (error) {
-    console.error('Błąd podczas obliczania podsumowania finansowego:', error);
+    console.error('❌ Błąd podczas obliczania podsumowania finansowego:', error);
     return { 
       income: 0, 
       expense: 0, 
