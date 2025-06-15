@@ -14,7 +14,7 @@ export interface Report {
   comments: string | null;
   created_at: string;
   updated_at: string;
-  report_type: 'standard' | 'annual';
+  report_type: 'standard';
   location?: {
     name: string;
   };
@@ -37,13 +37,13 @@ export interface Report {
 export interface ReportFormData {
   month: number;
   year: number;
-  report_type: 'standard' | 'annual';
+  report_type: 'standard';
 }
 
 export interface ReportSection {
   id: string;
   name: string;
-  report_type: 'standard' | 'annual';
+  report_type: 'standard';
   section_order: number;
 }
 

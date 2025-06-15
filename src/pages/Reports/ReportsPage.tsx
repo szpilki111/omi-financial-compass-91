@@ -6,7 +6,7 @@ import ReportsList from './ReportsList';
 import ReportForm from './ReportForm';
 import ReportDetails from './ReportDetails';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, ArrowLeft, Calendar } from 'lucide-react';
+import { PlusCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -18,15 +18,13 @@ const ReportsPage = () => {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
-  const [reportType, setReportType] = useState<'standard' | 'annual'>('standard');
   const { toast } = useToast();
 
   // Sprawdź parametr URL przy załadowaniu komponentu
   useEffect(() => {
     const action = searchParams.get('action');
-    const type = searchParams.get('type') as 'standard' | 'annual';
     if (action === 'new' && canCreateReports) {
-      handleNewReport(type || 'standard');
+      handleNewReport();
     }
   }, [searchParams, canCreateReports]);
 
@@ -48,10 +46,9 @@ const ReportsPage = () => {
     setViewMode('view');
   };
 
-  const handleNewReport = (type: 'standard' | 'annual' = 'standard') => {
+  const handleNewReport = () => {
     setIsCreatingReport(true);
     setSelectedReportId(null);
-    setReportType(type);
     setViewMode('edit');
   };
 
@@ -79,29 +76,22 @@ const ReportsPage = () => {
           )}
           <PageTitle title="Raportowanie" />
         </div>
-        {/* Przyciski tworzenia raportów tylko dla ekonomów */}
+        {/* Przycisk "Nowy raport" tylko dla ekonomów */}
         {viewMode === 'list' && canCreateReports && (
-          <div className="flex gap-2">
-            <Button onClick={() => handleNewReport('standard')} className="flex items-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              Nowy raport miesięczny
-            </Button>
-            <Button onClick={() => handleNewReport('annual')} variant="outline" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Nowy raport roczny
-            </Button>
-          </div>
+          <Button onClick={handleNewReport} className="flex items-center gap-2">
+            <PlusCircle className="h-4 w-4" />
+            Nowy raport
+          </Button>
         )}
       </div>
 
       {viewMode === 'edit' && (
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">
-            {isCreatingReport ? `Nowy raport ${reportType === 'annual' ? 'roczny' : 'miesięczny'}` : 'Edycja raportu'}
+            {isCreatingReport ? 'Nowy raport' : 'Edycja raportu'}
           </h2>
           <ReportForm 
             reportId={selectedReportId || undefined} 
-            reportType={reportType}
             onSuccess={handleReportCreated} 
             onCancel={handleCancel} 
           />

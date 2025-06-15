@@ -12,9 +12,7 @@ interface UserData {
   name: string;
   email: string;
   role: Role;
-  location: {
-    id: string;
-  };
+  location: string; // Id domu zakonnego
 }
 
 interface AuthContextType {
@@ -83,9 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: profile.name,
             email: profile.email,
             role: profile.role as Role,
-            location: {
-              id: profile.location_id || '',
-            },
+            location: profile.location_id || '',
           });
           console.log('User state updated with profile data');
         } else {

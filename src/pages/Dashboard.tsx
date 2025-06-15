@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -71,7 +70,7 @@ const Dashboard = () => {
 
   // Pobieranie danych finansowych z bieżącego miesiąca
   const { data: currentMonthData, isLoading: loadingCurrentMonth } = useQuery({
-    queryKey: ['current-month-financial-data', user?.location?.id, user?.role],
+    queryKey: ['current-month-financial-data', user?.location, user?.role],
     queryFn: async () => {
       if (!user) return { income: 0, expense: 0, balance: 0 };
 
@@ -83,7 +82,7 @@ const Dashboard = () => {
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
       // Dla lokalnych ekonomów - tylko ich lokalizacja
-      const locationId = user.role === 'ekonom' ? user.location?.id : null;
+      const locationId = user.role === 'ekonom' ? user.location : null;
 
       const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
       return summary;
@@ -93,7 +92,7 @@ const Dashboard = () => {
 
   // Pobieranie danych z poprzedniego miesiąca do porównania
   const { data: previousMonthData } = useQuery({
-    queryKey: ['previous-month-financial-data', user?.location?.id, user?.role],
+    queryKey: ['previous-month-financial-data', user?.location, user?.role],
     queryFn: async () => {
       if (!user) return { income: 0, expense: 0, balance: 0 };
 
@@ -108,7 +107,7 @@ const Dashboard = () => {
       const dateTo = lastDayOfPrevMonth.toISOString().split('T')[0];
 
       // Dla lokalnych ekonomów - tylko ich lokalizacja
-      const locationId = user.role === 'ekonom' ? user.location?.id : null;
+      const locationId = user.role === 'ekonom' ? user.location : null;
 
       const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
       return summary;
@@ -163,20 +162,20 @@ const Dashboard = () => {
 
   // Pobieranie informacji o placówce (tylko dla lokalnych ekonomów)
   const { data: locationInfo } = useQuery({
-    queryKey: ['location-info', user?.location?.id],
+    queryKey: ['location-info', user?.location],
     queryFn: async () => {
-      if (!user?.location?.id || user.role !== 'ekonom') return null;
+      if (!user?.location || user.role !== 'ekonom') return null;
       
       const { data, error } = await supabase
         .from('locations')
         .select('name')
-        .eq('id', user.location.id)
+        .eq('id', user.location)
         .maybeSingle();
 
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.location?.id && user?.role === 'ekonom'
+    enabled: !!user?.location && user?.role === 'ekonom'
   });
 
   const getStatusText = (status: string) => {

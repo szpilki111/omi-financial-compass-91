@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -62,7 +63,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 
   useEffect(() => {
     // Sprawdzenie czy użytkownik ma przypisaną lokalizację
-    if (user && !user.location?.id) {
+    if (user && !user.location) {
       setShowLocationWarning(true);
     } else {
       setShowLocationWarning(false);
@@ -238,7 +239,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     
     try {
       // Używamy domyślnej lokalizacji lub null jeśli nie ma przypisanej
-      const locationId = user.location?.id || null;
+      const locationId = user.location || null;
       
       const { error } = await supabase
         .from('transactions')

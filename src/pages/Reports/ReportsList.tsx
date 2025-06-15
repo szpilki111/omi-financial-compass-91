@@ -1,293 +1,312 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/Spinner';
-import { useAuth } from '@/context/AuthContext';
 import { Report } from '@/types/reports';
-import { formatCurrency } from '@/utils/financeUtils';
-import { FileText, Calendar, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Spinner } from '@/components/ui/Spinner';
+import { Search, X } from 'lucide-react';
 
 interface ReportsListProps {
   onReportSelect: (reportId: string) => void;
 }
 
-const ReportsList = ({ onReportSelect }: ReportsListProps) => {
-  const { user } = useAuth();
-  const [filterYear, setFilterYear] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterType, setFilterType] = useState<string>('all');
+const getStatusBadgeProps = (status: Report['status']) => {
+  switch (status) {
+    case 'submitted':
+      return { variant: 'outline' as const, className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    case 'approved':
+      return { variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200' };
+    case 'to_be_corrected':
+      return { variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200' };
+    default:
+      return { variant: 'outline' as const, className: 'bg-gray-100 text-gray-800 border-gray-200' };
+  }
+};
+
+const getStatusLabel = (status: Report['status']) => {
+  switch (status) {
+    case 'draft': return 'Roboczy';
+    case 'submitted': return 'Złożony';
+    case 'approved': return 'Zaakceptowany';
+    case 'to_be_corrected': return 'Do poprawy';
+    default: return status;
+  }
+};
+
+const formatCurrency = (value: number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return 'Brak danych';
+  }
+  return new Intl.NumberFormat('pl-PL', {
+    style: 'currency',
+    currency: 'PLN',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const monthNames = [
+  'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
+  'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'
+];
+
+const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
+  const [searchMonth, setSearchMonth] = useState<string>('all');
+  const [searchYear, setSearchYear] = useState<string>('all');
 
   const { data: reports, isLoading, error } = useQuery({
-    queryKey: ['reports', user?.location?.id, filterYear, filterStatus, filterType],
+    queryKey: ['reports'],
     queryFn: async () => {
-      if (!user?.location?.id) return [];
-
-      let query = supabase
-        .from('reports')
-        .select(`
-          *,
-          location:locations(name),
-          submitted_by_profile:profiles!reports_submitted_by_fkey(name),
-          reviewed_by_profile:profiles!reports_reviewed_by_fkey(name),
-          report_details(*)
-        `)
-        .eq('location_id', user.location.id)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false });
-
-      if (filterYear !== 'all') {
-        query = query.eq('year', parseInt(filterYear));
-      }
-
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
-
-      if (filterType !== 'all') {
-        query = query.eq('report_type', filterType as 'standard' | 'annual');
-      }
-
-      const { data, error } = await query;
+      const { data: userRole } = await supabase.rpc('get_user_role');
+      console.log('Rola użytkownika:', userRole);
       
-      if (error) throw error;
-      return data as Report[];
-    },
-    enabled: !!user?.location?.id,
+      let query = supabase.from('reports').select(`
+        *,
+        location:locations(name),
+        submitted_by_profile:profiles!submitted_by(name),
+        reviewed_by_profile:profiles!reviewed_by(name)
+      `);
+      
+      if (userRole === 'ekonom') {
+        const { data: locationId } = await supabase.rpc('get_user_location_id');
+        console.log('ID lokalizacji użytkownika:', locationId);
+        
+        if (locationId) {
+          query = query.eq('location_id', locationId);
+        }
+      }
+      
+      const { data: reportsData, error: reportsError } = await query.order('created_at', { ascending: false });
+      
+      if (reportsError) throw reportsError;
+      console.log('Pobrane raporty:', reportsData);
+
+      // Jeśli nie ma raportów, zwróć pustą tablicę
+      if (!reportsData || reportsData.length === 0) {
+        return [];
+      }
+
+      // Pobierz szczegóły finansowe dla wszystkich raportów w osobnym zapytaniu
+      const reportIds = reportsData.map(report => report.id);
+      const { data: reportDetails, error: detailsError } = await supabase
+        .from('report_details')
+        .select('*')
+        .in('report_id', reportIds);
+
+      if (detailsError) {
+        console.error('Błąd pobierania szczegółów raportów:', detailsError);
+      }
+
+      console.log('Pobrane szczegóły raportów:', reportDetails);
+
+      // Stwórz mapę szczegółów według report_id
+      const detailsMap = new Map();
+      if (reportDetails) {
+        reportDetails.forEach(detail => {
+          detailsMap.set(detail.report_id, detail);
+        });
+      }
+
+      // Połącz raporty ze szczegółami
+      const transformedData = reportsData.map((report: any) => {
+        const details = detailsMap.get(report.id);
+        return {
+          ...report,
+          report_details: details || null
+        };
+      }) as Report[];
+      
+      console.log('Przekształcone dane raportów:', transformedData);
+      return transformedData;
+    }
   });
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return <Clock className="h-4 w-4" />;
-      case 'submitted':
-        return <FileText className="h-4 w-4" />;
-      case 'approved':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'to_be_corrected':
-        return <AlertCircle className="h-4 w-4" />;
-      default:
-        return <FileText className="h-4 w-4" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'submitted':
-        return 'bg-blue-100 text-blue-800';
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'to_be_corrected':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return 'Wersja robocza';
-      case 'submitted':
-        return 'Przesłany';
-      case 'approved':
-        return 'Zatwierdzony';
-      case 'to_be_corrected':
-        return 'Do poprawy';
-      default:
-        return status;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'standard':
-        return 'Miesięczny';
-      case 'annual':
-        return 'Roczny';
-      default:
-        return type;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'standard':
-        return 'bg-blue-100 text-blue-800';
-      case 'annual':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Generate year options from reports
-  const availableYears = React.useMemo(() => {
+  // Sortowanie chronologiczne i filtrowanie raportów
+  const filteredAndSortedReports = useMemo(() => {
     if (!reports) return [];
-    const years = [...new Set(reports.map(report => report.year))].sort((a, b) => b - a);
-    return years;
+    
+    let filtered = reports;
+    
+    // Filtrowanie po miesiącu
+    if (searchMonth && searchMonth !== 'all') {
+      const monthNumber = parseInt(searchMonth);
+      filtered = filtered.filter(report => report.month === monthNumber);
+    }
+    
+    // Filtrowanie po roku
+    if (searchYear && searchYear !== 'all') {
+      const yearNumber = parseInt(searchYear);
+      filtered = filtered.filter(report => report.year === yearNumber);
+    }
+    
+    // Sortowanie chronologiczne (najnowsze najpierw)
+    return filtered.sort((a, b) => {
+      if (a.year !== b.year) {
+        return b.year - a.year; // Rok malejąco
+      }
+      return b.month - a.month; // Miesiąc malejąco w tym samym roku
+    });
+  }, [reports, searchMonth, searchYear]);
+
+  // Unikalne lata z raportów do selektora
+  const availableYears = useMemo(() => {
+    if (!reports) return [];
+    const years = [...new Set(reports.map(report => report.year))];
+    return years.sort((a, b) => b - a); // Najnowsze lata najpierw
   }, [reports]);
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex justify-center">
-            <Spinner />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const clearFilters = () => {
+    setSearchMonth('all');
+    setSearchYear('all');
+  };
 
-  if (error) {
+  if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
+  
+  if (error) return <div className="text-red-600 p-4">Błąd ładowania raportów: {(error as Error).message}</div>;
+  
+  if (!reports?.length) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-center text-red-500">Błąd podczas ładowania raportów</p>
-        </CardContent>
-      </Card>
+      <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+        <p className="text-omi-gray-500 mb-4">Brak raportów do wyświetlenia.</p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Filtry */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Rok</label>
-              <Select value={filterYear} onValueChange={setFilterYear}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Wszystkie lata</SelectItem>
-                  {availableYears.map(year => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">Status</label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Wszystkie statusy</SelectItem>
-                  <SelectItem value="draft">Wersja robocza</SelectItem>
-                  <SelectItem value="submitted">Przesłany</SelectItem>
-                  <SelectItem value="approved">Zatwierdzony</SelectItem>
-                  <SelectItem value="to_be_corrected">Do poprawy</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">Typ raportu</label>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Wszystkie typy</SelectItem>
-                  <SelectItem value="standard">Miesięczny</SelectItem>
-                  <SelectItem value="annual">Roczny</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Filtry wyszukiwania */}
+      <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filtruj:</span>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista raportów */}
-      {!reports || reports.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-500">Brak raportów do wyświetlenia</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {reports.map((report) => (
-            <Card key={report.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">{report.title}</h3>
-                      <Badge className={getStatusColor(report.status)}>
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(report.status)}
-                          {getStatusLabel(report.status)}
-                        </div>
-                      </Badge>
-                      <Badge className={getTypeColor(report.report_type)}>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {getTypeLabel(report.report_type)}
-                        </div>
-                      </Badge>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 mb-3">
-                      Okres: {report.period}
-                    </p>
-
-                    {report.report_details && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-green-600">Przychody:</span>
-                          <div>{formatCurrency(report.report_details.income_total)}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-red-600">Rozchody:</span>
-                          <div>{formatCurrency(report.report_details.expense_total)}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium">Saldo:</span>
-                          <div className={report.report_details.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {formatCurrency(report.report_details.balance)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="font-medium">Rozliczenia:</span>
-                          <div>{formatCurrency(report.report_details.settlements_total)}</div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-3 text-xs text-gray-500">
-                      {report.submitted_at && (
-                        <div>Przesłany: {new Date(report.submitted_at).toLocaleDateString('pl-PL')}</div>
-                      )}
-                      {report.reviewed_at && (
-                        <div>Zweryfikowany: {new Date(report.reviewed_at).toLocaleDateString('pl-PL')}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <Button 
-                    onClick={() => onReportSelect(report.id)}
-                    className="ml-4"
-                  >
-                    Szczegóły
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          
+          <div className="flex items-center gap-2">
+            <label htmlFor="month-filter" className="text-sm text-gray-600">Miesiąc:</label>
+            <Select value={searchMonth} onValueChange={setSearchMonth}>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Wszystkie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie</SelectItem>
+                {monthNames.map((month, index) => (
+                  <SelectItem key={index + 1} value={(index + 1).toString()}>
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <label htmlFor="year-filter" className="text-sm text-gray-600">Rok:</label>
+            <Select value={searchYear} onValueChange={setSearchYear}>
+              <SelectTrigger className="w-24">
+                <SelectValue placeholder="Wszystkie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie</SelectItem>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {(searchMonth !== 'all' || searchYear !== 'all') && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="flex items-center gap-1">
+              <X className="h-3 w-3" />
+              Wyczyść
+            </Button>
+          )}
         </div>
-      )}
+        
+        {filteredAndSortedReports.length !== reports.length && (
+          <div className="mt-2 text-sm text-gray-600">
+            Znaleziono {filteredAndSortedReports.length} z {reports.length} raportów
+          </div>
+        )}
+      </div>
+
+      {/* Tabela raportów */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <Table>
+          <TableCaption>Lista raportów z danymi finansowymi (sortowane chronologicznie)</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Placówka</TableHead>
+              <TableHead>Okres</TableHead>
+              <TableHead className="text-right">Przychody</TableHead>
+              <TableHead className="text-right">Rozchody</TableHead>
+              <TableHead className="text-right">Saldo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Złożony przez</TableHead>
+              <TableHead className="text-right">Akcje</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAndSortedReports.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  Brak raportów spełniających kryteria wyszukiwania
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredAndSortedReports.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
+                  <TableCell>{report.period}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    <span className="text-green-700">
+                      {formatCurrency(report.report_details?.income_total)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    <span className="text-red-700">
+                      {formatCurrency(report.report_details?.expense_total)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
+                      {formatCurrency(report.report_details?.balance)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge {...getStatusBadgeProps(report.status)}>
+                      {getStatusLabel(report.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {report.submitted_by_profile?.name || '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
+                      Szczegóły
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 };

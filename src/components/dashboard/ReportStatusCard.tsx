@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,9 +12,9 @@ const ReportStatusCard: React.FC = () => {
   
   // Pobierz najnowszy raport dla bieżącego miesiąca
   const { data: currentReport, isLoading } = useQuery({
-    queryKey: ['currentMonthReport', user?.location?.id],
+    queryKey: ['currentMonthReport', user?.location],
     queryFn: async () => {
-      if (!user?.location?.id) return null;
+      if (!user?.location) return null;
       
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth() + 1;
@@ -22,7 +23,7 @@ const ReportStatusCard: React.FC = () => {
       const { data, error } = await supabase
         .from('reports')
         .select('*')
-        .eq('location_id', user.location.id)
+        .eq('location_id', user.location)
         .eq('month', currentMonth)
         .eq('year', currentYear)
         .maybeSingle();
@@ -33,7 +34,7 @@ const ReportStatusCard: React.FC = () => {
       
       return data;
     },
-    enabled: !!user?.location?.id
+    enabled: !!user?.location
   });
 
   const getStatusMessage = (status: string | undefined) => {
