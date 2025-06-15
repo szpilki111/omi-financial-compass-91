@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Report } from '@/types/reports';
@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -57,7 +58,73 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
+const ReportTable: React.FC<{ 
+  reports: Report[]; 
+  onReportSelect: (reportId: string) => void; 
+  caption: string; 
+}> = ({ reports, onReportSelect, caption }) => (
+  <Table>
+    <TableCaption>{caption}</TableCaption>
+    <TableHeader>
+      <TableRow>
+        <TableHead>Placówka</TableHead>
+        <TableHead>Okres</TableHead>
+        <TableHead className="text-right">Saldo początkowe</TableHead>
+        <TableHead className="text-right">Przychody</TableHead>
+        <TableHead className="text-right">Rozchody</TableHead>
+        <TableHead className="text-right">Saldo końcowe</TableHead>
+        <TableHead>Status</TableHead>
+        <TableHead>Złożony przez</TableHead>
+        <TableHead className="text-right">Akcje</TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {reports.map((report) => (
+        <TableRow key={report.id}>
+          <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
+          <TableCell>{report.period}</TableCell>
+          <TableCell className="text-right font-mono">
+            <span className="text-blue-700">
+              {formatCurrency(report.report_details?.opening_balance)}
+            </span>
+          </TableCell>
+          <TableCell className="text-right font-mono">
+            <span className="text-green-700">
+              {formatCurrency(report.report_details?.income_total)}
+            </span>
+          </TableCell>
+          <TableCell className="text-right font-mono">
+            <span className="text-red-700">
+              {formatCurrency(report.report_details?.expense_total)}
+            </span>
+          </TableCell>
+          <TableCell className="text-right font-mono font-semibold">
+            <span className={report.report_details?.closing_balance && report.report_details.closing_balance >= 0 ? 'text-green-700' : 'text-red-700'}>
+              {formatCurrency(report.report_details?.closing_balance)}
+            </span>
+          </TableCell>
+          <TableCell>
+            <Badge {...getStatusBadgeProps(report.status)}>
+              {getStatusLabel(report.status)}
+            </Badge>
+          </TableCell>
+          <TableCell>
+            {report.submitted_by_profile?.name || '-'}
+          </TableCell>
+          <TableCell className="text-right">
+            <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
+              Szczegóły
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+);
+
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
+  const [activeTab, setActiveTab] = useState('monthly');
+
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
@@ -129,67 +196,46 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   
   if (error) return <div className="text-red-600 p-4">Błąd ładowania raportów: {(error as Error).message}</div>;
   
-  if (!reports?.length) {
-    return (
-      <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-        <p className="text-omi-gray-500 mb-4">Brak raportów do wyświetlenia.</p>
-      </div>
-    );
-  }
+  // Podziel raporty na miesięczne i roczne
+  const monthlyReports = reports?.filter(report => report.report_type === 'monthly') || [];
+  const annualReports = reports?.filter(report => report.report_type === 'annual') || [];
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      <Table>
-        <TableCaption>Lista raportów z danymi finansowymi</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Placówka</TableHead>
-            <TableHead>Okres</TableHead>
-            <TableHead className="text-right">Przychody</TableHead>
-            <TableHead className="text-right">Rozchody</TableHead>
-            <TableHead className="text-right">Bilans</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Złożony przez</TableHead>
-            <TableHead className="text-right">Akcje</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {reports.map((report) => (
-            <TableRow key={report.id}>
-              <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
-              <TableCell>{report.period}</TableCell>
-              <TableCell className="text-right font-mono">
-                <span className="text-green-700">
-                  {formatCurrency(report.report_details?.income_total)}
-                </span>
-              </TableCell>
-              <TableCell className="text-right font-mono">
-                <span className="text-red-700">
-                  {formatCurrency(report.report_details?.expense_total)}
-                </span>
-              </TableCell>
-              <TableCell className="text-right font-mono font-semibold">
-                <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
-                  {formatCurrency(report.report_details?.balance)}
-                </span>
-              </TableCell>
-              <TableCell>
-                <Badge {...getStatusBadgeProps(report.status)}>
-                  {getStatusLabel(report.status)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {report.submitted_by_profile?.name || '-'}
-              </TableCell>
-              <TableCell className="text-right">
-                <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
-                  Szczegóły
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="monthly">Raporty miesięczne ({monthlyReports.length})</TabsTrigger>
+          <TabsTrigger value="annual">Raporty roczne ({annualReports.length})</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="monthly">
+          {monthlyReports.length > 0 ? (
+            <ReportTable 
+              reports={monthlyReports} 
+              onReportSelect={onReportSelect} 
+              caption="Lista raportów miesięcznych z danymi finansowymi" 
+            />
+          ) : (
+            <div className="p-8 text-center">
+              <p className="text-omi-gray-500 mb-4">Brak raportów miesięcznych do wyświetlenia.</p>
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="annual">
+          {annualReports.length > 0 ? (
+            <ReportTable 
+              reports={annualReports} 
+              onReportSelect={onReportSelect} 
+              caption="Lista raportów rocznych z danymi finansowymi" 
+            />
+          ) : (
+            <div className="p-8 text-center">
+              <p className="text-omi-gray-500 mb-4">Brak raportów rocznych do wyświetlenia.</p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

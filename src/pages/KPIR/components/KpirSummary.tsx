@@ -41,7 +41,7 @@ const KpirSummary: React.FC<KpirSummaryProps> = ({ income, expense, balance }) =
       
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Bilans</CardTitle>
+          <CardTitle className="text-lg">Saldo</CardTitle>
         </CardHeader>
         <CardContent>
           <p className={`text-3xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
