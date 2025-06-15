@@ -15,39 +15,42 @@ const SettingsPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch user settings using RPC function
+  // Fetch user settings directly from the table
   const { data: settings, isLoading } = useQuery({
     queryKey: ['user-settings', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       
       const { data, error } = await supabase
-        .rpc('get_user_setting', { p_user_id: user.id })
-        .single();
+        .from('user_settings')
+        .select('windows98_style')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (error) {
+      if (error || !data) {
         // If no settings exist yet, return default
         return { windows98_style: false };
       }
 
-      return data || { windows98_style: false };
+      return data;
     },
     enabled: !!user?.id
   });
 
-  // Mutation to save settings using RPC function
+  // Mutation to save settings using upsert
   const updateSettingsMutation = useMutation({
     mutationFn: async (newSettings: { windows98_style: boolean }) => {
       if (!user?.id) throw new Error('Brak użytkownika');
 
-      const { data, error } = await supabase
-        .rpc('upsert_user_setting', {
-          p_user_id: user.id,
-          p_windows98_style: newSettings.windows98_style
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          windows98_style: newSettings.windows98_style,
+          updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-settings'] });

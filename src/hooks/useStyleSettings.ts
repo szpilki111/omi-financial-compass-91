@@ -11,17 +11,19 @@ export const useStyleSettings = () => {
     queryFn: async () => {
       if (!user?.id) return { windows98_style: false };
       
-      // Use direct SQL query since the types aren't updated yet
+      // Query the user_settings table directly
       const { data, error } = await supabase
-        .rpc('get_user_setting', { p_user_id: user.id })
-        .single();
+        .from('user_settings')
+        .select('windows98_style')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (error) {
+      if (error || !data) {
         // If no settings exist yet, return default
         return { windows98_style: false };
       }
 
-      return data || { windows98_style: false };
+      return data;
     },
     enabled: !!user?.id,
     staleTime: 300000, // 5 minutes

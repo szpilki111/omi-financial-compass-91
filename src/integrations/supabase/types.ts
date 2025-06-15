@@ -741,6 +741,12 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_user_setting: {
+        Args: { p_user_id: string }
+        Returns: {
+          windows98_style: boolean
+        }[]
+      }
       insert_profile_admin: {
         Args:
           | { user_id: number; profile_data: Json }
@@ -751,6 +757,10 @@ export type Database = {
               user_email: string
               location_id?: string
             }
+        Returns: undefined
+      }
+      upsert_user_setting: {
+        Args: { p_user_id: string; p_windows98_style: boolean }
         Returns: undefined
       }
     }
