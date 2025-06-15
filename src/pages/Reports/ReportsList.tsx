@@ -62,12 +62,27 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports', reportType],
     queryFn: async () => {
-      console.log('Rozpoczynam pobieranie raportów dla typu:', reportType);
+      console.log('=== ROZPOCZĘCIE POBIERANIA RAPORTÓW ===');
+      console.log('Typ raportu:', reportType);
       
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
       
-      // Pierwsza próba - pobierz wszystkie raporty bez filtrowania
+      // Najpierw sprawdź co jest w tabeli reports
+      console.log('=== SPRAWDZENIE ZAWARTOŚCI TABELI REPORTS ===');
+      const { data: allReportsCheck, error: checkError } = await supabase
+        .from('reports')
+        .select('id, title, report_type, period, year, month, status')
+        .limit(20);
+        
+      if (checkError) {
+        console.error('Błąd sprawdzania tabeli reports:', checkError);
+      } else {
+        console.log('Wszystkie raporty w systemie (próbka 20):', allReportsCheck);
+        console.log('Typy raportów znalezione:', [...new Set(allReportsCheck?.map(r => r.report_type) || [])]);
+      }
+
+      // Teraz pobierz raporty z filtrowaniem
       let query = supabase.from('reports').select(`
         *,
         location:locations(name),
@@ -75,21 +90,26 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         reviewed_by_profile:profiles!reviewed_by(name)
       `);
       
-      // Dodaj filtr typu raportu - spróbuj różnych wariantów
-      const reportTypeFilter = reportType === 'monthly' ? 'monthly' : 'annual';
-      console.log('Filtruję po typie raportu:', reportTypeFilter);
-      query = query.eq('report_type', reportTypeFilter);
+      // Sprawdź różne warianty typu raportu
+      console.log('=== FILTROWANIE PO TYPIE RAPORTU ===');
+      const reportTypeValue = reportType === 'monthly' ? 'monthly' : 'annual';
+      console.log('Szukany typ raportu:', reportTypeValue);
+      
+      // Dodaj filtr typu raportu
+      query = query.eq('report_type', reportTypeValue);
       
       // Jeśli użytkownik to ekonom, filtruj po lokalizacji
       if (userRole === 'ekonom') {
         const { data: locationId } = await supabase.rpc('get_user_location_id');
-        console.log('ID lokalizacji użytkownika:', locationId);
+        console.log('ID lokalizacji użytkownika (ekonom):', locationId);
         
         if (locationId) {
           query = query.eq('location_id', locationId);
+          console.log('Dodano filtr lokalizacji:', locationId);
         }
       }
       
+      console.log('=== WYKONYWANIE ZAPYTANIA ===');
       const { data: reportsData, error: reportsError } = await query.order('created_at', { ascending: false });
       
       if (reportsError) {
@@ -97,22 +117,36 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         throw reportsError;
       }
       
-      console.log('Pobrane raporty:', reportsData);
+      console.log('=== WYNIKI ZAPYTANIA ===');
+      console.log('Liczba znalezionych raportów:', reportsData?.length || 0);
+      console.log('Znalezione raporty:', reportsData);
 
       if (!reportsData || reportsData.length === 0) {
-        console.log('Brak raportów dla tego typu:', reportTypeFilter);
+        console.log('=== BRAK RAPORTÓW - DODATKOWE SPRAWDZENIA ===');
         
-        // Sprawdź czy w ogóle są jakieś raporty
-        const { data: allReports } = await supabase
+        // Sprawdź raporty bez filtra typu
+        const { data: withoutTypeFilter } = await supabase
           .from('reports')
-          .select('report_type, id, title')
+          .select('id, title, report_type, period')
           .limit(10);
+        console.log('Raporty bez filtra typu (próbka):', withoutTypeFilter);
         
-        console.log('Wszystkie raporty w systemie (próbka):', allReports);
+        // Sprawdź czy są raporty z typem 'standard'
+        const { data: standardReports } = await supabase
+          .from('reports')
+          .select('id, title, report_type, period')
+          .eq('report_type', 'standard')
+          .limit(5);
+        console.log('Raporty typu "standard":', standardReports);
+        
         return [];
       }
 
+      // Pobierz szczegóły raportów
+      console.log('=== POBIERANIE SZCZEGÓŁÓW RAPORTÓW ===');
       const reportIds = reportsData.map(report => report.id);
+      console.log('ID raportów do pobrania szczegółów:', reportIds);
+      
       const { data: reportDetails, error: detailsError } = await supabase
         .from('report_details')
         .select('*')
@@ -120,9 +154,9 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
 
       if (detailsError) {
         console.error('Błąd pobierania szczegółów raportów:', detailsError);
+      } else {
+        console.log('Pobrane szczegóły raportów:', reportDetails);
       }
-
-      console.log('Pobrane szczegóły raportów:', reportDetails);
 
       const detailsMap = new Map();
       if (reportDetails) {
@@ -139,7 +173,10 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         };
       }) as Report[];
       
+      console.log('=== KOŃCOWE DANE ===');
       console.log('Przekształcone dane raportów:', transformedData);
+      console.log('Liczba końcowych raportów:', transformedData.length);
+      
       return transformedData;
     }
   });
@@ -154,7 +191,8 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
     return (
       <div className="bg-white rounded-lg shadow-sm p-8 text-center">
         <p className="text-omi-gray-500 mb-4">Brak raportów {reportTypeText} do wyświetlenia.</p>
-        <p className="text-sm text-gray-400">Sprawdź konsolę przeglądarki po więcej informacji debugowania.</p>
+        <p className="text-sm text-gray-400">Sprawdź konsolę przeglądarki po szczegółowe logi debugowania.</p>
+        <p className="text-xs text-gray-300 mt-2">Typ raportu: {reportType}</p>
       </div>
     );
   }
