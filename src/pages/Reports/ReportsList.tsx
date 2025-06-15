@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -253,9 +254,10 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
             <TableRow>
               <TableHead>Placówka</TableHead>
               <TableHead>Okres</TableHead>
+              <TableHead className="text-right">Stan początkowy</TableHead>
               <TableHead className="text-right">Przychody</TableHead>
               <TableHead className="text-right">Rozchody</TableHead>
-              <TableHead className="text-right">Saldo</TableHead>
+              <TableHead className="text-right">Saldo końcowe</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Złożony przez</TableHead>
               <TableHead className="text-right">Akcje</TableHead>
@@ -264,45 +266,56 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
           <TableBody>
             {filteredAndSortedReports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                   Brak raportów spełniających kryteria wyszukiwania
                 </TableCell>
               </TableRow>
             ) : (
-              filteredAndSortedReports.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
-                  <TableCell>{report.period}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    <span className="text-green-700">
-                      {formatCurrency(report.report_details?.income_total)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    <span className="text-red-700">
-                      {formatCurrency(report.report_details?.expense_total)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    <span className={report.report_details?.balance && report.report_details.balance >= 0 ? 'text-green-700' : 'text-red-700'}>
-                      {formatCurrency(report.report_details?.balance)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge {...getStatusBadgeProps(report.status)}>
-                      {getStatusLabel(report.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {report.submitted_by_profile?.name || '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
-                      Szczegóły
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredAndSortedReports.map((report) => {
+                const openingBalance = report.report_details?.opening_balance || 0;
+                const periodicBalance = report.report_details?.balance || 0;
+                const finalBalance = openingBalance + periodicBalance;
+                
+                return (
+                  <TableRow key={report.id}>
+                    <TableCell>{report.location?.name || 'Nieznana'}</TableCell>
+                    <TableCell>{report.period}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span className={openingBalance >= 0 ? 'text-green-700' : 'text-red-700'}>
+                        {formatCurrency(openingBalance)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span className="text-green-700">
+                        {formatCurrency(report.report_details?.income_total)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span className="text-red-700">
+                        {formatCurrency(report.report_details?.expense_total)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
+                      <span className={finalBalance >= 0 ? 'text-green-700' : 'text-red-700'}>
+                        {formatCurrency(finalBalance)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge {...getStatusBadgeProps(report.status)}>
+                        {getStatusLabel(report.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {report.submitted_by_profile?.name || '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
+                        Szczegóły
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
