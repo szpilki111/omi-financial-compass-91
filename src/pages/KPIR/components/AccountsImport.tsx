@@ -1,194 +1,249 @@
 
 import React, { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Upload, Download, FileText } from 'lucide-react';
+import Papa from 'papaparse';
+
+interface Account {
+  number: string;
+  name: string;
+  type: string;
+}
 
 const AccountsImport: React.FC = () => {
-  const { toast } = useToast();
   const [isImporting, setIsImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const { toast } = useToast();
 
-  const importAccounts = async () => {
-    if (isImporting) return;
+  // Determine account type based on account number
+  const getAccountType = (accountNumber: string): string => {
+    if (!accountNumber) return 'other';
+    
+    const firstDigit = accountNumber.charAt(0);
+    
+    switch (firstDigit) {
+      case '1': return 'assets'; // Aktywa
+      case '2': return 'liabilities'; // Zobowiązania i rozrachunki
+      case '3': return 'equity'; // Fundusze i rezerwy
+      case '4': return 'expense'; // Koszty działalności
+      case '5': return 'expense'; // Koszty według rodzajów
+      case '6': return 'assets'; // Produkty, towary i usługi
+      case '7': return 'income'; // Przychody
+      case '8': return 'results'; // Rozliczenie wyniku finansowego
+      case '9': return 'off_balance'; // Konta pozabilansowe
+      default: return 'other';
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile && selectedFile.type === 'text/csv') {
+      setFile(selectedFile);
+    } else {
+      toast({
+        title: "Błąd",
+        description: "Proszę wybrać plik CSV",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const parseCSV = (file: File): Promise<Account[]> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const accounts: Account[] = results.data.map((row: any) => ({
+            number: row.number || row.Number || row.numer || '',
+            name: row.name || row.Name || row.nazwa || '',
+            type: getAccountType(row.number || row.Number || row.numer || '')
+          }));
+          resolve(accounts);
+        },
+        error: (error) => {
+          reject(error);
+        }
+      });
+    });
+  };
+
+  const handleImport = async () => {
+    if (!file) {
+      toast({
+        title: "Błąd",
+        description: "Proszę wybrać plik do importu",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsImporting(true);
-    setImportStatus("Rozpoczęto import...");
-    
+
     try {
-      toast({
-        title: "Rozpoczęto import",
-        description: "Trwa importowanie kont do bazy danych...",
-      });
+      const accounts = await parseCSV(file);
+      
+      if (accounts.length === 0) {
+        throw new Error("Nie znaleziono kont w pliku");
+      }
 
-      // Zaktualizowany plan kont zgodnie z wymaganiami
-      const accounts = [
-        // 100 – Kasa (środki pieniężne w kasie)
-        { number: '100', name: 'Kasa (środki pieniężne w kasie)', type: 'bilansowe zwykłe' },
-        { number: '101', name: 'Kasa walutowa EUR', type: 'bilansowe zwykłe - walutowe' },
-        { number: '102', name: 'Kasa walutowa USD', type: 'bilansowe zwykłe - walutowe' },
-        { number: '103', name: 'Kasa walutowa GBP', type: 'bilansowe zwykłe - walutowe' },
-        { number: '110', name: 'Gotówka w banku PLN', type: 'bilansowe zwykłe' },
-        { number: '117', name: 'Lokaty bankowe', type: 'bilansowe zwykłe' },
-        { number: '149', name: 'Pieniądze w drodze', type: 'bilansowe zwykłe' },
-        
-        // 200 – Rachunki bankowe (środki na kontach bankowych)
-        { number: '200', name: 'Rachunki bankowe (środki na kontach bankowych)', type: 'bilansowe rozrachunkowe' },
-        { number: '201', name: 'Rozliczenia z domami', type: 'bilansowe rozrachunkowe' },
-        { number: '202', name: 'Rozrachunki z podmiotami zewnętrznymi', type: 'bilansowe rozrachunkowe - walutowe' },
-        { number: '208', name: 'Rozliczenie ZUS', type: 'bilansowe rozrachunkowe' },
-        { number: '210', name: 'Fundusz intencji', type: 'bilansowe zwykłe' },
-        
-        // 300 – Rozrachunki z odbiorcami i dostawcami
-        { number: '300', name: 'Rozrachunki z odbiorcami i dostawcami', type: 'bilansowe rozrachunkowe' },
-        { number: '301', name: 'Magazyn', type: 'bilansowe zwykłe' },
-        { number: '310', name: 'Należności krótkoterminowe', type: 'bilansowe rozrachunkowe' },
-        { number: '320', name: 'Zobowiązania krótkoterminowe', type: 'bilansowe rozrachunkowe' },
-        
-        // 400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)
-        { number: '400', name: 'Koszty według rodzaju (np. zużycie materiałów, usługi obce)', type: 'wynikowe zwykłe' },
-        { number: '401', name: 'Biurowe', type: 'wynikowe zwykłe' },
-        { number: '402', name: 'Poczta', type: 'wynikowe zwykłe' },
-        { number: '403', name: 'Telefon', type: 'wynikowe zwykłe' },
-        { number: '405', name: 'Prowizje bankowe', type: 'wynikowe zwykłe' },
-        { number: '412', name: 'Utrzymanie samochodu', type: 'wynikowe zwykłe' },
-        { number: '420', name: 'Pensje zatrudnionych', type: 'wynikowe zwykłe' },
-        { number: '440', name: 'Kuchnia, żywność', type: 'wynikowe zwykłe' },
-        { number: '444', name: 'Energia, woda', type: 'wynikowe zwykłe' },
-        { number: '450', name: 'Inne koszty według rodzaju', type: 'wynikowe zwykłe' },
-        
-        // 500 – Koszty według typów działalności (np. działalność statutowa)
-        { number: '500', name: 'Koszty według typów działalności (np. działalność statutowa)', type: 'wynikowe zwykłe' },
-        { number: '501', name: 'Działalność statutowa', type: 'wynikowe zwykłe' },
-        { number: '502', name: 'Działalność gospodarcza', type: 'wynikowe zwykłe' },
-        { number: '503', name: 'Działalność charytatywna', type: 'wynikowe zwykłe' },
-        
-        // 700 – Przychody (np. darowizny, składki)
-        { number: '700', name: 'Przychody (np. darowizny, składki)', type: 'wynikowe zwykłe' },
-        { number: '701', name: 'Taca', type: 'wynikowe zwykłe' },
-        { number: '702', name: 'Darowizny', type: 'wynikowe zwykłe' },
-        { number: '703', name: 'Składki członkowskie', type: 'wynikowe zwykłe' },
-        { number: '704', name: 'Przychody z najmu', type: 'wynikowe zwykłe' },
-        { number: '705', name: 'Intencje mszalne', type: 'wynikowe zwykłe' },
-        { number: '710', name: 'Inne przychody', type: 'wynikowe zwykłe' },
-        
-        // 800 – Fundusze własne (np. fundusz statutowy)
-        { number: '800', name: 'Fundusze własne (np. fundusz statutowy)', type: 'bilansowe zwykłe' },
-        { number: '801', name: 'Fundusz statutowy', type: 'bilansowe zwykłe' },
-        { number: '802', name: 'Fundusz zapasowy', type: 'bilansowe zwykłe' },
-        { number: '803', name: 'Fundusz celowy', type: 'bilansowe zwykłe' },
-        
-        // Aktywa trwałe (dodatkowe konta)
-        { number: '011', name: 'Grunty', type: 'bilansowe zwykłe' },
-        { number: '012', name: 'Budynki', type: 'bilansowe zwykłe' },
-        { number: '013', name: 'Wyposażenie i umeblowanie', type: 'bilansowe zwykłe' },
-        { number: '015', name: 'Samochody', type: 'bilansowe zwykłe' },
-        { number: '020', name: 'Wartości niematerialne i prawne', type: 'bilansowe zwykłe' },
-        { number: '030', name: 'Długoterminowe aktywa finansowe', type: 'bilansowe zwykłe' },
-      ];
+      // Get user's location
+      const { data: userLocationId } = await supabase.rpc('get_user_location_id');
+      if (!userLocationId) {
+        throw new Error("Nie można ustalić lokalizacji użytkownika");
+      }
 
-      // Wykonanie importu w mniejszych porcjach
-      const batchSize = 10;
-      let importedCount = 0;
-      let failedCount = 0;
+      // Import accounts
+      for (const account of accounts) {
+        if (account.number && account.name) {
+          // Check if account already exists
+          const { data: existingAccount } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('number', account.number)
+            .single();
 
-      for (let i = 0; i < accounts.length; i += batchSize) {
-        const batch = accounts.slice(i, i + batchSize);
-        setImportStatus(`Importowanie kont ${i + 1}-${Math.min(i + batchSize, accounts.length)} z ${accounts.length}...`);
-        
-        try {
-          const { data, error } = await supabase.from('accounts').upsert(
-            batch.map(account => ({
-              number: account.number,
-              name: account.name,
-              type: account.type
-            })),
-            { onConflict: 'number' }
-          );
+          let accountId;
 
-          if (error) {
-            console.error("Błąd podczas importu partii kont:", error);
-            failedCount += batch.length;
-            continue;
+          if (existingAccount) {
+            // Update existing account
+            const { data: updatedAccount, error: updateError } = await supabase
+              .from('accounts')
+              .update({
+                name: account.name,
+                type: account.type
+              })
+              .eq('number', account.number)
+              .select('id')
+              .single();
+
+            if (updateError) throw updateError;
+            accountId = updatedAccount.id;
+          } else {
+            // Create new account
+            const { data: newAccount, error: insertError } = await supabase
+              .from('accounts')
+              .insert({
+                number: account.number,
+                name: account.name,
+                type: account.type
+              })
+              .select('id')
+              .single();
+
+            if (insertError) throw insertError;
+            accountId = newAccount.id;
           }
 
-          importedCount += batch.length;
-        } catch (batchError) {
-          console.error("Nieoczekiwany błąd podczas importu partii kont:", batchError);
-          failedCount += batch.length;
+          // Link account to user's location
+          const { error: linkError } = await supabase
+            .from('location_accounts')
+            .upsert({
+              location_id: userLocationId,
+              account_id: accountId
+            });
+
+          if (linkError) {
+            console.warn(`Warning: Could not link account ${account.number} to location:`, linkError);
+          }
         }
       }
 
-      // Końcowe podsumowanie
-      if (failedCount === 0) {
-        toast({
-          title: "Sukces",
-          description: `Wszystkie ${importedCount} kont zostało zaimportowanych do bazy danych`,
-        });
-        setImportStatus(`Zaimportowano ${importedCount} kont zgodnie z nowym planem kont.`);
-      } else {
-        toast({
-          title: "Import częściowy",
-          description: `Zaimportowano ${importedCount} kont, nie udało się zaimportować ${failedCount} kont`,
-          variant: "destructive",
-        });
-        setImportStatus(`Zaimportowano ${importedCount} kont, nie udało się zaimportować ${failedCount} kont.`);
-      }
-    } catch (error) {
-      console.error("Błąd podczas importu kont:", error);
       toast({
-        title: "Błąd",
-        description: "Nie udało się zaimportować kont do bazy danych",
+        title: "Sukces",
+        description: `Zaimportowano ${accounts.length} kont`,
+      });
+
+      setFile(null);
+    } catch (error: any) {
+      console.error('Import error:', error);
+      toast({
+        title: "Błąd importu",
+        description: error.message || "Wystąpił błąd podczas importu kont",
         variant: "destructive",
       });
-      setImportStatus("Błąd importu. Sprawdź konsolę, aby uzyskać więcej informacji.");
     } finally {
       setIsImporting(false);
     }
   };
 
+  const downloadTemplate = () => {
+    const csvContent = 'number,name\n100,"Kasa"\n130,"Rachunek bankowy"\n201,"Rozrachunki z odbiorcami"\n231,"Rozrachunki publicznoprawne"\n401,"Koszty materiałów i energii"\n701,"Przychody ze sprzedaży"';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'konta_szablon.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="flex flex-col items-center">
-      <p className="mb-4 text-sm text-omi-gray-600">
-        Kliknij przycisk poniżej, aby zaimportować zaktualizowany plan kont do bazy danych.
-        Plan kont został dostosowany zgodnie z wymaganiami systemu.
-      </p>
-      
-      {importStatus && (
-        <div className="mb-4 text-sm p-3 bg-omi-gray-100 border border-omi-gray-200 rounded">
-          {importStatus}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Import kont księgowych
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="csv-file">Plik CSV z kontami</Label>
+          <Input
+            id="csv-file"
+            type="file"
+            accept=".csv"
+            onChange={handleFileChange}
+            disabled={isImporting}
+          />
+          <p className="text-sm text-omi-gray-500">
+            Plik powinien zawierać kolumny: number (numer konta), name (nazwa konta).
+            Typ konta zostanie automatycznie określony na podstawie numeru.
+          </p>
         </div>
-      )}
-      
-      <Button 
-        onClick={importAccounts} 
-        className="bg-omi-500"
-        disabled={isImporting}
-      >
-        {isImporting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Importowanie...
-          </>
-        ) : (
-          'Importuj zaktualizowany plan kont'
-        )}
-      </Button>
-      
-      <div className="mt-4 text-xs text-omi-gray-500 max-w-md">
-        <p><strong>Nowy plan kont obejmuje:</strong></p>
-        <ul className="list-disc list-inside mt-2 space-y-1">
-          <li>100 – Kasa (środki pieniężne w kasie)</li>
-          <li>200 – Rachunki bankowe (środki na kontach bankowych)</li>
-          <li>300 – Rozrachunki z odbiorcami i dostawcami</li>
-          <li>400 – Koszty według rodzaju (np. zużycie materiałów, usługi obce)</li>
-          <li>500 – Koszty według typów działalności (np. działalność statutowa)</li>
-          <li>700 – Przychody (np. darowizny, składki)</li>
-          <li>800 – Fundusze własne (np. fundusz statutowy)</li>
-        </ul>
-      </div>
-    </div>
+
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleImport} 
+            disabled={!file || isImporting}
+            className="flex items-center gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            {isImporting ? 'Importowanie...' : 'Importuj konta'}
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            onClick={downloadTemplate}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Pobierz szablon
+          </Button>
+        </div>
+
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">Automatyczne określanie typów kont:</h4>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li><strong>1xx:</strong> Aktywa (majątek trwały)</li>
+            <li><strong>2xx:</strong> Zobowiązania i rozrachunki</li>
+            <li><strong>3xx:</strong> Fundusze i rezerwy</li>
+            <li><strong>4xx, 5xx:</strong> Koszty działalności</li>
+            <li><strong>6xx:</strong> Aktywa (produkty, towary)</li>
+            <li><strong>7xx:</strong> Przychody</li>
+            <li><strong>8xx:</strong> Rozliczenie wyniku</li>
+            <li><strong>9xx:</strong> Konta pozabilansowe</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

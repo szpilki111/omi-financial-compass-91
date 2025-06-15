@@ -323,6 +323,7 @@ export const calculateFinancialSummary = async (
 
 /**
  * Oblicza saldo zamknięcia dla poprzedniego okresu
+ * Jeśli nie ma poprzedniego raportu, próbuje obliczyć saldo na podstawie transakcji
  */
 export const calculatePreviousPeriodClosingBalance = async (
   locationId: string,
@@ -353,7 +354,8 @@ export const calculatePreviousPeriodClosingBalance = async (
       .from('reports')
       .select('id, report_details(closing_balance)')
       .eq('location_id', locationId)
-      .eq('year', prevYear);
+      .eq('year', prevYear)
+      .eq('status', 'approved'); // Tylko zatwierdzone raporty
 
     if (prevMonth) {
       query = query.eq('month', prevMonth).eq('report_type', 'monthly');
@@ -363,12 +365,28 @@ export const calculatePreviousPeriodClosingBalance = async (
 
     const { data: prevReports, error } = await query.single();
 
-    if (error || !prevReports?.report_details?.closing_balance) {
-      console.log('Nie znaleziono poprzedniego raportu lub saldo zamknięcia');
-      return 0;
+    if (!error && prevReports?.report_details?.closing_balance !== null) {
+      console.log('Znaleziono poprzedni raport z saldo zamknięcia:', prevReports.report_details.closing_balance);
+      return Number(prevReports.report_details.closing_balance) || 0;
     }
 
-    return Number(prevReports.report_details.closing_balance) || 0;
+    console.log('Nie znaleziono poprzedniego raportu, obliczam saldo na podstawie transakcji');
+
+    // Jeśli nie ma poprzedniego raportu, oblicz saldo na podstawie wszystkich transakcji do końca poprzedniego okresu
+    let dateTo: string;
+    if (prevMonth) {
+      const lastDayOfPrevMonth = new Date(prevYear, prevMonth, 0);
+      dateTo = lastDayOfPrevMonth.toISOString().split('T')[0];
+    } else {
+      dateTo = `${prevYear}-12-31`;
+    }
+
+    // Oblicz skumulowane saldo od początku działalności do końca poprzedniego okresu
+    const summary = await calculateFinancialSummary(locationId, undefined, dateTo);
+    
+    console.log(`Obliczone saldo na podstawie transakcji do ${dateTo}:`, summary.balance);
+    return summary.balance;
+
   } catch (error) {
     console.error('Błąd podczas pobierania poprzedniego saldo:', error);
     return 0;
@@ -548,6 +566,7 @@ export const saveReportAccountDetails = async (
 
 /**
  * Oblicza i zapisuje automatycznie podsumowanie finansowe dla nowego raportu
+ * Z ulepszoną obsługą sald początkowych
  */
 export const calculateAndSaveReportSummary = async (
   reportId: string,
@@ -576,7 +595,7 @@ export const calculateAndSaveReportSummary = async (
     // Pobierz saldo początkowe z poprzedniego okresu
     const openingBalance = await calculatePreviousPeriodClosingBalance(locationId, year, month);
     
-    // Oblicz finansowe podsumowanie
+    // Oblicz finansowe podsumowanie dla bieżącego okresu
     const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
     
     // Zapisz szczegóły raportu w bazie danych
@@ -591,6 +610,12 @@ export const calculateAndSaveReportSummary = async (
     }
     
     console.log('Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
+    console.log('Saldo początkowe:', openingBalance);
+    console.log('Przychody okresu:', summary.income);
+    console.log('Rozchody okresu:', summary.expense);
+    console.log('Saldo okresu:', summary.balance);
+    console.log('Saldo końcowe:', openingBalance + summary.balance);
+    
     return { ...summary, openingBalance };
   } catch (error) {
     console.error('Błąd podczas automatycznego obliczania podsumowania:', error);
