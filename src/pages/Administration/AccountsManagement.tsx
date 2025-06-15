@@ -23,9 +23,16 @@ interface Account {
   type: string;
 }
 
+interface EditingAccount {
+  id: string;
+  number: string;
+  name: string;
+  type: string;
+}
+
 const AccountsManagement = () => {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editedName, setEditedName] = useState<string>('');
+  const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -50,12 +57,12 @@ const AccountsManagement = () => {
     }
   });
 
-  // Update account name mutation
+  // Update account mutation
   const updateAccountMutation = useMutation({
-    mutationFn: async ({ accountId, newName }: { accountId: string; newName: string }) => {
+    mutationFn: async ({ accountId, updatedAccount }: { accountId: string; updatedAccount: Partial<Account> }) => {
       const { error } = await supabase
         .from('accounts')
-        .update({ name: newName.trim() })
+        .update(updatedAccount)
         .eq('id', accountId);
 
       if (error) throw error;
@@ -63,10 +70,10 @@ const AccountsManagement = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       setEditingAccountId(null);
-      setEditedName('');
+      setEditingAccount(null);
       toast({
         title: "Sukces",
-        description: "Nazwa konta została zaktualizowana.",
+        description: "Konto zostało zaktualizowane.",
       });
     },
     onError: (error: Error) => {
@@ -80,19 +87,29 @@ const AccountsManagement = () => {
 
   const handleEditStart = (account: Account) => {
     setEditingAccountId(account.id);
-    setEditedName(account.name);
+    setEditingAccount({
+      id: account.id,
+      number: account.number,
+      name: account.name,
+      type: account.type,
+    });
   };
 
   const handleEditCancel = () => {
     setEditingAccountId(null);
-    setEditedName('');
+    setEditingAccount(null);
   };
 
   const handleEditSave = () => {
-    if (!editingAccountId || !editedName.trim()) {
+    if (!editingAccountId || !editingAccount) {
+      return;
+    }
+
+    // Walidacja - sprawdź czy wszystkie pola są wypełnione
+    if (!editingAccount.number.trim() || !editingAccount.name.trim() || !editingAccount.type.trim()) {
       toast({
         title: "Błąd",
-        description: "Nazwa konta nie może być pusta.",
+        description: "Wszystkie pola muszą być wypełnione.",
         variant: "destructive",
       });
       return;
@@ -100,8 +117,21 @@ const AccountsManagement = () => {
 
     updateAccountMutation.mutate({
       accountId: editingAccountId,
-      newName: editedName.trim(),
+      updatedAccount: {
+        number: editingAccount.number.trim(),
+        name: editingAccount.name.trim(),
+        type: editingAccount.type.trim(),
+      },
     });
+  };
+
+  const updateEditingAccount = (field: keyof EditingAccount, value: string) => {
+    if (editingAccount) {
+      setEditingAccount({
+        ...editingAccount,
+        [field]: value,
+      });
+    }
   };
 
   if (isLoading) {
@@ -149,14 +179,24 @@ const AccountsManagement = () => {
                   {accounts.map((account) => (
                     <TableRow key={account.id}>
                       <TableCell className="font-medium">
-                        {account.number}
+                        {editingAccountId === account.id ? (
+                          <Input
+                            value={editingAccount?.number || ''}
+                            onChange={(e) => updateEditingAccount('number', e.target.value)}
+                            className="w-full"
+                            placeholder="Numer konta"
+                          />
+                        ) : (
+                          account.number
+                        )}
                       </TableCell>
                       <TableCell>
                         {editingAccountId === account.id ? (
                           <Input
-                            value={editedName}
-                            onChange={(e) => setEditedName(e.target.value)}
+                            value={editingAccount?.name || ''}
+                            onChange={(e) => updateEditingAccount('name', e.target.value)}
                             className="w-full"
+                            placeholder="Nazwa konta"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleEditSave();
@@ -164,13 +204,23 @@ const AccountsManagement = () => {
                                 handleEditCancel();
                               }
                             }}
-                            autoFocus
                           />
                         ) : (
                           account.name
                         )}
                       </TableCell>
-                      <TableCell>{account.type}</TableCell>
+                      <TableCell>
+                        {editingAccountId === account.id ? (
+                          <Input
+                            value={editingAccount?.type || ''}
+                            onChange={(e) => updateEditingAccount('type', e.target.value)}
+                            className="w-full"
+                            placeholder="Typ konta"
+                          />
+                        ) : (
+                          account.type
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         {editingAccountId === account.id ? (
                           <div className="flex gap-2 justify-end">
