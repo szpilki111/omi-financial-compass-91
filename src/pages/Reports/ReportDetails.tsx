@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import KpirSummary from '../KPIR/components/KpirSummary';
 import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
+import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -25,6 +26,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const { user, canApproveReports } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
@@ -410,10 +412,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="flex justify-between">
         
         <div className="space-x-2">
-          <Button variant="outline" onClick={() => {}}>
-            <FileTextIcon className="mr-2 h-4 w-4" />
-            Eksportuj do PDF
-          </Button>
+          <ReportPDFGenerator
+            report={report}
+            financialDetails={financialDetails || { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 }}
+            isGenerating={isGeneratingPDF}
+            onGenerateStart={() => setIsGeneratingPDF(true)}
+            onGenerateEnd={() => setIsGeneratingPDF(false)}
+          />
           <Button variant="outline" onClick={() => {}}>
             <FileIcon className="mr-2 h-4 w-4" />
             Eksportuj do Excel
