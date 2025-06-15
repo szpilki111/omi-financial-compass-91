@@ -150,7 +150,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     }
   };
   
-  // Funkcja do składania raportu
+  // Funkcja do składania raportu z powiadomieniem email
   const handleSubmitReport = async () => {
     if (!reportId) return;
     
@@ -172,13 +172,43 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .eq('id', reportId);
         
       if (error) throw error;
+
+      // Wyślij powiadomienie email do prowincjała
+      try {
+        console.log('Wysyłanie powiadomienia email...');
+        
+        const { data, error: emailError } = await supabase.functions.invoke('send-report-notification', {
+          body: {
+            reportId: reportId,
+            reportTitle: report?.title || 'Raport',
+            submittedBy: user?.name || 'Nieznany użytkownik',
+            locationName: report?.location?.name || 'Nieznana placówka',
+            period: report?.period || 'Nieznany okres'
+          }
+        });
+
+        if (emailError) {
+          console.error('Błąd wysyłania powiadomienia email:', emailError);
+          // Nie przerywamy procesu - raport jest już złożony
+          toast({
+            title: "Uwaga",
+            description: "Raport został złożony, ale wystąpił problem z wysłaniem powiadomienia email.",
+            variant: "default",
+          });
+        } else {
+          console.log('Powiadomienie email wysłane pomyślnie:', data);
+        }
+      } catch (emailError) {
+        console.error('Błąd podczas wysyłania powiadomienia:', emailError);
+        // Nie przerywamy procesu - raport jest już złożony
+      }
       
       // Odśwież dane raportu bez reload strony
       await refetchReport();
       
       toast({
         title: "Raport złożony",
-        description: "Raport został złożony do sprawdzenia.",
+        description: "Raport został złożony do sprawdzenia. Prowincjał otrzyma powiadomienie email.",
       });
       window.location.reload();
     } catch (error) {
