@@ -491,3 +491,15 @@ export const calculateAndSaveReportSummary = async (
     return { income: 0, expense: 0, balance: 0, openingBalance: 0 };
   }
 };
+
+/**
+ * Formatuje kwotę w walucie PLN
+ */
+export const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('pl-PL', {
+    style: 'currency',
+    currency: 'PLN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+};

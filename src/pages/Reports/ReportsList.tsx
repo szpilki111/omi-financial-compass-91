@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,9 +22,9 @@ const ReportsList = ({ onReportSelect }: ReportsListProps) => {
   const [filterType, setFilterType] = useState<string>('all');
 
   const { data: reports, isLoading, error } = useQuery({
-    queryKey: ['reports', user?.location_id, filterYear, filterStatus, filterType],
+    queryKey: ['reports', user?.location?.id, filterYear, filterStatus, filterType],
     queryFn: async () => {
-      if (!user?.location_id) return [];
+      if (!user?.location?.id) return [];
 
       let query = supabase
         .from('reports')
@@ -36,7 +35,7 @@ const ReportsList = ({ onReportSelect }: ReportsListProps) => {
           reviewed_by_profile:profiles!reports_reviewed_by_fkey(name),
           report_details(*)
         `)
-        .eq('location_id', user.location_id)
+        .eq('location_id', user.location.id)
         .order('year', { ascending: false })
         .order('month', { ascending: false });
 
@@ -49,7 +48,7 @@ const ReportsList = ({ onReportSelect }: ReportsListProps) => {
       }
 
       if (filterType !== 'all') {
-        query = query.eq('report_type', filterType);
+        query = query.eq('report_type', filterType as 'standard' | 'annual');
       }
 
       const { data, error } = await query;
@@ -57,7 +56,7 @@ const ReportsList = ({ onReportSelect }: ReportsListProps) => {
       if (error) throw error;
       return data as Report[];
     },
-    enabled: !!user?.location_id,
+    enabled: !!user?.location?.id,
   });
 
   const getStatusIcon = (status: string) => {

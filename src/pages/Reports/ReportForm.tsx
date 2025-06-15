@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -61,7 +60,7 @@ const ReportForm = ({ reportId, reportType = 'standard', onSuccess, onCancel }: 
 
   const createReportMutation = useMutation({
     mutationFn: async (data: ReportFormData) => {
-      if (!user?.location_id) {
+      if (!user?.location?.id) {
         throw new Error('Brak przypisanej lokalizacji');
       }
 
@@ -79,7 +78,7 @@ const ReportForm = ({ reportId, reportType = 'standard', onSuccess, onCancel }: 
         month: data.month,
         year: data.year,
         status: 'draft',
-        location_id: user.location_id,
+        location_id: user.location.id,
         report_type: data.report_type,
       };
 
