@@ -9,12 +9,10 @@ interface MainLayoutProps {
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   return (
-    <div className="min-h-screen symfonia-container">
+    <div className="min-h-screen bg-omi-gray-100">
       <Header />
-      <main className="mx-auto max-w-7xl py-2 px-2">
-        <div className="symfonia-window min-h-[calc(100vh-80px)]">
-          {children}
-        </div>
+      <main className="mx-auto max-w-7xl py-6 px-4 sm:px-6 lg:px-8">
+        {children}
       </main>
       <Toaster />
     </div>
