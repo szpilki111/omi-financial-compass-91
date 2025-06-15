@@ -80,8 +80,8 @@ const KpirPage: React.FC = () => {
         .order('created_at', { ascending: false });
 
       // Filtrowanie według uprawnień użytkownika
-      if (user?.role === 'ekonom' && user.location) {
-        query = query.eq('location_id', user.location);
+      if (user?.role === 'ekonom' && user.location?.id) {
+        query = query.eq('location_id', user.location.id);
       }
 
       // Filtrowanie według dat
@@ -142,7 +142,7 @@ const KpirPage: React.FC = () => {
       setTransactions(mappedTransactions);
 
       // Oblicz podsumowanie finansowe
-      const locationId = user?.location || undefined;
+      const locationId = user?.location?.id || undefined;
       const summary = await calculateFinancialSummary(
         locationId,
         filters.dateFrom,
@@ -339,7 +339,7 @@ const KpirPage: React.FC = () => {
           <KpirTable 
             transactions={transactions} 
             loading={loading} 
-            onShowDocument={handleEditDocument} // <--- WAŻNE: przekazujemy handler edycji, nie podglądu
+            onShowDocument={handleEditDocument}
           />
         </div>
       </div>
