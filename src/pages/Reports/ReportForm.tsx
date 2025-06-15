@@ -11,6 +11,7 @@ import { pl } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -36,6 +37,8 @@ import {
 import {
   Card,
   CardContent,
+  CardHeader,
+  CardTitle,
 } from '@/components/ui/card';
 import { calculateFinancialSummary, calculateAndSaveReportSummary } from '@/utils/financeUtils';
 import KpirSummary from '../KPIR/components/KpirSummary';
@@ -59,9 +62,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDraft, setIsDraft] = useState(true);
+  const [showYearlyView, setShowYearlyView] = useState(false);
 
   // Nowy stan dla podsumowania finansowego
   const [financialSummary, setFinancialSummary] = useState({
+    income: 0,
+    expense: 0,
+    balance: 0
+  });
+
+  // Nowy stan dla rocznego podsumowania
+  const [yearlyFinancialSummary, setYearlyFinancialSummary] = useState({
     income: 0,
     expense: 0,
     balance: 0
@@ -114,10 +125,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   
       const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
       setFinancialSummary(summary);
+
+      // Jeśli checkbox jest zaznaczony, pobierz też dane roczne
+      if (showYearlyView) {
+        const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
+        const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
+        
+        const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
+        setYearlyFinancialSummary(yearlySummary);
+      }
     };
 
     fetchFinancialSummary();
-  }, [form.getValues('month'), form.getValues('year'), user?.location]);
+  }, [form.getValues('month'), form.getValues('year'), user?.location, showYearlyView]);
 
   // Reagowanie na zmianę miesiąca lub roku
   useEffect(() => {
@@ -138,6 +158,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   
           const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
           setFinancialSummary(summary);
+
+          // Jeśli checkbox jest zaznaczony, pobierz też dane roczne
+          if (showYearlyView) {
+            const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
+            const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
+            
+            const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
+            setYearlyFinancialSummary(yearlySummary);
+          }
         };
   
         fetchFinancialSummary();
@@ -145,7 +174,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     });
     
     return () => subscription.unsubscribe();
-  }, [form.watch, user?.location]);
+  }, [form.watch, user?.location, showYearlyView]);
+
+  // Funkcja obsługująca zmianę checkboxa
+  const handleYearlyViewChange = async (checked: boolean) => {
+    setShowYearlyView(checked);
+    
+    if (checked && user?.location) {
+      const year = form.getValues('year');
+      const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
+      const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
+      
+      const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
+      setYearlyFinancialSummary(yearlySummary);
+    }
+  };
 
   // Ustawienie domyślnych wartości formularza na podstawie istniejącego raportu
   useEffect(() => {
@@ -831,12 +874,32 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 )}
               />
             </div>
+
+            {/* Nowy checkbox do widoku rocznego */}
+            <div className="mt-6 pt-4 border-t border-omi-gray-200">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="yearly-view"
+                  checked={showYearlyView}
+                  onCheckedChange={handleYearlyViewChange}
+                />
+                <label
+                  htmlFor="yearly-view"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Pokaż podsumowanie od początku roku
+                </label>
+              </div>
+              <p className="text-sm text-omi-gray-500 mt-1">
+                Zaznacz, aby zobaczyć dane finansowe za cały rok (tylko podgląd, bez zapisywania)
+              </p>
+            </div>
           </div>
 
-          {/* Dodane podsumowanie finansowe */}
+          {/* Podsumowanie finansowe za wybrany miesiąc */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200">
             <h2 className="text-xl font-semibold mb-4">
-              Podsumowanie finansowe za wybrany okres
+              Podsumowanie finansowe za wybrany miesiąc
             </h2>
             
             <KpirSummary 
@@ -850,51 +913,31 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             </p>
           </div>
 
-          {reportId && reportSections && (
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-omi-gray-200">
-              <h2 className="text-xl font-semibold mb-4">
-                Zawartość raportu
-              </h2>
+          {/* Nowe podsumowanie roczne (tylko gdy checkbox jest zaznaczony) */}
+          {showYearlyView && (
+            <div className="bg-blue-50 p-6 rounded-lg shadow-sm border border-blue-200">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold text-blue-900">
+                  Podgląd roczny - {form.getValues('year')}
+                </h2>
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                  TYLKO PODGLĄD
+                </span>
+              </div>
               
-              <Accordion type="single" collapsible className="w-full">
-                {reportSections.map((section) => (
-                  <AccordionItem key={section.id} value={section.id}>
-                    <AccordionTrigger className="text-lg">
-                      {section.name}
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <Card>
-                        <CardContent className="p-4">
-                          <p className="italic text-omi-gray-500">Wpisy tej sekcji będą dostępne po zapisaniu raportu.</p>
-                        </CardContent>
-                      </Card>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+              <KpirSummary 
+                income={yearlyFinancialSummary.income}
+                expense={yearlyFinancialSummary.expense}
+                balance={yearlyFinancialSummary.balance}
+              />
+              
+              <p className="mt-4 text-sm text-blue-600">
+                To jest tylko podgląd danych za cały rok. Te wartości nie będą zapisane w raporcie miesięcznym.
+              </p>
             </div>
           )}
-          
-          <div className="flex justify-end gap-2">
-            {onCancel && (
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onCancel}
-                disabled={isSubmitting}
-              >
-                Anuluj
-              </Button>
-            )}
-            <Button 
-              type="submit" 
-              variant="default" 
-              disabled={isSubmitting}
-            >
-              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              {reportId ? 'Zapisz zmiany' : 'Utwórz raport'}
-            </Button>
-          </div>
+
+          {/* ... keep existing code (zawartość raportu, przyciski) */}
         </form>
       </Form>
     </div>
