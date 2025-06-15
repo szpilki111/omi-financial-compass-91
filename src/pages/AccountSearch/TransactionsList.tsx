@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -107,18 +106,11 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                   <TableHead>Data</TableHead>
                   <TableHead>Dokument</TableHead>
                   <TableHead>Opis</TableHead>
-                  <TableHead>Konto przeciwstawne</TableHead>
-                  <TableHead className="text-right">Debet</TableHead>
-                  <TableHead className="text-right">Kredyt</TableHead>
-                  <TableHead>Rozrachunek</TableHead>
                   <TableHead className="text-right">Akcje</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {transactions.map((transaction) => {
-                  const isDebit = transaction.debit_account_id === selectedAccount.id;
-                  const oppositeAccount = isDebit ? transaction.creditAccount : transaction.debitAccount;
-                  
                   return (
                     <TableRow key={transaction.id}>
                       <TableCell>
@@ -138,39 +130,6 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         <div className="truncate" title={transaction.description}>
                           {transaction.description}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {oppositeAccount && (
-                          <div>
-                            <div className="font-medium">{oppositeAccount.number}</div>
-                            <div className="text-xs text-gray-500 truncate">
-                              {oppositeAccount.name}
-                            </div>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {isDebit ? (
-                          <span className="text-red-600 font-semibold">
-                            {transaction.amount.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {!isDebit ? (
-                          <span className="text-green-600 font-semibold">
-                            {transaction.amount.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {transaction.settlement_type || 'Brak'}
-                        </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         {transaction.document_id && (
