@@ -5,5 +5,5 @@ export { default as DocumentTable } from './DocumentTable';
 export { default as TransactionForm } from './TransactionForm';
 export { default as TransactionEditDialog } from './TransactionEditDialog';
 export { default as TransactionSplitDialog } from './TransactionSplitDialog';
-export { AccountCombobox as default as AccountCombobox } from './AccountCombobox';
+export { AccountCombobox } from './AccountCombobox';
 export { default as AccountSearchDialog } from './AccountSearchDialog';
