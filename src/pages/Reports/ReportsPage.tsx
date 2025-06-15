@@ -34,7 +34,7 @@ const ReportsPage = () => {
           </TabsList>
           
           <TabsContent value="monthly" className="mt-6">
-            <ReportsList onReportSelect={handleReportSelect} />
+            <ReportsList onReportSelect={handleReportSelect} reportType="monthly" />
           </TabsContent>
           
           <TabsContent value="annual" className="mt-6">
