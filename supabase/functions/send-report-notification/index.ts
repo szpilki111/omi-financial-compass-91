@@ -62,9 +62,12 @@ const handler = async (req: Request): Promise<Response> => {
     for (const admin of provincialAdmins) {
       console.log(`Sending notification to: ${admin.email}`);
       
+      // W trybie testowym wysyłaj na Twój email, w produkcji na email admina
+      const recipientEmail = admin.email === 'prowincjal@omi.pl' ? 'crmoblaci@gmail.com' : admin.email;
+      
       const emailResponse = await resend.emails.send({
         from: "System Raportowania <onboarding@resend.dev>",
-        to: [admin.email],
+        to: [recipientEmail],
         subject: `Nowy raport do sprawdzenia: ${reportTitle}`,
         html: `
           <h2>Nowy raport został złożony do sprawdzenia</h2>
@@ -80,11 +83,21 @@ const handler = async (req: Request): Promise<Response> => {
           
           <p>Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.</p>
           
+          ${recipientEmail !== admin.email ? 
+            `<p><strong>Uwaga:</strong> Ten email został wysłany na adres testowy (${recipientEmail}) zamiast na docelowy adres (${admin.email}) z powodu ograniczeń trybu testowego Resend.</p>` : 
+            ''
+          }
+          
           <p>Pozdrawienia,<br>System Raportowania</p>
         `,
       });
 
-      console.log(`Email sent to ${admin.email}:`, emailResponse);
+      console.log(`Email sent to ${recipientEmail}:`, emailResponse);
+      
+      if (emailResponse.error) {
+        console.error(`Failed to send email to ${recipientEmail}:`, emailResponse.error);
+        throw new Error(`Failed to send email: ${emailResponse.error.message}`);
+      }
     }
 
     return new Response(JSON.stringify({ 
