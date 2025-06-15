@@ -45,37 +45,37 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* Windows 98 Theme */
+  /* Windows 98 Theme - Only black, white and shades of gray */
   .windows98-theme {
-    --background: 210 11% 78%;
-    --foreground: 0 0% 0%;
+    --background: 0 0% 75%; /* Light gray background */
+    --foreground: 0 0% 0%; /* Black text */
 
-    --card: 210 11% 85%;
-    --card-foreground: 0 0% 0%;
+    --card: 0 0% 75%; /* Light gray cards */
+    --card-foreground: 0 0% 0%; /* Black text on cards */
 
-    --popover: 210 11% 85%;
-    --popover-foreground: 0 0% 0%;
+    --popover: 0 0% 75%; /* Light gray popover */
+    --popover-foreground: 0 0% 0%; /* Black text on popover */
 
-    --primary: 201 96% 32%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 50%; /* Medium gray for primary */
+    --primary-foreground: 0 0% 0%; /* Black text on primary */
 
-    --secondary: 210 17% 75%;
-    --secondary-foreground: 0 0% 0%;
+    --secondary: 0 0% 65%; /* Light gray for secondary */
+    --secondary-foreground: 0 0% 0%; /* Black text on secondary */
 
-    --muted: 210 11% 71%;
-    --muted-foreground: 0 0% 25%;
+    --muted: 0 0% 60%; /* Medium gray for muted */
+    --muted-foreground: 0 0% 20%; /* Dark gray text on muted */
 
-    --accent: 201 96% 32%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 0 0% 50%; /* Medium gray for accent */
+    --accent-foreground: 0 0% 0%; /* Black text on accent */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 0% 30%; /* Dark gray for destructive */
+    --destructive-foreground: 0 0% 100%; /* White text on destructive */
 
-    --border: 0 0% 50%;
-    --input: 0 0% 100%;
-    --ring: 201 96% 32%;
+    --border: 0 0% 40%; /* Medium-dark gray borders */
+    --input: 0 0% 100%; /* White input backgrounds */
+    --ring: 0 0% 0%; /* Black focus rings */
 
-    --radius: 0rem;
+    --radius: 0rem; /* No rounded corners for Windows 98 */
   }
 
   * {
@@ -90,34 +90,66 @@
   .windows98-theme body {
     font-family: 'MS Sans Serif', sans-serif;
     font-size: 11px;
+    background-color: #c0c0c0; /* Classic Windows gray */
+    color: #000000; /* Black text */
   }
 
   .windows98-theme .card {
     border: 2px outset #c0c0c0;
     border-radius: 0;
     background: #c0c0c0;
+    color: #000000;
   }
 
+  /* All buttons have black font on gray background */
   .windows98-theme button {
     border: 2px outset #c0c0c0;
     border-radius: 0;
-    background: #c0c0c0;
+    background: #c0c0c0 !important;
+    color: #000000 !important; /* Force black text */
     padding: 2px 8px;
     font-size: 11px;
+    font-weight: normal;
   }
 
   .windows98-theme button:hover {
-    background: #c0c0c0;
+    background: #d0d0d0 !important; /* Slightly lighter gray on hover */
+    color: #000000 !important; /* Keep black text */
   }
 
   .windows98-theme button:active {
     border: 2px inset #c0c0c0;
+    background: #b0b0b0 !important; /* Slightly darker gray when pressed */
+    color: #000000 !important; /* Keep black text */
+  }
+
+  .windows98-theme button:disabled {
+    background: #c0c0c0 !important;
+    color: #808080 !important; /* Dark gray for disabled text */
+    border: 2px outset #c0c0c0;
+  }
+
+  /* Ensure all button variants follow the same rules */
+  .windows98-theme button[class*="bg-"] {
+    background: #c0c0c0 !important;
+    color: #000000 !important;
+  }
+
+  .windows98-theme .bg-green-600,
+  .windows98-theme .bg-blue-600,
+  .windows98-theme .bg-red-600,
+  .windows98-theme .hover\\:bg-green-700,
+  .windows98-theme .hover\\:bg-blue-700,
+  .windows98-theme .hover\\:bg-red-700 {
+    background: #c0c0c0 !important;
+    color: #000000 !important;
   }
 
   .windows98-theme input {
     border: 2px inset #c0c0c0;
     border-radius: 0;
     background: white;
+    color: #000000;
     padding: 2px 4px;
     font-size: 11px;
   }
@@ -126,6 +158,7 @@
     border: 2px inset #c0c0c0;
     border-radius: 0;
     background: white;
+    color: #000000;
     padding: 2px 4px;
     font-size: 11px;
   }
@@ -134,6 +167,7 @@
     border: 2px inset #c0c0c0;
     border-radius: 0;
     background: white;
+    color: #000000;
     padding: 2px 4px;
     font-size: 11px;
   }
@@ -149,21 +183,63 @@
     padding: 2px 4px;
     font-size: 11px;
     font-weight: bold;
+    color: #000000;
   }
 
   .windows98-theme td {
     border: 1px solid #c0c0c0;
     padding: 2px 4px;
     font-size: 11px;
+    color: #000000;
   }
 
   .windows98-theme tr:nth-child(even) {
-    background: #e0e0e0;
+    background: #f0f0f0; /* Light gray for even rows */
   }
 
   .windows98-theme tr:hover {
-    background: #0000ff;
-    color: white;
+    background: #808080 !important; /* Dark gray highlight */
+    color: white !important; /* White text on dark background */
+  }
+
+  /* Icons should be black in Windows 98 theme */
+  .windows98-theme svg {
+    color: #000000 !important;
+  }
+
+  /* Switch component styling for Windows 98 */
+  .windows98-theme [role="switch"] {
+    background: #c0c0c0 !important;
+    border: 2px inset #c0c0c0;
+  }
+
+  .windows98-theme [role="switch"][data-state="checked"] {
+    background: #808080 !important;
+    border: 2px inset #808080;
+  }
+
+  /* Dialog and modal backgrounds */
+  .windows98-theme [role="dialog"],
+  .windows98-theme .fixed {
+    background: #c0c0c0;
+    color: #000000;
+    border: 2px outset #c0c0c0;
+  }
+
+  /* Remove any colored backgrounds or text */
+  .windows98-theme .text-blue-500,
+  .windows98-theme .text-green-500,
+  .windows98-theme .text-red-500,
+  .windows98-theme .text-blue-600,
+  .windows98-theme .text-green-600,
+  .windows98-theme .text-red-600 {
+    color: #000000 !important;
+  }
+
+  .windows98-theme .bg-blue-50,
+  .windows98-theme .bg-green-50,
+  .windows98-theme .bg-red-50 {
+    background: #e0e0e0 !important;
   }
 
   /* Custom table styles for a Symfonia-like look */
