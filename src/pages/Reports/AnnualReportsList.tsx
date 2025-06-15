@@ -35,13 +35,15 @@ const AnnualReportsList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedYear, setSelectedYear] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const { data: reports, isLoading, refetch } = useQuery({
     queryKey: ['annual-reports', searchTerm, selectedYear, selectedStatus],
     queryFn: async () => {
+      console.log('Pobieranie raportów rocznych...');
+      
       let query = supabase
         .from('reports')
         .select(`
@@ -57,16 +59,21 @@ const AnnualReportsList = () => {
         query = query.or(`title.ilike.%${searchTerm}%,period.ilike.%${searchTerm}%`);
       }
 
-      if (selectedYear) {
+      if (selectedYear && selectedYear !== 'all') {
         query = query.eq('year', parseInt(selectedYear));
       }
 
-      if (selectedStatus) {
+      if (selectedStatus && selectedStatus !== 'all') {
         query = query.eq('status', selectedStatus);
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error('Błąd pobierania raportów rocznych:', error);
+        throw error;
+      }
+      
+      console.log('Pobrane raporty roczne:', data);
       return data as AnnualReport[];
     },
   });
@@ -153,7 +160,7 @@ const AnnualReportsList = () => {
                 <SelectValue placeholder="Rok" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Wszystkie lata</SelectItem>
+                <SelectItem value="all">Wszystkie lata</SelectItem>
                 {years.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
@@ -167,7 +174,7 @@ const AnnualReportsList = () => {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Wszystkie</SelectItem>
+                <SelectItem value="all">Wszystkie</SelectItem>
                 <SelectItem value="draft">Szkic</SelectItem>
                 <SelectItem value="submitted">Wysłany</SelectItem>
                 <SelectItem value="approved">Zatwierdzony</SelectItem>
@@ -240,11 +247,11 @@ const AnnualReportsList = () => {
               Brak raportów rocznych
             </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || selectedYear || selectedStatus
+              {searchTerm || (selectedYear !== 'all') || (selectedStatus !== 'all')
                 ? 'Nie znaleziono raportów spełniających kryteria wyszukiwania.'
                 : 'Rozpocznij pracę tworząc pierwszy raport roczny.'}
             </p>
-            {!searchTerm && !selectedYear && !selectedStatus && (
+            {!searchTerm && selectedYear === 'all' && selectedStatus === 'all' && (
               <Button onClick={() => setIsFormOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Utwórz pierwszy raport
