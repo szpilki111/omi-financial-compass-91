@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -66,8 +65,8 @@ const monthNames = [
 ];
 
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
-  const [searchMonth, setSearchMonth] = useState<string>('');
-  const [searchYear, setSearchYear] = useState<string>('');
+  const [searchMonth, setSearchMonth] = useState<string>('all');
+  const [searchYear, setSearchYear] = useState<string>('all');
 
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports'],
@@ -143,13 +142,13 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
     let filtered = reports;
     
     // Filtrowanie po miesiącu
-    if (searchMonth) {
+    if (searchMonth && searchMonth !== 'all') {
       const monthNumber = parseInt(searchMonth);
       filtered = filtered.filter(report => report.month === monthNumber);
     }
     
     // Filtrowanie po roku
-    if (searchYear) {
+    if (searchYear && searchYear !== 'all') {
       const yearNumber = parseInt(searchYear);
       filtered = filtered.filter(report => report.year === yearNumber);
     }
@@ -171,8 +170,8 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   }, [reports]);
 
   const clearFilters = () => {
-    setSearchMonth('');
-    setSearchYear('');
+    setSearchMonth('all');
+    setSearchYear('all');
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
@@ -204,7 +203,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                 <SelectValue placeholder="Wszystkie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Wszystkie</SelectItem>
+                <SelectItem value="all">Wszystkie</SelectItem>
                 {monthNames.map((month, index) => (
                   <SelectItem key={index + 1} value={(index + 1).toString()}>
                     {month}
@@ -221,7 +220,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                 <SelectValue placeholder="Wszystkie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Wszystkie</SelectItem>
+                <SelectItem value="all">Wszystkie</SelectItem>
                 {availableYears.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
@@ -231,7 +230,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
             </Select>
           </div>
           
-          {(searchMonth || searchYear) && (
+          {(searchMonth !== 'all' || searchYear !== 'all') && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="flex items-center gap-1">
               <X className="h-3 w-3" />
               Wyczyść
