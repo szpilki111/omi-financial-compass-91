@@ -31,8 +31,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
   
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
+    period: '',
+    comments: '',
     location_id: user?.location || '',
     year: new Date().getFullYear(),
     month: reportType === 'monthly' ? new Date().getMonth() + 1 : null,
@@ -75,8 +75,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
 
       if (data) {
         setFormData({
-          title: data.title,
-          description: data.description || '',
+          period: data.period,
+          comments: data.comments || '',
           location_id: data.location_id,
           year: data.year,
           month: data.month,
@@ -100,8 +100,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
 
     try {
       // Walidacja
-      if (!formData.title.trim()) {
-        throw new Error('Tytuł raportu jest wymagany');
+      if (!formData.period.trim()) {
+        throw new Error('Okres raportu jest wymagany');
       }
 
       if (!formData.location_id) {
@@ -144,8 +144,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
         const { error: updateError } = await supabase
           .from('reports')
           .update({
-            title: formData.title,
-            description: formData.description,
+            period: formData.period,
+            comments: formData.comments,
             location_id: formData.location_id,
             year: formData.year,
             month: formData.report_type === 'monthly' ? formData.month : null,
@@ -170,14 +170,14 @@ const ReportForm: React.FC<ReportFormProps> = ({
         const { data: newReport, error: insertError } = await supabase
           .from('reports')
           .insert({
-            title: formData.title,
-            description: formData.description,
+            period: formData.period,
+            comments: formData.comments,
             location_id: formData.location_id,
             year: formData.year,
             month: formData.report_type === 'monthly' ? formData.month : null,
             report_type: formData.report_type,
             status: formData.status,
-            created_by: user?.id
+            submitted_by: user?.id
           })
           .select()
           .single();
@@ -248,11 +248,11 @@ const ReportForm: React.FC<ReportFormProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Tytuł raportu *</Label>
+              <Label htmlFor="period">Okres raportu *</Label>
               <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => handleInputChange('title', e.target.value)}
+                id="period"
+                value={formData.period}
+                onChange={(e) => handleInputChange('period', e.target.value)}
                 placeholder={`Raport ${formData.report_type === 'annual' ? 'roczny' : 'miesięczny'} ${formData.year}${formData.report_type === 'monthly' && formData.month ? `/${formData.month.toString().padStart(2, '0')}` : ''}`}
                 required
               />
@@ -322,12 +322,12 @@ const ReportForm: React.FC<ReportFormProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Opis</Label>
+            <Label htmlFor="comments">Komentarze</Label>
             <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Dodatkowy opis raportu..."
+              id="comments"
+              value={formData.comments}
+              onChange={(e) => handleInputChange('comments', e.target.value)}
+              placeholder="Dodatkowe komentarze do raportu..."
               rows={3}
             />
           </div>

@@ -29,20 +29,20 @@ interface ReportDetailsProps {
   reportId: string;
 }
 
-interface Report {
+interface DatabaseReport {
   id: string;
-  title: string;
-  description: string | null;
+  period: string;
+  comments: string | null;
   location_id: string;
   year: number;
   month: number | null;
-  report_type: 'monthly' | 'annual';
-  status: 'draft' | 'pending' | 'approved' | 'rejected';
+  report_type: 'monthly' | 'annual' | 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza';
+  status: 'draft' | 'submitted' | 'approved' | 'to_be_corrected';
   created_at: string;
   updated_at: string;
-  created_by: string;
+  submitted_by: string | null;
   location: { name: string };
-  creator: { email: string };
+  submitted_by_profile: { email: string } | null;
 }
 
 interface AccountDetail {
@@ -58,7 +58,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<DatabaseReport | null>(null);
   const [financialDetails, setFinancialDetails] = useState({
     income: 0,
     expense: 0,
@@ -82,7 +82,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
         .select(`
           *,
           location:locations(name),
-          creator:profiles(email)
+          submitted_by_profile:profiles(email)
         `)
         .eq('id', reportId)
         .single();
@@ -150,9 +150,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       draft: { label: 'Szkic', variant: 'secondary' as const },
-      pending: { label: 'Oczekuje', variant: 'default' as const },
+      submitted: { label: 'Przesłany', variant: 'default' as const },
       approved: { label: 'Zatwierdzony', variant: 'default' as const },
-      rejected: { label: 'Odrzucony', variant: 'destructive' as const }
+      to_be_corrected: { label: 'Do poprawy', variant: 'destructive' as const }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig];
@@ -166,7 +166,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }).format(amount);
   };
 
-  const getPeriodText = (report: Report) => {
+  const getPeriodText = (report: DatabaseReport) => {
     if (report.report_type === 'annual') {
       return `Rok ${report.year}`;
     }
@@ -226,7 +226,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
                 ) : (
                   <FileText className="h-5 w-5" />
                 )}
-                {report.title}
+                {report.period}
               </CardTitle>
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
@@ -258,8 +258,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
           </div>
         </CardHeader>
         <CardContent>
-          {report.description && (
-            <p className="text-gray-700">{report.description}</p>
+          {report.comments && (
+            <p className="text-gray-700">{report.comments}</p>
           )}
           <div className="mt-4 text-sm text-gray-500">
             <p>Utworzony: {format(new Date(report.created_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}</p>
