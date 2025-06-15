@@ -17,17 +17,17 @@ import { pl } from 'date-fns/locale';
 
 interface Operation {
   id: string;
-  document_id: string;
+  document_id: string | null;
   account_number: string;
   description: string;
   amount: number;
   transaction_type: 'income' | 'expense';
   date: string;
-  location: { name: string };
+  location: { name: string } | null;
   document: {
     document_number: string;
     type: string;
-  };
+  } | null;
 }
 
 interface OperationDetailsDialogProps {
@@ -112,17 +112,19 @@ const OperationDetailsDialog = ({ operation, isOpen, onClose }: OperationDetails
                     {operation.transaction_type === 'income' ? '+' : '-'}{formatCurrency(operation.amount)}
                   </span>
                 </div>
-                <Button
-                  onClick={handleEditDocument}
-                  disabled={loading}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
-                  <Edit className="h-4 w-4" />
-                  Edytuj dokument
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
+                {operation.document_id && (
+                  <Button
+                    onClick={handleEditDocument}
+                    disabled={loading}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edytuj dokument
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -159,31 +161,33 @@ const OperationDetailsDialog = ({ operation, isOpen, onClose }: OperationDetails
           </Card>
 
           {/* Document Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Informacje o dokumencie</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Numer dokumentu:</label>
-                    <p className="text-gray-900">{operation.document?.document_number || 'Brak numeru'}</p>
+          {operation.document_id && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Informacje o dokumencie</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Numer dokumentu:</label>
+                      <p className="text-gray-900">{operation.document?.document_number || 'Brak numeru'}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Typ dokumentu:</label>
+                      <p className="text-gray-900">{operation.document?.type || 'Nieznany'}</p>
+                    </div>
                   </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Typ dokumentu:</label>
-                    <p className="text-gray-900">{operation.document?.type || 'Nieznany'}</p>
-                  </div>
-                </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-600">ID dokumentu:</label>
-                  <p className="font-mono text-xs text-gray-500">{operation.document_id}</p>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">ID dokumentu:</label>
+                    <p className="font-mono text-xs text-gray-500">{operation.document_id}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Additional Information */}
           <Card>
@@ -199,7 +203,7 @@ const OperationDetailsDialog = ({ operation, isOpen, onClose }: OperationDetails
 
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-sm text-gray-600">
-                    <strong>Wskazówka:</strong> Kliknij "Edytuj dokument" aby przejść do szczegółowej edycji całego dokumentu finansowego wraz z wszystkimi powiązanymi operacjami.
+                    <strong>Wskazówka:</strong> {operation.document_id ? 'Kliknij "Edytuj dokument" aby przejść do szczegółowej edycji całego dokumentu finansowego wraz z wszystkimi powiązanymi operacjami.' : 'Ta operacja nie jest powiązana z żadnym dokumentem.'}
                   </p>
                 </div>
               </div>

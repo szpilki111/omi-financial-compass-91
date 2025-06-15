@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -28,19 +27,34 @@ interface Account {
   };
 }
 
+interface Transaction {
+  id: string;
+  document_id: string | null;
+  debit_account_id: string;
+  credit_account_id: string;
+  description: string;
+  amount: number;
+  date: string;
+  location: { name: string } | null;
+  document: {
+    document_number: string;
+    type: string;
+  } | null;
+}
+
 interface Operation {
   id: string;
-  document_id: string;
+  document_id: string | null;
   account_number: string;
   description: string;
   amount: number;
   transaction_type: 'income' | 'expense';
   date: string;
-  location: { name: string };
+  location: { name: string } | null;
   document: {
     document_number: string;
     type: string;
-  };
+  } | null;
 }
 
 const AccountSearchPage = () => {
@@ -109,32 +123,42 @@ const AccountSearchPage = () => {
     setOperationsLoading(true);
     
     try {
-      // Pobierz wszystkie operacje dla tego konta
-      const { data, error } = await supabase
-        .from('kpir_operations')
+      // Pobierz transakcje gdzie konto występuje jako debit lub credit
+      const { data: transactionsData, error } = await supabase
+        .from('transactions')
         .select(`
           id,
           document_id,
+          debit_account_id,
+          credit_account_id,
           description,
           amount,
-          transaction_type,
           date,
           location:locations(name),
           document:documents(document_number, type)
         `)
-        .eq('account_number', account.number)
+        .or(`debit_account_id.eq.${account.id},credit_account_id.eq.${account.id}`)
         .order('date', { ascending: false });
 
       if (error) throw error;
       
-      const transformedOperations = (data || []).map(operation => ({
-        ...operation,
-        account_number: account.number,
-        location: Array.isArray(operation.location) ? operation.location[0] : operation.location,
-        document: Array.isArray(operation.document) ? operation.document[0] : operation.document
-      }));
+      // Transform transactions to operations
+      const operations: Operation[] = (transactionsData || []).map(transaction => {
+        const isDebit = transaction.debit_account_id === account.id;
+        return {
+          id: transaction.id,
+          document_id: transaction.document_id,
+          account_number: account.number,
+          description: transaction.description,
+          amount: transaction.amount,
+          transaction_type: isDebit ? 'expense' : 'income',
+          date: transaction.date,
+          location: Array.isArray(transaction.location) ? transaction.location[0] : transaction.location,
+          document: Array.isArray(transaction.document) ? transaction.document[0] : transaction.document
+        };
+      });
 
-      setOperations(transformedOperations);
+      setOperations(operations);
     } catch (error: any) {
       console.error('Error fetching operations:', error);
       toast({
