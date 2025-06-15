@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -216,7 +215,7 @@ const AccountSearchPage = () => {
         {/* Results */}
         {selectedAccount && (
           <>
-            {/* Account info and totals */}
+            {/* Account info header */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -224,28 +223,6 @@ const AccountSearchPage = () => {
                   <Badge variant="outline">{selectedAccount.type}</Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty debetowe</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty kredytowe</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Saldo ({selectedYear})</p>
-                    <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {totals.balance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
             </Card>
 
             {/* View toggle buttons */}
@@ -291,6 +268,32 @@ const AccountSearchPage = () => {
                 onClearMonthFilter={() => setSelectedMonth(null)}
               />
             )}
+
+            {/* Account totals at the bottom */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Obroty debetowe</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Obroty kredytowe</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Saldo ({selectedYear})</p>
+                    <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {totals.balance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
