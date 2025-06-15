@@ -45,12 +45,125 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  /* Windows 98 Theme */
+  .windows98-theme {
+    --background: 210 11% 78%;
+    --foreground: 0 0% 0%;
+
+    --card: 210 11% 85%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 210 11% 85%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 201 96% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 17% 75%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 210 11% 71%;
+    --muted-foreground: 0 0% 25%;
+
+    --accent: 201 96% 32%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 50%;
+    --input: 0 0% 100%;
+    --ring: 201 96% 32%;
+
+    --radius: 0rem;
+  }
+
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  /* Windows 98 specific styles */
+  .windows98-theme body {
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+  }
+
+  .windows98-theme .card {
+    border: 2px outset #c0c0c0;
+    border-radius: 0;
+    background: #c0c0c0;
+  }
+
+  .windows98-theme button {
+    border: 2px outset #c0c0c0;
+    border-radius: 0;
+    background: #c0c0c0;
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .windows98-theme button:hover {
+    background: #c0c0c0;
+  }
+
+  .windows98-theme button:active {
+    border: 2px inset #c0c0c0;
+  }
+
+  .windows98-theme input {
+    border: 2px inset #c0c0c0;
+    border-radius: 0;
+    background: white;
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  .windows98-theme select {
+    border: 2px inset #c0c0c0;
+    border-radius: 0;
+    background: white;
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  .windows98-theme textarea {
+    border: 2px inset #c0c0c0;
+    border-radius: 0;
+    background: white;
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  .windows98-theme table {
+    border: 2px inset #c0c0c0;
+    background: white;
+  }
+
+  .windows98-theme th {
+    background: #c0c0c0;
+    border: 1px outset #c0c0c0;
+    padding: 2px 4px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+
+  .windows98-theme td {
+    border: 1px solid #c0c0c0;
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  .windows98-theme tr:nth-child(even) {
+    background: #e0e0e0;
+  }
+
+  .windows98-theme tr:hover {
+    background: #0000ff;
+    color: white;
   }
 
   /* Custom table styles for a Symfonia-like look */
