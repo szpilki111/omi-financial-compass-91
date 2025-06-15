@@ -1,3 +1,4 @@
+
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -214,15 +215,15 @@ export const calculateFinancialSummary = async (
       };
     });
 
-    // Funkcje do sprawdzania kont na podstawie pierwszej cyfry + konto 200
+    // Funkcje do sprawdzania kont - TYLKO konta 200, 400, 700
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('7') || accountNum === '200';
+      return accountNum.startsWith('7') || accountNum.startsWith('200');
     };
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('4') || accountNum === '200';
+      return accountNum.startsWith('4') || accountNum.startsWith('200');
     };
 
     let income = 0;
@@ -232,6 +233,9 @@ export const calculateFinancialSummary = async (
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
+    console.log('🔍 ANALIZA TRANSAKCJI DLA PRZYCHODÓW I KOSZTÓW:');
+    console.log('='.repeat(60));
+
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
@@ -240,36 +244,37 @@ export const calculateFinancialSummary = async (
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      // Sprawdź czy konto kredytowe (MA) to konto przychodowe (7xx lub 200)
-      const creditIsIncome = isIncomeAccount(creditAccountNumber);
-
-      // Sprawdź czy konto debetowe (WN) to konto kosztowe (4xx lub 200)  
-      const debitIsExpense = isExpenseAccount(debitAccountNumber);
-
-      // PRZYCHODY: konto 7xx lub 200 po stronie kredytu (MA)
-      if (creditIsIncome) {
-        // Użyj credit_amount jeśli jest > 0, w przeciwnym razie użyj amount
+      // PRZYCHODY: konta 7xx lub 200 po stronie kredytu (MA)
+      if (isIncomeAccount(creditAccountNumber)) {
         if (transaction.credit_amount != null && transaction.credit_amount > 0) {
           transactionIncome = transaction.credit_amount;
         } else {
           transactionIncome = transaction.amount;
         }
+        
+        console.log(`📈 PRZYCHÓD: ${creditAccountNumber} (MA) = ${transactionIncome} zł | ${transaction.description}`);
       }
 
-      // KOSZTY: konto 4xx lub 200 po stronie debetu (WN)
-      if (debitIsExpense) {
-        // Użyj debit_amount jeśli jest > 0, w przeciwnym razie użyj amount
+      // KOSZTY: konta 4xx lub 200 po stronie debetu (WN)
+      if (isExpenseAccount(debitAccountNumber)) {
         if (transaction.debit_amount != null && transaction.debit_amount > 0) {
           transactionExpense = transaction.debit_amount;
         } else {
           transactionExpense = transaction.amount;
         }
+        
+        console.log(`📉 KOSZT: ${debitAccountNumber} (WN) = ${transactionExpense} zł | ${transaction.description}`);
       }
 
       // Dodaj do sum całkowitych
       income += transactionIncome;
       expense += transactionExpense;
     });
+
+    console.log('='.repeat(60));
+    console.log(`💰 SUMA PRZYCHODÓW: ${income} zł`);
+    console.log(`💸 SUMA KOSZTÓW: ${expense} zł`);
+    console.log(`📊 BILANS: ${income - expense} zł`);
 
     const balance = income - expense;
 
