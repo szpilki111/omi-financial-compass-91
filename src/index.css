@@ -129,10 +129,17 @@
     border: 2px outset #c0c0c0;
   }
 
-  /* Ensure all button variants follow the same rules */
-  .windows98-theme button[class*="bg-"] {
-    background: #c0c0c0 !important;
-    color: #000000 !important;
+  /* Remove ALL colors from everything */
+  .windows98-theme .text-green-600,
+  .windows98-theme .text-blue-600,
+  .windows98-theme .text-red-600,
+  .windows98-theme .text-green-700,
+  .windows98-theme .text-blue-700,
+  .windows98-theme .text-red-700,
+  .windows98-theme .text-green-500,
+  .windows98-theme .text-blue-500,
+  .windows98-theme .text-red-500 {
+    color: #000000 !important; /* All colored text becomes black */
   }
 
   .windows98-theme .bg-green-600,
@@ -140,8 +147,11 @@
   .windows98-theme .bg-red-600,
   .windows98-theme .hover\\:bg-green-700,
   .windows98-theme .hover\\:bg-blue-700,
-  .windows98-theme .hover\\:bg-red-700 {
-    background: #c0c0c0 !important;
+  .windows98-theme .hover\\:bg-red-700,
+  .windows98-theme .bg-green-50,
+  .windows98-theme .bg-blue-50,
+  .windows98-theme .bg-red-50 {
+    background: #c0c0c0 !important; /* All colored backgrounds become gray */
     color: #000000 !important;
   }
 
@@ -218,28 +228,39 @@
     border: 2px inset #808080;
   }
 
-  /* Dialog and modal backgrounds */
-  .windows98-theme [role="dialog"],
-  .windows98-theme .fixed {
-    background: #c0c0c0;
-    color: #000000;
+  /* Dialog and modal backgrounds - BLACK OUTSIDE, WHITE INSIDE */
+  .windows98-theme [role="dialog"] {
+    background: white !important; /* Dialog content is white */
+    color: #000000 !important;
     border: 2px outset #c0c0c0;
   }
 
-  /* Remove any colored backgrounds or text */
-  .windows98-theme .text-blue-500,
-  .windows98-theme .text-green-500,
-  .windows98-theme .text-red-500,
-  .windows98-theme .text-blue-600,
-  .windows98-theme .text-green-600,
-  .windows98-theme .text-red-600 {
-    color: #000000 !important;
+  /* Dialog overlay - BLACK BACKGROUND */
+  .windows98-theme .fixed.inset-0.z-50 {
+    background: rgba(0, 0, 0, 0.8) !important; /* Black overlay */
   }
 
-  .windows98-theme .bg-blue-50,
-  .windows98-theme .bg-green-50,
-  .windows98-theme .bg-red-50 {
-    background: #e0e0e0 !important;
+  /* Dialog content container */
+  .windows98-theme [data-radix-dialog-content] {
+    background: white !important; /* White dialog content */
+    color: #000000 !important;
+    border: 2px outset #c0c0c0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Sheet (side panels) styling */
+  .windows98-theme [data-radix-dialog-content][data-side] {
+    background: white !important;
+    color: #000000 !important;
+    border: 2px outset #c0c0c0 !important;
+  }
+
+  /* Alert dialog styling */
+  .windows98-theme [data-radix-alert-dialog-content] {
+    background: white !important;
+    color: #000000 !important;
+    border: 2px outset #c0c0c0 !important;
+    border-radius: 0 !important;
   }
 
   /* Custom table styles for a Symfonia-like look */
