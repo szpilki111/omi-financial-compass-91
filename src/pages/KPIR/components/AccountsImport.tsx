@@ -27,14 +27,14 @@ const AccountsImport: React.FC = () => {
     const firstDigit = accountNumber.charAt(0);
     
     switch (firstDigit) {
-      case '1': return 'assets'; // Środki trwałe i obrotowe
-      case '2': return 'liabilities'; // Zobowiązania i rozrachunki
-      case '3': return 'equity'; // Kapitały własne i fundusze
+      case '1': return 'assets'; // Środki trwałe
+      case '2': return 'liabilities'; // Rozrachunki
+      case '3': return 'equity'; // Kapitały własne
       case '4': return 'expense'; // Koszty według rodzaju
       case '5': return 'expense'; // Koszty według miejsc powstawania
-      case '6': return 'assets'; // Produkty i usługi
-      case '7': return 'income'; // Przychody operacyjne
-      case '8': return 'results'; // Wyniki finansowe
+      case '6': return 'assets'; // Produkty
+      case '7': return 'income'; // Przychody ze sprzedaży
+      case '8': return 'results'; // Pozostałe przychody i koszty operacyjne
       case '9': return 'off_balance'; // Rozrachunki międzyokresowe
       default: return 'other';
     }
@@ -230,16 +230,17 @@ const AccountsImport: React.FC = () => {
         </div>
 
         <div className="bg-blue-50 p-4 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-2">Automatyczne określanie typów kont według PKR:</h4>
+          <h4 className="font-medium text-blue-900 mb-2">Automatyczne określanie typów kont według Polskiego Planu Kont:</h4>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li><strong>1xx:</strong> Środki trwałe i obrotowe (aktywa)</li>
-            <li><strong>2xx:</strong> Zobowiązania i rozrachunki</li>
-            <li><strong>3xx:</strong> Kapitały własne i fundusze</li>
-            <li><strong>4xx, 5xx:</strong> Koszty według rodzaju i miejsc powstawania</li>
-            <li><strong>6xx:</strong> Produkty i usługi (aktywa obrotowe)</li>
-            <li><strong>7xx:</strong> Przychody operacyjne</li>
-            <li><strong>8xx:</strong> Wyniki finansowe</li>
-            <li><strong>9xx:</strong> Rozrachunki międzyokresowe</li>
+            <li><strong>1xx:</strong> Środki trwałe (aktywa trwałe)</li>
+            <li><strong>2xx:</strong> Rozrachunki (rozrachunki z dostawcami, odbiorcami, ZUS, US)</li>
+            <li><strong>3xx:</strong> Kapitały własne (kapitał podstawowy, zyski zatrzymane)</li>
+            <li><strong>4xx:</strong> Koszty według rodzaju (materiały, usługi, amortyzacja)</li>
+            <li><strong>5xx:</strong> Koszty według miejsc powstawania (koszty działalności)</li>
+            <li><strong>6xx:</strong> Produkty (wyroby gotowe, produkty w toku)</li>
+            <li><strong>7xx:</strong> Przychody ze sprzedaży (podstawowa działalność operacyjna)</li>
+            <li><strong>8xx:</strong> Pozostałe przychody i koszty operacyjne (przychody/koszty finansowe)</li>
+            <li><strong>9xx:</strong> Rozrachunki międzyokresowe (bierne, czynne)</li>
           </ul>
         </div>
       </CardContent>
