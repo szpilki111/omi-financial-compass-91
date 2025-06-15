@@ -62,16 +62,25 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
   const { data: reports, isLoading, error } = useQuery({
     queryKey: ['reports', reportType],
     queryFn: async () => {
+      console.log('Rozpoczynam pobieranie raportów dla typu:', reportType);
+      
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
       
+      // Pierwsza próba - pobierz wszystkie raporty bez filtrowania
       let query = supabase.from('reports').select(`
         *,
         location:locations(name),
         submitted_by_profile:profiles!submitted_by(name),
         reviewed_by_profile:profiles!reviewed_by(name)
-      `).eq('report_type', reportType);
+      `);
       
+      // Dodaj filtr typu raportu - spróbuj różnych wariantów
+      const reportTypeFilter = reportType === 'monthly' ? 'monthly' : 'annual';
+      console.log('Filtruję po typie raportu:', reportTypeFilter);
+      query = query.eq('report_type', reportTypeFilter);
+      
+      // Jeśli użytkownik to ekonom, filtruj po lokalizacji
       if (userRole === 'ekonom') {
         const { data: locationId } = await supabase.rpc('get_user_location_id');
         console.log('ID lokalizacji użytkownika:', locationId);
@@ -83,10 +92,23 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
       
       const { data: reportsData, error: reportsError } = await query.order('created_at', { ascending: false });
       
-      if (reportsError) throw reportsError;
+      if (reportsError) {
+        console.error('Błąd pobierania raportów:', reportsError);
+        throw reportsError;
+      }
+      
       console.log('Pobrane raporty:', reportsData);
 
       if (!reportsData || reportsData.length === 0) {
+        console.log('Brak raportów dla tego typu:', reportTypeFilter);
+        
+        // Sprawdź czy w ogóle są jakieś raporty
+        const { data: allReports } = await supabase
+          .from('reports')
+          .select('report_type, id, title')
+          .limit(10);
+        
+        console.log('Wszystkie raporty w systemie (próbka):', allReports);
         return [];
       }
 
@@ -127,12 +149,12 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
   if (error) return <div className="text-red-600 p-4">Błąd ładowania raportów: {(error as Error).message}</div>;
 
   const reportTypeText = reportType === 'monthly' ? 'miesięcznych' : 'rocznych';
-  const reportTypeTextCapitalized = reportType === 'monthly' ? 'miesięczne' : 'roczne';
 
   if (!reports || reports.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-8 text-center">
         <p className="text-omi-gray-500 mb-4">Brak raportów {reportTypeText} do wyświetlenia.</p>
+        <p className="text-sm text-gray-400">Sprawdź konsolę przeglądarki po więcej informacji debugowania.</p>
       </div>
     );
   }
