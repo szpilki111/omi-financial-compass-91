@@ -67,22 +67,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
       
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
-      
-      // Najpierw sprawdź co jest w tabeli reports
-      console.log('=== SPRAWDZENIE ZAWARTOŚCI TABELI REPORTS ===');
-      const { data: allReportsCheck, error: checkError } = await supabase
-        .from('reports')
-        .select('id, title, report_type, period, year, month, status')
-        .limit(20);
-        
-      if (checkError) {
-        console.error('Błąd sprawdzania tabeli reports:', checkError);
-      } else {
-        console.log('Wszystkie raporty w systemie (próbka 20):', allReportsCheck);
-        console.log('Typy raportów znalezione:', [...new Set(allReportsCheck?.map(r => r.report_type) || [])]);
-      }
 
-      // Teraz pobierz raporty z filtrowaniem
       let query = supabase.from('reports').select(`
         *,
         location:locations(name),
@@ -90,13 +75,17 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
         reviewed_by_profile:profiles!reviewed_by(name)
       `);
       
-      // Sprawdź różne warianty typu raportu
+      // Mapowanie typów raportów - raporty "standard" traktujemy jako miesięczne
       console.log('=== FILTROWANIE PO TYPIE RAPORTU ===');
-      const reportTypeValue = reportType === 'monthly' ? 'monthly' : 'annual';
-      console.log('Szukany typ raportu:', reportTypeValue);
-      
-      // Dodaj filtr typu raportu
-      query = query.eq('report_type', reportTypeValue);
+      if (reportType === 'monthly') {
+        // Dla raportów miesięcznych szukamy typu 'standard'
+        console.log('Szukamy raportów miesięcznych (typu standard)');
+        query = query.eq('report_type', 'standard');
+      } else if (reportType === 'annual') {
+        // Dla raportów rocznych szukamy typu 'annual'
+        console.log('Szukamy raportów rocznych (typu annual)');
+        query = query.eq('report_type', 'annual');
+      }
       
       // Jeśli użytkownik to ekonom, filtruj po lokalizacji
       if (userRole === 'ekonom') {
@@ -122,23 +111,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, reportType = 
       console.log('Znalezione raporty:', reportsData);
 
       if (!reportsData || reportsData.length === 0) {
-        console.log('=== BRAK RAPORTÓW - DODATKOWE SPRAWDZENIA ===');
-        
-        // Sprawdź raporty bez filtra typu
-        const { data: withoutTypeFilter } = await supabase
-          .from('reports')
-          .select('id, title, report_type, period')
-          .limit(10);
-        console.log('Raporty bez filtra typu (próbka):', withoutTypeFilter);
-        
-        // Sprawdź czy są raporty z typem 'standard'
-        const { data: standardReports } = await supabase
-          .from('reports')
-          .select('id, title, report_type, period')
-          .eq('report_type', 'standard')
-          .limit(5);
-        console.log('Raporty typu "standard":', standardReports);
-        
+        console.log('=== BRAK RAPORTÓW ===');
         return [];
       }
 
