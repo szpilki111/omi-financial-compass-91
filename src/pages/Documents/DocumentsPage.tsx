@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -122,7 +123,9 @@ const DocumentsPage = () => {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="symfonia-panel">
+            <p className="text-xs">Ładowanie dokumentów...</p>
+          </div>
         </div>
       </MainLayout>
     );
@@ -130,53 +133,66 @@ const DocumentsPage = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
-          <div className="flex gap-2">
-            <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
-              Wyszukaj konta
-            </Button>
-            <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              Wyszukaj operacje
-            </Button>
-            <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nowy dokument
-            </Button>
+      <div className="space-y-3">
+        {/* Header panel */}
+        <div className="symfonia-panel">
+          <div className="flex justify-between items-center mb-3">
+            <h1 className="text-sm font-bold text-black">Dokumenty</h1>
+            <div className="flex gap-1">
+              <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-1 text-xs">
+                <Calculator className="h-3 w-3" />
+                Wyszukaj konta
+              </Button>
+              <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-1 text-xs">
+                <Search className="h-3 w-3" />
+                Wyszukaj operacje
+              </Button>
+              <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-1 text-xs">
+                <Plus className="h-3 w-3" />
+                Nowy dokument
+              </Button>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative mb-3">
+            <label className="symfonia-label">Wyszukiwanie:</label>
+            <Input
+              placeholder="Szukaj po numerze, nazwie lub dacie..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full"
+            />
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Szukaj po numerze, nazwie lub dacie..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+        {/* Documents table panel */}
+        <div className="symfonia-panel">
+          <DocumentTable
+            documents={filteredDocuments}
+            onDocumentClick={handleDocumentClick}
+            isLoading={isLoading}
           />
+
+          {filteredDocuments.length === 0 && !isLoading && searchTerm && (
+            <div className="text-center py-8">
+              <h3 className="text-sm font-bold text-black mb-2">
+                Nie znaleziono dokumentów
+              </h3>
+              <p className="text-xs text-gray-600 mb-2">
+                Spróbuj zmienić kryteria wyszukiwania
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Documents table */}
-        <DocumentTable
-          documents={filteredDocuments}
-          onDocumentClick={handleDocumentClick}
-          isLoading={isLoading}
-        />
-
-        {filteredDocuments.length === 0 && !isLoading && searchTerm && (
-          <div className="text-center py-12">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nie znaleziono dokumentów
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Spróbuj zmienić kryteria wyszukiwania
-            </p>
-          </div>
-        )}
+        {/* Status bar */}
+        <div className="symfonia-statusbar">
+          <span className="text-xs">
+            {filteredDocuments ? `Liczba dokumentów: ${filteredDocuments.length}` : 'Ładowanie...'}
+            {searchTerm && ` | Filtrowane po: "${searchTerm}"`}
+          </span>
+        </div>
       </div>
 
       <DocumentDialog
