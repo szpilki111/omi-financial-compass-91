@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -89,13 +90,27 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
 
       if (reportError) throw reportError;
       
-      // Cast the status to proper type to avoid TypeScript errors
-      const typedReportData = {
-        ...reportData,
-        status: reportData.status as 'draft' | 'submitted' | 'approved' | 'to_be_corrected'
-      } as DatabaseReport;
+      // Properly handle the data without unsafe casting
+      const processedReportData: DatabaseReport = {
+        id: reportData.id,
+        title: reportData.title || reportData.period || '',
+        period: reportData.period || '',
+        comments: reportData.comments,
+        location_id: reportData.location_id,
+        year: reportData.year,
+        month: reportData.month,
+        report_type: reportData.report_type as DatabaseReport['report_type'],
+        status: reportData.status,
+        created_at: reportData.created_at,
+        updated_at: reportData.updated_at,
+        submitted_by: reportData.submitted_by,
+        location: reportData.location || { name: 'Unknown' },
+        submitted_by_profile: reportData.submitted_by_profile && typeof reportData.submitted_by_profile === 'object' && 'email' in reportData.submitted_by_profile 
+          ? { email: reportData.submitted_by_profile.email }
+          : null
+      };
       
-      setReport(typedReportData);
+      setReport(processedReportData);
 
       // Pobierz szczegóły finansowe
       const details = await getReportFinancialDetails(reportId);
