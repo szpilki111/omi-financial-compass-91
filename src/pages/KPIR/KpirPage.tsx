@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -6,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FilePlus2, Download, Upload, FileDown, FileUp, Search } from 'lucide-react';
+import { FilePlus2, Download, Upload, FileDown, FileUp, Search, TestTube } from 'lucide-react';
 import { format } from 'date-fns';
 import KpirOperationDialog from './KpirOperationDialog';
 import KpirEditDialog from './KpirEditDialog';
@@ -15,6 +14,7 @@ import { KpirTransaction } from '@/types/kpir';
 import KpirTable from './KpirTable';
 import KpirImportDialog from './KpirImportDialog';
 import KpirSummary from './components/KpirSummary';
+import Phase1TestPanel from './components/Phase1TestPanel';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { calculateFinancialSummary, calculateOpeningBalance } from '@/utils/financeUtils';
 import { ArrowLeft } from "lucide-react";
@@ -31,6 +31,7 @@ const KpirPage: React.FC = () => {
   const [showNewOperationDialog, setShowNewOperationDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showTestPanel, setShowTestPanel] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
   const [selectedDocumentToEdit, setSelectedDocumentToEdit] = useState<{
     id: string;
@@ -290,17 +291,32 @@ const KpirPage: React.FC = () => {
             title="Lista operacji"
             subtitle="Przeglądaj operacje"
             actions={
-              <Button
-                variant="outline"
-                onClick={() => navigate("/dokumenty")}
-                className="gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Powrót do listy dokumentów
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTestPanel(!showTestPanel)}
+                  className="gap-2"
+                >
+                  <TestTube className="w-4 h-4" />
+                  {showTestPanel ? "Ukryj testy" : "Panel testowy"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/dokumenty")}
+                  className="gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Powrót do listy dokumentów
+                </Button>
+              </div>
             }
           />
         </div>
+
+        {/* Panel testowy Fazy 1 */}
+        {showTestPanel && (
+          <Phase1TestPanel />
+        )}
 
         {/* Komponent podsumowania finansowego */}
         <KpirSummary
