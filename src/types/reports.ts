@@ -30,6 +30,7 @@ export interface Report {
     expense_total: number;
     balance: number;
     settlements_total: number;
+    opening_balance: number;
   };
 }
 
@@ -91,6 +92,7 @@ export interface ReportDetails {
   expense_total: number;
   balance: number;
   settlements_total: number;
+  opening_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +105,7 @@ export interface ReportDetailsRow {
   expense_total: number;
   balance: number;
   settlements_total: number;
+  opening_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -114,6 +117,7 @@ export interface ReportDetailsInsert {
   expense_total?: number;
   balance?: number;
   settlements_total?: number;
+  opening_balance?: number;
 }
 
 // Typ dla operacji update na tabeli report_details
@@ -123,5 +127,6 @@ export interface ReportDetailsUpdate {
   expense_total?: number;
   balance?: number;
   settlements_total?: number;
+  opening_balance?: number;
   updated_at?: string;
 }

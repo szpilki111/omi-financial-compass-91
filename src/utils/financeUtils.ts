@@ -286,6 +286,61 @@ export const calculateFinancialSummary = async (
 };
 
 /**
+ * Pobiera saldo otwarcia dla określonej lokalizacji i okresu
+ */
+export const getOpeningBalance = async (
+  locationId: string | null | undefined,
+  month: number,
+  year: number
+) => {
+  try {
+    console.log(`Pobieranie salda otwarcia dla lokalizacji: ${locationId}, miesiąc: ${month}, rok: ${year}`);
+    
+    // Jeśli to styczeń, saldo otwarcia to 0
+    if (month === 1) {
+      return 0;
+    }
+    
+    // Oblicz poprzedni miesiąc
+    const previousMonth = month - 1;
+    const previousYear = previousMonth === 0 ? year - 1 : year;
+    const actualPreviousMonth = previousMonth === 0 ? 12 : previousMonth;
+    
+    // Sprawdź czy istnieje raport z poprzedniego miesiąca
+    const { data: previousReport, error } = await supabase
+      .from('reports')
+      .select(`
+        id,
+        report_details (
+          balance,
+          opening_balance
+        )
+      `)
+      .eq('location_id', locationId)
+      .eq('month', actualPreviousMonth)
+      .eq('year', previousYear)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Błąd podczas pobierania poprzedniego raportu:', error);
+      return 0;
+    }
+    
+    if (previousReport?.report_details) {
+      // Saldo otwarcia = saldo otwarcia poprzedniego miesiąca + bilans poprzedniego miesiąca
+      const previousOpeningBalance = previousReport.report_details.opening_balance || 0;
+      const previousBalance = previousReport.report_details.balance || 0;
+      return previousOpeningBalance + previousBalance;
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error('Błąd podczas pobierania salda otwarcia:', error);
+    return 0;
+  }
+};
+
+/**
  * Pobierz szczegóły finansowe dla konkretnego raportu
  * Ta funkcja zwraca zapisane wartości z tabeli report_details lub zerowe wartości jeśli nie ma zapisanych danych
  */
@@ -302,12 +357,12 @@ export const getReportFinancialDetails = async (reportId: string) => {
     
     if (reportDetailsError) {
       console.error('Błąd podczas pobierania szczegółów raportu:', reportDetailsError);
-      return { income: 0, expense: 0, balance: 0, settlements: 0 };
+      return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
     }
     
     if (!reportDetails) {
       console.log('Nie znaleziono szczegółów raportu w report_details, zwracam zerowe wartości');
-      return { income: 0, expense: 0, balance: 0, settlements: 0 };
+      return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
     }
     
     // Jeśli znaleziono szczegóły, zwróć je
@@ -315,11 +370,12 @@ export const getReportFinancialDetails = async (reportId: string) => {
       income: Number(reportDetails.income_total) || 0,
       expense: Number(reportDetails.expense_total) || 0,
       balance: Number(reportDetails.balance) || 0,
-      settlements: Number(reportDetails.settlements_total) || 0
+      settlements: Number(reportDetails.settlements_total) || 0,
+      openingBalance: Number(reportDetails.opening_balance) || 0
     };
   } catch (error) {
     console.error('Błąd podczas pobierania szczegółów finansowych raportu:', error);
-    return { income: 0, expense: 0, balance: 0, settlements: 0 };
+    return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
   }
 };
 
@@ -328,7 +384,7 @@ export const getReportFinancialDetails = async (reportId: string) => {
  */
 export const updateReportDetails = async (
   reportId: string, 
-  financialSummary: { income: number, expense: number, balance: number }
+  financialSummary: { income: number, expense: number, balance: number, openingBalance?: number }
 ) => {
   try {
     console.log(`Aktualizacja szczegółów raportu ${reportId} z danymi:`, financialSummary);
@@ -341,14 +397,21 @@ export const updateReportDetails = async (
       
     if (existingDetails && existingDetails.length > 0) {
       // Aktualizuj istniejące szczegóły
+      const updateData: any = {
+        income_total: financialSummary.income,
+        expense_total: financialSummary.expense,
+        balance: financialSummary.balance,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Dodaj opening_balance tylko jeśli został przekazany
+      if (financialSummary.openingBalance !== undefined) {
+        updateData.opening_balance = financialSummary.openingBalance;
+      }
+      
       const { data, error } = await supabase
         .from('report_details')
-        .update({
-          income_total: financialSummary.income,
-          expense_total: financialSummary.expense,
-          balance: financialSummary.balance,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('report_id', reportId);
         
       if (error) {
@@ -360,15 +423,18 @@ export const updateReportDetails = async (
       return data;
     } else {
       // Utwórz nowe szczegóły
+      const insertData: any = {
+        report_id: reportId,
+        income_total: financialSummary.income,
+        expense_total: financialSummary.expense,
+        balance: financialSummary.balance,
+        settlements_total: 0,
+        opening_balance: financialSummary.openingBalance || 0
+      };
+      
       const { data, error } = await supabase
         .from('report_details')
-        .insert({
-          report_id: reportId,
-          income_total: financialSummary.income,
-          expense_total: financialSummary.expense,
-          balance: financialSummary.balance,
-          settlements_total: 0
-        })
+        .insert(insertData)
         .select()
         .single();
         
@@ -405,17 +471,23 @@ export const calculateAndSaveReportSummary = async (
     const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
     const dateTo = lastDayOfMonth.toISOString().split('T')[0];
     
+    // Pobierz saldo otwarcia
+    const openingBalance = await getOpeningBalance(locationId, month, year);
+    
     // Oblicz finansowe podsumowanie
     const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
     
-    // Zapisz szczegóły raportu w bazie danych
-    await updateReportDetails(reportId, summary);
+    // Zapisz szczegóły raportu w bazie danych wraz z saldem otwarcia
+    await updateReportDetails(reportId, {
+      ...summary,
+      openingBalance
+    });
     
     console.log('Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
-    return summary;
+    return { ...summary, openingBalance };
   } catch (error) {
     console.error('Błąd podczas automatycznego obliczania podsumowania:', error);
     // Nie rzucaj błędu, aby nie blokować tworzenia raportu
-    return { income: 0, expense: 0, balance: 0 };
+    return { income: 0, expense: 0, balance: 0, openingBalance: 0 };
   }
 };

@@ -6,11 +6,34 @@ interface KpirSummaryProps {
   income: number;
   expense: number;
   balance: number;
+  openingBalance?: number;
 }
 
-const KpirSummary: React.FC<KpirSummaryProps> = ({ income, expense, balance }) => {
+const KpirSummary: React.FC<KpirSummaryProps> = ({ 
+  income, 
+  expense, 
+  balance, 
+  openingBalance = 0 
+}) => {
+  // Obliczenie końcowego bilansu uwzględniającego saldo otwarcia
+  const finalBalance = openingBalance + balance;
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Otwarcie miesiąca</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className={`text-3xl font-bold ${openingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+            {openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+          </p>
+          <p className="text-xs text-omi-gray-500 mt-1">
+            Saldo z poprzedniego miesiąca
+          </p>
+        </CardContent>
+      </Card>
+      
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg">Przychody</CardTitle>
@@ -41,14 +64,14 @@ const KpirSummary: React.FC<KpirSummaryProps> = ({ income, expense, balance }) =
       
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Bilans</CardTitle>
+          <CardTitle className="text-lg">Bilans końcowy</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className={`text-3xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {balance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+          <p className={`text-3xl font-bold ${finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {finalBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
           </p>
           <p className="text-xs text-omi-gray-500 mt-1">
-            Przychody - Rozchody
+            Otwarcie + Przychody - Rozchody
           </p>
         </CardContent>
       </Card>
