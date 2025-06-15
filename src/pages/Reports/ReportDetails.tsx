@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,13 +30,14 @@ interface ReportDetailsProps {
 
 interface DatabaseReport {
   id: string;
+  title: string;
   period: string;
   comments: string | null;
   location_id: string;
   year: number;
   month: number | null;
   report_type: 'monthly' | 'annual' | 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza';
-  status: 'draft' | 'submitted' | 'approved' | 'to_be_corrected';
+  status: string;
   created_at: string;
   updated_at: string;
   submitted_by: string | null;
@@ -88,7 +88,14 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
         .single();
 
       if (reportError) throw reportError;
-      setReport(reportData);
+      
+      // Cast the status to proper type to avoid TypeScript errors
+      const typedReportData = {
+        ...reportData,
+        status: reportData.status as 'draft' | 'submitted' | 'approved' | 'to_be_corrected'
+      } as DatabaseReport;
+      
+      setReport(typedReportData);
 
       // Pobierz szczegóły finansowe
       const details = await getReportFinancialDetails(reportId);
@@ -155,7 +162,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
       to_be_corrected: { label: 'Do poprawy', variant: 'destructive' as const }
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig];
+    const config = statusConfig[status as keyof typeof statusConfig] || 
+                   { label: status, variant: 'secondary' as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -226,7 +234,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
                 ) : (
                   <FileText className="h-5 w-5" />
                 )}
-                {report.period}
+                {report.title || report.period}
               </CardTitle>
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">

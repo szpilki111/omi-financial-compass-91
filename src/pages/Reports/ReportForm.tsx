@@ -31,6 +31,7 @@ const ReportForm: React.FC<ReportFormProps> = ({
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
   
   const [formData, setFormData] = useState({
+    title: '',
     period: '',
     comments: '',
     location_id: user?.location || '',
@@ -75,7 +76,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
 
       if (data) {
         setFormData({
-          period: data.period,
+          title: data.title || '',
+          period: data.period || '',
           comments: data.comments || '',
           location_id: data.location_id,
           year: data.year,
@@ -100,8 +102,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
 
     try {
       // Walidacja
-      if (!formData.period.trim()) {
-        throw new Error('Okres raportu jest wymagany');
+      if (!formData.title.trim() && !formData.period.trim()) {
+        throw new Error('Tytuł lub okres raportu jest wymagany');
       }
 
       if (!formData.location_id) {
@@ -144,7 +146,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
         const { error: updateError } = await supabase
           .from('reports')
           .update({
-            period: formData.period,
+            title: formData.title || formData.period,
+            period: formData.period || formData.title,
             comments: formData.comments,
             location_id: formData.location_id,
             year: formData.year,
@@ -170,7 +173,8 @@ const ReportForm: React.FC<ReportFormProps> = ({
         const { data: newReport, error: insertError } = await supabase
           .from('reports')
           .insert({
-            period: formData.period,
+            title: formData.title || formData.period,
+            period: formData.period || formData.title,
             comments: formData.comments,
             location_id: formData.location_id,
             year: formData.year,
@@ -248,13 +252,23 @@ const ReportForm: React.FC<ReportFormProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="period">Okres raportu *</Label>
+              <Label htmlFor="title">Tytuł raportu *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => handleInputChange('title', e.target.value)}
+                placeholder={`Raport ${formData.report_type === 'annual' ? 'roczny' : 'miesięczny'} ${formData.year}${formData.report_type === 'monthly' && formData.month ? `/${formData.month.toString().padStart(2, '0')}` : ''}`}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="period">Okres raportu</Label>
               <Input
                 id="period"
                 value={formData.period}
                 onChange={(e) => handleInputChange('period', e.target.value)}
-                placeholder={`Raport ${formData.report_type === 'annual' ? 'roczny' : 'miesięczny'} ${formData.year}${formData.report_type === 'monthly' && formData.month ? `/${formData.month.toString().padStart(2, '0')}` : ''}`}
-                required
+                placeholder={`${formData.year}${formData.report_type === 'monthly' && formData.month ? `/${formData.month.toString().padStart(2, '0')}` : ''}`}
               />
             </div>
 
