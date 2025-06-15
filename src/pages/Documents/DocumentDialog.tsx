@@ -65,7 +65,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   // Generate document number using the database function
   const generateDocumentNumber = async (date: Date) => {
-    if (!user?.location) {
+    if (!user?.location?.id) {
       toast({
         title: "Błąd",
         description: "Nie można określić lokalizacji użytkownika",
@@ -80,7 +80,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const month = date.getMonth() + 1; // JavaScript months are 0-indexed
 
       const { data, error } = await supabase.rpc('generate_document_number', {
-        p_location_id: user.location,
+        p_location_id: user.location.id,
         p_year: year,
         p_month: month
       });
@@ -152,7 +152,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   // Generate initial document number for new documents
   useEffect(() => {
-    if (!document && isOpen && user?.location) {
+    if (!document && isOpen && user?.location?.id) {
       const currentDate = form.getValues('document_date');
       generateDocumentNumber(currentDate).then(generatedNumber => {
         if (generatedNumber) {
@@ -160,7 +160,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
       });
     }
-  }, [document, isOpen, user?.location]);
+  }, [document, isOpen, user?.location?.id]);
 
   // Load account numbers for transactions
   const loadAccountNumbersForTransactions = async (transactionsToLoad: Transaction[]) => {
@@ -222,7 +222,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const onSubmit = async (data: DocumentFormData) => {
-    if (!user?.location || !user?.id) {
+    if (!user?.location?.id || !user?.id) {
       toast({
         title: "Błąd",
         description: "Nie można określić lokalizacji lub ID użytkownika",
@@ -257,7 +257,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_number: data.document_number,
             document_name: data.document_name,
             document_date: format(data.document_date, 'yyyy-MM-dd'),
-            location_id: user.location,
+            location_id: user.location.id,
             user_id: user.id, // Explicitly set the user_id
           })
           .select()
@@ -309,7 +309,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               description: t.description, // Teraz na pewno nie będzie null!
               settlement_type: t.settlement_type,
               date: format(data.document_date, 'yyyy-MM-dd'),
-              location_id: user.location,
+              location_id: user.location.id,
               user_id: user.id,
               document_number: data.document_number, // Add document number for better traceability
             };
