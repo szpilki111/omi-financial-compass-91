@@ -1,64 +1,30 @@
+
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/context/AuthContext';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getReportFinancialDetails, calculateAndSaveReportSummary } from '@/utils/financeUtils';
-import { 
-  FileText, 
-  Calendar, 
-  MapPin, 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown,
-  BarChart3,
-  RefreshCw,
-  Edit3,
-  Check,
-  X,
-  Calculator
-} from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import MainLayout from '@/components/layout/MainLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
+import { ArrowLeft, FileText, Calendar, MapPin, Edit, Save, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { getReportFinancialDetails, calculateAndSaveReportSummary } from '@/utils/financeUtils';
 
-interface ReportDetailsProps {
-  reportId: string;
-}
-
-interface DatabaseReport {
-  id: string;
-  title: string;
-  period: string;
-  comments: string | null;
-  location_id: string;
-  year: number;
-  month: number | null;
-  report_type: 'monthly' | 'annual' | 'standard' | 'zos' | 'bilans' | 'rzis' | 'jpk' | 'analiza';
-  status: string;
-  created_at: string;
-  updated_at: string;
-  submitted_by: string | null;
-  location: { name: string };
-  submitted_by_profile: { email: string } | null;
-}
-
-interface AccountDetail {
-  account_id: string;
-  account_number: string;
-  account_name: string;
-  account_type: string;
-  total_amount: number;
-}
-
-const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
+const ReportDetails = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [recalculating, setRecalculating] = useState(false);
-  const [report, setReport] = useState<DatabaseReport | null>(null);
+  const queryClient = useQueryClient();
+  const [isEditingComments, setIsEditingComments] = useState(false);
+  const [editedComments, setEditedComments] = useState('');
   const [financialDetails, setFinancialDetails] = useState({
     income: 0,
     expense: 0,
@@ -67,121 +33,116 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
     openingBalance: 0,
     closingBalance: 0
   });
-  const [accountDetails, setAccountDetails] = useState<AccountDetail[]>([]);
 
-  useEffect(() => {
-    fetchReportDetails();
-  }, [reportId]);
-
-  const fetchReportDetails = async () => {
-    setLoading(true);
-    try {
-      // Pobierz dane raportu
-      const { data: reportData, error: reportError } = await supabase
+  // Fetch report data
+  const { data: reportData, isLoading, refetch } = useQuery({
+    queryKey: ['report', id],
+    queryFn: async () => {
+      if (!id) throw new Error('Report ID is required');
+      
+      const { data, error } = await supabase
         .from('reports')
         .select(`
           *,
-          location:locations(name),
-          submitted_by_profile:profiles(email)
+          locations(name),
+          submitted_by_profile:profiles!reports_submitted_by_fkey(name)
         `)
-        .eq('id', reportId)
+        .eq('id', id)
         .single();
 
-      if (reportError) throw reportError;
-      
-      // Properly handle the data without unsafe casting
-      const processedReportData: DatabaseReport = {
-        id: reportData.id,
-        title: reportData.title || reportData.period || '',
-        period: reportData.period || '',
-        comments: reportData.comments,
-        location_id: reportData.location_id,
-        year: reportData.year,
-        month: reportData.month,
-        report_type: reportData.report_type as DatabaseReport['report_type'],
-        status: reportData.status,
-        created_at: reportData.created_at,
-        updated_at: reportData.updated_at,
-        submitted_by: reportData.submitted_by,
-        location: reportData.location || { name: 'Unknown' },
-        submitted_by_profile: reportData.submitted_by_profile && 
-          typeof reportData.submitted_by_profile === 'object' && 
-          reportData.submitted_by_profile !== null &&
-          'email' in reportData.submitted_by_profile 
-          ? { email: (reportData.submitted_by_profile as any).email }
-          : null
-      };
-      
-      setReport(processedReportData);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
 
-      // Pobierz szczegóły finansowe
-      const details = await getReportFinancialDetails(reportId);
-      setFinancialDetails(details);
-
-      // Pobierz szczegóły kont
-      const { data: accountData, error: accountError } = await supabase
-        .from('report_account_details')
-        .select('*')
-        .eq('report_id', reportId)
-        .order('account_number');
-
-      if (accountError) throw accountError;
-      setAccountDetails(accountData || []);
-
-    } catch (error: any) {
-      console.error('Error fetching report details:', error);
-      toast({
-        title: "Błąd",
-        description: "Nie udało się pobrać szczegółów raportu",
-        variant: "destructive",
+  // Fetch financial details
+  useEffect(() => {
+    if (id) {
+      getReportFinancialDetails(id).then(details => {
+        setFinancialDetails(details);
       });
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [id]);
 
-  const handleRecalculate = async () => {
-    if (!report) return;
-    
-    setRecalculating(true);
-    try {
-      await calculateAndSaveReportSummary(
-        reportId,
-        report.location_id,
-        report.month,
-        report.year
-      );
+  const updateCommentsMutation = useMutation({
+    mutationFn: async (newComments: string) => {
+      if (!id) throw new Error('Report ID is required');
       
-      // Odśwież dane
-      await fetchReportDetails();
+      const { error } = await supabase
+        .from('reports')
+        .update({ 
+          comments: newComments,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
       
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report', id] });
+      setIsEditingComments(false);
       toast({
         title: "Sukces",
-        description: "Raport został ponownie obliczony",
+        description: "Komentarze zostały zaktualizowane",
       });
-    } catch (error: any) {
-      console.error('Error recalculating report:', error);
+    },
+    onError: (error: any) => {
       toast({
         title: "Błąd",
-        description: "Nie udało się ponownie obliczyć raportu",
+        description: "Nie udało się zaktualizować komentarzy",
         variant: "destructive",
       });
-    } finally {
-      setRecalculating(false);
     }
+  });
+
+  const recalculateMutation = useMutation({
+    mutationFn: async () => {
+      if (!id || !reportData) throw new Error('Report data is required');
+      
+      return await calculateAndSaveReportSummary(
+        id,
+        reportData.location_id,
+        reportData.month,
+        reportData.year
+      );
+    },
+    onSuccess: (newDetails) => {
+      setFinancialDetails({
+        income: newDetails.income,
+        expense: newDetails.expense,
+        balance: newDetails.balance,
+        settlements: 0,
+        openingBalance: newDetails.openingBalance || 0,
+        closingBalance: newDetails.closingBalance || 0
+      });
+      refetch();
+      toast({
+        title: "Sukces",
+        description: "Dane finansowe zostały przeliczone",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Błąd",
+        description: "Nie udało się przeliczyć danych finansowych",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleEditComments = () => {
+    setEditedComments(reportData?.comments || '');
+    setIsEditingComments(true);
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      draft: { label: 'Szkic', variant: 'secondary' as const },
-      submitted: { label: 'Przesłany', variant: 'default' as const },
-      approved: { label: 'Zatwierdzony', variant: 'default' as const },
-      to_be_corrected: { label: 'Do poprawy', variant: 'destructive' as const }
-    };
+  const handleSaveComments = () => {
+    updateCommentsMutation.mutate(editedComments);
+  };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || 
-                   { label: status, variant: 'secondary' as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+  const handleCancelEdit = () => {
+    setIsEditingComments(false);
+    setEditedComments('');
   };
 
   const formatCurrency = (amount: number) => {
@@ -191,302 +152,264 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId }) => {
     }).format(amount);
   };
 
-  const getPeriodText = (report: DatabaseReport) => {
-    if (report.report_type === 'annual') {
-      return `Rok ${report.year}`;
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'default';
+      case 'rejected':
+        return 'destructive';
+      case 'submitted':
+        return 'secondary';
+      default:
+        return 'outline';
     }
-    const monthNames = [
-      'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
-      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'
-    ];
-    return `${monthNames[report.month! - 1]} ${report.year}`;
   };
 
-  // Grupowanie kont według typu
-  const groupedAccounts = {
-    income: accountDetails.filter(acc => acc.account_type === 'income'),
-    expense: accountDetails.filter(acc => acc.account_type === 'expense')
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return 'Szkic';
+      case 'submitted':
+        return 'Wysłany';
+      case 'approved':
+        return 'Zatwierdzony';
+      case 'rejected':
+        return 'Odrzucony';
+      default:
+        return 'Nieznany';
+    }
   };
 
-  // Konta przychodowe (7xx)
-  const incomeAccount7xx = groupedAccounts.income.filter(acc => acc.account_number.startsWith('7'));
-  
-  // Konta kosztowe (4xx, 5xx)
-  const expenseAccount4xx = groupedAccounts.expense.filter(acc => acc.account_number.startsWith('4'));
-  const expenseAccount5xx = groupedAccounts.expense.filter(acc => acc.account_number.startsWith('5'));
-  
-  // Konto 200 (może być w przychodach lub kosztach)
-  const account200Income = groupedAccounts.income.filter(acc => acc.account_number === '200');
-  const account200Expense = groupedAccounts.expense.filter(acc => acc.account_number === '200');
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Ładowanie szczegółów raportu...</p>
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </div>
+      </MainLayout>
     );
   }
 
-  if (!report) {
+  if (!reportData) {
     return (
-      <div className="text-center p-8">
-        <p>Nie znaleziono raportu</p>
-      </div>
+      <MainLayout>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Raport nie został znaleziony</h2>
+          <Button onClick={() => navigate('/raporty')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Powrót do listy raportów
+          </Button>
+        </div>
+      </MainLayout>
     );
   }
+
+  const canEdit = user?.role === 'admin' || user?.role === 'prowincjal' || reportData.submitted_by === user?.id;
+  const canApprove = user?.role === 'admin' || user?.role === 'prowincjal';
 
   return (
-    <div className="space-y-6">
-      {/* Nagłówek raportu */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                {report.report_type === 'annual' ? (
-                  <Calendar className="h-5 w-5" />
-                ) : (
-                  <FileText className="h-5 w-5" />
-                )}
-                {report.title || report.period}
-              </CardTitle>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
-                  {report.location.name}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  {getPeriodText(report)}
-                </div>
-                {getStatusBadge(report.status)}
-              </div>
+    <MainLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={() => navigate('/raporty')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Powrót
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{reportData.title}</h1>
+              <p className="text-gray-600">
+                {reportData.report_type === 'monthly' ? 'Raport miesięczny' : 'Raport roczny'} • {reportData.period}
+              </p>
             </div>
-            <div className="flex gap-2">
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={getStatusBadgeVariant(reportData.status)}>
+              {getStatusText(reportData.status)}
+            </Badge>
+            {canEdit && reportData.status === 'draft' && (
               <Button
+                onClick={() => recalculateMutation.mutate()}
+                disabled={recalculateMutation.isPending}
                 variant="outline"
                 size="sm"
-                onClick={handleRecalculate}
-                disabled={recalculating}
               >
-                {recalculating ? (
-                  <RefreshCw className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Calculator className="h-4 w-4 mr-1" />
-                )}
-                Przelicz
+                Przelicz dane
               </Button>
-            </div>
+            )}
           </div>
-        </CardHeader>
-        <CardContent>
-          {report.comments && (
-            <p className="text-gray-700">{report.comments}</p>
-          )}
-          <div className="mt-4 text-sm text-gray-500">
-            <p>Utworzony: {format(new Date(report.created_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}</p>
-            <p>Ostatnia aktualizacja: {format(new Date(report.updated_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}</p>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Podsumowanie finansowe z saldami */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {financialDetails.openingBalance !== 0 && (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+        {/* Report Info */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Informacje o raporcie
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div>
+                <label className="text-sm font-medium text-gray-600">Typ raportu:</label>
+                <p className="text-gray-900">
+                  {reportData.report_type === 'monthly' ? 'Miesięczny' : 'Roczny'}
+                </p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-600">Okres:</label>
+                <p className="flex items-center gap-1 text-gray-900">
+                  <Calendar className="h-4 w-4" />
+                  {reportData.period}
+                </p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-600">Lokalizacja:</label>
+                <p className="flex items-center gap-1 text-gray-900">
+                  <MapPin className="h-4 w-4" />
+                  {reportData.locations?.name || 'Nieznana'}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-600">Utworzony przez:</label>
+                <p className="text-gray-900">
+                  {reportData.submitted_by_profile?.name || 'Nieznany użytkownik'}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-600">Data utworzenia:</label>
+                <p className="text-gray-900">
+                  {format(new Date(reportData.created_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}
+                </p>
+              </div>
+
+              {reportData.updated_at !== reportData.created_at && (
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Saldo początkowe</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(financialDetails.openingBalance)}
+                  <label className="text-sm font-medium text-gray-600">Ostatnia aktualizacja:</label>
+                  <p className="text-gray-900">
+                    {format(new Date(reportData.updated_at), 'dd MMMM yyyy, HH:mm', { locale: pl })}
                   </p>
                 </div>
-                <BarChart3 className="h-8 w-8 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* Financial Summary */}
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Przychody</p>
+          <CardHeader>
+            <CardTitle>Podsumowanie finansowe</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <label className="text-sm font-medium text-blue-600">Saldo początkowe:</label>
+                <p className="text-2xl font-bold text-blue-600">
+                  {formatCurrency(financialDetails.openingBalance)}
+                </p>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <label className="text-sm font-medium text-green-600">Przychody:</label>
                 <p className="text-2xl font-bold text-green-600">
                   {formatCurrency(financialDetails.income)}
                 </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Rozchody</p>
+              
+              <div className="bg-red-50 p-4 rounded-lg">
+                <label className="text-sm font-medium text-red-600">Rozchody:</label>
                 <p className="text-2xl font-bold text-red-600">
                   {formatCurrency(financialDetails.expense)}
                 </p>
               </div>
-              <TrendingDown className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
+              
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <label className="text-sm font-medium text-gray-600">Saldo okresu:</label>
+                <p className={`text-2xl font-bold ${financialDetails.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(financialDetails.balance)}
+                </p>
+              </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Saldo końcowe</p>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <label className="text-sm font-medium text-purple-600">Saldo końcowe:</label>
                 <p className={`text-2xl font-bold ${financialDetails.closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(financialDetails.closingBalance)}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Szczegółowy podział kont */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Przychody */}
+        {/* Comments */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-600">
-              <TrendingUp className="h-5 w-5" />
-              Przychody
+            <CardTitle className="flex items-center justify-between">
+              Komentarze
+              {canEdit && reportData.status === 'draft' && !isEditingComments && (
+                <Button variant="outline" size="sm" onClick={handleEditComments}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edytuj
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Konta 7xx */}
-            {incomeAccount7xx.length > 0 && (
-              <div className="mb-4">
-                <h4 className="font-medium text-sm text-gray-600 mb-2">Konta przychodowe (7xx)</h4>
-                <div className="space-y-2">
-                  {incomeAccount7xx.map((account) => (
-                    <div key={`${account.account_id}_${account.account_type}`} className="flex justify-between items-center p-2 bg-green-50 rounded">
-                      <div>
-                        <span className="font-medium">{account.account_number}</span>
-                        <span className="text-sm text-gray-600 ml-2">{account.account_name}</span>
-                      </div>
-                      <span className="font-medium text-green-600">
-                        {formatCurrency(account.total_amount)}
-                      </span>
-                    </div>
-                  ))}
+            {isEditingComments ? (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="comments">Komentarze</Label>
+                  <Textarea
+                    id="comments"
+                    value={editedComments}
+                    onChange={(e) => setEditedComments(e.target.value)}
+                    placeholder="Dodaj komentarze do raportu..."
+                    rows={4}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleSaveComments}
+                    disabled={updateCommentsMutation.isPending}
+                    size="sm"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Zapisz
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleCancelEdit}
+                    size="sm"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Anuluj
+                  </Button>
                 </div>
               </div>
-            )}
-
-            {/* Konto 200 (przychody) */}
-            {account200Income.length > 0 && (
-              <div className="mb-4">
-                <h4 className="font-medium text-sm text-gray-600 mb-2">Konto 200 (przychody)</h4>
-                <div className="space-y-2">
-                  {account200Income.map((account) => (
-                    <div key={`${account.account_id}_${account.account_type}`} className="flex justify-between items-center p-2 bg-green-50 rounded">
-                      <div>
-                        <span className="font-medium">{account.account_number}</span>
-                        <span className="text-sm text-gray-600 ml-2">{account.account_name}</span>
-                      </div>
-                      <span className="font-medium text-green-600">
-                        {formatCurrency(account.total_amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            ) : (
+              <div className="text-gray-700">
+                {reportData.comments || 'Brak komentarzy'}
               </div>
-            )}
-
-            {groupedAccounts.income.length === 0 && (
-              <p className="text-gray-500 text-center py-4">Brak przychodów w tym okresie</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Rozchody */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <TrendingDown className="h-5 w-5" />
-              Rozchody
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Konta 4xx */}
-            {expenseAccount4xx.length > 0 && (
-              <div className="mb-4">
-                <h4 className="font-medium text-sm text-gray-600 mb-2">Koszty działalności (4xx)</h4>
-                <div className="space-y-2">
-                  {expenseAccount4xx.map((account) => (
-                    <div key={`${account.account_id}_${account.account_type}`} className="flex justify-between items-center p-2 bg-red-50 rounded">
-                      <div>
-                        <span className="font-medium">{account.account_number}</span>
-                        <span className="text-sm text-gray-600 ml-2">{account.account_name}</span>
-                      </div>
-                      <span className="font-medium text-red-600">
-                        {formatCurrency(account.total_amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Konta 5xx */}
-            {expenseAccount5xx.length > 0 && (
-              <div className="mb-4">
-                <h4 className="font-medium text-sm text-gray-600 mb-2">Pozostałe koszty (5xx)</h4>
-                <div className="space-y-2">
-                  {expenseAccount5xx.map((account) => (
-                    <div key={`${account.account_id}_${account.account_type}`} className="flex justify-between items-center p-2 bg-red-50 rounded">
-                      <div>
-                        <span className="font-medium">{account.account_number}</span>
-                        <span className="text-sm text-gray-600 ml-2">{account.account_name}</span>
-                      </div>
-                      <span className="font-medium text-red-600">
-                        {formatCurrency(account.total_amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Konto 200 (rozchody) */}
-            {account200Expense.length > 0 && (
-              <div className="mb-4">
-                <h4 className="font-medium text-sm text-gray-600 mb-2">Konto 200 (rozchody)</h4>
-                <div className="space-y-2">
-                  {account200Expense.map((account) => (
-                    <div key={`${account.account_id}_${account.account_type}`} className="flex justify-between items-center p-2 bg-red-50 rounded">
-                      <div>
-                        <span className="font-medium">{account.account_number}</span>
-                        <span className="text-sm text-gray-600 ml-2">{account.account_name}</span>
-                      </div>
-                      <span className="font-medium text-red-600">
-                        {formatCurrency(account.total_amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {groupedAccounts.expense.length === 0 && (
-              <p className="text-gray-500 text-center py-4">Brak rozchodów w tym okresie</p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Approval Actions */}
+        {canApprove && reportData.status === 'submitted' && (
+          <ReportApprovalActions
+            reportId={id!}
+            onStatusChange={() => {
+              refetch();
+              queryClient.invalidateQueries({ queryKey: ['reports'] });
+            }}
+          />
+        )}
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

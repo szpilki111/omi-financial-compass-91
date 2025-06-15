@@ -1,129 +1,41 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, FileText } from 'lucide-react';
 import ReportsList from './ReportsList';
-import ReportForm from './ReportForm';
-import ReportDetails from './ReportDetails';
-import { Button } from '@/components/ui/button';
-import { PlusCircle, ArrowLeft, Calendar, FileText } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import AnnualReportsList from './AnnualReportsList';
 
 const ReportsPage = () => {
-  const navigate = useNavigate();
-  const { canCreateReports } = useAuth();
-  const [searchParams] = useSearchParams();
-  const [isCreatingReport, setIsCreatingReport] = useState(false);
-  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
-  const [reportType, setReportType] = useState<'monthly' | 'annual'>('monthly');
-  const { toast } = useToast();
-
-  // Sprawdź parametr URL przy załadowaniu komponentu
-  useEffect(() => {
-    const action = searchParams.get('action');
-    const type = searchParams.get('type') as 'monthly' | 'annual';
-    if (action === 'new' && canCreateReports) {
-      if (type && (type === 'monthly' || type === 'annual')) {
-        setReportType(type);
-      }
-      handleNewReport();
-    }
-  }, [searchParams, canCreateReports]);
-
-  const handleReportCreated = () => {
-    setIsCreatingReport(false);
-    setViewMode('list');
-    // Usuń parametr z URL
-    navigate('/reports', { replace: true });
-    toast({
-      title: "Sukces",
-      description: "Raport został utworzony pomyślnie.",
-      variant: "default",
-    });
-  };
-
-  const handleReportSelected = (reportId: string) => {
-    setSelectedReportId(reportId);
-    setIsCreatingReport(false);
-    setViewMode('view');
-  };
-
-  const handleNewReport = (type: 'monthly' | 'annual' = 'monthly') => {
-    setReportType(type);
-    setIsCreatingReport(true);
-    setSelectedReportId(null);
-    setViewMode('edit');
-  };
-
-  const handleCancel = () => {
-    setIsCreatingReport(false);
-    setSelectedReportId(null);
-    setViewMode('list');
-    setReportType('monthly');
-    // Usuń parametr z URL
-    navigate('/reports', { replace: true });
-  };
+  const [activeTab, setActiveTab] = useState('monthly');
 
   return (
     <MainLayout>
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center">
-          {viewMode !== 'list' && (
-            <Button 
-              variant="ghost" 
-              onClick={handleCancel} 
-              className="mr-2"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Powrót
-            </Button>
-          )}
-          <PageTitle title="Raportowanie" />
-        </div>
-        {/* Przyciski "Nowy raport" tylko dla ekonomów */}
-        {viewMode === 'list' && canCreateReports && (
-          <div className="flex gap-2">
-            <Button onClick={() => handleNewReport('monthly')} className="flex items-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              Raport miesięczny
-            </Button>
-            <Button 
-              onClick={() => handleNewReport('annual')} 
-              variant="outline"
-              className="flex items-center gap-2"
-            >
+      <div className="space-y-6">
+        <PageTitle title="Raporty" />
+        
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="monthly" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              Raport roczny
-            </Button>
-          </div>
-        )}
+              Raporty miesięczne
+            </TabsTrigger>
+            <TabsTrigger value="annual" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Raporty roczne
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="monthly" className="mt-6">
+            <ReportsList />
+          </TabsContent>
+          
+          <TabsContent value="annual" className="mt-6">
+            <AnnualReportsList />
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {viewMode === 'edit' && (
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            {reportType === 'annual' ? <Calendar className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-            {isCreatingReport ? `Nowy raport ${reportType === 'annual' ? 'roczny' : 'miesięczny'}` : 'Edycja raportu'}
-          </h2>
-          <ReportForm 
-            reportId={selectedReportId || undefined} 
-            reportType={reportType}
-            onSuccess={handleReportCreated} 
-            onCancel={handleCancel} 
-          />
-        </div>
-      )}
-      
-      {viewMode === 'view' && selectedReportId && (
-        <ReportDetails reportId={selectedReportId} />
-      )}
-      
-      {viewMode === 'list' && (
-        <ReportsList onReportSelect={handleReportSelected} />
-      )}
     </MainLayout>
   );
 };

@@ -68,18 +68,19 @@ const OperationDetailsDialog = ({ operation, isOpen, onClose }: OperationDetails
 
       if (error) throw error;
 
-      // Przekieruj do strony edycji dokumentu
-      window.open(`/dokumenty?edit=${operation.document_id}`, '_blank');
+      // Otwórz stronę dokumentów z parametrem edycji
+      const editUrl = `/dokumenty?edit=${operation.document_id}`;
+      window.open(editUrl, '_blank');
       
       toast({
         title: "Przekierowanie",
-        description: "Otwarto dokument w nowej karcie",
+        description: "Otwarto dokument w nowej karcie do edycji",
       });
     } catch (error: any) {
       console.error('Error fetching document:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się otworzyć dokumentu",
+        description: "Nie udało się otworzyć dokumentu do edycji",
         variant: "destructive",
       });
     } finally {
@@ -203,7 +204,7 @@ const OperationDetailsDialog = ({ operation, isOpen, onClose }: OperationDetails
 
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-sm text-gray-600">
-                    <strong>Wskazówka:</strong> {operation.document_id ? 'Kliknij "Edytuj dokument" aby przejść do szczegółowej edycji całego dokumentu finansowego wraz z wszystkimi powiązanymi operacjami.' : 'Ta operacja nie jest powiązana z żadnym dokumentem.'}
+                    <strong>Wskazówka:</strong> {operation.document_id ? 'Kliknij "Edytuj dokument" aby przejść do szczegółowej edycji całego dokumentu finansowego wraz z wszystkimi powiązanymi operacjami w nowej karcie.' : 'Ta operacja nie jest powiązana z żadnym dokumentem.'}
                   </p>
                 </div>
               </div>

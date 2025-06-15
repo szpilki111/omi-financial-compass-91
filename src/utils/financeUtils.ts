@@ -1,4 +1,3 @@
-
 import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -634,6 +633,168 @@ export const calculatePreviousPeriodClosingBalance = async (
 };
 
 /**
+ * Pobiera szczegółowy podział kont według numerów (700, 400, 200) dla raportów
+ */
+export const getDetailedAccountSummaryForReport = async (
+  locationId: string | null | undefined,
+  dateFrom?: string,
+  dateTo?: string
+) => {
+  try {
+    console.log('🔍 POBIERANIE SZCZEGÓŁOWEGO PODZIAŁU KONT DLA RAPORTU');
+    
+    let query = supabase
+      .from('transactions')
+      .select(`
+        id,
+        date,
+        amount,
+        debit_account_id,
+        credit_account_id,
+        debit_amount,
+        credit_amount,
+        description,
+        document_number
+      `)
+      .order('date', { ascending: false });
+
+    if (locationId) {
+      query = query.eq('location_id', locationId);
+    }
+    if (dateFrom) {
+      query = query.gte('date', dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte('date', dateTo);
+    }
+
+    const { data: transactions, error: transError } = await query;
+    if (transError) throw transError;
+
+    // Pobierz konta przypisane do lokalizacji
+    let accountsQuery = supabase
+      .from('accounts')
+      .select(`
+        id, 
+        number, 
+        name,
+        type,
+        location_accounts!inner(location_id)
+      `);
+
+    if (locationId) {
+      accountsQuery = accountsQuery.eq('location_accounts.location_id', locationId);
+    }
+
+    const { data: accounts, error: accountsError } = await accountsQuery;
+    if (accountsError) throw accountsError;
+
+    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, acc]));
+
+    // Zdefiniuj kluczowe konta
+    const keyAccounts = {
+      income_700: accounts.filter(acc => acc.number.startsWith('7')),
+      income_200: accounts.filter(acc => acc.number === '200'),
+      expense_400: accounts.filter(acc => acc.number.startsWith('4')),
+      expense_200: accounts.filter(acc => acc.number === '200')
+    };
+
+    // Oblicz sumy dla każdego typu konta
+    const accountSummary = {
+      income_700_total: 0,
+      income_700_details: [] as Array<{account_number: string, account_name: string, amount: number}>,
+      income_200_total: 0,
+      expense_400_total: 0,
+      expense_400_details: [] as Array<{account_number: string, account_name: string, amount: number}>,
+      expense_200_total: 0,
+      total_income: 0,
+      total_expense: 0,
+      net_balance: 0
+    };
+
+    const accountTotals = new Map<string, number>();
+
+    transactions?.forEach(transaction => {
+      const debitAccount = accountsMap.get(transaction.debit_account_id);
+      const creditAccount = accountsMap.get(transaction.credit_account_id);
+      
+      const debitAmount = transaction.debit_amount || transaction.amount;
+      const creditAmount = transaction.credit_amount || transaction.amount;
+
+      // Przychody z kont 7xx (kredyt)
+      if (creditAccount && creditAccount.number.startsWith('7')) {
+        const key = `credit_${creditAccount.id}`;
+        accountTotals.set(key, (accountTotals.get(key) || 0) + creditAmount);
+        accountSummary.income_700_total += creditAmount;
+      }
+
+      // Przychody z konta 200 (kredyt)
+      if (creditAccount && creditAccount.number === '200') {
+        accountSummary.income_200_total += creditAmount;
+      }
+
+      // Koszty z kont 4xx (debet)
+      if (debitAccount && debitAccount.number.startsWith('4')) {
+        const key = `debit_${debitAccount.id}`;
+        accountTotals.set(key, (accountTotals.get(key) || 0) + debitAmount);
+        accountSummary.expense_400_total += debitAmount;
+      }
+
+      // Koszty z konta 200 (debet)
+      if (debitAccount && debitAccount.number === '200') {
+        accountSummary.expense_200_total += debitAmount;
+      }
+    });
+
+    // Przygotuj szczegóły dla kont 700
+    keyAccounts.income_700.forEach(account => {
+      const amount = accountTotals.get(`credit_${account.id}`) || 0;
+      if (amount > 0) {
+        accountSummary.income_700_details.push({
+          account_number: account.number,
+          account_name: account.name,
+          amount
+        });
+      }
+    });
+
+    // Przygotuj szczegóły dla kont 400
+    keyAccounts.expense_400.forEach(account => {
+      const amount = accountTotals.get(`debit_${account.id}`) || 0;
+      if (amount > 0) {
+        accountSummary.expense_400_details.push({
+          account_number: account.number,
+          account_name: account.name,
+          amount
+        });
+      }
+    });
+
+    // Oblicz sumy całkowite
+    accountSummary.total_income = accountSummary.income_700_total + accountSummary.income_200_total;
+    accountSummary.total_expense = accountSummary.expense_400_total + accountSummary.expense_200_total;
+    accountSummary.net_balance = accountSummary.total_income - accountSummary.total_expense;
+
+    console.log('📊 Szczegółowy podział kont:', accountSummary);
+    return accountSummary;
+
+  } catch (error) {
+    console.error('❌ Błąd podczas pobierania szczegółowego podziału kont:', error);
+    return {
+      income_700_total: 0,
+      income_700_details: [],
+      income_200_total: 0,
+      expense_400_total: 0,
+      expense_400_details: [],
+      expense_200_total: 0,
+      total_income: 0,
+      total_expense: 0,
+      net_balance: 0
+    };
+  }
+};
+
+/**
  * Pobierz szczegóły finansowe dla konkretnego raportu
  * Ta funkcja zwraca zapisane wartości z tabeli report_details lub zerowe wartości jeśli nie ma zapisanych danych
  */
@@ -813,7 +974,7 @@ export const saveReportAccountDetails = async (
 
 /**
  * Oblicza i zapisuje automatycznie podsumowanie finansowe dla nowego raportu
- * Z ulepszoną obsługą sald początkowych i końcowych
+ * Z ulepszoną obsługą sald początkowych i końcowych oraz szczegółowym podziałem kont
  */
 export const calculateAndSaveReportSummary = async (
   reportId: string,
@@ -848,6 +1009,9 @@ export const calculateAndSaveReportSummary = async (
     // Oblicz finansowe podsumowanie dla bieżącego okresu
     const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
     
+    // Pobierz szczegółowy podział kont
+    const detailedAccountSummary = await getDetailedAccountSummaryForReport(locationId, dateFrom, dateTo);
+    
     // Zapisz szczegóły raportu w bazie danych
     await updateReportDetails(reportId, {
       ...summary,
@@ -864,14 +1028,19 @@ export const calculateAndSaveReportSummary = async (
     console.log('✅ Podsumowanie finansowe zostało automatycznie obliczone i zapisane');
     console.log(`💰 Saldo początkowe: ${openingBalance.toFixed(2)} PLN`);
     console.log(`📈 Przychody okresu: ${summary.income.toFixed(2)} PLN`);
+    console.log(`  - Konta 7xx: ${detailedAccountSummary.income_700_total.toFixed(2)} PLN`);
+    console.log(`  - Konto 200: ${detailedAccountSummary.income_200_total.toFixed(2)} PLN`);
     console.log(`📉 Rozchody okresu: ${summary.expense.toFixed(2)} PLN`);
+    console.log(`  - Konta 4xx: ${detailedAccountSummary.expense_400_total.toFixed(2)} PLN`);
+    console.log(`  - Konto 200: ${detailedAccountSummary.expense_200_total.toFixed(2)} PLN`);
     console.log(`⚖️ Saldo okresu: ${summary.balance.toFixed(2)} PLN`);
     console.log(`🎯 Saldo końcowe: ${closingBalance.toFixed(2)} PLN`);
     
     return { 
       ...summary, 
       openingBalance,
-      closingBalance
+      closingBalance,
+      detailedAccountSummary
     };
   } catch (error) {
     console.error('❌ Błąd podczas automatycznego obliczania podsumowania:', error);
@@ -883,7 +1052,18 @@ export const calculateAndSaveReportSummary = async (
       openingBalance: 0,
       closingBalance: 0,
       accountBreakdown: [],
-      detailedAccountBreakdown: []
+      detailedAccountBreakdown: [],
+      detailedAccountSummary: {
+        income_700_total: 0,
+        income_700_details: [],
+        income_200_total: 0,
+        expense_400_total: 0,
+        expense_400_details: [],
+        expense_200_total: 0,
+        total_income: 0,
+        total_expense: 0,
+        net_balance: 0
+      }
     };
   }
 };

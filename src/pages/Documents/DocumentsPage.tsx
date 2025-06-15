@@ -6,12 +6,13 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentTable from './DocumentTable';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import AccountSearchDialog from './AccountSearchDialog';
 
 interface Document {
   id: string;
@@ -38,6 +39,7 @@ const DocumentsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [isAccountSearchOpen, setIsAccountSearchOpen] = useState(false);
 
   // Fetch documents with related data
   const { data: documents, isLoading, refetch } = useQuery({
@@ -115,6 +117,10 @@ const DocumentsPage = () => {
     navigate('/kpir');
   };
 
+  const handleAccountSearch = () => {
+    setIsAccountSearchOpen(true);
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -131,6 +137,10 @@ const DocumentsPage = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
           <div className="flex gap-2">
+            <Button onClick={handleAccountSearch} variant="outline" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Wyszukaj konta
+            </Button>
             <Button onClick={handleSearchOperations} variant="outline" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               Wyszukaj operacje
@@ -180,6 +190,11 @@ const DocumentsPage = () => {
         }}
         onDocumentCreated={handleDocumentCreated}
         document={selectedDocument}
+      />
+
+      <AccountSearchDialog
+        isOpen={isAccountSearchOpen}
+        onClose={() => setIsAccountSearchOpen(false)}
       />
     </MainLayout>
   );
