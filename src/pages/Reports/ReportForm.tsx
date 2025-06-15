@@ -75,7 +75,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const [yearlyFinancialSummary, setYearlyFinancialSummary] = useState({
     income: 0,
     expense: 0,
-    balance: 0
+    balance: 0,
+    openingBalance: 0  // Nowe pole dla salda otwarcia roku
   });
 
   // Inicjalizacja formularza
@@ -128,11 +129,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
       // Jeśli checkbox jest zaznaczony, pobierz też dane roczne
       if (showYearlyView) {
-        const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
-        const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
-        
-        const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
-        setYearlyFinancialSummary(yearlySummary);
+        await fetchYearlySummary(year);
       }
     };
 
@@ -161,11 +158,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
           // Jeśli checkbox jest zaznaczony, pobierz też dane roczne
           if (showYearlyView) {
-            const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
-            const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
-            
-            const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
-            setYearlyFinancialSummary(yearlySummary);
+            await fetchYearlySummary(year);
           }
         };
   
@@ -176,17 +169,63 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     return () => subscription.unsubscribe();
   }, [form.watch, user?.location, showYearlyView]);
 
+  // Nowa funkcja do pobierania rocznego podsumowania z saldem otwarcia z poprzedniego roku
+  const fetchYearlySummary = async (year: number) => {
+    if (!user?.location) return;
+
+    const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
+    const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
+    
+    // Pobierz dane finansowe za cały rok
+    const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
+    
+    // Pobierz saldo z końca poprzedniego roku (jeśli istnieje)
+    let openingBalance = 0;
+    const previousYear = year - 1;
+    
+    try {
+      // Sprawdź czy istnieje raport za grudzień poprzedniego roku
+      const { data: previousYearReport, error } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          report_details!inner (
+            balance,
+            opening_balance
+          )
+        `)
+        .eq('location_id', user.location)
+        .eq('year', previousYear)
+        .eq('month', 12)
+        .maybeSingle();
+
+      if (!error && previousYearReport?.report_details) {
+        // Oblicz saldo końcowe z poprzedniego roku
+        const prevYearData = previousYearReport.report_details;
+        openingBalance = (prevYearData.opening_balance || 0) + (prevYearData.balance || 0);
+        console.log(`Znaleziono saldo z końca ${previousYear} roku:`, openingBalance);
+      } else {
+        console.log(`Brak danych za grudzień ${previousYear} roku`);
+      }
+    } catch (err) {
+      console.log(`Błąd podczas pobierania danych z poprzedniego roku:`, err);
+    }
+    
+    setYearlyFinancialSummary({
+      income: yearlySummary.income,
+      expense: yearlySummary.expense,
+      balance: yearlySummary.balance,
+      openingBalance
+    });
+  };
+
   // Funkcja obsługująca zmianę checkboxa
   const handleYearlyViewChange = async (checked: boolean) => {
     setShowYearlyView(checked);
     
     if (checked && user?.location) {
       const year = form.getValues('year');
-      const yearStart = new Date(year, 0, 1).toISOString().split('T')[0];
-      const yearEnd = new Date(year, 11, 31).toISOString().split('T')[0];
-      
-      const yearlySummary = await calculateFinancialSummary(user.location, yearStart, yearEnd);
-      setYearlyFinancialSummary(yearlySummary);
+      await fetchYearlySummary(year);
     }
   };
 
@@ -913,7 +952,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             </p>
           </div>
 
-          {/* Nowe podsumowanie roczne (tylko gdy checkbox jest zaznaczony) */}
+          {/* Nowe podsumowanie roczne z saldem otwarcia z poprzedniego roku */}
           {showYearlyView && (
             <div className="bg-blue-50 p-6 rounded-lg shadow-sm border border-blue-200">
               <div className="flex items-center gap-2 mb-4">
@@ -925,11 +964,96 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 </span>
               </div>
               
-              <KpirSummary 
-                income={yearlyFinancialSummary.income}
-                expense={yearlyFinancialSummary.expense}
-                balance={yearlyFinancialSummary.balance}
-              />
+              {/* Niestandardowy komponent KpirSummary dla danych rocznych */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Otwarcie roku (saldo z końca poprzedniego roku) */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-blue-600">
+                      Otwarcie roku
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-700">
+                      {new Intl.NumberFormat('pl-PL', {
+                        style: 'currency',
+                        currency: 'PLN',
+                        minimumFractionDigits: 2,
+                      }).format(yearlyFinancialSummary.openingBalance)}
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Saldo z końca {form.getValues('year') - 1} roku
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Przychody */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-green-600">
+                      Przychody
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-700">
+                      {new Intl.NumberFormat('pl-PL', {
+                        style: 'currency',
+                        currency: 'PLN',
+                        minimumFractionDigits: 2,
+                      }).format(yearlyFinancialSummary.income)}
+                    </div>
+                    <p className="text-xs text-green-600 mt-1">
+                      Suma wszystkich przychodów (konta 7xx i 200 po stronie kredytu)
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Rozchody */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-red-600">
+                      Rozchody
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-700">
+                      {new Intl.NumberFormat('pl-PL', {
+                        style: 'currency',
+                        currency: 'PLN',
+                        minimumFractionDigits: 2,
+                      }).format(yearlyFinancialSummary.expense)}
+                    </div>
+                    <p className="text-xs text-red-600 mt-1">
+                      Suma wszystkich kosztów (konta 4xx i 200 po stronie debetu)
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Saldo końcowe */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">
+                      Saldo końcowe
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-2xl font-bold ${
+                      (yearlyFinancialSummary.openingBalance + yearlyFinancialSummary.balance) >= 0 
+                        ? 'text-green-700' 
+                        : 'text-red-700'
+                    }`}>
+                      {new Intl.NumberFormat('pl-PL', {
+                        style: 'currency',
+                        currency: 'PLN',
+                        minimumFractionDigits: 2,
+                      }).format(yearlyFinancialSummary.openingBalance + yearlyFinancialSummary.balance)}
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Otwarcie + Przychody - Rozchody
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
               
               <p className="mt-4 text-sm text-blue-600">
                 To jest tylko podgląd danych za cały rok. Te wartości nie będą zapisane w raporcie miesięcznym.
@@ -937,7 +1061,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             </div>
           )}
 
-          {/* ... keep existing code (zawartość raportu, przyciski) */}
+          {/* Przyciski akcji */}
+          <div className="flex justify-end gap-3">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onCancel || (() => navigate('/reports'))}
+              disabled={isSubmitting}
+            >
+              Anuluj
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting && <Spinner size="sm" className="mr-2" />}
+              {reportId ? 'Zaktualizuj raport' : 'Utwórz raport'}
+            </Button>
+          </div>
         </form>
       </Form>
     </div>
