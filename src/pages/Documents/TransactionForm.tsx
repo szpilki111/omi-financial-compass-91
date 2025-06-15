@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import AccountCombobox from './AccountCombobox';
+import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 
 interface TransactionFormProps {
@@ -94,7 +94,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         credit_amount: formData.credit_amount,
         amount: Math.max(formData.debit_amount, formData.credit_amount), // For backward compatibility
         settlement_type: formData.settlement_type,
-        location_id: user.location.id,
         user_id: user.id,
       };
 
@@ -162,8 +161,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           <Label>Strona "Winien"</Label>
           <AccountCombobox
             value={formData.debit_account_id}
-            onValueChange={(value) => handleAccountChange(value, 'debit')}
-            placeholder="Wybierz konto Winien"
+            onChange={(value) => handleAccountChange(value, 'debit')}
+            locationId={user?.location?.id}
           />
           <Input
             type="number"
@@ -180,8 +179,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           <Label>Strona "Ma"</Label>
           <AccountCombobox
             value={formData.credit_account_id}
-            onValueChange={(value) => handleAccountChange(value, 'credit')}
-            placeholder="Wybierz konto Ma"
+            onChange={(value) => handleAccountChange(value, 'credit')}
+            locationId={user?.location?.id}
           />
           <Input
             type="number"

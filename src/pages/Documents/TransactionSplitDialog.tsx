@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus } from 'lucide-react';
-import AccountCombobox from './AccountCombobox';
+import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 
 interface SplitEntry {
@@ -103,7 +103,6 @@ const TransactionSplitDialog: React.FC<TransactionSplitDialogProps> = ({
       debit_amount: entry.amount,
       credit_amount: 0,
       settlement_type: 'Bank' as const,
-      location_id: user.location.id,
       user_id: user.id,
       is_split_transaction: true,
       parent_transaction_id: transaction?.id,
@@ -154,8 +153,8 @@ const TransactionSplitDialog: React.FC<TransactionSplitDialogProps> = ({
                   <Label htmlFor={`account-${entry.id}`}>Konto</Label>
                   <AccountCombobox
                     value={entry.account_id}
-                    onValueChange={(value) => updateSplitEntry(entry.id, 'account_id', value)}
-                    placeholder="Wybierz konto"
+                    onChange={(value) => updateSplitEntry(entry.id, 'account_id', value)}
+                    locationId={user?.location?.id}
                   />
                 </div>
 
