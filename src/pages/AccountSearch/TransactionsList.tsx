@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,7 +119,9 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium">{transaction.document_number}</div>
+                          <div className="font-medium">
+                            {transaction.document?.document_number || transaction.document_number || 'Brak numeru'}
+                          </div>
                           {transaction.document && (
                             <div className="text-xs text-gray-500">
                               {transaction.document.document_name}
