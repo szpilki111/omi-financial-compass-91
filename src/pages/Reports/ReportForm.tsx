@@ -72,7 +72,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Oblicz podsumowanie finansowe na podstawie wybranych parametrów
   React.useEffect(() => {
     const calculatePreview = async () => {
-      if (!selectedMonth || !selectedYear || !user?.location_id) return;
+      if (!selectedMonth || !selectedYear || !user?.location) return;
       
       setIsCalculating(true);
       try {
@@ -81,7 +81,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
         // Pobierz saldo otwarcia
         const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
-        const openingBalance = await getOpeningBalance(user.location_id, month, year);
+        const openingBalance = await getOpeningBalance(user.location, month, year);
         
         // Oblicz daty
         const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -90,7 +90,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         const dateTo = lastDayOfMonth.toISOString().split('T')[0];
         
         // Oblicz podsumowanie finansowe
-        const summary = await calculateFinancialSummary(user.location_id, dateFrom, dateTo);
+        const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
         
         setFinancialSummary({
           ...summary,
@@ -105,10 +105,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     };
 
     calculatePreview();
-  }, [selectedMonth, selectedYear, user?.location_id]);
+  }, [selectedMonth, selectedYear, user?.location]);
 
   const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
-    if (!user?.location_id) {
+    if (!user?.location) {
       toast({
         title: "Błąd",
         description: "Nie można określić lokalizacji użytkownika.",
@@ -130,7 +130,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       const { data: existingReport, error: checkError } = await supabase
         .from('reports')
         .select('id, title')
-        .eq('location_id', user.location_id)
+        .eq('location_id', user.location)
         .eq('month', month)
         .eq('year', year)
         .maybeSingle();
@@ -150,9 +150,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         return;
       }
 
+      // Pobierz nazwę lokalizacji
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('name')
+        .eq('id', user.location)
+        .single();
+
+      if (locationError) {
+        console.error('❌ Błąd pobierania danych lokalizacji:', locationError);
+        throw locationError;
+      }
+
       // Utwórz nowy raport
       console.log('✨ Tworzenie nowego raportu...');
-      const reportTitle = `Raport za ${months.find(m => m.value === values.month)?.label} ${values.year} - ${user.location?.name || 'Nieznana lokalizacja'}`;
+      const reportTitle = `Raport za ${months.find(m => m.value === values.month)?.label} ${values.year} - ${locationData?.name || 'Nieznana lokalizacja'}`;
       const period = `${months.find(m => m.value === values.month)?.label} ${values.year}`;
 
       const { data: newReport, error: createError } = await supabase
@@ -162,7 +174,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           period: period,
           month: month,
           year: year,
-          location_id: user.location_id,
+          location_id: user.location,
           status: 'draft'
         })
         .select()
@@ -180,7 +192,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       try {
         const financialResult = await calculateAndSaveReportSummary(
           newReport.id,
-          user.location_id,
+          user.location,
           month,
           year
         );
