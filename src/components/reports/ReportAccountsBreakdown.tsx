@@ -20,24 +20,38 @@ interface ReportAccountsBreakdownProps {
   locationId: string;
   month: number;
   year: number;
+  dateRange?: {
+    from: string;
+    to: string;
+  };
 }
 
 const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({ 
   reportId, 
   locationId, 
   month, 
-  year 
+  year,
+  dateRange 
 }) => {
   // Pobieranie szczegółowej rozpiski kont dla raportu
   const { data: accountsBreakdown, isLoading } = useQuery({
-    queryKey: ['report_accounts_breakdown', reportId, locationId, month, year],
+    queryKey: ['report_accounts_breakdown', reportId, locationId, month, year, dateRange],
     queryFn: async () => {
-      // Oblicz daty na podstawie miesiąca i roku
-      const firstDayOfMonth = new Date(year, month - 1, 1);
-      const lastDayOfMonth = new Date(year, month, 0);
-      
-      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      let dateFrom: string;
+      let dateTo: string;
+
+      // Jeśli podano niestandardowy zakres dat, użyj go
+      if (dateRange) {
+        dateFrom = dateRange.from;
+        dateTo = dateRange.to;
+      } else {
+        // W przeciwnym razie oblicz daty na podstawie miesiąca i roku
+        const firstDayOfMonth = new Date(year, month - 1, 1);
+        const lastDayOfMonth = new Date(year, month, 0);
+        
+        dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+        dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      }
 
       console.log('🔍 Pobieranie rozpiski kont dla okresu:', dateFrom, 'do', dateTo);
 
@@ -136,7 +150,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
       return breakdown;
     },
-    enabled: !!reportId && !!locationId
+    enabled: !!locationId
   });
 
   // Funkcja do kategoryzacji kont - TYLKO konta wpływające na przychody/koszty
@@ -175,7 +189,12 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Szczegółowa rozpiska kont</CardTitle>
+          <CardTitle>
+            {dateRange 
+              ? `Szczegółowa rozpiska kont (${dateRange.from} - ${dateRange.to})`
+              : 'Szczegółowa rozpiska kont'
+            }
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center p-4">
@@ -190,7 +209,12 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Szczegółowa rozpiska kont</CardTitle>
+          <CardTitle>
+            {dateRange 
+              ? `Szczegółowa rozpiska kont (${dateRange.from} - ${dateRange.to})`
+              : 'Szczegółowa rozpiska kont'
+            }
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-omi-gray-500 text-center py-4">

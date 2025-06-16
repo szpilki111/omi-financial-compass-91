@@ -64,14 +64,56 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const { data: financialDetails, isLoading: isLoadingFinancial, refetch: refetchFinancial } = useQuery({
     queryKey: ['report_financial', reportId],
     queryFn: async () => {
-      if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
+      if (!reportId || !report) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
       
       console.log('💰 Pobieranie szczegółów finansowych dla raportu:', reportId);
-      const result = await getReportFinancialDetails(reportId);
+      
+      // Najpierw spróbuj pobrać zapisane szczegóły
+      let result = await getReportFinancialDetails(reportId);
+      
+      // Jeśli to raport w statusie "draft", "submitted" lub "approved", zawsze oblicz i wyświetl sumy automatycznie
+      if (report?.status === 'draft' || report?.status === 'submitted' || report?.status === 'approved') {
+        console.log('🔄 Raport - obliczam sumy automatycznie dla statusu:', report.status);
+        
+        try {
+          // Pobierz dane raportu
+          const { data: reportData, error: reportError } = await supabase
+            .from('reports')
+            .select('month, year, location_id')
+            .eq('id', reportId)
+            .single();
+            
+          if (reportError) throw reportError;
+          
+          // Oblicz daty na podstawie miesiąca i roku
+          const firstDayOfMonth = new Date(reportData.year, reportData.month - 1, 1);
+          const lastDayOfMonth = new Date(reportData.year, reportData.month, 0);
+          
+          const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+          const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+          
+          // Pobierz saldo otwarcia
+          const openingBalance = await getOpeningBalance(reportData.location_id, reportData.month, reportData.year);
+          
+          // Oblicz finansowe podsumowanie
+          const summary = await calculateFinancialSummary(reportData.location_id, dateFrom, dateTo);
+          
+          // Aktualizuj szczegóły w bazie danych tylko jeśli nie są już zapisane lub to raport roboczy
+          if ((result.income === 0 && result.expense === 0 && result.openingBalance === 0) || report?.status === 'draft') {
+            await updateReportDetails(reportId, { ...summary, openingBalance });
+          }
+          
+          result = { ...summary, openingBalance, settlements: 0 };
+          console.log('✅ Automatycznie obliczone szczegóły dla raportu:', result);
+        } catch (error) {
+          console.error('❌ Błąd automatycznego obliczania:', error);
+        }
+      }
+      
       console.log('✅ Szczegóły finansowe pobrane:', result);
       return result;
     },
-    enabled: !!reportId
+    enabled: !!reportId && !!report
   });
 
   // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
@@ -88,7 +130,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     financialDetails.openingBalance !== 0
   );
 
-  // Funkcja do odświeżania sum raportu - przelicza przychody i koszty zgodnie z określonymi kontami
+  // Określ, czy pokazać przycisk "Przelicz sumy" w nagłówku - TYLKO dla raportów roboczych i do poprawy z OBLICZONYMI sumami
+  const shouldShowRecalculateButton = (report?.status === 'draft' || report?.status === 'to_be_corrected') && hasCalculatedSums;
+
+  // Funkcja do odświeżania sum raportu - tylko dla raportów roboczych i do poprawy
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
       if (isReportLocked) {
@@ -159,7 +204,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       setIsRefreshing(false);
     }
   };
-  
+
   // Funkcja do składania raportu z powiadomieniem email
   const handleSubmitReport = async () => {
     if (!reportId) return;
@@ -386,7 +431,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {!isReportLocked && (
+          {/* Pokazuj przycisk "Przelicz sumy" TYLKO dla raportów roboczych i do poprawy z już obliczonymi sumami */}
+          {shouldShowRecalculateButton && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -402,43 +448,15 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               Przelicz sumy
             </Button>
           )}
-          {isReportLocked && (
-            <p className="text-sm text-omi-gray-500 italic">
-              Sumy są zablokowane dla {report.status === 'submitted' ? 'złożonych' : 'zatwierdzonych'} raportów
-            </p>
-          )}
         </div>
 
         {financialDetails && (
-          <>
-            {!hasCalculatedSums && !isReportLocked ? (
-              <div className="text-center py-8">
-                <p className="text-omi-gray-500 mb-4">
-                  Sumy nie zostały jeszcze przeliczone dla tego raportu.
-                </p>
-                <p className="text-sm text-omi-gray-400 mb-4">
-                  Przychody i koszty są obliczane na podstawie kont wynikowych (7xx, 4xx) oraz rozrachunkowych (2xx).<br/>
-                  Saldo otwarcia jest pobierane z poprzedniego miesiąca.<br/>
-                  Kliknij przycisk, aby wygenerować podsumowanie.
-                </p>
-                <Button onClick={handleRefreshSums} disabled={isRefreshing}>
-                  {isRefreshing ? (
-                    <Spinner size="sm" className="mr-2" />
-                  ) : (
-                    <RefreshCcwIcon size={16} className="mr-2" />
-                  )}
-                  Przelicz sumy teraz
-                </Button>
-              </div>
-            ) : (
-              <KpirSummary 
-                income={financialDetails.income}
-                expense={financialDetails.expense}
-                balance={financialDetails.balance}
-                openingBalance={financialDetails.openingBalance}
-              />
-            )}
-          </>
+          <KpirSummary 
+            income={financialDetails.income}
+            expense={financialDetails.expense}
+            balance={financialDetails.balance}
+            openingBalance={financialDetails.openingBalance}
+          />
         )}
       </div>
 
