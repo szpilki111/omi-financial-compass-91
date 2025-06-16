@@ -18,6 +18,7 @@ const ReportsPage = () => {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
+  const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
 
   // Sprawdź parametr URL przy załadowaniu komponentu
@@ -31,6 +32,7 @@ const ReportsPage = () => {
   const handleReportCreated = () => {
     setIsCreatingReport(false);
     setViewMode('list');
+    setRefreshKey(prev => prev + 1); // Odśwież listę raportów
     // Usuń parametr z URL
     navigate('/reports', { replace: true });
     toast({
@@ -103,7 +105,10 @@ const ReportsPage = () => {
       )}
       
       {viewMode === 'list' && (
-        <ReportsList onReportSelect={handleReportSelected} />
+        <ReportsList 
+          onReportSelect={handleReportSelected} 
+          key={refreshKey} // Wymusza odświeżenie listy po utworzeniu raportu
+        />
       )}
     </MainLayout>
   );
