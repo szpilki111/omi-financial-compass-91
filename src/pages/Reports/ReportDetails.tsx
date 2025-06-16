@@ -149,7 +149,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsRefreshing(true);
     
     try {
-      // ... keep existing code (refresh logic remains the same)
       console.log('🔄 Rozpoczynam przeliczanie sum dla raportu:', reportId);
       
       // Pobierz dane raportu
@@ -453,8 +452,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
         {financialDetails && (
           <>
-            {/* Dla wszystkich raportów z obliczonymi sumami LUB dla raportów submitted/approved zawsze pokazuj sumy */}
-            {(hasCalculatedSums || report?.status === 'submitted' || report?.status === 'approved') ? (
+            {/* Dla raportów roboczych ZAWSZE pokazuj podsumowanie - nawet z zerami */}
+            {/* Dla submitted/approved też zawsze pokazuj */}
+            {/* Dla to_be_corrected pokazuj tylko jeśli ma obliczone sumy LUB przycisk do obliczenia */}
+            {(report?.status === 'draft' || report?.status === 'submitted' || report?.status === 'approved' || (report?.status === 'to_be_corrected' && hasCalculatedSums)) ? (
               <KpirSummary 
                 income={financialDetails.income}
                 expense={financialDetails.expense}
