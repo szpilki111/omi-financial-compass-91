@@ -717,6 +717,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_document_with_transactions: {
+        Args: { p_document_id: string }
+        Returns: undefined
+      }
       delete_user_admin: {
         Args: { user_id_to_delete: string }
         Returns: undefined

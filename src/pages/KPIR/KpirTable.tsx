@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Table, 
@@ -53,10 +54,13 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
 
+    // Determine which document number to show (from document or transaction)
+    const documentNumber = transaction.document?.document_number || transaction.document_number || '-';
+
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
         <TableCell>{transaction.formattedDate}</TableCell>
-        <TableCell>{transaction.document_number || '-'}</TableCell>
+        <TableCell>{documentNumber}</TableCell>
         <TableCell>
           <div className="flex items-center">
             {hasSubTransactions && (

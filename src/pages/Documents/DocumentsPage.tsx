@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -110,6 +111,39 @@ const DocumentsPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleDocumentDelete = async (documentId: string) => {
+    if (!confirm('Czy na pewno chcesz usunąć ten dokument? Wszystkie powiązane operacje również zostaną usunięte.')) {
+      return;
+    }
+
+    try {
+      // Call the Postgres function to delete document and related transactions
+      const { error } = await supabase.rpc('delete_document_with_transactions', {
+        p_document_id: documentId
+      });
+
+      if (error) {
+        console.error('Error deleting document:', error);
+        throw error;
+      }
+
+      toast({
+        title: "Sukces",
+        description: "Dokument i powiązane operacje zostały usunięte",
+      });
+
+      // Refresh the documents list
+      refetch();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć dokumentu",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSearchAccounts = () => {
     navigate('/wyszukaj-konta');
   };
@@ -164,6 +198,7 @@ const DocumentsPage = () => {
         <DocumentTable
           documents={filteredDocuments}
           onDocumentClick={handleDocumentClick}
+          onDocumentDelete={handleDocumentDelete}
           isLoading={isLoading}
         />
 
