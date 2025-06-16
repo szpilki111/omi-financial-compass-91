@@ -451,16 +451,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
 
         {financialDetails && (
-          <>
-            {/* Dla raportów roboczych ZAWSZE pokazuj podsumowanie - nawet z zerami */}
-            {/* Dla submitted/approved też zawsze pokazuj */}
-            {/* Dla to_be_corrected pokazuj tylko jeśli ma obliczone sumy LUB przycisk do obliczenia */}
-            {<KpirSummary 
-                income={financialDetails.income}
-                expense={financialDetails.expense}
-                balance={financialDetails.balance}
-                openingBalance={financialDetails.openingBalance}
-              />}
+          <KpirSummary 
+            income={financialDetails.income}
+            expense={financialDetails.expense}
+            balance={financialDetails.balance}
+            openingBalance={financialDetails.openingBalance}
+          />
+        )}
       </div>
 
       {/* Nowa sekcja ze szczegółową rozpiską kont */}
