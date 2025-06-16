@@ -228,7 +228,7 @@ const ReportForm: React.FC = () => {
             <Checkbox
               id="show-year-to-date"
               checked={showYearToDate}
-              onCheckedChange={setShowYearToDate}
+              onCheckedChange={(checked) => setShowYearToDate(checked === true)}
             />
             <label
               htmlFor="show-year-to-date"

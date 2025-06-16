@@ -15,6 +15,15 @@ interface YearToDateSummaryProps {
   isVisible: boolean;
 }
 
+interface AccountBreakdown {
+  account_number: string;
+  account_name: string;
+  account_type: string;
+  total_amount: number;
+  category: string;
+  side: 'debit' | 'credit';
+}
+
 const YearToDateSummary: React.FC<YearToDateSummaryProps> = ({
   locationId,
   currentMonth,
@@ -106,7 +115,7 @@ const YearToDateSummary: React.FC<YearToDateSummaryProps> = ({
         }
       });
 
-      const breakdown = Array.from(accountTotals.values())
+      const breakdown: AccountBreakdown[] = Array.from(accountTotals.values())
         .filter(account => account.category === 'income' || account.category === 'expense')
         .filter(account => Math.abs(account.total_amount) > 0.01)
         .sort((a, b) => a.account_number.localeCompare(b.account_number));
@@ -173,14 +182,14 @@ const YearToDateSummary: React.FC<YearToDateSummaryProps> = ({
   }
 
   // Grupowanie kont według kategorii
-  const groupedAccounts = yearToDateData.breakdown?.reduce((groups, account) => {
+  const groupedAccounts: Record<string, AccountBreakdown[]> = yearToDateData.breakdown?.reduce((groups, account) => {
     const category = account.category;
     if (!groups[category]) {
       groups[category] = [];
     }
     groups[category].push(account);
     return groups;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, AccountBreakdown[]>) || {};
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -193,7 +202,7 @@ const YearToDateSummary: React.FC<YearToDateSummaryProps> = ({
     }
   };
 
-  const getCategoryTotal = (accounts: any[]) => {
+  const getCategoryTotal = (accounts: AccountBreakdown[]) => {
     return accounts.reduce((sum, account) => sum + account.total_amount, 0);
   };
 
@@ -221,7 +230,7 @@ const YearToDateSummary: React.FC<YearToDateSummaryProps> = ({
         {yearToDateData.breakdown && yearToDateData.breakdown.length > 0 && (
           <div>
             <h3 className="text-lg font-semibold mb-3">Szczegółowa rozpiska kont</h3>
-            {Object.entries(groupedAccounts || {}).map(([category, accounts]) => (
+            {Object.entries(groupedAccounts).map(([category, accounts]) => (
               <div key={category} className="mb-6">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="text-md font-semibold">{getCategoryTitle(category)}</h4>
