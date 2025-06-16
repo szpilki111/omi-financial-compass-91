@@ -71,9 +71,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       // Najpierw spróbuj pobrać zapisane szczegóły
       let result = await getReportFinancialDetails(reportId);
       
-      // Jeśli to raport w statusie "draft", zawsze oblicz i wyświetl sumy automatycznie
-      if (report?.status === 'draft') {
-        console.log('🔄 Raport roboczy - obliczam sumy automatycznie');
+      // Jeśli to raport w statusie "draft", "submitted" lub "approved", zawsze oblicz i wyświetl sumy automatycznie
+      if (report?.status === 'draft' || report?.status === 'submitted' || report?.status === 'approved') {
+        console.log('🔄 Raport - obliczam sumy automatycznie dla statusu:', report.status);
         
         try {
           // Pobierz dane raportu
@@ -98,13 +98,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           // Oblicz finansowe podsumowanie
           const summary = await calculateFinancialSummary(reportData.location_id, dateFrom, dateTo);
           
-          // Aktualizuj szczegóły w bazie danych tylko jeśli nie są już zapisane
-          if (result.income === 0 && result.expense === 0 && result.openingBalance === 0) {
+          // Aktualizuj szczegóły w bazie danych tylko jeśli nie są już zapisane lub to raport roboczy
+          if ((result.income === 0 && result.expense === 0 && result.openingBalance === 0) || report?.status === 'draft') {
             await updateReportDetails(reportId, { ...summary, openingBalance });
           }
           
           result = { ...summary, openingBalance, settlements: 0 };
-          console.log('✅ Automatycznie obliczone szczegóły dla raportu roboczego:', result);
+          console.log('✅ Automatycznie obliczone szczegóły dla raportu:', result);
         } catch (error) {
           console.error('❌ Błąd automatycznego obliczania:', error);
         }
@@ -130,7 +130,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     financialDetails.openingBalance !== 0
   );
 
-  // Funkcja do odświeżania sum raportu - przelicza przychody i koszty zgodnie z określonymi kontami
+  // Funkcja do odświeżania sum raportu - tylko dla raportów roboczych i do poprawy
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
       if (isReportLocked) {
@@ -146,6 +146,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsRefreshing(true);
     
     try {
+      // ... keep existing code (refresh logic remains the same)
       console.log('🔄 Rozpoczynam przeliczanie sum dla raportu:', reportId);
       
       // Pobierz dane raportu
@@ -428,7 +429,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {!isReportLocked && !hasCalculatedSums && report?.status !== 'draft' && (
+          {/* Pokazuj przycisk "Przelicz sumy" tylko dla raportów roboczych i do poprawy bez obliczonych sum */}
+          {report?.status === 'draft' && !hasCalculatedSums && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -444,16 +446,28 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               Przelicz sumy
             </Button>
           )}
-          {isReportLocked && (
-            <p className="text-sm text-omi-gray-500 italic">
-              Sumy są zablokowane dla {report.status === 'submitted' ? 'złożonych' : 'zatwierdzonych'} raportów
-            </p>
+          {report?.status === 'to_be_corrected' && !hasCalculatedSums && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshSums} 
+              disabled={isRefreshing}
+              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
+            >
+              {isRefreshing ? (
+                <Spinner size="sm" className="mr-2" />
+              ) : (
+                <RefreshCcwIcon size={16} className="mr-2" />
+              )}
+              Przelicz sumy
+            </Button>
           )}
         </div>
 
         {financialDetails && (
           <>
-            {hasCalculatedSums || report?.status === 'draft' ? (
+            {/* Zawsze pokazuj sumy dla wszystkich raportów z wyjątkiem roboczych bez obliczonych sum */}
+            {(hasCalculatedSums || report?.status !== 'draft') ? (
               <KpirSummary 
                 income={financialDetails.income}
                 expense={financialDetails.expense}
