@@ -18,12 +18,12 @@ export const useStyleSettings = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error || !data) {
-        // If no settings exist yet, return default
+      if (error) {
+        console.error('Error fetching style settings:', error);
         return { windows98_style: false };
       }
 
-      return data;
+      return data || { windows98_style: false };
     },
     enabled: !!user?.id,
     staleTime: 300000, // 5 minutes

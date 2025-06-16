@@ -27,30 +27,60 @@ const SettingsPage = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error || !data) {
-        // If no settings exist yet, return default
+      if (error) {
+        console.error('Error fetching settings:', error);
         return { windows98_style: false };
       }
 
-      return data;
+      return data || { windows98_style: false };
     },
     enabled: !!user?.id
   });
 
-  // Mutation to save settings using upsert
+  // Mutation to save settings using upsert with better error handling
   const updateSettingsMutation = useMutation({
     mutationFn: async (newSettings: { windows98_style: boolean }) => {
       if (!user?.id) throw new Error('Brak użytkownika');
 
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          windows98_style: newSettings.windows98_style,
-          updated_at: new Date().toISOString()
-        });
+      console.log('Saving settings:', newSettings, 'for user:', user.id);
 
-      if (error) throw error;
+      // First, try to get existing settings
+      const { data: existingSettings } = await supabase
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingSettings) {
+        // Update existing record
+        const { error } = await supabase
+          .from('user_settings')
+          .update({
+            windows98_style: newSettings.windows98_style,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from('user_settings')
+          .insert({
+            user_id: user.id,
+            windows98_style: newSettings.windows98_style,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-settings'] });
@@ -65,13 +95,14 @@ const SettingsPage = () => {
       console.error('Error updating settings:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się zapisać ustawień",
+        description: "Nie udało się zapisać ustawień. Spróbuj ponownie.",
         variant: "destructive"
       });
     }
   });
 
   const handleStyleToggle = (checked: boolean) => {
+    console.log('Style toggle changed to:', checked);
     updateSettingsMutation.mutate({ windows98_style: checked });
   };
 
