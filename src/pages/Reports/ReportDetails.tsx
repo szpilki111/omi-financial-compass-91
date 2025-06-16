@@ -130,6 +130,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     financialDetails.openingBalance !== 0
   );
 
+  // Określ, czy pokazać przycisk "Przelicz sumy" - TYLKO dla raportów roboczych i do poprawy BEZ obliczonych sum
+  const shouldShowRecalculateButton = (report?.status === 'draft' || report?.status === 'to_be_corrected') && !hasCalculatedSums;
+
   // Funkcja do odświeżania sum raportu - tylko dla raportów roboczych i do poprawy
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
@@ -429,24 +432,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {/* Pokazuj przycisk "Przelicz sumy" tylko dla raportów roboczych i do poprawy bez obliczonych sum */}
-          {report?.status === 'draft' && !hasCalculatedSums && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRefreshSums} 
-              disabled={isRefreshing}
-              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
-            >
-              {isRefreshing ? (
-                <Spinner size="sm" className="mr-2" />
-              ) : (
-                <RefreshCcwIcon size={16} className="mr-2" />
-              )}
-              Przelicz sumy
-            </Button>
-          )}
-          {report?.status === 'to_be_corrected' && !hasCalculatedSums && (
+          {/* Pokazuj przycisk "Przelicz sumy" TYLKO dla raportów roboczych i do poprawy bez obliczonych sum */}
+          {shouldShowRecalculateButton && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -466,8 +453,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
         {financialDetails && (
           <>
-            {/* Zawsze pokazuj sumy dla wszystkich raportów z wyjątkiem roboczych bez obliczonych sum */}
-            {(hasCalculatedSums || report?.status !== 'draft') ? (
+            {/* Dla wszystkich raportów z obliczonymi sumami LUB dla raportów submitted/approved zawsze pokazuj sumy */}
+            {(hasCalculatedSums || report?.status === 'submitted' || report?.status === 'approved') ? (
               <KpirSummary 
                 income={financialDetails.income}
                 expense={financialDetails.expense}
