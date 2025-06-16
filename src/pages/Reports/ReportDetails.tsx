@@ -130,8 +130,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     financialDetails.openingBalance !== 0
   );
 
-  // Określ, czy pokazać przycisk "Przelicz sumy" - TYLKO dla raportów roboczych i do poprawy BEZ obliczonych sum
-  const shouldShowRecalculateButton = (report?.status === 'draft' || report?.status === 'to_be_corrected') && !hasCalculatedSums;
+  // Określ, czy pokazać przycisk "Przelicz sumy" w nagłówku - TYLKO dla raportów roboczych i do poprawy z OBLICZONYMI sumami
+  const shouldShowRecalculateButton = (report?.status === 'draft' || report?.status === 'to_be_corrected') && hasCalculatedSums;
 
   // Funkcja do odświeżania sum raportu - tylko dla raportów roboczych i do poprawy
   const handleRefreshSums = async () => {
@@ -432,7 +432,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {/* Pokazuj przycisk "Przelicz sumy" TYLKO dla raportów roboczych i do poprawy bez obliczonych sum */}
+          {/* Pokazuj przycisk "Przelicz sumy" TYLKO dla raportów roboczych i do poprawy z już obliczonymi sumami */}
           {shouldShowRecalculateButton && (
             <Button 
               variant="outline" 
