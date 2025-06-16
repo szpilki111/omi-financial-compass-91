@@ -181,7 +181,8 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
   };
 
   const handleReportDeleted = () => {
-    refetch(); // Use refetch instead of refreshKey
+    console.log('🔄 Raport został usunięty - odświeżanie listy');
+    refetch();
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
@@ -329,6 +330,9 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
                                 variant="ghost" 
                                 size="sm"
                                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => {
+                                  console.log('🗑️ Kliknięto przycisk usuwania dla raportu:', report.id, report.title);
+                                }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

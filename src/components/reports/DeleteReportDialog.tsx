@@ -1,7 +1,6 @@
 
 import React from 'react';
 import {
-  AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
@@ -10,8 +9,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -101,31 +98,29 @@ const DeleteReportDialog: React.FC<DeleteReportDialogProps> = ({
   };
 
   return (
-    <AlertDialog>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Usuń raport</AlertDialogTitle>
-          <AlertDialogDescription>
-            Czy na pewno chcesz usunąć raport "{reportTitle}"?
-            <br />
-            <br />
-            Ta operacja jest nieodwracalna i usunie wszystkie dane związane z tym raportem.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>
-            Anuluj
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700"
-          >
-            {isDeleting ? 'Usuwanie...' : 'Usuń raport'}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Usuń raport</AlertDialogTitle>
+        <AlertDialogDescription>
+          Czy na pewno chcesz usunąć raport "{reportTitle}"?
+          <br />
+          <br />
+          Ta operacja jest nieodwracalna i usunie wszystkie dane związane z tym raportem.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={isDeleting}>
+          Anuluj
+        </AlertDialogCancel>
+        <AlertDialogAction
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="bg-red-600 hover:bg-red-700"
+        >
+          {isDeleting ? 'Usuwanie...' : 'Usuń raport'}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
   );
 };
 
