@@ -327,7 +327,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <p className="text-xl font-bold text-blue-600">
                   {formatCurrency(financialSummary.openingBalance)}
                 </p>
-                <p className="text-xs text-gray-500">Saldo z poprzedniego miesiąca</p>
               </div>
               
               <div className="text-center">
@@ -335,7 +334,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <p className="text-xl font-bold text-green-600">
                   {formatCurrency(financialSummary.income)}
                 </p>
-                <p className="text-xs text-gray-500">Suma wszystkich przychodów (konta 7xx i 200 po stronie kredytu)</p>
               </div>
               
               <div className="text-center">
@@ -343,7 +341,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <p className="text-xl font-bold text-red-600">
                   {formatCurrency(financialSummary.expense)}
                 </p>
-                <p className="text-xs text-gray-500">Suma wszystkich kosztów (konta 4xx i 200 po stronie debetu)</p>
               </div>
               
               <div className="text-center">
@@ -351,7 +348,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <p className={`text-xl font-bold ${financialSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(financialSummary.openingBalance + financialSummary.balance)}
                 </p>
-                <p className="text-xs text-gray-500">Otwarcie + Przychody - Rozchody</p>
               </div>
             </div>
           )}
