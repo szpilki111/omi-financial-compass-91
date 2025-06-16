@@ -11,10 +11,6 @@ export const calculateFinancialSummary = async (
   dateTo?: string
 ) => {
   try {
-    console.log("💰 ROZPOCZĘCIE OBLICZANIA PODSUMOWANIA FINANSOWEGO");
-    console.log(`📍 Lokalizacja: ${locationId}`);
-    console.log(`📅 Okres: ${dateFrom} - ${dateTo}`);
-
     let query = supabase
       .from('transactions')
       .select(`
@@ -56,8 +52,6 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
-    console.log(`📊 Znaleziono ${data?.length || 0} transakcji`);
-
     // Pobierz konta TYLKO przypisane do lokalizacji
     let accountsQuery = supabase
       .from('accounts')
@@ -79,8 +73,6 @@ export const calculateFinancialSummary = async (
       console.error("❌ Błąd pobierania kont:", accountsError);
       throw accountsError;
     }
-
-    console.log(`🏦 Znaleziono ${accounts?.length || 0} kont`);
 
     const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
 
@@ -112,11 +104,8 @@ export const calculateFinancialSummary = async (
     let expense = 0;
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
-      console.log("⚠️ Brak transakcji do przetworzenia");
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
-
-    console.log('🔍 ANALIZA TRANSAKCJI:');
 
     // Analiza każdej transakcji
     formattedTransactions.forEach(transaction => {
@@ -133,8 +122,6 @@ export const calculateFinancialSummary = async (
         } else {
           transactionIncome = transaction.amount;
         }
-        
-        console.log(`📈 PRZYCHÓD: ${creditAccountNumber} (MA) = ${transactionIncome} zł`);
       }
 
       // KOSZTY: konta 4xx lub 200 po stronie debetu (WN)
@@ -144,19 +131,12 @@ export const calculateFinancialSummary = async (
         } else {
           transactionExpense = transaction.amount;
         }
-        
-        console.log(`📉 KOSZT: ${debitAccountNumber} (WN) = ${transactionExpense} zł`);
       }
 
       // Dodaj do sum całkowitych
       income += transactionIncome;
       expense += transactionExpense;
     });
-
-    console.log('💰 PODSUMOWANIE KOŃCOWE:');
-    console.log(`💵 Przychody: ${income} zł`);
-    console.log(`💸 Koszty: ${expense} zł`);
-    console.log(`📊 Bilans: ${income - expense} zł`);
 
     const balance = income - expense;
 
@@ -181,11 +161,8 @@ export const getOpeningBalance = async (
   year: number
 ) => {
   try {
-    console.log(`🔍 Pobieranie salda otwarcia: lokalizacja=${locationId}, miesiąc=${month}, rok=${year}`);
-    
     // Jeśli to styczeń, saldo otwarcia to 0
     if (month === 1) {
-      console.log("📅 Styczeń - saldo otwarcia = 0");
       return 0;
     }
     
@@ -193,8 +170,6 @@ export const getOpeningBalance = async (
     const previousMonth = month - 1;
     const previousYear = previousMonth === 0 ? year - 1 : year;
     const actualPreviousMonth = previousMonth === 0 ? 12 : previousMonth;
-    
-    console.log(`🔙 Szukam raportu za: ${actualPreviousMonth}/${previousYear}`);
     
     // Sprawdź czy istnieje raport z poprzedniego miesiąca
     const { data: previousReport, error } = await supabase
@@ -221,11 +196,9 @@ export const getOpeningBalance = async (
       const previousBalance = previousReport.report_details.balance || 0;
       const openingBalance = previousOpeningBalance + previousBalance;
       
-      console.log(`✅ Znaleziono poprzedni raport: otwarcie=${previousOpeningBalance}, bilans=${previousBalance}, suma=${openingBalance}`);
       return openingBalance;
     }
     
-    console.log("⚠️ Brak poprzedniego raportu - saldo otwarcia = 0");
     return 0;
   } catch (error) {
     console.error('❌ Błąd podczas pobierania salda otwarcia:', error);
@@ -238,8 +211,6 @@ export const getOpeningBalance = async (
  */
 export const getReportFinancialDetails = async (reportId: string) => {
   try {
-    console.log(`🔍 Pobieranie szczegółów finansowych dla raportu: ${reportId}`);
-    
     const { data: reportDetails, error: reportDetailsError } = await supabase
       .from('report_details')
       .select('*')
@@ -252,11 +223,8 @@ export const getReportFinancialDetails = async (reportId: string) => {
     }
     
     if (!reportDetails) {
-      console.log('⚠️ Nie znaleziono szczegółów raportu - zwracam zerowe wartości');
       return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
     }
-    
-    console.log('✅ Znaleziono szczegóły raportu:', reportDetails);
     
     return {
       income: Number(reportDetails.income_total) || 0,
@@ -279,8 +247,6 @@ export const updateReportDetails = async (
   financialSummary: { income: number, expense: number, balance: number, openingBalance?: number }
 ) => {
   try {
-    console.log(`💾 Aktualizacja szczegółów raportu ${reportId}:`, financialSummary);
-    
     // Sprawdź, czy już istnieją szczegóły dla tego raportu
     const { data: existingDetails } = await supabase
       .from('report_details')
@@ -288,8 +254,6 @@ export const updateReportDetails = async (
       .eq('report_id', reportId);
       
     if (existingDetails && existingDetails.length > 0) {
-      console.log("🔄 Aktualizuję istniejące szczegóły");
-      
       const updateData: any = {
         income_total: financialSummary.income,
         expense_total: financialSummary.expense,
@@ -311,11 +275,8 @@ export const updateReportDetails = async (
         throw error;
       }
       
-      console.log('✅ Szczegóły raportu zaktualizowane');
       return data;
     } else {
-      console.log("🆕 Tworzę nowe szczegóły");
-      
       const insertData: any = {
         report_id: reportId,
         income_total: financialSummary.income,
@@ -336,7 +297,6 @@ export const updateReportDetails = async (
         throw error;
       }
       
-      console.log('✅ Szczegóły raportu utworzone');
       return data;
     }
   } catch (error) {
@@ -355,8 +315,6 @@ export const calculateAndSaveReportSummary = async (
   year: number
 ) => {
   try {
-    console.log(`🔢 Automatyczne obliczanie podsumowania dla raportu ${reportId}`);
-    
     // Oblicz daty na podstawie miesiąca i roku
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -364,15 +322,11 @@ export const calculateAndSaveReportSummary = async (
     const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
     const dateTo = lastDayOfMonth.toISOString().split('T')[0];
     
-    console.log(`📅 Okres obliczeniowy: ${dateFrom} - ${dateTo}`);
-    
     // Pobierz saldo otwarcia
     const openingBalance = await getOpeningBalance(locationId, month, year);
-    console.log(`💰 Saldo otwarcia: ${openingBalance}`);
     
     // Oblicz finansowe podsumowanie
     const summary = await calculateFinancialSummary(locationId, dateFrom, dateTo);
-    console.log(`📊 Obliczone podsumowanie:`, summary);
     
     // Zapisz szczegóły raportu w bazie danych wraz z saldem otwarcia
     await updateReportDetails(reportId, {
@@ -380,7 +334,6 @@ export const calculateAndSaveReportSummary = async (
       openingBalance
     });
     
-    console.log('✅ Podsumowanie finansowe zapisane pomyślnie');
     return { ...summary, openingBalance };
   } catch (error) {
     console.error('❌ Błąd podczas automatycznego obliczania podsumowania:', error);
