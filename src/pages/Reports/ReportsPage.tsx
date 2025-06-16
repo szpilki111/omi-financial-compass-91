@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -32,7 +31,7 @@ const ReportsPage = () => {
   const handleReportCreated = () => {
     setIsCreatingReport(false);
     setViewMode('list');
-    setRefreshKey(prev => prev + 1); // Odśwież listę raportów
+    setRefreshKey(prev => prev + 1); // Trigger refresh of reports list
     // Usuń parametr z URL
     navigate('/reports', { replace: true });
     toast({
@@ -107,7 +106,7 @@ const ReportsPage = () => {
       {viewMode === 'list' && (
         <ReportsList 
           onReportSelect={handleReportSelected} 
-          key={refreshKey} // Wymusza odświeżenie listy po utworzeniu raportu
+          refreshKey={refreshKey}
         />
       )}
     </MainLayout>

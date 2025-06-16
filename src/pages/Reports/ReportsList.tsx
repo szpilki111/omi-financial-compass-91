@@ -27,6 +27,7 @@ import DeleteReportDialog from '@/components/reports/DeleteReportDialog';
 
 interface ReportsListProps {
   onReportSelect: (reportId: string) => void;
+  refreshKey?: number;
 }
 
 const getStatusBadgeProps = (status: Report['status']) => {
@@ -69,12 +70,11 @@ const monthNames = [
   'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'
 ];
 
-const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
+const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 0 }) => {
   const [searchMonth, setSearchMonth] = useState<string>('all');
   const [searchYear, setSearchYear] = useState<string>('all');
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const { data: reports, isLoading, error } = useQuery({
+  const { data: reports, isLoading, error, refetch } = useQuery({
     queryKey: ['reports', refreshKey],
     queryFn: async () => {
       const { data: userRole } = await supabase.rpc('get_user_role');
@@ -181,7 +181,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   };
 
   const handleReportDeleted = () => {
-    setRefreshKey(prev => prev + 1); // Odśwież listę raportów
+    refetch(); // Use refetch instead of refreshKey
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
