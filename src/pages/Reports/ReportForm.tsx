@@ -1,385 +1,290 @@
+
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import { calculateAndSaveReportSummary } from '@/utils/financeUtils';
+import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
+import YearToDateSummary from '@/components/reports/YearToDateSummary';
 
-const reportFormSchema = z.object({
-  month: z.string().min(1, 'Miesiąc jest wymagany'),
-  year: z.string().min(1, 'Rok jest wymagany'),
-  showFromYearStart: z.boolean().default(false)
-});
-
-interface ReportFormProps {
-  reportId?: string;
-  onSuccess?: () => void;
-  onCancel?: () => void;
-}
-
-const months = [
-  { value: '1', label: 'Styczeń' },
-  { value: '2', label: 'Luty' },
-  { value: '3', label: 'Marzec' },
-  { value: '4', label: 'Kwiecień' },
-  { value: '5', label: 'Maj' },
-  { value: '6', label: 'Czerwiec' },
-  { value: '7', label: 'Lipiec' },
-  { value: '8', label: 'Sierpień' },
-  { value: '9', label: 'Wrzesień' },
-  { value: '10', label: 'Październik' },
-  { value: '11', label: 'Listopad' },
-  { value: '12', label: 'Grudzień' }
-];
-
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
-
-const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
+const ReportForm: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const [selectedMonth, setSelectedMonth] = useState<number>();
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCalculating, setIsCalculating] = useState(false);
+  const [showYearToDate, setShowYearToDate] = useState(false);
 
-  const form = useForm<z.infer<typeof reportFormSchema>>({
-    resolver: zodResolver(reportFormSchema),
-    defaultValues: {
-      month: new Date().getMonth() + 1 + '',
-      year: new Date().getFullYear() + '',
-      showFromYearStart: false
-    }
-  });
+  // Pobieranie lokalizacji użytkownika
+  const { data: userLocation, isLoading: isLoadingLocation } = useQuery({
+    queryKey: ['user_location', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
 
-  const [selectedMonth, selectedYear, showFromYearStart] = form.watch(['month', 'year', 'showFromYearStart']);
-  
-  const [financialSummary, setFinancialSummary] = useState({
-    income: 0,
-    expense: 0,
-    balance: 0,
-    openingBalance: 0
-  });
-
-  // Oblicz podsumowanie finansowe na podstawie wybranych parametrów
-  React.useEffect(() => {
-    const calculatePreview = async () => {
-      if (!selectedMonth || !selectedYear || !user?.location) return;
-      
-      setIsCalculating(true);
-      try {
-        const month = parseInt(selectedMonth);
-        const year = parseInt(selectedYear);
-        
-        // Pobierz saldo otwarcia
-        const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
-        const openingBalance = await getOpeningBalance(user.location, month, year);
-        
-        // Oblicz daty
-        const firstDayOfMonth = new Date(year, month - 1, 1);
-        const lastDayOfMonth = new Date(year, month, 0);
-        const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-        const dateTo = lastDayOfMonth.toISOString().split('T')[0];
-        
-        // Oblicz podsumowanie finansowe
-        const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
-        
-        setFinancialSummary({
-          ...summary,
-          openingBalance
-        });
-      } catch (error) {
-        console.error('Błąd podczas obliczania podglądu:', error);
-        setFinancialSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
-      } finally {
-        setIsCalculating(false);
-      }
-    };
-
-    calculatePreview();
-  }, [selectedMonth, selectedYear, user?.location]);
-
-  const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
-    if (!user?.location) {
-      toast({
-        title: "Błąd",
-        description: "Nie można określić lokalizacji użytkownika.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    console.log('🚀 ROZPOCZĘCIE TWORZENIA RAPORTU');
-    console.log('📝 Dane formularza:', values);
-
-    try {
-      const month = parseInt(values.month);
-      const year = parseInt(values.year);
-      
-      // Sprawdź czy raport już istnieje
-      console.log('🔍 Sprawdzanie czy raport już istnieje...');
-      const { data: existingReport, error: checkError } = await supabase
-        .from('reports')
-        .select('id, title')
-        .eq('location_id', user.location)
-        .eq('month', month)
-        .eq('year', year)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('❌ Błąd sprawdzania istnienia raportu:', checkError);
-        throw checkError;
-      }
-
-      if (existingReport) {
-        console.log('⚠️ Raport już istnieje:', existingReport);
-        toast({
-          title: "Raport już istnieje",
-          description: `Raport za ${months.find(m => m.value === values.month)?.label} ${values.year} już został utworzony.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Pobierz nazwę lokalizacji
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('name')
-        .eq('id', user.location)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id, locations(id, name)')
+        .eq('id', user.id)
         .single();
 
-      if (locationError) {
-        console.error('❌ Błąd pobierania danych lokalizacji:', locationError);
-        throw locationError;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id
+  });
+
+  // Sprawdzanie czy raport już istnieje
+  const { data: existingReport } = useQuery({
+    queryKey: ['existing_report', userLocation?.location_id, selectedMonth, selectedYear],
+    queryFn: async () => {
+      if (!userLocation?.location_id || !selectedMonth || !selectedYear) return null;
+
+      const { data, error } = await supabase
+        .from('reports')
+        .select('id, status')
+        .eq('location_id', userLocation.location_id)
+        .eq('month', selectedMonth)
+        .eq('year', selectedYear)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userLocation?.location_id && !!selectedMonth && !!selectedYear
+  });
+
+  // Mutacja do tworzenia raportu
+  const createReportMutation = useMutation({
+    mutationFn: async () => {
+      if (!userLocation?.location_id || !selectedMonth || !selectedYear) {
+        throw new Error('Brak wymaganych danych');
       }
 
-      // Utwórz nowy raport
-      console.log('✨ Tworzenie nowego raportu...');
-      const reportTitle = `Raport za ${months.find(m => m.value === values.month)?.label} ${values.year} - ${locationData?.name || 'Nieznana lokalizacja'}`;
-      const period = `${months.find(m => m.value === values.month)?.label} ${values.year}`;
+      const monthNames = [
+        'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+        'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'
+      ];
 
-      const { data: newReport, error: createError } = await supabase
+      const title = `Raport ${monthNames[selectedMonth - 1]} ${selectedYear}`;
+      const period = `${selectedMonth.toString().padStart(2, '0')}.${selectedYear}`;
+
+      // Utwórz raport
+      const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
-          title: reportTitle,
-          period: period,
-          month: month,
-          year: year,
-          location_id: user.location,
-          status: 'draft'
+          title,
+          period,
+          month: selectedMonth,
+          year: selectedYear,
+          status: 'draft',
+          location_id: userLocation.location_id,
+          report_type: 'standard'
         })
         .select()
         .single();
 
-      if (createError) {
-        console.error('❌ Błąd tworzenia raportu:', createError);
-        throw createError;
-      }
+      if (reportError) throw reportError;
 
-      console.log('✅ Raport utworzony:', newReport);
+      // Oblicz i zapisz automatycznie podsumowanie finansowe
+      await calculateAndSaveReportSummary(
+        report.id,
+        userLocation.location_id,
+        selectedMonth,
+        selectedYear
+      );
 
-      // Automatycznie oblicz i zapisz podsumowanie finansowe
-      console.log('💰 Obliczanie podsumowania finansowego...');
-      try {
-        const financialResult = await calculateAndSaveReportSummary(
-          newReport.id,
-          user.location,
-          month,
-          year
-        );
-        console.log('✅ Podsumowanie finansowe obliczone:', financialResult);
-      } catch (summaryError) {
-        console.warn('⚠️ Błąd obliczania podsumowania finansowego:', summaryError);
-        // Nie przerywamy procesu - raport jest już utworzony
-      }
-
-      console.log('🎉 RAPORT UTWORZONY POMYŚLNIE!');
-      
+      return report;
+    },
+    onSuccess: (report) => {
       toast({
-        title: "Sukces",
-        description: "Raport został utworzony z obliczonymi sumami finansowymi!",
-        variant: "default",
+        title: "Raport utworzony",
+        description: `Raport ${report.title} został utworzony pomyślnie.`,
       });
-
-      // Przekieruj do widoku szczegółów raportu
-      console.log('🔄 Przekierowanie do szczegółów raportu...');
-      navigate(`/reports/${newReport.id}`, { replace: true });
       
-      if (onSuccess) {
-        onSuccess();
-      }
-
-    } catch (error) {
-      console.error('❌ BŁĄD PODCZAS TWORZENIA RAPORTU:', error);
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      navigate(`/reports/${report.id}`);
+    },
+    onError: (error) => {
+      console.error('Błąd podczas tworzenia raportu:', error);
       toast({
         title: "Błąd",
         description: "Wystąpił problem podczas tworzenia raportu.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
+  });
+
+  const handleSubmit = () => {
+    setIsSubmitting(true);
+    createReportMutation.mutate();
   };
 
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
-  };
+  // Generowanie opcji miesięcy
+  const months = [
+    { value: 1, label: 'Styczeń' },
+    { value: 2, label: 'Luty' },
+    { value: 3, label: 'Marzec' },
+    { value: 4, label: 'Kwiecień' },
+    { value: 5, label: 'Maj' },
+    { value: 6, label: 'Czerwiec' },
+    { value: 7, label: 'Lipiec' },
+    { value: 8, label: 'Sierpień' },
+    { value: 9, label: 'Wrzesień' },
+    { value: 10, label: 'Październik' },
+    { value: 11, label: 'Listopad' },
+    { value: 12, label: 'Grudzień' }
+  ];
+
+  // Generowanie opcji lat (obecny rok i kilka poprzednich)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+  if (isLoadingLocation) {
+    return (
+      <div className="flex justify-center p-8">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!userLocation?.locations?.name) {
+    return (
+      <div className="p-8">
+        <h2 className="text-2xl font-bold mb-4">Brak uprawnień</h2>
+        <p>Nie masz przypisanej lokalizacji. Skontaktuj się z administratorem.</p>
+      </div>
+    );
+  }
+
+  const canCreateReport = selectedMonth && selectedYear && !existingReport;
+  const reportExists = existingReport && existingReport.status;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="month"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Miesiąc</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz miesiąc, za który tworzysz raport" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {months.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Nowy raport</h1>
+        <p className="text-omi-gray-500 mt-2">
+          Lokalizacja: {userLocation.locations.name}
+        </p>
+      </div>
 
-          <FormField
-            control={form.control}
-            name="year"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Rok</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz rok, za który tworzysz raport" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="showFromYearStart"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>
-                  Pokaż podsumowanie od początku roku
-                </FormLabel>
-                <p className="text-sm text-muted-foreground">
-                  Zaznacz, aby zobaczyć dane finansowe za cały rok (tylko podgląd, bez zapisywania)
-                </p>
-              </div>
-            </FormItem>
-          )}
-        />
-
-        {/* Podgląd podsumowania finansowego */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4">Podsumowanie finansowe za wybrany miesiąc</h3>
-          
-          {isCalculating ? (
-            <div className="flex items-center justify-center py-8">
-              <Spinner size="sm" className="mr-2" />
-              <span>Obliczanie podsumowania...</span>
+      <Card>
+        <CardHeader>
+          <CardTitle>Szczegóły raportu</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Miesiąc</label>
+              <Select
+                value={selectedMonth?.toString()}
+                onValueChange={(value) => setSelectedMonth(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Wybierz miesiąc" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value.toString()}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <h4 className="font-medium text-gray-600 mb-1">Otwarcie miesiąca</h4>
-                <p className="text-xl font-bold text-blue-600">
-                  {formatCurrency(financialSummary.openingBalance)}
-                </p>
-                <p className="text-xs text-gray-500">Saldo z poprzedniego miesiąca</p>
-              </div>
-              
-              <div className="text-center">
-                <h4 className="font-medium text-gray-600 mb-1">Przychody</h4>
-                <p className="text-xl font-bold text-green-600">
-                  {formatCurrency(financialSummary.income)}
-                </p>
-                <p className="text-xs text-gray-500">Suma wszystkich przychodów (konta 7xx i 200 po stronie kredytu)</p>
-              </div>
-              
-              <div className="text-center">
-                <h4 className="font-medium text-gray-600 mb-1">Rozchody</h4>
-                <p className="text-xl font-bold text-red-600">
-                  {formatCurrency(financialSummary.expense)}
-                </p>
-                <p className="text-xs text-gray-500">Suma wszystkich kosztów (konta 4xx i 200 po stronie debetu)</p>
-              </div>
-              
-              <div className="text-center">
-                <h4 className="font-medium text-gray-600 mb-1">Saldo końcowe</h4>
-                <p className={`text-xl font-bold ${financialSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(financialSummary.openingBalance + financialSummary.balance)}
-                </p>
-                <p className="text-xs text-gray-500">Otwarcie + Przychody - Rozchody</p>
-              </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Rok</label>
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Wybierz rok" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Checkbox do pokazywania podsumowania od początku roku */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="show-year-to-date"
+              checked={showYearToDate}
+              onCheckedChange={setShowYearToDate}
+            />
+            <label
+              htmlFor="show-year-to-date"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Pokaż podsumowanie od początku roku
+            </label>
+          </div>
+
+          {reportExists && (
+            <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+              <p className="text-orange-800">
+                Raport za wybrany okres już istnieje. Status: <strong>{reportExists}</strong>
+              </p>
             </div>
           )}
-          
-          <p className="text-sm text-gray-600 mt-4">
-            Te wartości zostaną automatycznie zapisane w raporcie po jego utworzeniu.
-          </p>
-        </div>
 
-        <div className="flex justify-end space-x-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSubmit}
+              disabled={!canCreateReport || isSubmitting}
+            >
+              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+              Utwórz raport
+            </Button>
+            
+            <Button
+              variant="outline"
+              onClick={() => navigate('/reports')}
+            >
               Anuluj
             </Button>
-          )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Spinner size="sm" className="mr-2" />
-                Tworzenie raportu...
-              </>
-            ) : (
-              'Utwórz raport'
-            )}
-          </Button>
-        </div>
-      </form>
-    </Form>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Szczegółowa rozpiska kont dla wybranego miesiąca */}
+      {selectedMonth && selectedYear && userLocation?.location_id && (
+        <ReportAccountsBreakdown
+          reportId=""
+          locationId={userLocation.location_id}
+          month={selectedMonth}
+          year={selectedYear}
+        />
+      )}
+
+      {/* Podsumowanie od początku roku */}
+      {selectedMonth && selectedYear && userLocation?.location_id && (
+        <YearToDateSummary
+          locationId={userLocation.location_id}
+          currentMonth={selectedMonth}
+          currentYear={selectedYear}
+          isVisible={showYearToDate}
+        />
+      )}
+    </div>
   );
 };
 

@@ -16,7 +16,7 @@ interface AccountBreakdown {
 }
 
 interface ReportAccountsBreakdownProps {
-  reportId: string;
+  reportId?: string; // Opcjonalne dla formularza tworzenia raportu
   locationId: string;
   month: number;
   year: number;
@@ -30,7 +30,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 }) => {
   // Pobieranie szczegółowej rozpiski kont dla raportu
   const { data: accountsBreakdown, isLoading } = useQuery({
-    queryKey: ['report_accounts_breakdown', reportId, locationId, month, year],
+    queryKey: ['report_accounts_breakdown', reportId || 'preview', locationId, month, year],
     queryFn: async () => {
       // Oblicz daty na podstawie miesiąca i roku
       const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -136,7 +136,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
       return breakdown;
     },
-    enabled: !!reportId && !!locationId
+    enabled: !!locationId
   });
 
   // Funkcja do kategoryzacji kont - TYLKO konta wpływające na przychody/koszty
