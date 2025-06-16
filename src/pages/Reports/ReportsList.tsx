@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,8 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/Spinner';
-import { Search, X } from 'lucide-react';
+import { Search, X, Trash2 } from 'lucide-react';
+import DeleteReportDialog from '@/components/reports/DeleteReportDialog';
 
 interface ReportsListProps {
   onReportSelect: (reportId: string) => void;
@@ -68,9 +72,10 @@ const monthNames = [
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   const [searchMonth, setSearchMonth] = useState<string>('all');
   const [searchYear, setSearchYear] = useState<string>('all');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const { data: reports, isLoading, error } = useQuery({
-    queryKey: ['reports'],
+    queryKey: ['reports', refreshKey],
     queryFn: async () => {
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
@@ -173,6 +178,10 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
   const clearFilters = () => {
     setSearchMonth('all');
     setSearchYear('all');
+  };
+
+  const handleReportDeleted = () => {
+    setRefreshKey(prev => prev + 1); // Odśwież listę raportów
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Spinner size="lg" /></div>;
@@ -309,9 +318,29 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect }) => {
                       {report.submitted_by_profile?.name || '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
-                        Szczegóły
-                      </Button>
+                      <div className="flex items-center gap-2 justify-end">
+                        <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
+                          Szczegóły
+                        </Button>
+                        {report.status === 'draft' && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <DeleteReportDialog
+                              reportId={report.id}
+                              reportTitle={report.title}
+                              onReportDeleted={handleReportDeleted}
+                            />
+                          </AlertDialog>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
