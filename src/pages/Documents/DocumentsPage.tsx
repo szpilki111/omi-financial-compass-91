@@ -52,7 +52,7 @@ const DocumentsPage = () => {
           locations(name),
           profiles!documents_user_id_fkey(name)
         `)
-        .order('document_date', { ascending: false });
+        .order('document_number', { ascending: false }); // Sortowanie od najnowszych
 
       if (error) {
         console.error('Error fetching documents:', error);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -18,6 +17,7 @@ const ReportsPage = () => {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit' | 'view'>('list');
+  const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
 
   // Sprawdź parametr URL przy załadowaniu komponentu
@@ -31,6 +31,7 @@ const ReportsPage = () => {
   const handleReportCreated = () => {
     setIsCreatingReport(false);
     setViewMode('list');
+    setRefreshKey(prev => prev + 1); // Trigger refresh of reports list
     // Usuń parametr z URL
     navigate('/reports', { replace: true });
     toast({
@@ -103,7 +104,10 @@ const ReportsPage = () => {
       )}
       
       {viewMode === 'list' && (
-        <ReportsList onReportSelect={handleReportSelected} />
+        <ReportsList 
+          onReportSelect={handleReportSelected} 
+          refreshKey={refreshKey}
+        />
       )}
     </MainLayout>
   );
