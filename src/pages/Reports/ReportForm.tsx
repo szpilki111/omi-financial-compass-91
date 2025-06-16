@@ -29,12 +29,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import {
   Card,
   CardContent,
   CardHeader,
@@ -63,6 +57,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDraft, setIsDraft] = useState(true);
   const [showYearlyView, setShowYearlyView] = useState(false);
+  const [creationProgress, setCreationProgress] = useState('');
 
   // Nowy stan dla podsumowania finansowego
   const [financialSummary, setFinancialSummary] = useState({
@@ -76,7 +71,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     income: 0,
     expense: 0,
     balance: 0,
-    openingBalance: 0  // Nowe pole dla salda otwarcia roku
+    openingBalance: 0
   });
 
   // Inicjalizacja formularza
@@ -169,7 +164,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     return () => subscription.unsubscribe();
   }, [form.watch, user?.location, showYearlyView]);
 
-  // Nowa funkcja do pobierania rocznego podsumowania z saldem otwarcia z poprzedniego roku
+  // Nowa funkcja do pobierania rocznego podsumowania
   const fetchYearlySummary = async (year: number) => {
     if (!user?.location) return;
 
@@ -275,10 +270,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     }
   });
 
-  // Mutacja do zapisywania raportu jako wersja robocza
+  // Uproszczona mutacja do zapisywania raportu
   const saveDraftMutation = useMutation({
     mutationFn: async (data: { month: number; year: number }) => {
-      console.log("Rozpoczęcie zapisywania raportu...");
+      console.log("🚀 ROZPOCZĘCIE PROCESU TWORZENIA RAPORTU");
+      setCreationProgress("Sprawdzanie danych...");
       
       const { month, year } = data;
       
@@ -288,7 +284,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       }
       
       const location_id = user.location;
-      console.log("Używam lokalizacji użytkownika:", location_id);
+      console.log("📍 Lokalizacja:", location_id);
+      
+      setCreationProgress("Generowanie danych raportu...");
       
       // Tytuł raportu w formacie "Raport za [miesiąc] [rok] - [nazwa placówki]"
       const monthName = format(new Date(year, month - 1, 1), 'LLLL', { locale: pl });
@@ -305,6 +303,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       
       if (reportId) {
         // Aktualizacja istniejącego raportu
+        console.log("🔄 AKTUALIZACJA ISTNIEJĄCEGO RAPORTU");
+        setCreationProgress("Aktualizowanie raportu...");
+        
         const { data: updatedReport, error } = await supabase
           .from('reports')
           .update({
@@ -321,21 +322,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           .single();
           
         if (error) {
-          console.error("Błąd podczas aktualizacji raportu:", error);
+          console.error("❌ Błąd podczas aktualizacji:", error);
           throw error;
         }
         
-        // Automatycznie oblicz i zapisz podsumowanie finansowe
+        setCreationProgress("Obliczanie podsumowania finansowego...");
         try {
           await calculateAndSaveReportSummary(reportId, location_id, month, year);
-          console.log("Podsumowanie finansowe zostało automatycznie zaktualizowane");
+          console.log("✅ Podsumowanie finansowe zaktualizowane");
         } catch (err) {
-          console.log("Błąd podczas automatycznej aktualizacji podsumowania (nieblokujący):", err);
+          console.log("⚠️ Błąd podsumowania (nieblokujący):", err);
         }
         
         return { reportId, isNew: false };
       } else {
-        // Sprawdź czy istnieje już raport za ten miesiąc i rok dla tej lokalizacji
+        // Sprawdź duplikaty
+        console.log("🆕 TWORZENIE NOWEGO RAPORTU");
+        setCreationProgress("Sprawdzanie duplikatów...");
+        
         const { data: existingReports, error: existingError } = await supabase
           .from('reports')
           .select('id')
@@ -344,7 +348,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           .eq('location_id', location_id);
           
         if (existingError) {
-          console.error("Błąd podczas sprawdzania istniejących raportów:", existingError);
+          console.error("❌ Błąd sprawdzania duplikatów:", existingError);
           throw existingError;
         }
         
@@ -352,7 +356,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           throw new Error('Raport za ten miesiąc i rok dla tej lokalizacji już istnieje');
         }
         
-        // Tworzenie nowego raportu z domyślnym statusem 'draft' (wersja robocza)
+        setCreationProgress("Tworzenie nowego raportu...");
+        
+        // Utwórz nowy raport z domyślnym statusem 'draft' (wersja robocza)
         const { data: newReport, error } = await supabase
           .from('reports')
           .insert({
@@ -370,47 +376,31 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           .single();
           
         if (error) {
-          console.error("Błąd podczas tworzenia raportu:", error);
+          console.error("❌ Błąd tworzenia raportu:", error);
           throw error;
         }
         
-        // Inicjalizuj wpisy raportu na podstawie planu kont - nie rzucaj błędów
+        console.log("✅ Raport utworzony:", newReport?.id);
+        
         if (newReport?.id) {
-          try {
-            await initializeReportEntries(newReport.id, location_id, month, year);
-            console.log("Wpisy raportu zostały zainicjalizowane");
-          } catch (err) {
-            console.log("Błąd podczas inicjalizacji wpisów (nieblokujący):", err);
-          }
+          setCreationProgress("Obliczanie i zapisywanie podsumowania finansowego...");
           
-          // Automatycznie oblicz i zapisz podsumowanie finansowe od razu po utworzeniu
           try {
             await calculateAndSaveReportSummary(newReport.id, location_id, month, year);
-            console.log("Podsumowanie finansowe zostało automatycznie obliczone i zapisane");
+            console.log("✅ Podsumowanie finansowe obliczone i zapisane");
           } catch (err) {
-            console.log("Błąd podczas automatycznego obliczania podsumowania (nieblokujący):", err);
-          }
-            
-          // Upewnij się, że raport ma status 'draft' po inicjalizacji
-          try {
-            await supabase
-              .from('reports')
-              .update({
-                status: 'draft'
-              })
-              .eq('id', newReport.id);
-            console.log("Status raportu ustawiony na 'draft'");
-          } catch (err) {
-            console.log("Błąd podczas ustawiania statusu (nieblokujący):", err);
+            console.log("⚠️ Błąd podsumowania (nieblokujący):", err);
           }
         }
         
-        console.log("Raport został pomyślnie utworzony:", newReport?.id);
+        console.log("🎉 RAPORT UTWORZONY POMYŚLNIE");
         return { reportId: newReport?.id, isNew: true };
       }
     },
     onSuccess: (result) => {
-      console.log("Mutacja zakończona sukcesem:", result);
+      console.log("🎉 SUKCES - raport gotowy:", result);
+      setCreationProgress("");
+      
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: ['currentMonthReport'] });
       
@@ -418,7 +408,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       if (result.isNew) {
         toast({
           title: "Sukces",
-          description: "Pomyślnie stworzono roboczą wersję raportu z obliczonymi sumami finansowymi",
+          description: "Raport został utworzony z obliczonymi sumami finansowymi",
         });
       } else {
         toast({
@@ -427,16 +417,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         });
       }
       
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        navigate(`/reports/${result.reportId}`);
-      }
-      
       setIsSubmitting(false);
+      
+      // Automatyczne przejście do szczegółów raportu
+      if (result.reportId) {
+        console.log("🔄 Przekierowanie do szczegółów raportu");
+        navigate(`/reports/${result.reportId}`);
+      } else if (onSuccess) {
+        onSuccess();
+      }
     },
     onError: (error) => {
-      console.error('Błąd podczas zapisywania raportu:', error);
+      console.error('❌ BŁĄD podczas zapisywania raportu:', error);
+      setCreationProgress("");
       toast({
         title: "Błąd",
         description: `Nie udało się zapisać raportu: ${error instanceof Error ? error.message : 'Nieznany błąd'}`,
@@ -777,6 +770,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     };
     
     setIsSubmitting(true);
+    setCreationProgress("Inicjalizacja...");
     
     // Zawsze używamy saveDraftMutation do zapisania raportu
     saveDraftMutation.mutate(formData);
@@ -839,6 +833,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             <h2 className="text-xl font-semibold mb-4">
               {reportId ? 'Edycja raportu' : 'Nowy raport'}
             </h2>
+            
+            {/* Wskaźnik postępu */}
+            {creationProgress && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Spinner size="sm" />
+                  <span className="text-blue-800 font-medium">{creationProgress}</span>
+                </div>
+              </div>
+            )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -964,7 +968,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 </span>
               </div>
               
-              {/* Niestandardowy komponent KpirSummary dla danych rocznych */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* Otwarcie roku (saldo z końca poprzedniego roku) */}
                 <Card>
