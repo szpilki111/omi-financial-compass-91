@@ -64,16 +64,16 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const { data: financialDetails, isLoading: isLoadingFinancial, refetch: refetchFinancial } = useQuery({
     queryKey: ['report_financial', reportId],
     queryFn: async () => {
-      if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
+      if (!reportId || !report) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
       
       console.log('💰 Pobieranie szczegółów finansowych dla raportu:', reportId);
       
       // Najpierw spróbuj pobrać zapisane szczegóły
       let result = await getReportFinancialDetails(reportId);
       
-      // Jeśli to raport w statusie "draft" i nie ma zapisanych szczegółów, oblicz je automatycznie
-      if (report?.status === 'draft' && result.income === 0 && result.expense === 0 && result.openingBalance === 0) {
-        console.log('🔄 Raport roboczy bez szczegółów - obliczam automatycznie');
+      // Jeśli to raport w statusie "draft", zawsze oblicz i wyświetl sumy automatycznie
+      if (report?.status === 'draft') {
+        console.log('🔄 Raport roboczy - obliczam sumy automatycznie');
         
         try {
           // Pobierz dane raportu
@@ -98,11 +98,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           // Oblicz finansowe podsumowanie
           const summary = await calculateFinancialSummary(reportData.location_id, dateFrom, dateTo);
           
-          // Zapisz szczegóły w bazie danych
-          await updateReportDetails(reportId, { ...summary, openingBalance });
+          // Aktualizuj szczegóły w bazie danych tylko jeśli nie są już zapisane
+          if (result.income === 0 && result.expense === 0 && result.openingBalance === 0) {
+            await updateReportDetails(reportId, { ...summary, openingBalance });
+          }
           
           result = { ...summary, openingBalance, settlements: 0 };
-          console.log('✅ Automatycznie obliczone szczegóły:', result);
+          console.log('✅ Automatycznie obliczone szczegóły dla raportu roboczego:', result);
         } catch (error) {
           console.error('❌ Błąd automatycznego obliczania:', error);
         }
@@ -199,7 +201,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       setIsRefreshing(false);
     }
   };
-  
+
   // Funkcja do składania raportu z powiadomieniem email
   const handleSubmitReport = async () => {
     if (!reportId) return;
@@ -426,7 +428,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {!isReportLocked && !hasCalculatedSums && (
+          {!isReportLocked && !hasCalculatedSums && report?.status !== 'draft' && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -451,7 +453,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
         {financialDetails && (
           <>
-            {hasCalculatedSums ? (
+            {hasCalculatedSums || report?.status === 'draft' ? (
               <KpirSummary 
                 income={financialDetails.income}
                 expense={financialDetails.expense}
