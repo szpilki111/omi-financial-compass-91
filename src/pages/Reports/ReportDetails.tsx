@@ -35,6 +35,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     queryFn: async () => {
       if (!reportId) return null;
 
+      console.log('🔍 Pobieranie danych raportu:', reportId);
+
       const { data, error } = await supabase
         .from('reports')
         .select(`
@@ -46,8 +48,12 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .eq('id', reportId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Błąd pobierania raportu:', error);
+        throw error;
+      }
       
+      console.log('✅ Dane raportu pobrane:', data);
       // Cast the data to the proper Report type to ensure status is properly typed
       return data as Report;
     },
@@ -59,7 +65,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     queryKey: ['report_financial', reportId],
     queryFn: async () => {
       if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
-      return await getReportFinancialDetails(reportId);
+      
+      console.log('💰 Pobieranie szczegółów finansowych dla raportu:', reportId);
+      const result = await getReportFinancialDetails(reportId);
+      console.log('✅ Szczegóły finansowe pobrane:', result);
+      return result;
     },
     enabled: !!reportId
   });
@@ -94,7 +104,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsRefreshing(true);
     
     try {
-      console.log('Rozpoczynam przeliczanie sum dla raportu:', reportId);
+      console.log('🔄 Rozpoczynam przeliczanie sum dla raportu:', reportId);
       
       // Pobierz dane raportu
       const { data: report, error: reportError } = await supabase
@@ -105,7 +115,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
       if (reportError) throw reportError;
       
-      console.log('Dane raportu:', report);
+      console.log('📋 Dane raportu:', report);
       
       // Oblicz daty na podstawie miesiąca i roku
       const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
@@ -114,8 +124,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
       
-      console.log('Okres przeliczania:', dateFrom, 'do', dateTo);
-      console.log('Lokalizacja:', report.location_id);
+      console.log('📅 Okres przeliczania:', dateFrom, 'do', dateTo);
+      console.log('📍 Lokalizacja:', report.location_id);
       
       // Pobierz saldo otwarcia
       const openingBalance = await getOpeningBalance(report.location_id, report.month, report.year);
@@ -125,8 +135,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       // - Koszty: konta 400-499 po stronie DEBETU
       const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
       
-      console.log('Obliczone podsumowanie:', summary);
-      console.log('Saldo otwarcia:', openingBalance);
+      console.log('💰 Obliczone podsumowanie:', summary);
+      console.log('💳 Saldo otwarcia:', openingBalance);
       
       // Aktualizuj szczegóły raportu w bazie danych
       await updateReportDetails(reportId, { ...summary, openingBalance });
@@ -139,7 +149,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         description: `Saldo otwarcia: ${openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Przychody: ${summary.income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Koszty: ${summary.expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`,
       });
     } catch (error) {
-      console.error('Błąd podczas odświeżania sum:', error);
+      console.error('❌ Błąd podczas odświeżania sum:', error);
       toast({
         title: "Błąd",
         description: "Wystąpił problem podczas przeliczania sum.",
@@ -273,13 +283,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const getStatusClass = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'text-yellow-600';
+        return 'text-yellow-600 bg-yellow-100 px-2 py-1 rounded-md';
       case 'submitted':
-        return 'text-blue-600';
+        return 'text-blue-600 bg-blue-100 px-2 py-1 rounded-md';
       case 'approved':
-        return 'text-green-600';
+        return 'text-green-600 bg-green-100 px-2 py-1 rounded-md';
       case 'to_be_corrected':
-        return 'text-orange-600';
+        return 'text-orange-600 bg-orange-100 px-2 py-1 rounded-md';
       default:
         return '';
     }
@@ -290,7 +300,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">{report.title}</h1>
-          <p className="text-omi-gray-500">
+          <p className="text-omi-gray-500 mt-2">
             Status: <span className={getStatusClass(report.status)}>{getStatusLabel(report.status)}</span>
           </p>
         </div>
