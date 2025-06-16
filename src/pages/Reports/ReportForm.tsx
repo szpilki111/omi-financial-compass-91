@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
 import { calculateAndSaveReportSummary } from '@/utils/financeUtils';
+import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
+import YearToDateAccountsBreakdown from '@/components/reports/YearToDateAccountsBreakdown';
 
 const reportFormSchema = z.object({
   month: z.string().min(1, 'Miesiąc jest wymagany'),
@@ -377,23 +379,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           )}
         </div>
 
-        <div className="flex justify-end space-x-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-              Anuluj
-            </Button>
-          )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Spinner size="sm" className="mr-2" />
-                Tworzenie raportu...
-              </>
-            ) : (
-              'Utwórz raport'
-            )}
-          </Button>
-        </div>
+        {/* Szczegółowa rozpiska kont dla miesięcznego podsumowania */}
+        {selectedMonth && selectedYear && user?.location && (
+          <ReportAccountsBreakdown
+            reportId=""
+            locationId={user.location}
+            month={parseInt(selectedMonth)}
+            year={parseInt(selectedYear)}
+          />
+        )}
 
         <FormField
           control={form.control}
@@ -420,57 +414,109 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         
         {/* Podgląd podsumowania rok-do-daty */}
         {showFromYearStart && (
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4">
-              Podsumowanie finansowe od początku {selectedYear} roku
-              {selectedMonth && ` do ${months.find(m => m.value === selectedMonth)?.label}`}
-            </h3>
-            
-            {isCalculatingYearToDate ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner size="sm" className="mr-2" />
-                <span>Obliczanie podsumowania od początku roku...</span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <h4 className="font-medium text-gray-600 mb-1">Otwarcie roku</h4>
-                  <p className="text-xl font-bold text-blue-600">
-                    {formatCurrency(yearToDateSummary.openingBalance)}
-                  </p>
+          <>
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4">
+                Podsumowanie finansowe od początku {selectedYear} roku
+                {selectedMonth && ` do ${months.find(m => m.value === selectedMonth)?.label}`}
+              </h3>
+              
+              {isCalculatingYearToDate ? (
+                <div className="flex items-center justify-center py-8">
+                  <Spinner size="sm" className="mr-2" />
+                  <span>Obliczanie podsumowania od początku roku...</span>
                 </div>
-                
-                <div className="text-center">
-                  <h4 className="font-medium text-gray-600 mb-1">Przychody</h4>
-                  <p className="text-xl font-bold text-green-600">
-                    {formatCurrency(yearToDateSummary.income)}
-                  </p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <h4 className="font-medium text-gray-600 mb-1">Otwarcie roku</h4>
+                    <p className="text-xl font-bold text-blue-600">
+                      {formatCurrency(yearToDateSummary.openingBalance)}
+                    </p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <h4 className="font-medium text-gray-600 mb-1">Przychody</h4>
+                    <p className="text-xl font-bold text-green-600">
+                      {formatCurrency(yearToDateSummary.income)}
+                    </p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <h4 className="font-medium text-gray-600 mb-1">Rozchody</h4>
+                    <p className="text-xl font-bold text-red-600">
+                      {formatCurrency(yearToDateSummary.expense)}
+                    </p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <h4 className="font-medium text-gray-600 mb-1">Saldo końcowe</h4>
+                    <p className={`text-xl font-bold ${yearToDateSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(yearToDateSummary.openingBalance + yearToDateSummary.balance)}
+                    </p>
+                  </div>
                 </div>
-                
-                <div className="text-center">
-                  <h4 className="font-medium text-gray-600 mb-1">Rozchody</h4>
-                  <p className="text-xl font-bold text-red-600">
-                    {formatCurrency(yearToDateSummary.expense)}
-                  </p>
-                </div>
-                
-                <div className="text-center">
-                  <h4 className="font-medium text-gray-600 mb-1">Saldo końcowe</h4>
-                  <p className={`text-xl font-bold ${yearToDateSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(yearToDateSummary.openingBalance + yearToDateSummary.balance)}
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            <p className="text-xs text-blue-600 mt-3">
-              * To podsumowanie pokazuje dane finansowe od 1 stycznia {selectedYear} do końca {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
-            </p>
-          </div>
+              )}
+              
+              <p className="text-xs text-blue-600 mt-3">
+                * To podsumowanie pokazuje dane finansowe od 1 stycznia {selectedYear} do końca {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              </p>
+            </div>
+
+            {/* Szczegółowa rozpiska kont dla podsumowania rok-do-daty */}
+            <YearToDateAccountsBreakdown
+              locationId={user?.location || ''}
+              month={parseInt(selectedMonth || '1')}
+              year={parseInt(selectedYear || new Date().getFullYear().toString())}
+            />
+          </>
         )}
 
+        <div className="flex justify-end space-x-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+              Anuluj
+            </Button>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Tworzenie raportu...
+              </>
+            ) : (
+              'Utwórz raport'
+            )}
+          </Button>
+        </div>
       </form>
     </Form>
+  );
+};
+
+// Komponent do wyświetlania rozpiski kont od początku roku
+const YearToDateAccountsBreakdown: React.FC<{
+  locationId: string;
+  month: number;
+  year: number;
+}> = ({ locationId, month, year }) => {
+  return (
+    <div className="bg-blue-50 p-4 rounded-lg">
+      <h3 className="text-lg font-semibold mb-4">
+        Szczegółowa rozpiska kont od początku {year} roku do końca {months.find(m => m.value === month.toString())?.label}
+      </h3>
+      
+      <ReportAccountsBreakdown
+        reportId=""
+        locationId={locationId}
+        month={12} // Ustawiamy na 12, aby pobrać cały rok
+        year={year}
+        dateRange={{
+          from: `${year}-01-01`,
+          to: new Date(year, month, 0).toISOString().split('T')[0] // Ostatni dzień wybranego miesiąca
+        }}
+      />
+    </div>
   );
 };
 
