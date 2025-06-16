@@ -494,30 +494,4 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   );
 };
 
-// Komponent do wyświetlania rozpiski kont od początku roku
-const YearToDateAccountsBreakdown: React.FC<{
-  locationId: string;
-  month: number;
-  year: number;
-}> = ({ locationId, month, year }) => {
-  return (
-    <div className="bg-blue-50 p-4 rounded-lg">
-      <h3 className="text-lg font-semibold mb-4">
-        Szczegółowa rozpiska kont od początku {year} roku do końca {months.find(m => m.value === month.toString())?.label}
-      </h3>
-      
-      <ReportAccountsBreakdown
-        reportId=""
-        locationId={locationId}
-        month={12} // Ustawiamy na 12, aby pobrać cały rok
-        year={year}
-        dateRange={{
-          from: `${year}-01-01`,
-          to: new Date(year, month, 0).toISOString().split('T')[0] // Ostatni dzień wybranego miesiąca
-        }}
-      />
-    </div>
-  );
-};
-
 export default ReportForm;
