@@ -400,6 +400,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           )}
         />
 
+        <div className="flex justify-end space-x-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+              Anuluj
+            </Button>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Tworzenie raportu...
+              </>
+            ) : (
+              'Utwórz raport'
+            )}
+          </Button>
+        </div>
+        
         {/* Podgląd podsumowania rok-do-daty */}
         {showFromYearStart && (
           <div className="bg-blue-50 p-4 rounded-lg">
@@ -451,23 +469,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           </div>
         )}
 
-        <div className="flex justify-end space-x-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-              Anuluj
-            </Button>
-          )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Spinner size="sm" className="mr-2" />
-                Tworzenie raportu...
-              </>
-            ) : (
-              'Utwórz raport'
-            )}
-          </Button>
-        </div>
       </form>
     </Form>
   );
