@@ -455,35 +455,12 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
             {/* Dla raportów roboczych ZAWSZE pokazuj podsumowanie - nawet z zerami */}
             {/* Dla submitted/approved też zawsze pokazuj */}
             {/* Dla to_be_corrected pokazuj tylko jeśli ma obliczone sumy LUB przycisk do obliczenia */}
-            {(report?.status === 'draft' || report?.status === 'submitted' || report?.status === 'approved' || (report?.status === 'to_be_corrected' && hasCalculatedSums)) ? (
-              <KpirSummary 
+            {<KpirSummary 
                 income={financialDetails.income}
                 expense={financialDetails.expense}
                 balance={financialDetails.balance}
                 openingBalance={financialDetails.openingBalance}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-omi-gray-500 mb-4">
-                  Sumy nie zostały jeszcze przeliczone dla tego raportu.
-                </p>
-                <p className="text-sm text-omi-gray-400 mb-4">
-                  Przychody i koszty są obliczane na podstawie kont wynikowych (7xx, 4xx) oraz rozrachunkowych (2xx).<br/>
-                  Saldo otwarcia jest pobierane z poprzedniego miesiąca.<br/>
-                  Kliknij przycisk, aby wygenerować podsumowanie.
-                </p>
-                <Button onClick={handleRefreshSums} disabled={isRefreshing}>
-                  {isRefreshing ? (
-                    <Spinner size="sm" className="mr-2" />
-                  ) : (
-                    <RefreshCcwIcon size={16} className="mr-2" />
-                  )}
-                  Przelicz sumy teraz
-                </Button>
-              </div>
-            )}
-          </>
-        )}
+              />}
       </div>
 
       {/* Nowa sekcja ze szczegółową rozpiską kont */}
