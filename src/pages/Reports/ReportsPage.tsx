@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
@@ -92,7 +91,11 @@ const ReportsPage = () => {
           <h2 className="text-xl font-semibold mb-4">
             {isCreatingReport ? 'Nowy raport' : 'Edycja raportu'}
           </h2>
-          <ReportForm />
+          <ReportForm 
+            reportId={selectedReportId || undefined} 
+            onSuccess={handleReportCreated} 
+            onCancel={handleCancel} 
+          />
         </div>
       )}
       
