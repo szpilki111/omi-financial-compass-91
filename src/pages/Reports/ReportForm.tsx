@@ -352,9 +352,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             </div>
           )}
           
-          <p className="text-sm text-gray-600 mt-4">
-            Te wartości zostaną automatycznie zapisane w raporcie po jego utworzeniu.
-          </p>
         </div>
 
         <div className="flex justify-end space-x-2">
