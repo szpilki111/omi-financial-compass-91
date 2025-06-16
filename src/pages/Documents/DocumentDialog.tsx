@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +27,7 @@ import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
+import { Transaction } from './types';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -40,21 +40,6 @@ interface DocumentFormData {
   document_number: string;
   document_name: string;
   document_date: Date;
-}
-
-interface Transaction {
-  id?: string;
-  debit_account_id: string;
-  credit_account_id: string;
-  amount: number;
-  description: string;
-  settlement_type: string;
-  debit_amount?: number;
-  credit_amount?: number;
-  isCloned?: boolean;
-  clonedType?: 'debit' | 'credit';
-  debitAccountNumber?: string;
-  creditAccountNumber?: string;
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
@@ -287,36 +272,62 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         documentId = newDocument.id;
       }
 
-      // Save transactions if any
-      if (transactions.length > 0 && documentId) {
-        // First, delete existing transactions if editing
-        if (document) {
-          await supabase
-            .from('transactions')
-            .delete()
-            .eq('document_id', documentId);
+      // KLUCZOWA POPRAWKA: Upewnij się, że description ZAWSZE jest stringiem
+      const transactionsSafe = transactions.map((t, idx) => ({
+        ...t,
+        description:
+          typeof t.description === "string" && t.description.trim() !== ""
+            ? t.description
+            : "",
+      }));
+
+      // Save transactions if any - CRITICAL FIX HERE
+      if (documentId) {
+        // First, delete existing transactions if editing (FIXED: Always delete for consistency)
+        const { error: deleteError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('document_id', documentId);
+
+        if (deleteError) {
+          console.error('Error deleting existing transactions:', deleteError);
+          throw deleteError;
         }
 
-        // Insert new/updated transactions
-        const transactionsToInsert = transactions.map(t => ({
-          document_id: documentId,
-          debit_account_id: t.debit_account_id,
-          credit_account_id: t.credit_account_id,
-          amount: t.debit_amount || t.amount, // Use debit_amount as primary amount
-          debit_amount: t.debit_amount || t.amount,
-          credit_amount: t.credit_amount || t.amount,
-          description: t.description,
-          settlement_type: t.settlement_type,
-          date: format(data.document_date, 'yyyy-MM-dd'),
-          location_id: user.location,
-          user_id: user.id, // Ensure user_id is set for transactions too
-        }));
+        // Insert new/updated transactions only if there are any
+        if (transactionsSafe.length > 0) {
+          const transactionsToInsert = transactionsSafe.map(t => {
+            // CRITICAL FIX: Zawsze explicitnie przypisujemy wartości amount i oba pola stron, bez "magicznego" fallbackowania.
+            // amount pole zostaje domyślną podstawową wartością (historycznie), debit_amount i credit_amount zawsze osobno
+            return {
+              document_id: documentId,
+              debit_account_id: t.debit_account_id,
+              credit_account_id: t.credit_account_id,
+              amount: t.amount, // amount zachowujemy jako podstawowe pole (histori compatibility/prezentacja)
+              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+              description: t.description, // Teraz na pewno nie będzie null!
+              settlement_type: t.settlement_type,
+              date: format(data.document_date, 'yyyy-MM-dd'),
+              location_id: user.location,
+              user_id: user.id,
+              document_number: data.document_number, // Add document number for better traceability
+            };
+          });
 
-        const { error: transactionError } = await supabase
-          .from('transactions')
-          .insert(transactionsToInsert);
+          console.log('Inserting transactions:', transactionsToInsert);
 
-        if (transactionError) throw transactionError;
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert(transactionsToInsert);
+
+          if (transactionError) {
+            console.error('Error inserting transactions:', transactionError);
+            throw transactionError;
+          }
+
+          console.log('Transactions inserted successfully');
+        }
       }
 
       onDocumentCreated();
@@ -480,44 +491,35 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleTransactionUpdated = async (updatedTransaction: Transaction) => {
-    // Reload transactions if editing existing document
     if (document?.id) {
       loadTransactions(document.id);
     } else {
-      // For new documents, update the local transactions array
       if (editingTransactionIndex !== null) {
-        // Load account numbers for the updated transaction
         const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
-        
         setTransactions(prev => {
           const updated = [...prev];
           const originalTransaction = updated[editingTransactionIndex];
-          
-          // If this is a cloned transaction, preserve the cloned properties and restrictions
-          if (isClonedTransaction && originalTransaction.isCloned) {
-            const finalTransaction = {
-              ...transactionWithAccountNumbers[0],
+
+          // Nowa logika: zawsze nadpisujemy pod tym indeksem, nie klonujemy już raz sklonowanej transakcji!
+          let finalTransaction = transactionWithAccountNumbers[0];
+
+          if (originalTransaction.isCloned && originalTransaction.clonedType) {
+            finalTransaction = {
+              ...finalTransaction,
               isCloned: true,
               clonedType: originalTransaction.clonedType,
             };
-            
-            // Enforce the cloned restrictions - keep the opposite side at 0
+
             if (originalTransaction.clonedType === 'debit') {
-              // For cloned debit transactions, keep credit_amount at 0
               finalTransaction.credit_amount = 0;
               finalTransaction.amount = finalTransaction.debit_amount || 0;
             } else if (originalTransaction.clonedType === 'credit') {
-              // For cloned credit transactions, keep debit_amount at 0
               finalTransaction.debit_amount = 0;
               finalTransaction.amount = finalTransaction.credit_amount || 0;
             }
-            
-            updated[editingTransactionIndex] = finalTransaction;
-          } else {
-            // For regular transactions, use the updated transaction as is
-            updated[editingTransactionIndex] = transactionWithAccountNumbers[0];
           }
-          
+
+          updated[editingTransactionIndex] = finalTransaction;
           return updated;
         });
       }

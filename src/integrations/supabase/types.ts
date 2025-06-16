@@ -299,33 +299,90 @@ export type Database = {
           },
         ]
       }
+      report_account_details: {
+        Row: {
+          account_id: string
+          account_name: string
+          account_number: string
+          account_type: string
+          created_at: string | null
+          id: string
+          report_id: string
+          total_amount: number
+          updated_at: string | null
+        }
+        Insert: {
+          account_id: string
+          account_name: string
+          account_number: string
+          account_type: string
+          created_at?: string | null
+          id?: string
+          report_id: string
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          account_name?: string
+          account_number?: string
+          account_type?: string
+          created_at?: string | null
+          id?: string
+          report_id?: string
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_account_details_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_account_details_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_details: {
         Row: {
           balance: number
+          closing_balance: number | null
           created_at: string
           expense_total: number
           id: string
           income_total: number
+          opening_balance: number | null
           report_id: string
           settlements_total: number
           updated_at: string
         }
         Insert: {
           balance?: number
+          closing_balance?: number | null
           created_at?: string
           expense_total?: number
           id?: string
           income_total?: number
+          opening_balance?: number | null
           report_id: string
           settlements_total?: number
           updated_at?: string
         }
         Update: {
           balance?: number
+          closing_balance?: number | null
           created_at?: string
           expense_total?: number
           id?: string
           income_total?: number
+          opening_balance?: number | null
           report_id?: string
           settlements_total?: number
           updated_at?: string
@@ -524,7 +581,7 @@ export type Database = {
           is_split_transaction: boolean | null
           location_id: string
           parent_transaction_id: string | null
-          settlement_type: string
+          settlement_type: string | null
           updated_at: string
           user_id: string
         }
@@ -545,7 +602,7 @@ export type Database = {
           is_split_transaction?: boolean | null
           location_id: string
           parent_transaction_id?: string | null
-          settlement_type: string
+          settlement_type?: string | null
           updated_at?: string
           user_id: string
         }
@@ -566,7 +623,7 @@ export type Database = {
           is_split_transaction?: boolean | null
           location_id?: string
           parent_transaction_id?: string | null
-          settlement_type?: string
+          settlement_type?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -615,6 +672,30 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          windows98_style: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          windows98_style?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          windows98_style?: boolean
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -635,6 +716,10 @@ export type Database = {
           user_location_id?: string
         }
         Returns: string
+      }
+      delete_document_with_transactions: {
+        Args: { p_document_id: string }
+        Returns: undefined
       }
       delete_user_admin: {
         Args: { user_id_to_delete: string }
@@ -660,6 +745,12 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_user_setting: {
+        Args: { p_user_id: string }
+        Returns: {
+          windows98_style: boolean
+        }[]
+      }
       insert_profile_admin: {
         Args:
           | { user_id: number; profile_data: Json }
@@ -672,9 +763,21 @@ export type Database = {
             }
         Returns: undefined
       }
+      upsert_user_setting: {
+        Args: { p_user_id: string; p_windows98_style: boolean }
+        Returns: undefined
+      }
     }
     Enums: {
-      report_type: "standard" | "zos" | "bilans" | "rzis" | "jpk" | "analiza"
+      report_type:
+        | "standard"
+        | "zos"
+        | "bilans"
+        | "rzis"
+        | "jpk"
+        | "analiza"
+        | "monthly"
+        | "annual"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -790,7 +893,16 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      report_type: ["standard", "zos", "bilans", "rzis", "jpk", "analiza"],
+      report_type: [
+        "standard",
+        "zos",
+        "bilans",
+        "rzis",
+        "jpk",
+        "analiza",
+        "monthly",
+        "annual",
+      ],
     },
   },
 } as const

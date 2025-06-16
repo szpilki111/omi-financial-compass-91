@@ -23,6 +23,16 @@ export interface KpirTransaction {
   is_split_transaction?: boolean;
   user_id?: string;
   location?: { name: string };
+  // Dodaj pole document (często null jeśli nie powiązana z dokumentem)
+  document?: {
+    id: string;
+    document_number: string;
+    document_name: string;
+    document_date: string;
+  } | null;
+  // --- Dodane by naprawić TS error związany z subTransakcjami ---
+  debit_amount?: number;
+  credit_amount?: number;
 }
 
 export interface Account {
@@ -50,3 +60,4 @@ export interface ImportRow {
   amount: number;
   account: string;
 }
+

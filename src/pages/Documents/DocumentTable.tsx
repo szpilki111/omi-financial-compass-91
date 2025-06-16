@@ -2,7 +2,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { FileText, Calendar, MapPin, Eye } from 'lucide-react';
+import { FileText, Calendar, MapPin, Eye, Trash } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -34,10 +34,11 @@ interface Document {
 interface DocumentTableProps {
   documents: Document[];
   onDocumentClick: (document: Document) => void;
+  onDocumentDelete: (documentId: string) => void;
   isLoading: boolean;
 }
 
-const DocumentTable = ({ documents, onDocumentClick, isLoading }: DocumentTableProps) => {
+const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading }: DocumentTableProps) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -71,7 +72,7 @@ const DocumentTable = ({ documents, onDocumentClick, isLoading }: DocumentTableP
             <TableHead>Lokalizacja</TableHead>
             <TableHead>Transakcje</TableHead>
             <TableHead>Data utworzenia</TableHead>
-            <TableHead className="w-[100px]">Akcje</TableHead>
+            <TableHead className="w-[140px]">Akcje</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -107,16 +108,29 @@ const DocumentTable = ({ documents, onDocumentClick, isLoading }: DocumentTableP
                 {format(new Date(document.created_at), 'dd.MM.yyyy HH:mm')}
               </TableCell>
               <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDocumentClick(document);
-                  }}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDocumentClick(document);
+                    }}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDocumentDelete(document.id);
+                    }}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}

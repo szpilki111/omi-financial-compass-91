@@ -7,6 +7,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import LocationsManagement from './LocationsManagement';
 import LocationAccountsManagement from './LocationAccountsManagement';
 import UsersManagement from './UsersManagement';
+import AccountsManagement from './AccountsManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -39,9 +40,10 @@ const AdministrationPage = () => {
         </div>
 
         <Tabs defaultValue="locations" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="locations">Placówki</TabsTrigger>
             <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
+            <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
             {user.role === 'admin' && (
               <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             )}
@@ -53,6 +55,10 @@ const AdministrationPage = () => {
 
           <TabsContent value="accounts" className="space-y-4">
             <LocationAccountsManagement />
+          </TabsContent>
+
+          <TabsContent value="manage-accounts" className="space-y-4">
+            <AccountsManagement />
           </TabsContent>
 
           {user.role === 'admin' && (

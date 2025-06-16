@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getReportFinancialDetails, calculateFinancialSummary, updateReportDetails } from '@/utils/financeUtils';
+import { getReportFinancialDetails, calculateFinancialSummary, updateReportDetails, getOpeningBalance } from '@/utils/financeUtils';
 import { ArrowLeftIcon, FileTextIcon, FileIcon, RefreshCcwIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import KpirSummary from '../KPIR/components/KpirSummary';
 import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
+import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
+import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
+import { Report } from '@/types/reports';
 
 interface ReportDetailsProps {
   reportId?: string;
@@ -25,6 +27,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const { user, canApproveReports } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Pobieranie danych raportu
   const { data: report, isLoading: isLoadingReport, refetch: refetchReport } = useQuery({
@@ -44,7 +47,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .single();
 
       if (error) throw error;
-      return data;
+      
+      // Cast the data to the proper Report type to ensure status is properly typed
+      return data as Report;
     },
     enabled: !!reportId
   });
@@ -53,7 +58,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const { data: financialDetails, isLoading: isLoadingFinancial, refetch: refetchFinancial } = useQuery({
     queryKey: ['report_financial', reportId],
     queryFn: async () => {
-      if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0 };
+      if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
       return await getReportFinancialDetails(reportId);
     },
     enabled: !!reportId
@@ -69,10 +74,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const hasCalculatedSums = financialDetails && (
     financialDetails.income !== 0 || 
     financialDetails.expense !== 0 || 
-    financialDetails.balance !== 0
+    financialDetails.balance !== 0 ||
+    financialDetails.openingBalance !== 0
   );
 
-  // Funkcja do odświeżania sum raportu
+  // Funkcja do odświeżania sum raportu - przelicza przychody i koszty zgodnie z określonymi kontami
   const handleRefreshSums = async () => {
     if (!reportId || isReportLocked) {
       if (isReportLocked) {
@@ -88,6 +94,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     setIsRefreshing(true);
     
     try {
+      console.log('Rozpoczynam przeliczanie sum dla raportu:', reportId);
+      
       // Pobierz dane raportu
       const { data: report, error: reportError } = await supabase
         .from('reports')
@@ -97,6 +105,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
       if (reportError) throw reportError;
       
+      console.log('Dane raportu:', report);
+      
       // Oblicz daty na podstawie miesiąca i roku
       const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
       const lastDayOfMonth = new Date(report.year, report.month, 0);
@@ -104,18 +114,29 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
       
-      // Oblicz finansowe podsumowanie
+      console.log('Okres przeliczania:', dateFrom, 'do', dateTo);
+      console.log('Lokalizacja:', report.location_id);
+      
+      // Pobierz saldo otwarcia
+      const openingBalance = await getOpeningBalance(report.location_id, report.month, report.year);
+      
+      // Oblicz finansowe podsumowanie zgodnie z określonymi kontami:
+      // - Przychody: konta 700-799 i 200-299 po stronie KREDYTU
+      // - Koszty: konta 400-499 po stronie DEBETU
       const summary = await calculateFinancialSummary(report.location_id, dateFrom, dateTo);
       
+      console.log('Obliczone podsumowanie:', summary);
+      console.log('Saldo otwarcia:', openingBalance);
+      
       // Aktualizuj szczegóły raportu w bazie danych
-      await updateReportDetails(reportId, summary);
+      await updateReportDetails(reportId, { ...summary, openingBalance });
       
       // Odśwież dane bez reload strony
       await refetchFinancial();
       
       toast({
-        title: "Sukces",
-        description: "Sumy raportu zostały przeliczone i zapisane.",
+        title: "Sumy przeliczone",
+        description: `Saldo otwarcia: ${openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Przychody: ${summary.income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Koszty: ${summary.expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`,
       });
     } catch (error) {
       console.error('Błąd podczas odświeżania sum:', error);
@@ -129,7 +150,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     }
   };
   
-  // Funkcja do składania raportu
+  // Funkcja do składania raportu z powiadomieniem email
   const handleSubmitReport = async () => {
     if (!reportId) return;
     
@@ -151,13 +172,43 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         .eq('id', reportId);
         
       if (error) throw error;
+
+      // Wyślij powiadomienie email do prowincjała
+      try {
+        console.log('Wysyłanie powiadomienia email...');
+        
+        const { data, error: emailError } = await supabase.functions.invoke('send-report-notification', {
+          body: {
+            reportId: reportId,
+            reportTitle: report?.title || 'Raport',
+            submittedBy: user?.name || 'Nieznany użytkownik',
+            locationName: report?.location?.name || 'Nieznana placówka',
+            period: report?.period || 'Nieznany okres'
+          }
+        });
+
+        if (emailError) {
+          console.error('Błąd wysyłania powiadomienia email:', emailError);
+          // Nie przerywamy procesu - raport jest już złożony
+          toast({
+            title: "Uwaga",
+            description: "Raport został złożony, ale wystąpił problem z wysłaniem powiadomienia email.",
+            variant: "default",
+          });
+        } else {
+          console.log('Powiadomienie email wysłane pomyślnie:', data);
+        }
+      } catch (emailError) {
+        console.error('Błąd podczas wysyłania powiadomienia:', emailError);
+        // Nie przerywamy procesu - raport jest już złożony
+      }
       
       // Odśwież dane raportu bez reload strony
       await refetchReport();
       
       toast({
         title: "Raport złożony",
-        description: "Raport został złożony do sprawdzenia.",
+        description: "Raport został złożony do sprawdzenia. Prowincjał otrzyma powiadomienie email.",
       });
       window.location.reload();
     } catch (error) {
@@ -331,6 +382,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
               size="sm" 
               onClick={handleRefreshSums} 
               disabled={isRefreshing}
+              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
             >
               {isRefreshing ? (
                 <Spinner size="sm" className="mr-2" />
@@ -354,6 +406,11 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                 <p className="text-omi-gray-500 mb-4">
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.
                 </p>
+                <p className="text-sm text-omi-gray-400 mb-4">
+                  Przychody i koszty są obliczane na podstawie kont wynikowych (7xx, 4xx) oraz rozrachunkowych (2xx).<br/>
+                  Saldo otwarcia jest pobierane z poprzedniego miesiąca.<br/>
+                  Kliknij przycisk, aby wygenerować podsumowanie.
+                </p>
                 <Button onClick={handleRefreshSums} disabled={isRefreshing}>
                   {isRefreshing ? (
                     <Spinner size="sm" className="mr-2" />
@@ -368,23 +425,33 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                 income={financialDetails.income}
                 expense={financialDetails.expense}
                 balance={financialDetails.balance}
+                openingBalance={financialDetails.openingBalance}
               />
             )}
           </>
         )}
       </div>
 
+      {/* Nowa sekcja ze szczegółową rozpiską kont */}
+      {report && (
+        <ReportAccountsBreakdown
+          reportId={reportId!}
+          locationId={report.location_id}
+          month={report.month}
+          year={report.year}
+        />
+      )}
+
       <div className="flex justify-between">
         
         <div className="space-x-2">
-          <Button variant="outline" onClick={() => {}}>
-            <FileTextIcon className="mr-2 h-4 w-4" />
-            Eksportuj do PDF
-          </Button>
-          <Button variant="outline" onClick={() => {}}>
-            <FileIcon className="mr-2 h-4 w-4" />
-            Eksportuj do Excel
-          </Button>
+          <ReportPDFGenerator
+            report={report}
+            financialDetails={financialDetails || { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 }}
+            isGenerating={isGeneratingPDF}
+            onGenerateStart={() => setIsGeneratingPDF(true)}
+            onGenerateEnd={() => setIsGeneratingPDF(false)}
+          />
         </div>
       </div>
     </div>

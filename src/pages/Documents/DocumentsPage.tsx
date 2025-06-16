@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentTable from './DocumentTable';
@@ -111,6 +111,43 @@ const DocumentsPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleDocumentDelete = async (documentId: string) => {
+    if (!confirm('Czy na pewno chcesz usunąć ten dokument? Wszystkie powiązane operacje również zostaną usunięte.')) {
+      return;
+    }
+
+    try {
+      // Call the Postgres function to delete document and related transactions
+      const { error } = await supabase.rpc('delete_document_with_transactions', {
+        p_document_id: documentId
+      });
+
+      if (error) {
+        console.error('Error deleting document:', error);
+        throw error;
+      }
+
+      toast({
+        title: "Sukces",
+        description: "Dokument i powiązane operacje zostały usunięte",
+      });
+
+      // Refresh the documents list
+      refetch();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć dokumentu",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSearchAccounts = () => {
+    navigate('/wyszukaj-konta');
+  };
+
   const handleSearchOperations = () => {
     navigate('/kpir');
   };
@@ -131,7 +168,11 @@ const DocumentsPage = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
           <div className="flex gap-2">
-            <Button onClick={handleSearchOperations} variant="outline" className="flex items-center gap-2">
+            <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
+              <Calculator className="h-4 w-4" />
+              Wyszukaj konta
+            </Button>
+            <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               Wyszukaj operacje
             </Button>
@@ -157,6 +198,7 @@ const DocumentsPage = () => {
         <DocumentTable
           documents={filteredDocuments}
           onDocumentClick={handleDocumentClick}
+          onDocumentDelete={handleDocumentDelete}
           isLoading={isLoading}
         />
 
