@@ -67,11 +67,51 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       if (!reportId) return { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 };
       
       console.log('💰 Pobieranie szczegółów finansowych dla raportu:', reportId);
-      const result = await getReportFinancialDetails(reportId);
+      
+      // Najpierw spróbuj pobrać zapisane szczegóły
+      let result = await getReportFinancialDetails(reportId);
+      
+      // Jeśli to raport w statusie "draft" i nie ma zapisanych szczegółów, oblicz je automatycznie
+      if (report?.status === 'draft' && result.income === 0 && result.expense === 0 && result.openingBalance === 0) {
+        console.log('🔄 Raport roboczy bez szczegółów - obliczam automatycznie');
+        
+        try {
+          // Pobierz dane raportu
+          const { data: reportData, error: reportError } = await supabase
+            .from('reports')
+            .select('month, year, location_id')
+            .eq('id', reportId)
+            .single();
+            
+          if (reportError) throw reportError;
+          
+          // Oblicz daty na podstawie miesiąca i roku
+          const firstDayOfMonth = new Date(reportData.year, reportData.month - 1, 1);
+          const lastDayOfMonth = new Date(reportData.year, reportData.month, 0);
+          
+          const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+          const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+          
+          // Pobierz saldo otwarcia
+          const openingBalance = await getOpeningBalance(reportData.location_id, reportData.month, reportData.year);
+          
+          // Oblicz finansowe podsumowanie
+          const summary = await calculateFinancialSummary(reportData.location_id, dateFrom, dateTo);
+          
+          // Zapisz szczegóły w bazie danych
+          await updateReportDetails(reportId, { ...summary, openingBalance });
+          
+          result = { ...summary, openingBalance, settlements: 0 };
+          console.log('✅ Automatycznie obliczone szczegóły:', result);
+        } catch (error) {
+          console.error('❌ Błąd automatycznego obliczania:', error);
+        }
+      }
+      
       console.log('✅ Szczegóły finansowe pobrane:', result);
       return result;
     },
-    enabled: !!reportId
+    enabled: !!reportId && !!report
   });
 
   // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
@@ -386,7 +426,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {!isReportLocked && (
+          {!isReportLocked && !hasCalculatedSums && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -411,7 +451,14 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
 
         {financialDetails && (
           <>
-            {!hasCalculatedSums && !isReportLocked ? (
+            {hasCalculatedSums ? (
+              <KpirSummary 
+                income={financialDetails.income}
+                expense={financialDetails.expense}
+                balance={financialDetails.balance}
+                openingBalance={financialDetails.openingBalance}
+              />
+            ) : (
               <div className="text-center py-8">
                 <p className="text-omi-gray-500 mb-4">
                   Sumy nie zostały jeszcze przeliczone dla tego raportu.
@@ -430,13 +477,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
                   Przelicz sumy teraz
                 </Button>
               </div>
-            ) : (
-              <KpirSummary 
-                income={financialDetails.income}
-                expense={financialDetails.expense}
-                balance={financialDetails.balance}
-                openingBalance={financialDetails.openingBalance}
-              />
             )}
           </>
         )}

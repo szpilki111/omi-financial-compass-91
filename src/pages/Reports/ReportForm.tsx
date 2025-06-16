@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -250,7 +249,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                       <SelectValue placeholder="Wybierz miesiąc, za który tworzysz raport" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent className="max-h-96">
                     {months.map((month) => (
                       <SelectItem key={month.value} value={month.value}>
                         {month.label}
