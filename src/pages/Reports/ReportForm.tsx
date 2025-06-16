@@ -49,6 +49,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [isCalculatingYearToDate, setIsCalculatingYearToDate] = useState(false);
 
   const form = useForm<z.infer<typeof reportFormSchema>>({
     resolver: zodResolver(reportFormSchema),
@@ -62,6 +63,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const [selectedMonth, selectedYear, showFromYearStart] = form.watch(['month', 'year', 'showFromYearStart']);
   
   const [financialSummary, setFinancialSummary] = useState({
+    income: 0,
+    expense: 0,
+    balance: 0,
+    openingBalance: 0
+  });
+
+  const [yearToDateSummary, setYearToDateSummary] = useState({
     income: 0,
     expense: 0,
     balance: 0,
@@ -105,6 +113,45 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
 
     calculatePreview();
   }, [selectedMonth, selectedYear, user?.location]);
+
+  // Oblicz podsumowanie od początku roku
+  React.useEffect(() => {
+    const calculateYearToDatePreview = async () => {
+      if (!showFromYearStart || !selectedYear || !user?.location) {
+        setYearToDateSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
+        return;
+      }
+      
+      setIsCalculatingYearToDate(true);
+      try {
+        const year = parseInt(selectedYear);
+        
+        const { calculateFinancialSummary } = await import('@/utils/financeUtils');
+        
+        // Oblicz daty od początku roku do końca wybranego miesiąca
+        const firstDayOfYear = new Date(year, 0, 1);
+        const selectedMonth = parseInt(form.getValues('month'));
+        const lastDayOfSelectedMonth = new Date(year, selectedMonth, 0);
+        const dateFrom = firstDayOfYear.toISOString().split('T')[0];
+        const dateTo = lastDayOfSelectedMonth.toISOString().split('T')[0];
+        
+        // Oblicz podsumowanie finansowe za cały okres
+        const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
+        
+        setYearToDateSummary({
+          ...summary,
+          openingBalance: 0 // Saldo otwarcia roku to zawsze 0
+        });
+      } catch (error) {
+        console.error('Błąd podczas obliczania podglądu rok-do-daty:', error);
+        setYearToDateSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
+      } finally {
+        setIsCalculatingYearToDate(false);
+      }
+    };
+
+    calculateYearToDatePreview();
+  }, [showFromYearStart, selectedYear, selectedMonth, user?.location, form]);
 
   const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
     if (!user?.location) {
@@ -288,29 +335,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name="showFromYearStart"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>
-                  Pokaż podsumowanie od początku roku
-                </FormLabel>
-                <p className="text-sm text-muted-foreground">
-                  Zaznacz, aby zobaczyć dane finansowe za cały rok (tylko podgląd, bez zapisywania)
-                </p>
-              </div>
-            </FormItem>
-          )}
-        />
-
         {/* Podgląd podsumowania finansowego */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold mb-4">Podsumowanie finansowe za wybrany miesiąc</h3>
@@ -351,8 +375,81 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               </div>
             </div>
           )}
-          
         </div>
+
+        <FormField
+          control={form.control}
+          name="showFromYearStart"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Pokaż podsumowanie od początku roku
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Zaznacz, aby zobaczyć dane finansowe za cały rok (od stycznia do wybranego miesiąca)
+                </p>
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {/* Podgląd podsumowania rok-do-daty */}
+        {showFromYearStart && (
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-4">
+              Podsumowanie finansowe od początku {selectedYear} roku
+              {selectedMonth && ` do ${months.find(m => m.value === selectedMonth)?.label}`}
+            </h3>
+            
+            {isCalculatingYearToDate ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="sm" className="mr-2" />
+                <span>Obliczanie podsumowania od początku roku...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <h4 className="font-medium text-gray-600 mb-1">Otwarcie roku</h4>
+                  <p className="text-xl font-bold text-blue-600">
+                    {formatCurrency(yearToDateSummary.openingBalance)}
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <h4 className="font-medium text-gray-600 mb-1">Przychody</h4>
+                  <p className="text-xl font-bold text-green-600">
+                    {formatCurrency(yearToDateSummary.income)}
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <h4 className="font-medium text-gray-600 mb-1">Rozchody</h4>
+                  <p className="text-xl font-bold text-red-600">
+                    {formatCurrency(yearToDateSummary.expense)}
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <h4 className="font-medium text-gray-600 mb-1">Saldo końcowe</h4>
+                  <p className={`text-xl font-bold ${yearToDateSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(yearToDateSummary.openingBalance + yearToDateSummary.balance)}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-xs text-blue-600 mt-3">
+              * To podsumowanie pokazuje dane finansowe od 1 stycznia {selectedYear} do końca {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-end space-x-2">
           {onCancel && (
