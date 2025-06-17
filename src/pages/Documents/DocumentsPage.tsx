@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -190,7 +189,7 @@ const DocumentsPage = () => {
             placeholder="Szukaj po numerze, nazwie lub dacie..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-11"
           />
         </div>
 
