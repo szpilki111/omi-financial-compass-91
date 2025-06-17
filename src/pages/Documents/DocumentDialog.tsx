@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +55,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isClonedTransaction, setIsClonedTransaction] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isReportBlocked, setIsReportBlocked] = useState(false);
+  const [reportBlockedMessage, setReportBlockedMessage] = useState('');
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -116,6 +117,58 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const handleCancelClose = () => {
     setShowConfirmClose(false);
   };
+
+  // Check if report editing is blocked for the selected date
+  const checkReportEditingBlocked = async (documentDate: Date) => {
+    if (!user?.location) {
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: user.location,
+        p_document_date: format(documentDate, 'yyyy-MM-dd')
+      });
+
+      if (error) {
+        console.error('Error checking report editing status:', error);
+        return false;
+      }
+
+      const isBlocked = data === true;
+      setIsReportBlocked(isBlocked);
+      
+      if (isBlocked) {
+        const monthYear = format(documentDate, 'MMMM yyyy');
+        setReportBlockedMessage(`Nie można zapisać dokumentu. Raport za ${monthYear} został już złożony lub zatwierdzony.`);
+      } else {
+        setReportBlockedMessage('');
+      }
+
+      return isBlocked;
+    } catch (error) {
+      console.error('Error checking report editing status:', error);
+      return false;
+    }
+  };
+
+  // Check report status when document date changes
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'document_date' && value.document_date) {
+        checkReportEditingBlocked(new Date(value.document_date));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, user?.location]);
+
+  // Check report status when dialog opens for existing document
+  useEffect(() => {
+    if (document && isOpen) {
+      const documentDate = new Date(document.document_date);
+      checkReportEditingBlocked(documentDate);
+    }
+  }, [document, isOpen, user?.location]);
 
   // Generate document number using the database function
   const generateDocumentNumber = async (date: Date) => {
@@ -282,6 +335,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       toast({
         title: "Błąd",
         description: "Nie można określić lokalizacji lub ID użytkownika",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if report editing is blocked before saving
+    const isBlocked = await checkReportEditingBlocked(data.document_date);
+    if (isBlocked) {
+      toast({
+        title: "Błąd",
+        description: reportBlockedMessage,
         variant: "destructive",
       });
       return;
@@ -612,6 +676,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </DialogTitle>
           </DialogHeader>
 
+          {/* Display warning message if report is blocked */}
+          {isReportBlocked && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <p className="text-red-800 text-sm font-medium">
+                ⚠️ {reportBlockedMessage}
+              </p>
+            </div>
+          )}
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -690,7 +763,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 >
                   Anuluj
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button 
+                  type="submit" 
+                  disabled={isLoading || isReportBlocked}
+                >
                   {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
                 </Button>
               </div>
@@ -706,6 +782,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 variant="outline"
                 onClick={() => setShowTransactionForm(true)}
                 className="flex items-center gap-2"
+                disabled={isReportBlocked}
               >
                 <Plus className="h-4 w-4" />
                 Dodaj operację
@@ -713,7 +790,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </div>
 
             {/* Transaction form appears right after the button */}
-            {showTransactionForm && (
+            {showTransactionForm && !isReportBlocked && (
               <TransactionForm
                 onAdd={addTransaction}
                 onCancel={() => setShowTransactionForm(false)}
@@ -767,6 +844,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         size="sm"
                         onClick={() => handleEditTransaction(transaction, index)}
                         className="text-blue-600 hover:text-blue-700"
+                        disabled={isReportBlocked}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -776,6 +854,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         size="sm"
                         onClick={() => removeTransaction(index)}
                         className="text-red-600 hover:text-red-700"
+                        disabled={isReportBlocked}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
