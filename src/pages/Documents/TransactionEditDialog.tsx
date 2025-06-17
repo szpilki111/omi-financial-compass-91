@@ -15,8 +15,6 @@ import { AccountCombobox } from './AccountCombobox';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
 
 interface AmountField {
   id: string;
@@ -77,26 +75,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     enabled: !!user?.id,
   });
 
-  // Check if editing is blocked for this transaction
-  const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
-    queryKey: ['editingBlocked', transaction?.id, userProfile?.location_id],
-    queryFn: async () => {
-      if (!transaction || !userProfile?.location_id) return false;
-      
-      // Use the document date if available, otherwise use transaction date
-      const documentDate = transaction.document?.document_date || transaction.date;
-      
-      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
-        p_location_id: userProfile.location_id,
-        p_document_date: documentDate
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!transaction && !!userProfile?.location_id && isOpen,
-  });
-
   useEffect(() => {
     if (transaction) {
       setFormData({
@@ -127,7 +105,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
 
   // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
   const handleClose = () => {
-    if (hasUnsavedChanges && !isEditingBlocked) {
+    if (hasUnsavedChanges) {
       if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
         handleSubmit();
         return;
@@ -137,8 +115,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    if (isEditingBlocked) return; // Prevent changes when editing is blocked
-    
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
     
@@ -186,7 +162,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const handleDebitAmountChange = (fieldId: string, amount: number) => {
-    if (isEditingBlocked) return;
     setHasUnsavedChanges(true);
     setDebitFields(prev => prev.map(field => 
       field.id === fieldId ? { ...field, amount } : field
@@ -201,7 +176,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const handleCreditAmountChange = (fieldId: string, amount: number) => {
-    if (isEditingBlocked) return;
     setHasUnsavedChanges(true);
     setCreditFields(prev => prev.map(field => 
       field.id === fieldId ? { ...field, amount } : field
@@ -216,7 +190,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
-    if (isEditingBlocked) return;
     setHasUnsavedChanges(true);
     if (type === 'debit') {
       setDebitFields(prev => prev.map(field => 
@@ -230,7 +203,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const addNewField = (type: 'debit' | 'credit') => {
-    if (isEditingBlocked) return;
     const newField: AmountField = {
       id: Date.now().toString(),
       amount: 0,
@@ -247,7 +219,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const removeField = (fieldId: string, type: 'debit' | 'credit') => {
-    if (isEditingBlocked) return;
     if (type === 'debit' && debitFields.length > 1) {
       setDebitFields(prev => prev.filter(field => field.id !== fieldId));
     } else if (type === 'credit' && creditFields.length > 1) {
@@ -288,8 +259,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   };
 
   const handleSubmit = () => {
-    if (isEditingBlocked) return;
-    
     if (!validateForm()) {
       return;
     }
@@ -312,34 +281,12 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     setHasUnsavedChanges(false);
   };
 
-  if (checkingBlock) {
-    return (
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Sprawdzanie uprawnień...</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">Sprawdzanie czy operacja może być edytowana...</div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edytuj operację</DialogTitle>
         </DialogHeader>
-
-        {isEditingBlocked && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Nie można edytować tej operacji, ponieważ raport za ten okres został już złożony lub zatwierdzony.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <div className="space-y-4">
           <div>
@@ -350,7 +297,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Opis operacji finansowej"
               className={errors.description ? 'border-red-500' : ''}
-              disabled={isEditingBlocked}
             />
             {errors.description && (
               <p className="text-red-500 text-sm mt-1">{errors.description}</p>
@@ -377,10 +323,9 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                             onFocus={handleAmountFocus}
                             onBlur={() => handleAmountBlur(field.id, 'debit', field.amount)}
                             placeholder="0.00"
-                            disabled={isEditingBlocked}
                           />
                         </div>
-                        {debitFields.length > 1 && !isEditingBlocked && (
+                        {debitFields.length > 1 && (
                           <Button
                             type="button"
                             variant="outline"
@@ -399,7 +344,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                           locationId={userProfile?.location_id}
                           side="debit"
-                          disabled={isEditingBlocked}
                         />
                       </div>
                       {index > 0 && (
@@ -435,10 +379,9 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                             onFocus={handleAmountFocus}
                             onBlur={() => handleAmountBlur(field.id, 'credit', field.amount)}
                             placeholder="0.00"
-                            disabled={isEditingBlocked}
                           />
                         </div>
-                        {creditFields.length > 1 && !isEditingBlocked && (
+                        {creditFields.length > 1 && (
                           <Button
                             type="button"
                             variant="outline"
@@ -457,7 +400,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                           locationId={userProfile?.location_id}
                           side="credit"
-                          disabled={isEditingBlocked}
                         />
                       </div>
                       {index > 0 && (
@@ -487,7 +429,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
           <Button variant="outline" onClick={handleClose}>
             Anuluj
           </Button>
-          <Button onClick={handleSubmit} disabled={isEditingBlocked}>
+          <Button onClick={handleSubmit}>
             Zapisz operację
           </Button>
         </DialogFooter>

@@ -19,18 +19,6 @@ import { ArrowLeft } from "lucide-react";
 
 import DocumentDialog from '@/pages/Documents/DocumentDialog'; // <-- importujemy okno edycji dokumentu
 
-// Define a proper Document interface for the KPIR page
-interface DocumentForEdit {
-  id: string;
-  document_number: string;
-  document_name: string;
-  document_date: string;
-  location_id: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
 const KpirPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -42,8 +30,13 @@ const KpirPage: React.FC = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<KpirTransaction | null>(null);
-  // Updated state for document editing:
-  const [selectedDocumentToEdit, setSelectedDocumentToEdit] = useState<DocumentForEdit | null>(null);
+  // Nowy stan dla edycji dokumentu:
+  const [selectedDocumentToEdit, setSelectedDocumentToEdit] = useState<{
+    id: string;
+    document_number: string;
+    document_name: string;
+    document_date: string;
+  } | null>(null);
   const [showDocumentEditDialog, setShowDocumentEditDialog] = useState(false);
   
   // Stan filtrów
@@ -253,21 +246,10 @@ const KpirPage: React.FC = () => {
     });
   };
 
-  // Handler do otwierania edycji dokumentu - create full document object
+  // Handler do otwierania edycji dokumentu
   const handleEditDocument = (document: KpirTransaction["document"]) => {
     if (document) {
-      // Create a full document object with all required properties
-      const fullDocument: DocumentForEdit = {
-        id: document.id,
-        document_number: document.document_number,
-        document_name: document.document_name,
-        document_date: document.document_date,
-        location_id: user?.location || '', // Use current user's location
-        user_id: user?.id || '', // Use current user's id
-        created_at: new Date().toISOString(), // Default values
-        updated_at: new Date().toISOString(), // Default values
-      };
-      setSelectedDocumentToEdit(fullDocument);
+      setSelectedDocumentToEdit(document);
       setShowDocumentEditDialog(true);
     }
   };

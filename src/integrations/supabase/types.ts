@@ -707,10 +707,6 @@ export type Database = {
           | { user_id: string; new_password: string }
         Returns: boolean
       }
-      check_report_editing_blocked: {
-        Args: { p_location_id: string; p_document_date: string }
-        Returns: boolean
-      }
       create_user_admin: {
         Args: {
           user_email: string
