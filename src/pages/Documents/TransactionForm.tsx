@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from './types';
-import AccountCombobox from './AccountCombobox';
+import { AccountCombobox } from './AccountCombobox';
 
 interface TransactionFormProps {
   onAdd: (transaction: Transaction) => void;

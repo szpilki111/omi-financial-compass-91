@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -19,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Transaction } from './types';
-import AccountCombobox from './AccountCombobox';
+import { AccountCombobox } from './AccountCombobox';
 
 interface TransactionEditDialogProps {
   isOpen: boolean;
