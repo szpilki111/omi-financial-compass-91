@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,18 +65,34 @@ const DocumentsPage = () => {
       // Get transaction counts and total amounts for each document
       const documentsWithCounts = await Promise.all(
         (data || []).map(async (doc) => {
+          // Get transaction count
           const { count } = await supabase
             .from('transactions')
             .select('*', { count: 'exact', head: true })
             .eq('document_id', doc.id);
           
-          // Get total amount for the document
-          const { data: transactions } = await supabase
+          // Get all transactions for this document to calculate total amount
+          const { data: transactions, error: transactionsError } = await supabase
             .from('transactions')
-            .select('amount')
+            .select('amount, currency, exchange_rate')
             .eq('document_id', doc.id);
           
-          const totalAmount = transactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+          if (transactionsError) {
+            console.error('Error fetching transactions for document:', doc.id, transactionsError);
+          }
+          
+          // Calculate total amount in PLN (considering exchange rates)
+          const totalAmount = transactions?.reduce((sum, transaction) => {
+            const amount = Number(transaction.amount) || 0;
+            const exchangeRate = Number(transaction.exchange_rate) || 1;
+            
+            // Convert to PLN if currency is not PLN
+            const amountInPLN = transaction.currency === 'PLN' ? amount : amount * exchangeRate;
+            
+            return sum + amountInPLN;
+          }, 0) || 0;
+          
+          console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} PLN`);
           
           return {
             ...doc,
@@ -87,7 +104,7 @@ const DocumentsPage = () => {
         })
       );
 
-      console.log('Documents with counts:', documentsWithCounts);
+      console.log('Documents with counts and totals:', documentsWithCounts);
       return documentsWithCounts;
     },
   });
