@@ -42,6 +42,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isFirstDebitFieldFocused, setIsFirstDebitFieldFocused] = useState(false);
   const [isFirstCreditFieldFocused, setIsFirstCreditFieldFocused] = useState(false);
+  const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -80,21 +81,47 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
 
   // Funkcje do obsługi inteligentnych pól kwot
   const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
+    // Jeśli wartość to "0", usuń ją całkowicie
     if (e.target.value === '0') {
       e.target.value = '';
+      // Ustaw wartość w state na 0, żeby input był pusty
+      if (type === 'debit') {
+        setDebitFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      } else {
+        setCreditFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      }
     }
     
-    // Ustaw focus dla pierwszego pola
+    // Ustaw focus dla pierwszego pola i zapamiętaj czy drugie pole było zerem
     if (fieldId === '1') {
       if (type === 'debit') {
         setIsFirstDebitFieldFocused(true);
+        setWasSecondFieldZeroOnFirstFocus(creditFields[0]?.amount === 0);
       } else {
         setIsFirstCreditFieldFocused(true);
+        setWasSecondFieldZeroOnFirstFocus(debitFields[0]?.amount === 0);
       }
     }
   };
 
-  const handleAmountBlur = (fieldId: string, type: 'debit' | 'credit', amount: number) => {
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
+    // Jeśli pole jest puste po utracie fokusa, ustaw na 0
+    if (e.target.value === '' || e.target.value === undefined) {
+      if (type === 'debit') {
+        setDebitFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      } else {
+        setCreditFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      }
+    }
+
     // Wyłącz auto-uzupełnianie gdy pierwsze pole traci fokus
     if (fieldId === '1') {
       if (type === 'debit') {
@@ -102,6 +129,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       } else {
         setIsFirstCreditFieldFocused(false);
       }
+      setWasSecondFieldZeroOnFirstFocus(false);
     }
 
     const fields = type === 'debit' ? debitFields : creditFields;
@@ -133,8 +161,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       field.id === fieldId ? { ...field, amount } : field
     ));
 
-    // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy pierwsze pole debit ma fokus
-    if (fieldId === '1' && isFirstDebitFieldFocused && creditFields[0]?.amount === 0) {
+    // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole debit
+    // 2. Pierwsze pole debit ma fokus  
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstDebitFieldFocused && wasSecondFieldZeroOnFirstFocus) {
       setCreditFields(prev => prev.map((field, index) => 
         index === 0 ? { ...field, amount } : field
       ));
@@ -146,8 +177,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       field.id === fieldId ? { ...field, amount } : field
     ));
 
-    // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy pierwsze pole credit ma fokus
-    if (fieldId === '1' && isFirstCreditFieldFocused && debitFields[0]?.amount === 0) {
+    // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole credit
+    // 2. Pierwsze pole credit ma fokus
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstCreditFieldFocused && wasSecondFieldZeroOnFirstFocus) {
       setDebitFields(prev => prev.map((field, index) => 
         index === 0 ? { ...field, amount } : field
       ));
@@ -314,10 +348,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                         type="number"
                         step="0.01"
                         min="0"
-                        value={field.amount}
+                        value={field.amount === 0 ? '' : field.amount}
                         onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
-                        onBlur={() => handleAmountBlur(field.id, 'debit', field.amount)}
+                        onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
                         placeholder="0.00"
                       />
                     </div>
@@ -370,10 +404,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                         type="number"
                         step="0.01"
                         min="0"
-                        value={field.amount}
+                        value={field.amount === 0 ? '' : field.amount}
                         onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
-                        onBlur={() => handleAmountBlur(field.id, 'credit', field.amount)}
+                        onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
                         placeholder="0.00"
                       />
                     </div>
