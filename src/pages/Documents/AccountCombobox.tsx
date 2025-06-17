@@ -26,6 +26,7 @@ interface AccountComboboxProps {
   disabled?: boolean;
   locationId?: string;
   className?: string;
+  side?: 'debit' | 'credit'; // New prop to determine which side this is for
 }
 
 export const AccountCombobox: React.FC<AccountComboboxProps> = ({ 
@@ -33,7 +34,8 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   onChange, 
   disabled, 
   locationId,
-  className 
+  className,
+  side
 }) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -120,7 +122,18 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         console.error('Error fetching accounts:', error);
         setAccounts([]);
       } else {
-        setAccounts(data || []);
+        // Filter accounts based on side restrictions
+        let filteredData = data || [];
+        
+        if (side === 'debit') {
+          // For debit side (Winien), exclude accounts starting with "4"
+          filteredData = filteredData.filter(account => !account.number.startsWith('4'));
+        } else if (side === 'credit') {
+          // For credit side (Ma), exclude accounts starting with "7"
+          filteredData = filteredData.filter(account => !account.number.startsWith('7'));
+        }
+        
+        setAccounts(filteredData);
       }
       setLoading(false);
     };
@@ -130,7 +143,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, open, locationId]);
+  }, [searchTerm, open, locationId, side]);
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {

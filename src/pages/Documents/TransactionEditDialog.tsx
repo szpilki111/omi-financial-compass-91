@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -344,6 +343,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           value={field.accountId}
                           onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                           locationId={userProfile?.location_id}
+                          side="debit"
                         />
                       </div>
                       {index > 0 && (
@@ -399,6 +399,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           value={field.accountId}
                           onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                           locationId={userProfile?.location_id}
+                          side="credit"
                         />
                       </div>
                       {index > 0 && (
