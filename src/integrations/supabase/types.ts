@@ -565,13 +565,13 @@ export type Database = {
       }
       transactions: {
         Row: {
-          amount: number | null
+          amount: number
           created_at: string
-          credit_account_id: string | null
+          credit_account_id: string
           credit_amount: number | null
           currency: string
           date: string
-          debit_account_id: string | null
+          debit_account_id: string
           debit_amount: number | null
           description: string
           document_id: string | null
@@ -586,13 +586,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          amount?: number | null
+          amount: number
           created_at?: string
-          credit_account_id?: string | null
+          credit_account_id: string
           credit_amount?: number | null
           currency?: string
           date: string
-          debit_account_id?: string | null
+          debit_account_id: string
           debit_amount?: number | null
           description: string
           document_id?: string | null
@@ -607,13 +607,13 @@ export type Database = {
           user_id: string
         }
         Update: {
-          amount?: number | null
+          amount?: number
           created_at?: string
-          credit_account_id?: string | null
+          credit_account_id?: string
           credit_amount?: number | null
           currency?: string
           date?: string
-          debit_account_id?: string | null
+          debit_account_id?: string
           debit_amount?: number | null
           description?: string
           document_id?: string | null
