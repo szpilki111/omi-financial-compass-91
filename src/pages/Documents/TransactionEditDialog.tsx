@@ -11,13 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Transaction } from './types';
 import { AccountCombobox } from './AccountCombobox';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +21,7 @@ interface AmountField {
   id: string;
   amount: number;
   accountId: string;
+  description?: string; // Dodano pole opisu dla każdego pola
 }
 
 interface TransactionEditDialogProps {
@@ -53,15 +47,14 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: '',
-    settlement_type: 'Bank',
   });
 
   const [debitFields, setDebitFields] = useState<AmountField[]>([
-    { id: '1', amount: 0, accountId: '' }
+    { id: '1', amount: 0, accountId: '', description: '' }
   ]);
 
   const [creditFields, setCreditFields] = useState<AmountField[]>([
-    { id: '1', amount: 0, accountId: '' }
+    { id: '1', amount: 0, accountId: '', description: '' }
   ]);
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -87,19 +80,20 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     if (transaction) {
       setFormData({
         description: transaction.description || '',
-        settlement_type: transaction.settlement_type || 'Bank',
       });
 
       setDebitFields([{
         id: '1',
         amount: transaction.debit_amount || 0,
-        accountId: transaction.debit_account_id || ''
+        accountId: transaction.debit_account_id || '',
+        description: transaction.description || ''
       }]);
 
       setCreditFields([{
         id: '1',
         amount: transaction.credit_amount || 0,
-        accountId: transaction.credit_account_id || ''
+        accountId: transaction.credit_account_id || '',
+        description: transaction.description || ''
       }]);
 
       setHasUnsavedChanges(false);
@@ -129,6 +123,12 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+
+    // Jeśli zmienił się opis głównej operacji, zaktualizuj opisy we wszystkich polach
+    if (field === 'description') {
+      setDebitFields(prev => prev.map(field => ({ ...field, description: value })));
+      setCreditFields(prev => prev.map(field => ({ ...field, description: value })));
+    }
   };
 
   const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -151,7 +151,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
         const newField: AmountField = {
           id: Date.now().toString(),
           amount: difference,
-          accountId: ''
+          accountId: '',
+          description: formData.description // Skopiuj opis z głównej operacji
         };
         
         if (currentTotal < oppositeTotal) {
@@ -206,7 +207,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     const newField: AmountField = {
       id: Date.now().toString(),
       amount: 0,
-      accountId: ''
+      accountId: '',
+      description: formData.description // Skopiuj opis z głównej operacji
     };
 
     if (type === 'debit') {
@@ -274,7 +276,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       debit_amount: mainDebit.amount,
       credit_amount: mainCredit.amount,
       amount: Math.max(mainDebit.amount, mainCredit.amount),
-      settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
     };
 
     onSave(updatedTransaction);
@@ -345,6 +346,14 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           locationId={userProfile?.location_id}
                         />
                       </div>
+                      {index > 0 && (
+                        <div>
+                          <Label className="text-sm text-gray-600">Opis operacji</Label>
+                          <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
+                            {field.description || formData.description}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <Button
@@ -401,6 +410,14 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           locationId={userProfile?.location_id}
                         />
                       </div>
+                      {index > 0 && (
+                        <div>
+                          <Label className="text-sm text-gray-600">Opis operacji</Label>
+                          <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
+                            {field.description || formData.description}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <Button
@@ -423,23 +440,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               {errors.accounts && <p>{errors.accounts}</p>}
             </div>
           )}
-
-          <div>
-            <Label>Forma rozrachunku</Label>
-            <Select 
-              value={formData.settlement_type} 
-              onValueChange={(value) => handleChange('settlement_type', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Gotówka">Gotówka</SelectItem>
-                <SelectItem value="Bank">Bank</SelectItem>
-                <SelectItem value="Rozrachunek">Rozrachunek</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         <DialogFooter>

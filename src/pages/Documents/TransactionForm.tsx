@@ -7,13 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from './types';
 import { AccountCombobox } from './AccountCombobox';
@@ -22,6 +15,7 @@ interface AmountField {
   id: string;
   amount: number;
   accountId: string;
+  description?: string; // Dodano pole opisu dla każdego pola
 }
 
 interface TransactionFormProps {
@@ -39,11 +33,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   });
 
   const [debitFields, setDebitFields] = useState<AmountField[]>([
-    { id: '1', amount: 0, accountId: '' }
+    { id: '1', amount: 0, accountId: '', description: '' }
   ]);
 
   const [creditFields, setCreditFields] = useState<AmountField[]>([
-    { id: '1', amount: 0, accountId: '' }
+    { id: '1', amount: 0, accountId: '', description: '' }
   ]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,6 +69,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+
+    // Jeśli zmienił się opis głównej operacji, zaktualizuj opisy we wszystkich polach
+    if (field === 'description') {
+      setDebitFields(prev => prev.map(field => ({ ...field, description: value })));
+      setCreditFields(prev => prev.map(field => ({ ...field, description: value })));
+    }
   };
 
   // Funkcje do obsługi inteligentnych pól kwot
@@ -98,7 +98,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         const newField: AmountField = {
           id: Date.now().toString(),
           amount: difference,
-          accountId: ''
+          accountId: '',
+          description: formData.description // Skopiuj opis z głównej operacji
         };
         
         if (currentTotal < oppositeTotal) {
@@ -150,7 +151,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     const newField: AmountField = {
       id: Date.now().toString(),
       amount: 0,
-      accountId: ''
+      accountId: '',
+      description: formData.description // Skopiuj opis z głównej operacji
     };
 
     if (type === 'debit') {
@@ -283,6 +285,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       locationId={userProfile?.location_id}
                     />
                   </div>
+                  {index > 0 && (
+                    <div>
+                      <Label className="text-sm text-gray-600">Opis operacji</Label>
+                      <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
+                        {field.description || formData.description}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
               <Button
@@ -337,6 +347,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       locationId={userProfile?.location_id}
                     />
                   </div>
+                  {index > 0 && (
+                    <div>
+                      <Label className="text-sm text-gray-600">Opis operacji</Label>
+                      <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
+                        {field.description || formData.description}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
               <Button
@@ -358,23 +376,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
             {errors.accounts && <p>{errors.accounts}</p>}
           </div>
         )}
-
-        <div>
-          <Label>Forma rozrachunku</Label>
-          <Select 
-            value={formData.settlement_type} 
-            onValueChange={(value) => handleChange('settlement_type', value)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Gotówka">Gotówka</SelectItem>
-              <SelectItem value="Bank">Bank</SelectItem>
-              <SelectItem value="Rozrachunek">Rozrachunek</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
 
         <div className="flex gap-2 pt-4">
           <Button type="submit" size="sm">
