@@ -130,7 +130,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       console.log('Checking report status for:', { year, month, locationId: user.location });
 
-      // KLUCZOWA POPRAWKA: Sprawdź status raportu używając polskich statusów
       const { data: reports, error } = await supabase
         .from('reports')
         .select('status')
@@ -365,7 +364,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     const isBlocked = await checkReportEditingBlocked(data.document_date);
     if (isBlocked) {
       toast({
-        title: "Błąd zapisu",
+        title: "Nie można zapisać dokumentu",
         description: reportBlockedMessage,
         variant: "destructive",
       });
@@ -381,9 +380,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
       return;
     }
-
-    // USUNIĘTA WALIDACJA: Nie wymagamy już, żeby wszystkie transakcje miały wybrane oba konta
-    // Operacje mogą mieć tylko jedno konto (debit lub credit)
 
     setIsLoading(true);
     try {
@@ -426,7 +422,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         documentId = newDocument.id;
       }
 
-      // KLUCZOWA POPRAWKA: Upewnij się, że description ZAWSZE jest stringiem
+      // Ensure description is always a string
       const transactionsSafe = transactions.map((t, idx) => ({
         ...t,
         description:
@@ -453,8 +449,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           const transactionsToInsert = transactionsSafe.map(t => {
             return {
               document_id: documentId,
-              debit_account_id: t.debit_account_id || null, // Może być null
-              credit_account_id: t.credit_account_id || null, // Może być null
+              debit_account_id: t.debit_account_id || null,
+              credit_account_id: t.credit_account_id || null,
               amount: t.amount,
               debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
               credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
@@ -663,10 +659,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         setTransactions(prev => {
           const updated = [...prev];
           
-          // KLUCZOWA ZMIANA: Usuń oryginalną transakcję
+          // Remove original transaction
           updated.splice(editingTransactionIndex, 1);
           
-          // Dodaj wszystkie nowe transakcje na tej samej pozycji
+          // Add all new transactions at the same position
           updated.splice(editingTransactionIndex, 0, ...transactionsWithAccountNumbers);
           
           console.log('Updated transactions array:', updated);
