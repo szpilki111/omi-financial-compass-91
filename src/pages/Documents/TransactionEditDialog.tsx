@@ -356,15 +356,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                       )}
                     </div>
                   ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addNewField('debit')}
-                    className="w-full"
-                  >
-                    + Dodaj pole Winien
-                  </Button>
                 </div>
               </div>
             )}
@@ -420,15 +411,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                       )}
                     </div>
                   ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addNewField('credit')}
-                    className="w-full"
-                  >
-                    + Dodaj pole Ma
-                  </Button>
                 </div>
               </div>
             )}
