@@ -464,30 +464,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       description: "Strona Winien została powielona",
     });
   };
-
-  const duplicateCreditSide = (index: number) => {
-    const originalTransaction = transactions[index];
-    
-    // For child transactions, don't modify the original - just duplicate as is
-    if (originalTransaction.isCloned) {
-      const duplicatedTransaction: Transaction = {
-        ...originalTransaction,
-        id: undefined, // Remove ID so it gets a new one when saved
-      };
-      
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Insert the duplicated transaction right after the original one
-        updated.splice(index + 1, 0, duplicatedTransaction);
-        return updated;
-      });
-
-      toast({
-        title: "Sukces",
-        description: "Operacja została powielona",
-      });
-      return;
-    }
     
     // For parent transactions, use the original logic
     const updatedOriginal = {
@@ -760,33 +736,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {/* Show duplication buttons based on cloned type restrictions */}
-                      {(!transaction.isCloned || transaction.clonedType === 'debit') && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => duplicateDebitSide(index)}
-                          className="text-green-600 hover:text-green-700"
-                          title="Powiel stronę Winien"
-                        >
-                          <Copy className="h-4 w-4" />
-                          W
-                        </Button>
-                      )}
-                      {(!transaction.isCloned || transaction.clonedType === 'credit') && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => duplicateCreditSide(index)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Powiel stronę Ma"
-                        >
-                          <Copy className="h-4 w-4" />
-                          M
-                        </Button>
-                      )}
                       <Button
                         type="button"
                         variant="ghost"
