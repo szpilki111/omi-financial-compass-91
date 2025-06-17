@@ -1,320 +1,177 @@
-
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Edit, Copy } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { Transaction } from './types';
+import DocumentTable from './DocumentTable';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
+import TransactionSplitDialog from './TransactionSplitDialog';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
-import { Transaction } from './types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
+
+interface Document {
+  id: string;
+  document_number: string;
+  document_name: string;
+  document_date: string;
+  location_id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface DocumentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onDocumentCreated: () => void;
-  document?: any;
+  document?: Document | null;
 }
 
-interface DocumentFormData {
-  document_number: string;
-  document_name: string;
-  document_date: Date;
-}
-
-const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
+const DocumentDialog: React.FC<DocumentDialogProps> = ({
+  isOpen,
+  onClose,
+  onDocumentCreated,
+  document,
+}) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [showTransactionForm, setShowTransactionForm] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [hiddenFieldsInEdit, setHiddenFieldsInEdit] = useState<{debit?: boolean, credit?: boolean}>({});
-  const [isClonedTransaction, setIsClonedTransaction] = useState(false);
-  const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
 
-  const form = useForm<DocumentFormData>({
-    defaultValues: {
-      document_number: '',
-      document_name: '',
-      document_date: new Date(),
-    },
+  const [formData, setFormData] = useState({
+    document_number: '',
+    document_name: '',
+    document_date: format(new Date(), 'yyyy-MM-dd'),
   });
 
-  // Track form changes to detect unsaved changes
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      setHasUnsavedChanges(true);
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
 
-  // Track transaction changes
-  useEffect(() => {
-    if (transactions.length > 0) {
-      setHasUnsavedChanges(true);
-    }
-  }, [transactions]);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
-  // Reset unsaved changes flag when dialog opens for new document
-  useEffect(() => {
-    if (isOpen && !document) {
-      setHasUnsavedChanges(false);
-    }
-  }, [isOpen, document]);
-
-  // Handle dialog close with confirmation if there are unsaved changes
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) {
-      // Dialog is being closed
-      if (hasUnsavedChanges) {
-        setShowConfirmClose(true);
-      } else {
-        onClose();
-      }
-    }
-  };
-
-  const handleCloseDialog = () => {
-    if (hasUnsavedChanges) {
-      setShowConfirmClose(true);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleConfirmClose = () => {
-    setShowConfirmClose(false);
-    setHasUnsavedChanges(false);
-    onClose();
-  };
-
-  const handleCancelClose = () => {
-    setShowConfirmClose(false);
-  };
-
-  // Generate document number using the database function
-  const generateDocumentNumber = async (date: Date) => {
-    if (!user?.location) {
-      toast({
-        title: "Błąd",
-        description: "Nie można określić lokalizacji użytkownika",
-        variant: "destructive",
-      });
-      return '';
-    }
-
-    setIsGeneratingNumber(true);
-    try {
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1; // JavaScript months are 0-indexed
-
-      const { data, error } = await supabase.rpc('generate_document_number', {
-        p_location_id: user.location,
-        p_year: year,
-        p_month: month
+  // Check if editing is blocked for this document
+  const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
+    queryKey: ['editingBlocked', document?.id, userProfile?.location_id, formData.document_date],
+    queryFn: async () => {
+      if (!userProfile?.location_id) return false;
+      
+      // Use document date if editing existing document, otherwise use form date
+      const dateToCheck = document?.document_date || formData.document_date;
+      
+      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: userProfile.location_id,
+        p_document_date: dateToCheck
       });
 
-      if (error) {
-        console.error('Error generating document number:', error);
-        throw error;
-      }
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id && isOpen,
+  });
 
-      return data || '';
-    } catch (error: any) {
-      console.error('Error generating document number:', error);
-      toast({
-        title: "Błąd",
-        description: "Nie udało się wygenerować numeru dokumentu",
-        variant: "destructive",
-      });
-      return '';
-    } finally {
-      setIsGeneratingNumber(false);
-    }
-  };
-
-  // Load document data when editing
   useEffect(() => {
     if (document) {
-      form.reset({
+      setFormData({
         document_number: document.document_number,
         document_name: document.document_name,
-        document_date: new Date(document.document_date),
+        document_date: document.document_date,
       });
-      
-      // Load existing transactions only for existing documents
-      loadTransactions(document.id);
-      setHasUnsavedChanges(false);
     } else {
-      // For new documents, always start with empty form and no transactions
-      form.reset({
+      setFormData({
         document_number: '',
         document_name: '',
-        document_date: new Date(),
-      });
-      setTransactions([]); // Explicitly clear transactions for new documents
-      setHasUnsavedChanges(false);
-    }
-  }, [document, form, isOpen]); // Added isOpen to dependency array
-
-  // Clear transactions when dialog closes and opens for new document
-  useEffect(() => {
-    if (isOpen && !document) {
-      // This is a new document - ensure transactions are cleared
-      setTransactions([]);
-    }
-  }, [isOpen, document]);
-
-  // Auto-generate document number for new documents when date changes
-  useEffect(() => {
-    if (!document && isOpen) {
-      const subscription = form.watch((value, { name }) => {
-        if (name === 'document_date' && value.document_date) {
-          generateDocumentNumber(new Date(value.document_date)).then(generatedNumber => {
-            if (generatedNumber) {
-              form.setValue('document_number', generatedNumber);
-            }
-          });
-        }
-      });
-      return () => subscription.unsubscribe();
-    }
-  }, [document, isOpen, form]);
-
-  // Generate initial document number for new documents
-  useEffect(() => {
-    if (!document && isOpen && user?.location) {
-      const currentDate = form.getValues('document_date');
-      generateDocumentNumber(currentDate).then(generatedNumber => {
-        if (generatedNumber) {
-          form.setValue('document_number', generatedNumber);
-        }
+        document_date: format(new Date(), 'yyyy-MM-dd'),
       });
     }
-  }, [document, isOpen, user?.location]);
+    setHasUnsavedChanges(false);
+  }, [document, isOpen]);
 
-  // Load account numbers for transactions
-  const loadAccountNumbersForTransactions = async (transactionsToLoad: Transaction[]) => {
-    try {
-      const accountIds = new Set<string>();
-      transactionsToLoad.forEach(t => {
-        if (t.debit_account_id) accountIds.add(t.debit_account_id);
-        if (t.credit_account_id) accountIds.add(t.credit_account_id);
-      });
+  const fetchTransactions = async (documentId: string) => {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('document_id', documentId);
 
-      if (accountIds.size === 0) return transactionsToLoad;
-
-      const { data: accounts, error } = await supabase
-        .from('accounts')
-        .select('id, number, name')
-        .in('id', Array.from(accountIds));
-
-      if (error) throw error;
-
-      const accountsMap = new Map(accounts?.map(acc => [acc.id, acc]) || []);
-
-      return transactionsToLoad.map(transaction => ({
-        ...transaction,
-        debitAccountNumber: accountsMap.get(transaction.debit_account_id)?.number || '',
-        creditAccountNumber: accountsMap.get(transaction.credit_account_id)?.number || '',
-      }));
-    } catch (error) {
-      console.error('Error loading account numbers:', error);
-      return transactionsToLoad;
+    if (error) {
+      console.error('Error fetching transactions:', error);
+      throw error;
     }
+
+    return data;
   };
 
-  const loadTransactions = async (documentId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('document_id', documentId);
+  const { data: transactions } = useQuery({
+    queryKey: ['transactions', document?.id],
+    queryFn: () => fetchTransactions(document!.id),
+    enabled: !!document?.id,
+  });
 
-      if (error) throw error;
-      
-      const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(data || []);
-      setTransactions(transactionsWithAccountNumbers);
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-    }
-  };
-
-  const handleRegenerateNumber = async () => {
-    const currentDate = form.getValues('document_date');
-    const generatedNumber = await generateDocumentNumber(currentDate);
-    if (generatedNumber) {
-      form.setValue('document_number', generatedNumber);
-      toast({
-        title: "Sukces",
-        description: "Numer dokumentu został wygenerowany ponownie",
-      });
-    }
-  };
-
-  const onSubmit = async (data: DocumentFormData) => {
-    if (!user?.location || !user?.id) {
-      toast({
-        title: "Błąd",
-        description: "Nie można określić lokalizacji lub ID użytkownika",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const handleSaveDocument = async () => {
+    if (isEditingBlocked) return;
+    
     setIsLoading(true);
+
     try {
-      let documentId = document?.id;
-
-      console.log('Creating/updating document with user_id:', user.id);
-
       if (document) {
         // Update existing document
         const { error } = await supabase
           .from('documents')
           .update({
-            document_number: data.document_number,
-            document_name: data.document_name,
-            document_date: format(data.document_date, 'yyyy-MM-dd'),
+            document_number: formData.document_number,
+            document_name: formData.document_name,
+            document_date: formData.document_date,
           })
           .eq('id', document.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error updating document:', error);
+          throw error;
+        }
+
+        toast({
+          title: "Sukces",
+          description: "Dokument został zaktualizowany pomyślnie",
+        });
       } else {
-        // Create new document - ensure user_id is set correctly
-        const { data: newDocument, error } = await supabase
+        // Create new document
+        const { data, error } = await supabase
           .from('documents')
           .insert({
-            document_number: data.document_number,
-            document_name: data.document_name,
-            document_date: format(data.document_date, 'yyyy-MM-dd'),
-            location_id: user.location,
-            user_id: user.id, // Explicitly set the user_id
+            document_number: formData.document_number,
+            document_name: formData.document_name,
+            document_date: formData.document_date,
+            location_id: userProfile?.location_id,
+            user_id: user?.id,
           })
           .select()
           .single();
@@ -323,71 +180,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           console.error('Error creating document:', error);
           throw error;
         }
+
+        toast({
+          title: "Sukces",
+          description: "Dokument został utworzony pomyślnie",
+        });
         
-        console.log('Document created successfully:', newDocument);
-        documentId = newDocument.id;
-      }
+        // Invalidate documents query to refresh the list
+        queryClient.invalidateQueries({ queryKey: ['documents'] });
 
-      // KLUCZOWA POPRAWKA: Upewnij się, że description ZAWSZE jest stringiem
-      const transactionsSafe = transactions.map((t, idx) => ({
-        ...t,
-        description:
-          typeof t.description === "string" && t.description.trim() !== ""
-            ? t.description
-            : "",
-      }));
-
-      // Save transactions if any - CRITICAL FIX HERE
-      if (documentId) {
-        // First, delete existing transactions if editing (FIXED: Always delete for consistency)
-        const { error: deleteError } = await supabase
-          .from('transactions')
-          .delete()
-          .eq('document_id', documentId);
-
-        if (deleteError) {
-          console.error('Error deleting existing transactions:', deleteError);
-          throw deleteError;
-        }
-
-        // Insert new/updated transactions only if there are any
-        if (transactionsSafe.length > 0) {
-          const transactionsToInsert = transactionsSafe.map(t => {
-            // CRITICAL FIX: Zawsze explicitnie przypisujemy wartości amount i oba pola stron, bez "magicznego" fallbackowania.
-            // amount pole zostaje domyślną podstawową wartością (historycznie), debit_amount i credit_amount zawsze osobno
-            return {
-              document_id: documentId,
-              debit_account_id: t.debit_account_id,
-              credit_account_id: t.credit_account_id,
-              amount: t.amount, // amount zachowujemy jako podstawowe pole (histori compatibility/prezentacja)
-              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
-              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
-              description: t.description, // Teraz na pewno nie będzie null!
-              settlement_type: t.settlement_type,
-              date: format(data.document_date, 'yyyy-MM-dd'),
-              location_id: user.location,
-              user_id: user.id,
-              document_number: data.document_number, // Add document number for better traceability
-            };
-          });
-
-          console.log('Inserting transactions:', transactionsToInsert);
-
-          const { error: transactionError } = await supabase
-            .from('transactions')
-            .insert(transactionsToInsert);
-
-          if (transactionError) {
-            console.error('Error inserting transactions:', transactionError);
-            throw transactionError;
-          }
-
-          console.log('Transactions inserted successfully');
-        }
+        // Call the callback to signal document creation
+        onDocumentCreated();
       }
 
       setHasUnsavedChanges(false);
-      onDocumentCreated();
       onClose();
     } catch (error: any) {
       console.error('Error saving document:', error);
@@ -401,449 +207,236 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
-  const addTransaction = async (transaction: Transaction) => {
-    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
-    setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
-    setShowTransactionForm(false);
-  };
-
-  const removeTransaction = (index: number) => {
-    setTransactions(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const duplicateDebitSide = (index: number) => {
-    const originalTransaction = transactions[index];
-    
-    // For child transactions, don't modify the original - just duplicate as is
-    if (originalTransaction.isCloned) {
-      const duplicatedTransaction: Transaction = {
-        ...originalTransaction,
-        id: undefined, // Remove ID so it gets a new one when saved
-      };
-      
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Insert the duplicated transaction right after the original one
-        updated.splice(index + 1, 0, duplicatedTransaction);
-        return updated;
-      });
-
+  const handleTransactionDelete = async (transactionId: string) => {
+    if (isEditingBlocked) {
       toast({
-        title: "Sukces",
-        description: "Operacja została powielona",
+        title: "Błąd",
+        description: "Nie można usuwać operacji - raport za ten okres został już złożony lub zatwierdzony",
+        variant: "destructive",
       });
       return;
     }
-    
-    // For parent transactions, use the original logic
-    const updatedOriginal = {
-      ...originalTransaction,
-      debit_amount: 0,
-      amount: originalTransaction.credit_amount || originalTransaction.amount,
-    };
-    
-    const duplicatedTransaction: Transaction = {
-      ...originalTransaction,
-      description: '',
-      debit_amount: originalTransaction.debit_amount || originalTransaction.amount,
-      credit_amount: 0,
-      amount: originalTransaction.debit_amount || originalTransaction.amount,
-      id: undefined,
-      isCloned: true,
-      clonedType: 'debit' as const
-    };
-    
-    setTransactions(prev => {
-      const updated = [...prev];
-      updated[index] = updatedOriginal;
-      updated.splice(index + 1, 0, duplicatedTransaction);
-      return updated;
-    });
 
-    toast({
-      title: "Sukces",
-      description: "Strona Winien została powielona",
-    });
-  };
-
-  const duplicateCreditSide = (index: number) => {
-    const originalTransaction = transactions[index];
-    
-    // For child transactions, don't modify the original - just duplicate as is
-    if (originalTransaction.isCloned) {
-      const duplicatedTransaction: Transaction = {
-        ...originalTransaction,
-        id: undefined, // Remove ID so it gets a new one when saved
-      };
-      
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Insert the duplicated transaction right after the original one
-        updated.splice(index + 1, 0, duplicatedTransaction);
-        return updated;
-      });
-
-      toast({
-        title: "Sukces",
-        description: "Operacja została powielona",
-      });
+    if (!confirm('Czy na pewno chcesz usunąć tę operację?')) {
       return;
     }
-    
-    // For parent transactions, use the original logic
-    const updatedOriginal = {
-      ...originalTransaction,
-      credit_amount: 0,
-      amount: originalTransaction.debit_amount || originalTransaction.amount,
-    };
-    
-    const duplicatedTransaction: Transaction = {
-      ...originalTransaction,
-      description: '',
-      debit_amount: 0,
-      credit_amount: originalTransaction.credit_amount || originalTransaction.amount,
-      amount: originalTransaction.credit_amount || originalTransaction.amount,
-      id: undefined,
-      isCloned: true,
-      clonedType: 'credit' as const
-    };
-    
-    setTransactions(prev => {
-      const updated = [...prev];
-      updated[index] = updatedOriginal;
-      updated.splice(index + 1, 0, duplicatedTransaction);
-      return updated;
-    });
 
-    toast({
-      title: "Sukces",
-      description: "Strona Ma została powielona",
-    });
-  };
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', transactionId);
 
-  const handleEditTransaction = (transaction: Transaction, index: number) => {
-    // Check if this is a cloned transaction and determine hidden fields
-    let hideFields = {};
-    
-    if (transaction.isCloned) {
-      // For cloned transactions, hide the opposite side
-      hideFields = {
-        debit: transaction.clonedType === 'credit',
-        credit: transaction.clonedType === 'debit',
-      };
-      setIsClonedTransaction(true);
-    } else {
-      // For regular transactions, determine which fields to hide based on amounts
-      hideFields = {
-        debit: transaction.debit_amount === 0,
-        credit: transaction.credit_amount === 0,
-      };
-      setIsClonedTransaction(false);
-    }
-    
-    setHiddenFieldsInEdit(hideFields);
-    setEditingTransaction(transaction);
-    setEditingTransactionIndex(index);
-    setShowEditDialog(true);
-  };
-
-  const handleTransactionUpdated = async (updatedTransaction: Transaction) => {
-    if (document?.id) {
-      loadTransactions(document.id);
-    } else {
-      if (editingTransactionIndex !== null) {
-        const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
-        setTransactions(prev => {
-          const updated = [...prev];
-          const originalTransaction = updated[editingTransactionIndex];
-
-          // Nowa logika: zawsze nadpisujemy pod tym indeksem, nie klonujemy już raz sklonowanej transakcji!
-          let finalTransaction = transactionWithAccountNumbers[0];
-
-          if (originalTransaction.isCloned && originalTransaction.clonedType) {
-            finalTransaction = {
-              ...finalTransaction,
-              isCloned: true,
-              clonedType: originalTransaction.clonedType,
-            };
-
-            if (originalTransaction.clonedType === 'debit') {
-              finalTransaction.credit_amount = 0;
-              finalTransaction.amount = finalTransaction.debit_amount || 0;
-            } else if (originalTransaction.clonedType === 'credit') {
-              finalTransaction.debit_amount = 0;
-              finalTransaction.amount = finalTransaction.credit_amount || 0;
-            }
-          }
-
-          updated[editingTransactionIndex] = finalTransaction;
-          return updated;
-        });
+      if (error) {
+        console.error('Error deleting transaction:', error);
+        throw error;
       }
+
+      toast({
+        title: "Sukces",
+        description: "Operacja została usunięta pomyślnie",
+      });
+
+      // Refresh transactions list
+      queryClient.invalidateQueries({ queryKey: ['transactions', document?.id] });
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error);
+      toast({
+        title: "Błąd",
+        description: error.message || "Nie udało się usunąć operacji",
+        variant: "destructive",
+      });
     }
-    setShowEditDialog(false);
-    setEditingTransaction(null);
-    setEditingTransactionIndex(null);
-    setIsClonedTransaction(false);
   };
 
-  // Calculate separate sums for debit and credit using the new columns
-  const debitTotal = transactions.reduce((sum, t) => {
-    const debitAmount = t.debit_amount !== undefined ? t.debit_amount : t.amount;
-    return sum + debitAmount;
-  }, 0);
-  
-  const creditTotal = transactions.reduce((sum, t) => {
-    const creditAmount = t.credit_amount !== undefined ? t.credit_amount : t.amount;
-    return sum + creditAmount;
-  }, 0);
+  const handleClose = () => {
+    if (hasUnsavedChanges && !isEditingBlocked) {
+      setShowConfirmDialog(true);
+    } else {
+      onClose();
+    }
+  };
 
-  console.log('Transactions:', transactions);
-  console.log('Debit total:', debitTotal);
-  console.log('Credit total:', creditTotal);
+  const handleDiscardChanges = () => {
+    setShowConfirmDialog(false);
+    onClose();
+  };
+
+  const handleConfirmSave = () => {
+    setShowConfirmDialog(false);
+    handleSaveDocument();
+  };
+
+  if (checkingBlock) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sprawdzanie uprawnień...</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">Sprawdzanie czy dokument może być edytowany...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {document ? 'Edytuj dokument' : 'Nowy dokument'}
-            </DialogTitle>
-          </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {document ? 'Edytuj dokument' : 'Nowy dokument'}
+          </DialogTitle>
+        </DialogHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="document_number"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Numer dokumentu</FormLabel>
-                      <div className="flex gap-2">
-                        <FormControl>
-                          <Input {...field} placeholder="np. DOM/2024/01/001" />
-                        </FormControl>
-                        {!document && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleRegenerateNumber}
-                            disabled={isGeneratingNumber}
-                            title="Wygeneruj ponownie numer dokumentu"
-                          >
-                            <RefreshCw className={cn("h-4 w-4", isGeneratingNumber && "animate-spin")} />
-                          </Button>
-                        )}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+        {isEditingBlocked && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {document 
+                ? "Nie można edytować tego dokumentu, ponieważ raport za ten okres został już złożony lub zatwierdzony."
+                : "Nie można tworzyć dokumentów na tę datę, ponieważ raport za ten okres został już złożony lub zatwierdzony."
+              }
+            </AlertDescription>
+          </Alert>
+        )}
 
-                <FormField
-                  control={form.control}
-                  name="document_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Data dokumentu</FormLabel>
-                      <FormControl>
-                        <DatePicker
-                          value={field.value}
-                          onChange={field.onChange}
-                          placeholder="Wybierz datę"
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="document_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nazwa dokumentu</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Opisowa nazwa dokumentu" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <div className="space-y-6">
+          {/* Document form */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="document_number">Numer dokumentu *</Label>
+              <Input
+                id="document_number"
+                value={formData.document_number}
+                onChange={(e) => {
+                  if (!isEditingBlocked) {
+                    setFormData({ ...formData, document_number: e.target.value });
+                    setHasUnsavedChanges(true);
+                  }
+                }}
+                placeholder="Zostanie wygenerowany automatycznie"
+                disabled={isEditingBlocked}
               />
-
-              <div className="flex justify-end space-x-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => {
-                    setHasUnsavedChanges(false);
-                    onClose();
-                  }}
-                >
-                  Anuluj
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
-                </Button>
-              </div>
-            </form>
-          </Form>
-
-          {/* Operations section - outside the main form to prevent nesting */}
-          <div className="space-y-4 border-t pt-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Operacje</h3>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowTransactionForm(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Dodaj operację
-              </Button>
             </div>
 
-            {/* Transaction form appears right after the button */}
-            {showTransactionForm && (
-              <TransactionForm
-                onAdd={addTransaction}
-                onCancel={() => setShowTransactionForm(false)}
+            <div>
+              <Label htmlFor="document_name">Nazwa dokumentu *</Label>
+              <Input
+                id="document_name"
+                value={formData.document_name}
+                onChange={(e) => {
+                  if (!isEditingBlocked) {
+                    setFormData({ ...formData, document_name: e.target.value });
+                    setHasUnsavedChanges(true);
+                  }
+                }}
+                placeholder="Np. Faktura sprzedaży"
+                disabled={isEditingBlocked}
               />
-            )}
+            </div>
 
-            {/* Transaction list appears after the form */}
-            {transactions.length > 0 && (
-              <div className="space-y-2">
-                {transactions.map((transaction, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium">{transaction.description}</p>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-600 font-medium">
-                              Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                            {transaction.debitAccountNumber && (
-                              <span className="text-gray-500 text-xs">
-                                → {transaction.debitAccountNumber}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-blue-600 font-medium">
-                              Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                            {transaction.creditAccountNumber && (
-                              <span className="text-gray-500 text-xs">
-                                → {transaction.creditAccountNumber}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditTransaction(transaction, index)}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTransaction(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Updated summary section with separate debit and credit totals */}
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex justify-between items-center text-lg">
-                    <span className="font-medium text-green-700">Winien:</span>
-                    <span className="font-semibold text-green-700">
-                      {debitTotal.toLocaleString('pl-PL', { 
-                        style: 'currency', 
-                        currency: 'PLN' 
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-lg">
-                    <span className="font-medium text-blue-700">Ma:</span>
-                    <span className="font-semibold text-blue-700">
-                      {creditTotal.toLocaleString('pl-PL', { 
-                        style: 'currency', 
-                        currency: 'PLN' 
-                      })}
-                    </span>
-                  </div>
-                  <div className="border-t pt-2">
-                    <div className="flex justify-between items-center text-xl font-bold">
-                      <span>Razem:</span>
-                      <span>
-                        {(debitTotal + creditTotal).toLocaleString('pl-PL', { 
-                          style: 'currency', 
-                          currency: 'PLN' 
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div>
+              <Label htmlFor="document_date">Data dokumentu *</Label>
+              <Input
+                id="document_date"
+                type="date"
+                value={formData.document_date}
+                onChange={(e) => {
+                  if (!isEditingBlocked) {
+                    setFormData({ ...formData, document_date: e.target.value });
+                    setHasUnsavedChanges(true);
+                  }
+                }}
+                disabled={isEditingBlocked}
+              />
+            </div>
           </div>
-        </DialogContent>
 
-        {/* Transaction Edit Dialog */}
+          {/* Save button */}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleClose}>
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleSaveDocument} 
+              disabled={isLoading || isEditingBlocked}
+            >
+              {isLoading ? 'Zapisywanie...' : 'Zapisz dokument'}
+            </Button>
+          </div>
+
+          {/* Transactions section */}
+          {document && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Operacje</h3>
+              
+              {!isEditingBlocked && (
+                <TransactionForm
+                  documentId={document.id}
+                  onTransactionAdded={() => {
+                    queryClient.invalidateQueries({ queryKey: ['transactions', document.id] });
+                  }}
+                />
+              )}
+
+              <DocumentTable
+                documentId={document.id}
+                onTransactionEdit={(transaction) => {
+                  setSelectedTransaction(transaction);
+                  setIsEditDialogOpen(true);
+                }}
+                onTransactionDelete={handleTransactionDelete}
+                onTransactionSplit={(transaction) => {
+                  setSelectedTransaction(transaction);
+                  setIsSplitDialogOpen(true);
+                }}
+                isEditingBlocked={isEditingBlocked}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Edit Transaction Dialog */}
         <TransactionEditDialog
-          isOpen={showEditDialog}
+          isOpen={isEditDialogOpen}
           onClose={() => {
-            setShowEditDialog(false);
-            setEditingTransaction(null);
-            setEditingTransactionIndex(null);
-            setHiddenFieldsInEdit({});
-            setIsClonedTransaction(false);
+            setIsEditDialogOpen(false);
+            setSelectedTransaction(null);
           }}
-          onSave={handleTransactionUpdated}
-          transaction={editingTransaction}
-          isNewDocument={!document}
-          hiddenFields={hiddenFieldsInEdit}
+          onSave={(updatedTransaction) => {
+            // Handle save logic
+            setIsEditDialogOpen(false);
+            setSelectedTransaction(null);
+            queryClient.invalidateQueries({ queryKey: ['transactions', document?.id] });
+          }}
+          transaction={selectedTransaction}
         />
-      </Dialog>
 
-      {/* Confirm close dialog */}
-      <ConfirmCloseDialog
-        isOpen={showConfirmClose}
-        onConfirm={handleConfirmClose}
-        onCancel={handleCancelClose}
-      />
-    </>
+        {/* Split Transaction Dialog */}
+        <TransactionSplitDialog
+          isOpen={isSplitDialogOpen}
+          onClose={() => {
+            setIsSplitDialogOpen(false);
+            setSelectedTransaction(null);
+          }}
+          onSave={() => {
+            setIsSplitDialogOpen(false);
+            setSelectedTransaction(null);
+            queryClient.invalidateQueries({ queryKey: ['transactions', document?.id] });
+          }}
+          transaction={selectedTransaction}
+        />
+
+        {/* Confirm Close Dialog */}
+        <ConfirmCloseDialog
+          isOpen={showConfirmDialog}
+          onClose={() => setShowConfirmDialog(false)}
+          onSave={handleSaveDocument}
+          onDiscard={onClose}
+        />
+      </DialogContent>
+    </Dialog>
   );
 };
 
