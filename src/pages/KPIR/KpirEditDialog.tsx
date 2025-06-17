@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -32,6 +33,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const [formData, setFormData] = useState({
     date: '',
@@ -86,11 +88,25 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         currency: transaction.currency,
         exchange_rate: transaction.exchange_rate || 1,
       });
+      setHasUnsavedChanges(false);
     }
   }, [transaction]);
 
+  // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
+        // Jeśli użytkownik chce zapisać, wywołaj handleSubmit
+        document.getElementById('edit-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        return;
+      }
+    }
+    onClose();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setHasUnsavedChanges(true);
     
     if (name === 'amount') {
       const numericValue = parseFloat(value) || 0;
@@ -111,6 +127,40 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
     // Usuń błąd dla danego pola, jeśli istnieje
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
+    }
+  };
+
+  // Funkcje do obsługi inteligentnych pól kwot
+  const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '0') {
+      e.target.value = '';
+    }
+  };
+
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '') {
+      e.target.value = '0';
+      setFormData({ ...formData, amount: 0 });
+    }
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numericValue = parseFloat(value) || 0;
+    
+    setHasUnsavedChanges(true);
+    
+    // Sprawdzenie czy wartość nie jest za duża
+    if (value && value.length > 10) {
+      setErrors({ ...errors, amount: 'za dużo cyfr w polu' });
+      return;
+    }
+    
+    setFormData({ ...formData, amount: numericValue });
+    
+    // Usuń błąd dla pola kwoty, jeśli istnieje
+    if (errors.amount) {
+      setErrors({ ...errors, amount: '' });
     }
   };
 
@@ -141,7 +191,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
     
     try {
       if (!transaction?.id) {
-        throw new Error("Brak ID transakcji");
+        throw new Error("Brak ID operacji");
       }
       
       const { error } = await supabase
@@ -168,6 +218,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         description: "Operacja została zaktualizowana",
       });
       
+      setHasUnsavedChanges(false);
       onSave();
     } catch (error: any) {
       console.error('Błąd podczas aktualizacji operacji:', error);
@@ -182,13 +233,13 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   };
   
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edytuj operację finansową</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form id="edit-form" onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Data */}
             <div className="space-y-1">
@@ -251,7 +302,9 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 id="amount"
                 name="amount"
                 value={formData.amount}
-                onChange={handleChange}
+                onChange={handleAmountChange}
+                onFocus={handleAmountFocus}
+                onBlur={handleAmountBlur}
                 min="0"
                 step="0.01"
                 max="9999999999"
@@ -327,7 +380,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Anuluj
             </Button>
             <Button type="submit" disabled={loading}>

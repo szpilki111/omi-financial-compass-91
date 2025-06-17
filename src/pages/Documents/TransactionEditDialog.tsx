@@ -1,257 +1,315 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Transaction } from './types';
-import { useToast } from '@/hooks/use-toast';
-import { AccountCombobox } from './AccountCombobox';
+import AccountCombobox from './AccountCombobox';
 
 interface TransactionEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (transaction: Transaction) => void;
   transaction: Transaction | null;
-  isNewDocument: boolean;
-  hiddenFields: { debit?: boolean; credit?: boolean };
+  isNewDocument?: boolean;
+  hiddenFields?: {
+    debit?: boolean;
+    credit?: boolean;
+  };
 }
 
-const TransactionEditDialog = ({
+const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   isOpen,
   onClose,
   onSave,
   transaction,
-  isNewDocument,
-  hiddenFields,
-}: any) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [lockedAccountName, setLockedAccountName] = useState('');
-  const [form, setForm] = useState<Transaction>({
+  isNewDocument = false,
+  hiddenFields = {}
+}) => {
+  const [formData, setFormData] = useState({
+    description: '',
     debit_account_id: '',
     credit_account_id: '',
-    amount: 0,
     debit_amount: 0,
     credit_amount: 0,
+    amount: 0,
+    settlement_type: 'Bank',
   });
-
-  const locationId = transaction?.location_id || user?.location;
+  
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (transaction) {
-      setForm({
+      setFormData({
+        description: transaction.description || '',
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
+        debit_amount: transaction.debit_amount || 0,
+        credit_amount: transaction.credit_amount || 0,
         amount: transaction.amount || 0,
-        debit_amount: transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount,
-        credit_amount: transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount,
-        id: transaction.id,
-        isCloned: transaction.isCloned,
-        clonedType: transaction.clonedType,
+        settlement_type: transaction.settlement_type || 'Bank',
       });
-
-      if (transaction.isCloned) {
-        const lockedAccountId =
-          transaction.clonedType === 'credit'
-            ? transaction.debit_account_id
-            : transaction.credit_account_id;
-
-        if (lockedAccountId) {
-          const fetchLockedAccountName = async () => {
-            setLockedAccountName('Ładowanie...');
-            const { data } = await supabase
-              .from('accounts')
-              .select('number, name')
-              .eq('id', lockedAccountId)
-              .single();
-            if (data) {
-              setLockedAccountName(`${data.number} - ${data.name}`);
-            } else {
-              setLockedAccountName('Nieznane konto');
-            }
-          };
-          fetchLockedAccountName();
-        }
-      }
-    } else {
-      setForm({
-        debit_account_id: '',
-        credit_account_id: '',
-        amount: 0,
-        debit_amount: 0,
-        credit_amount: 0,
-      });
+      setHasUnsavedChanges(false);
     }
   }, [transaction]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-  };
+  // Synchronizacja kwot - gdy jedna zmienia się, druga też (tylko jeśli nie są ukryte)
+  useEffect(() => {
+    if (!hiddenFields.credit && formData.debit_amount > 0 && formData.credit_amount !== formData.debit_amount) {
+      setFormData(prev => ({
+        ...prev,
+        credit_amount: prev.debit_amount,
+        amount: prev.debit_amount
+      }));
+    }
+  }, [formData.debit_amount, hiddenFields.credit]);
 
-  const handleAccountChange = (fieldName: 'debit_account_id' | 'credit_account_id', value: string) => {
-    setForm(prev => ({ ...prev, [fieldName]: value }));
-  };
+  useEffect(() => {
+    if (!hiddenFields.debit && formData.credit_amount > 0 && formData.debit_amount !== formData.credit_amount) {
+      setFormData(prev => ({
+        ...prev,
+        debit_amount: prev.credit_amount,
+        amount: prev.credit_amount
+      }));
+    }
+  }, [formData.credit_amount, hiddenFields.debit]);
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      if (!form.debit_amount && !form.credit_amount) {
-        toast({
-          title: "Błąd",
-          description: "Musisz podać kwotę Winien lub Ma",
-          variant: "destructive",
-        });
+  // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
+        handleSubmit();
         return;
       }
+    }
+    onClose();
+  };
 
-      // Uwaga: w przypadku nowego dokumentu LUB klonowanej transakcji nie zapisujemy do bazy
-      if (isNewDocument || form.isCloned) {
-        // Usuwamy id, żeby nie przekazywać "starego" id z bazowej transakcji
-        const { id, ...newForm } = form;
-        onSave(newForm as Transaction);
-        onClose();
-        return;
-      }
-
-      // Edycja istniejącej transakcji w bazie
-      if (!transaction?.id) {
-        throw new Error("Brak ID transakcji");
-      }
-
-      const { error } = await supabase
-        .from('transactions')
-        .update({
-          debit_account_id: form.debit_account_id,
-          credit_account_id: form.credit_account_id,
-          amount: form.amount,
-          debit_amount: form.debit_amount,
-          credit_amount: form.credit_amount,
-        })
-        .eq('id', transaction.id);
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Sukces",
-        description: "Transakcja została zaktualizowana",
-      });
-
-      onSave(form);
-      onClose();
-    } catch (error: any) {
-      console.error('Błąd podczas aktualizacji transakcji:', error);
-      toast({
-        title: "Błąd",
-        description: error.message || "Nie udało się zaktualizować transakcji",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setHasUnsavedChanges(true);
+    
+    // Usuń błąd dla danego pola
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
-  // Helpers to determine readonly/enabled for account and amount fields
-  const isCloned = transaction?.isCloned;
-  const clonedType = transaction?.clonedType; // 'debit' | 'credit'
+  // Funkcje do obsługi inteligentnych pól kwot
+  const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '0') {
+      e.target.value = '';
+    }
+  };
 
-  // Helper: disables non-split side in split transaction
-  const isDebitLocked = isCloned && clonedType === 'credit';
-  const isCreditLocked = isCloned && clonedType === 'debit';
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, field: string) => {
+    if (e.target.value === '') {
+      e.target.value = '0';
+      setFormData(prev => ({ ...prev, [field]: 0 }));
+    }
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    const value = e.target.value;
+    const numericValue = parseFloat(value) || 0;
+    
+    setHasUnsavedChanges(true);
+    
+    // Sprawdzenie czy wartość nie jest za duża
+    if (value && value.length > 10) {
+      setErrors(prev => ({ ...prev, [field]: 'za dużo cyfr w polu' }));
+      return;
+    }
+    
+    setFormData(prev => ({ ...prev, [field]: numericValue }));
+    
+    // Usuń błąd dla pola kwoty
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.description.trim()) {
+      newErrors.description = 'Opis jest wymagany';
+    }
+    
+    if (!hiddenFields.debit && !formData.debit_account_id) {
+      newErrors.debit_account_id = 'Konto Winien jest wymagane';
+    }
+    
+    if (!hiddenFields.credit && !formData.credit_account_id) {
+      newErrors.credit_account_id = 'Konto Ma jest wymagane';
+    }
+    
+    if (formData.debit_amount <= 0 && formData.credit_amount <= 0) {
+      newErrors.amount = 'Kwota musi być większa od zera';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      description: formData.description,
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
+    };
+
+    onSave(updatedTransaction);
+    setHasUnsavedChanges(false);
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            Edycja transakcji
-          </DialogTitle>
+          <DialogTitle>Edytuj operację</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Usunięto pole Opis */}
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="description">Opis operacji *</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Opis operacji finansowej"
+              className={errors.description ? 'border-red-500' : ''}
+            />
+            {errors.description && (
+              <p className="text-red-500 text-sm mt-1">{errors.description}</p>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Winien */}
-            <div>
-              <label className="block text-xs font-medium mb-1 text-green-700">Kwota Winien</label>
-              <input
-                type="number"
-                name="debit_amount"
-                value={form.debit_amount || ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                disabled={isDebitLocked}
-                className={`w-full p-2 border rounded-md ${isDebitLocked ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-              />
-              {/* Konto Winien */}
-              <label className="block text-xs font-medium mt-2 mb-1 text-green-700">Konto Winien</label>
-              {isDebitLocked ? (
-                <input
-                  type="text"
-                  value={lockedAccountName}
-                  disabled
-                  className="w-full p-2 border rounded-md bg-gray-100 text-gray-400"
-                />
-              ) : (
+            {!hiddenFields.debit && (
+              <div>
+                <Label>Konto Winien *</Label>
                 <AccountCombobox
-                  value={form.debit_account_id}
-                  onChange={(id) => handleAccountChange('debit_account_id', id)}
-                  locationId={locationId}
+                  value={formData.debit_account_id}
+                  onSelect={(accountId) => handleChange('debit_account_id', accountId)}
+                  placeholder="Wybierz konto Winien"
+                  className={errors.debit_account_id ? 'border-red-500' : ''}
                 />
-              )}
-            </div>
+                {errors.debit_account_id && (
+                  <p className="text-red-500 text-sm mt-1">{errors.debit_account_id}</p>
+                )}
+              </div>
+            )}
 
-            {/* Ma */}
-            <div>
-              <label className="block text-xs font-medium mb-1 text-blue-700">Kwota Ma</label>
-              <input
-                type="number"
-                name="credit_amount"
-                value={form.credit_amount || ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                disabled={isCreditLocked}
-                className={`w-full p-2 border rounded-md ${isCreditLocked ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-              />
-              {/* Konto Ma */}
-              <label className="block text-xs font-medium mt-2 mb-1 text-blue-700">Konto Ma</label>
-              {isCreditLocked ? (
-                <input
-                  type="text"
-                  value={lockedAccountName}
-                  disabled
-                  className="w-full p-2 border rounded-md bg-gray-100 text-gray-400"
-                />
-              ) : (
+            {!hiddenFields.credit && (
+              <div>
+                <Label>Konto Ma *</Label>
                 <AccountCombobox
-                  value={form.credit_account_id}
-                  onChange={(id) => handleAccountChange('credit_account_id', id)}
-                  locationId={locationId}
+                  value={formData.credit_account_id}
+                  onSelect={(accountId) => handleChange('credit_account_id', accountId)}
+                  placeholder="Wybierz konto Ma"
+                  className={errors.credit_account_id ? 'border-red-500' : ''}
                 />
-              )}
-            </div>
+                {errors.credit_account_id && (
+                  <p className="text-red-500 text-sm mt-1">{errors.credit_account_id}</p>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Usunięto pole Forma rozrachunku */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {!hiddenFields.debit && (
+              <div>
+                <Label htmlFor="debit_amount">Kwota Winien *</Label>
+                <Input
+                  id="debit_amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.debit_amount}
+                  onChange={(e) => handleAmountChange(e, 'debit_amount')}
+                  onFocus={handleAmountFocus}
+                  onBlur={(e) => handleAmountBlur(e, 'debit_amount')}
+                  placeholder="0.00"
+                  className={errors.amount ? 'border-red-500' : ''}
+                />
+              </div>
+            )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" type="button" onClick={onClose}>Anuluj</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Zapisywanie...' : 'Zapisz zmiany'}</Button>
+            {!hiddenFields.credit && (
+              <div>
+                <Label htmlFor="credit_amount">Kwota Ma *</Label>
+                <Input
+                  id="credit_amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.credit_amount}
+                  onChange={(e) => handleAmountChange(e, 'credit_amount')}
+                  onFocus={handleAmountFocus}
+                  onBlur={(e) => handleAmountBlur(e, 'credit_amount')}
+                  placeholder="0.00"
+                  className={errors.amount ? 'border-red-500' : ''}
+                />
+              </div>
+            )}
           </div>
-        </form>
+
+          {errors.amount && (
+            <p className="text-red-500 text-sm">{errors.amount}</p>
+          )}
+
+          <div>
+            <Label>Forma rozrachunku</Label>
+            <Select 
+              value={formData.settlement_type} 
+              onValueChange={(value) => handleChange('settlement_type', value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Gotówka">Gotówka</SelectItem>
+                <SelectItem value="Bank">Bank</SelectItem>
+                <SelectItem value="Rozrachunek">Rozrachunek</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Anuluj
+          </Button>
+          <Button onClick={handleSubmit}>
+            Zapisz operację
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

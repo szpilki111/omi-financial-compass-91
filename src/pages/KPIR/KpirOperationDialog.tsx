@@ -46,6 +46,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const [isSearching, setIsSearching] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const [showLocationWarning, setShowLocationWarning] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const [formData, setFormData] = useState<KpirOperationFormData>({
     date: today,
@@ -136,11 +137,25 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         exchange_rate: 1,
       });
       setErrors({});
+      setHasUnsavedChanges(false);
     }
   }, [open]);
 
+  // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
+        // Jeśli użytkownik chce zapisać, wywołaj handleSubmit
+        document.getElementById('operation-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        return;
+      }
+    }
+    onClose();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setHasUnsavedChanges(true);
     
     if (name === 'amount') {
       const numericValue = parseFloat(value) || 0;
@@ -164,6 +179,40 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
   };
 
+  // Nowa funkcja do obsługi pól kwot z inteligentnymi zachowaniami
+  const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '0') {
+      e.target.value = '';
+    }
+  };
+
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '') {
+      e.target.value = '0';
+      setFormData({ ...formData, amount: 0 });
+    }
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numericValue = parseFloat(value) || 0;
+    
+    setHasUnsavedChanges(true);
+    
+    // Sprawdzenie czy wartość nie jest za duża
+    if (value && value.length > 10) {
+      setErrors({ ...errors, amount: 'za dużo cyfr w polu' });
+      return;
+    }
+    
+    setFormData({ ...formData, amount: numericValue });
+    
+    // Usuń błąd dla pola kwoty, jeśli istnieje
+    if (errors.amount) {
+      setErrors({ ...errors, amount: '' });
+    }
+  };
+
   const handleAccountChange = (accountId: string) => {
     const selectedAccount = accounts.find(acc => acc.id === accountId);
     
@@ -172,6 +221,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
       debit_account_id: accountId,
       credit_account_id: accountId
     });
+    
+    setHasUnsavedChanges(true);
     
     // Ustaw wyszukiwanie na wybraną wartość, aby wyświetlała się w polu
     if (selectedAccount) {
@@ -266,6 +317,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
         description: "Operacja została dodana",
       });
       
+      setHasUnsavedChanges(false);
       onSave();
     } catch (error: any) {
       console.error('Błąd podczas dodawania operacji:', error);
@@ -282,7 +334,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const selectedAccount = accounts.find(account => account.id === formData.debit_account_id);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nowa operacja finansowa</DialogTitle>
@@ -297,7 +349,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           </Alert>
         )}
         
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form id="operation-form" onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Data */}
             <div className="space-y-1">
@@ -360,7 +412,9 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 id="amount"
                 name="amount"
                 value={formData.amount}
-                onChange={handleChange}
+                onChange={handleAmountChange}
+                onFocus={handleAmountFocus}
+                onBlur={handleAmountBlur}
                 min="0"
                 step="0.01"
                 max="9999999999"
@@ -506,7 +560,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Anuluj
             </Button>
             <Button type="submit" disabled={loading}>
