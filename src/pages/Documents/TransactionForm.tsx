@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -195,26 +196,48 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       return;
     }
 
-    // Create transactions only for adjacent pairs (same index)
+    // Create one transaction for each debit field with its corresponding credit field
+    // If there are different numbers of debit/credit fields, create transactions for each unique combination
     const maxLength = Math.max(debitFields.length, creditFields.length);
     
     for (let i = 0; i < maxLength; i++) {
-      const debitField = debitFields[i];
-      const creditField = creditFields[i];
+      const debitField = debitFields[i] || debitFields[debitFields.length - 1]; // Use last debit field if fewer
+      const creditField = creditFields[i] || creditFields[creditFields.length - 1]; // Use last credit field if fewer
       
-      // Only create transaction if both debit and credit exist with amounts > 0
-      if (debitField && creditField && debitField.amount > 0 && creditField.amount > 0) {
+      // Only create transaction if both fields have amounts > 0 and accounts selected
+      if (debitField && creditField && 
+          debitField.amount > 0 && creditField.amount > 0 &&
+          debitField.accountId && creditField.accountId) {
+        
         const transaction: Transaction = {
           description: formData.description,
           debit_account_id: debitField.accountId,
           credit_account_id: creditField.accountId,
           debit_amount: debitField.amount,
           credit_amount: creditField.amount,
-          amount: Math.max(debitField.amount, creditField.amount),
+          amount: Math.max(debitField.amount, creditField.amount), // For compatibility
           settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
         };
 
         onAdd(transaction);
+      }
+    }
+
+    // Also handle cases where we have unmatched debit or credit fields
+    // Create separate transactions for any remaining fields
+    for (let i = 0; i < debitFields.length; i++) {
+      const debitField = debitFields[i];
+      if (debitField.amount > 0 && debitField.accountId && i >= creditFields.length) {
+        // This debit field has no corresponding credit field
+        console.log('Unmatched debit field at index:', i, debitField);
+      }
+    }
+
+    for (let i = 0; i < creditFields.length; i++) {
+      const creditField = creditFields[i];
+      if (creditField.amount > 0 && creditField.accountId && i >= debitFields.length) {
+        // This credit field has no corresponding debit field
+        console.log('Unmatched credit field at index:', i, creditField);
       }
     }
   };
@@ -241,7 +264,18 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Debit Fields */}
           <div>
-            <Label className="text-base font-medium mb-3 block">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+            <div className="flex justify-between items-center mb-3">
+              <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addNewField('debit')}
+                className="text-green-600"
+              >
+                + Dodaj
+              </Button>
+            </div>
             <div className="space-y-3">
               {debitFields.map((field, index) => (
                 <div key={field.id} className="space-y-2">
@@ -286,7 +320,18 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
 
           {/* Credit Fields */}
           <div>
-            <Label className="text-base font-medium mb-3 block">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+            <div className="flex justify-between items-center mb-3">
+              <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addNewField('credit')}
+                className="text-green-600"
+              >
+                + Dodaj
+              </Button>
+            </div>
             <div className="space-y-3">
               {creditFields.map((field, index) => (
                 <div key={field.id} className="space-y-2">

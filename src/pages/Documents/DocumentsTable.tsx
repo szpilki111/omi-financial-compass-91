@@ -85,9 +85,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
             <TableHead>Numer dokumentu</TableHead>
             <TableHead>Nazwa</TableHead>
             <TableHead>Data</TableHead>
-            <TableHead>Lokalizacja</TableHead>
-            <TableHead>Utworzony przez</TableHead>
-            <TableHead className="text-right">Liczba operacji</TableHead>
+            <TableHead className="w-24">Liczba operacji</TableHead>
             <TableHead className="text-right">Suma</TableHead>
             <TableHead>Akcje</TableHead>
           </TableRow>
@@ -102,9 +100,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
               <TableCell className="font-medium">{document.document_number}</TableCell>
               <TableCell>{document.document_name}</TableCell>
               <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
-              <TableCell>{document.locations?.name || 'N/A'}</TableCell>
-              <TableCell>{document.profiles?.name || 'N/A'}</TableCell>
-              <TableCell className="text-right">{document.transaction_count || 0}</TableCell>
+              <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
               <TableCell className="text-right font-medium">
                 {formatAmount(document.total_amount || 0)}
               </TableCell>
