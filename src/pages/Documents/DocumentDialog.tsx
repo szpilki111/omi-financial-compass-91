@@ -125,12 +125,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
 
     try {
-      // KLUCZOWA POPRAWKA: Sprawdź status raportu dla miesiąca dokumentu
       const year = documentDate.getFullYear();
       const month = documentDate.getMonth() + 1;
 
       console.log('Checking report status for:', { year, month, locationId: user.location });
 
+      // KLUCZOWA POPRAWKA: Sprawdź status raportu używając polskich statusów
       const { data: reports, error } = await supabase
         .from('reports')
         .select('status')
@@ -372,7 +372,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return;
     }
 
-    // Dodaj dodatkową walidację transakcji
+    // Walidacja - sprawdź czy są jakieś transakcje
     if (transactions.length === 0) {
       toast({
         title: "Błąd walidacji",
@@ -382,19 +382,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return;
     }
 
-    // Sprawdź czy wszystkie transakcje mają wybrane konta
-    const invalidTransactions = transactions.filter(t => 
-      !t.debit_account_id || !t.credit_account_id
-    );
-
-    if (invalidTransactions.length > 0) {
-      toast({
-        title: "Błąd walidacji",
-        description: "Wszystkie operacje muszą mieć wybrane konta Winien i Ma",
-        variant: "destructive",
-      });
-      return;
-    }
+    // USUNIĘTA WALIDACJA: Nie wymagamy już, żeby wszystkie transakcje miały wybrane oba konta
+    // Operacje mogą mieć tylko jedno konto (debit lub credit)
 
     setIsLoading(true);
     try {
@@ -446,9 +435,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             : "",
       }));
 
-      // Save transactions if any - CRITICAL FIX HERE
+      // Save transactions if any
       if (documentId) {
-        // First, delete existing transactions if editing (FIXED: Always delete for consistency)
+        // First, delete existing transactions if editing
         const { error: deleteError } = await supabase
           .from('transactions')
           .delete()
@@ -462,21 +451,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         // Insert new/updated transactions only if there are any
         if (transactionsSafe.length > 0) {
           const transactionsToInsert = transactionsSafe.map(t => {
-            // CRITICAL FIX: Zawsze explicitnie przypisujemy wartości amount i oba pola stron, bez "magicznego" fallbackowania.
-            // amount pole zostaje domyślną podstawową wartością (historycznie), debit_amount i credit_amount zawsze osobno
             return {
               document_id: documentId,
-              debit_account_id: t.debit_account_id,
-              credit_account_id: t.credit_account_id,
-              amount: t.amount, // amount zachowujemy jako podstawowe pole (histori compatibility/prezentacja)
+              debit_account_id: t.debit_account_id || null, // Może być null
+              credit_account_id: t.credit_account_id || null, // Może być null
+              amount: t.amount,
               debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
               credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
-              description: t.description, // Teraz na pewno nie będzie null!
+              description: t.description,
               settlement_type: t.settlement_type,
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
               user_id: user.id,
-              document_number: data.document_number, // Add document number for better traceability
+              document_number: data.document_number,
             };
           });
 
