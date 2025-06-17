@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,6 +38,22 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   // Synchronizacja kwot - gdy jedna zmienia się, druga też
   useEffect(() => {
@@ -167,8 +184,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
             <Label>Konto Winien *</Label>
             <AccountCombobox
               value={formData.debit_account_id}
-              onSelect={(accountId) => handleChange('debit_account_id', accountId)}
-              placeholder="Wybierz konto Winien"
+              onChange={(accountId) => handleChange('debit_account_id', accountId)}
+              locationId={userProfile?.location_id}
               className={errors.debit_account_id ? 'border-red-500' : ''}
             />
             {errors.debit_account_id && (
@@ -180,8 +197,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
             <Label>Konto Ma *</Label>
             <AccountCombobox
               value={formData.credit_account_id}
-              onSelect={(accountId) => handleChange('credit_account_id', accountId)}
-              placeholder="Wybierz konto Ma"
+              onChange={(accountId) => handleChange('credit_account_id', accountId)}
+              locationId={userProfile?.location_id}
               className={errors.credit_account_id ? 'border-red-500' : ''}
             />
             {errors.credit_account_id && (

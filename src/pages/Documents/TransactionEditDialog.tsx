@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -19,6 +20,9 @@ import {
 } from '@/components/ui/select';
 import { Transaction } from './types';
 import { AccountCombobox } from './AccountCombobox';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 interface TransactionEditDialogProps {
   isOpen: boolean;
@@ -40,6 +44,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   isNewDocument = false,
   hiddenFields = {}
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: '',
     debit_account_id: '',
@@ -52,6 +57,22 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   useEffect(() => {
     if (transaction) {
@@ -215,8 +236,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                 <Label>Konto Winien *</Label>
                 <AccountCombobox
                   value={formData.debit_account_id}
-                  onSelect={(accountId) => handleChange('debit_account_id', accountId)}
-                  placeholder="Wybierz konto Winien"
+                  onChange={(accountId) => handleChange('debit_account_id', accountId)}
+                  locationId={userProfile?.location_id}
                   className={errors.debit_account_id ? 'border-red-500' : ''}
                 />
                 {errors.debit_account_id && (
@@ -230,8 +251,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                 <Label>Konto Ma *</Label>
                 <AccountCombobox
                   value={formData.credit_account_id}
-                  onSelect={(accountId) => handleChange('credit_account_id', accountId)}
-                  placeholder="Wybierz konto Ma"
+                  onChange={(accountId) => handleChange('credit_account_id', accountId)}
+                  locationId={userProfile?.location_id}
                   className={errors.credit_account_id ? 'border-red-500' : ''}
                 />
                 {errors.credit_account_id && (
