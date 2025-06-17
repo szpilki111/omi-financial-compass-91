@@ -70,7 +70,7 @@ const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading
             <TableHead>Nazwa</TableHead>
             <TableHead>Data dokumentu</TableHead>
             <TableHead>Lokalizacja</TableHead>
-            <TableHead>Transakcje</TableHead>
+            <TableHead>Operacje</TableHead>
             <TableHead>Data utworzenia</TableHead>
             <TableHead className="w-[140px]">Akcje</TableHead>
           </TableRow>

@@ -255,13 +255,13 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Rozbicie transakcji - strona {splitSide === 'debit' ? 'Winien' : 'Ma'}
+            Rozbicie operacji - strona {splitSide === 'debit' ? 'Winien' : 'Ma'}
           </DialogTitle>
         </DialogHeader>
 
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-sm">Informacje o transakcji</CardTitle>
+            <CardTitle className="text-sm">Informacje o operacji</CardTitle>
           </CardHeader>
           <CardContent className="text-sm">
             <p><strong>Opis:</strong> {transaction.description}</p>
@@ -421,7 +421,7 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
                 Anuluj
               </Button>
               <Button type="submit" disabled={!isBalanced}>
-                Rozbij transakcję
+                Rozbij operację
               </Button>
             </div>
           </form>

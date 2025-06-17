@@ -371,7 +371,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       toast({
         title: "Sukces",
-        description: "Transakcja została powielona",
+        description: "Operacja została powielona",
       });
       return;
     }
@@ -426,7 +426,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       toast({
         title: "Sukces",
-        description: "Transakcja została powielona",
+        description: "Operacja została powielona",
       });
       return;
     }
@@ -630,10 +630,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           </form>
         </Form>
 
-        {/* Transactions section - outside the main form to prevent nesting */}
+        {/* Operations section - outside the main form to prevent nesting */}
         <div className="space-y-4 border-t pt-6">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">Transakcje</h3>
+            <h3 className="text-lg font-medium">Operacje</h3>
             <Button
               type="button"
               variant="outline"
@@ -641,7 +641,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               className="flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
-              Dodaj transakcję
+              Dodaj operację
             </Button>
           </div>
 
