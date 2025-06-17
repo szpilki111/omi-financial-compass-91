@@ -51,13 +51,19 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
       // Transform the data to match the Transaction interface
       return data?.map(item => ({
         ...item,
-        debitAccount: item.debitAccount && typeof item.debitAccount === 'object' && 'number' in item.debitAccount 
+        debitAccount: item.debitAccount && 
+                     typeof item.debitAccount === 'object' && 
+                     item.debitAccount !== null &&
+                     'number' in item.debitAccount 
           ? { 
               number: item.debitAccount.number as string, 
               name: item.debitAccount.name as string 
             }
           : undefined,
-        creditAccount: item.creditAccount && typeof item.creditAccount === 'object' && 'number' in item.creditAccount
+        creditAccount: item.creditAccount && 
+                      typeof item.creditAccount === 'object' && 
+                      item.creditAccount !== null &&
+                      'number' in item.creditAccount
           ? { 
               number: item.creditAccount.number as string, 
               name: item.creditAccount.name as string 
@@ -103,8 +109,18 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
             <TableRow key={transaction.id}>
               <TableCell>{transaction.date ? format(new Date(transaction.date), 'dd.MM.yyyy') : ''}</TableCell>
               <TableCell>{transaction.description}</TableCell>
-              <TableCell>{transaction.debitAccount?.number} - {transaction.debitAccount?.name}</TableCell>
-              <TableCell>{transaction.creditAccount?.number} - {transaction.creditAccount?.name}</TableCell>
+              <TableCell>
+                {transaction.debitAccount 
+                  ? `${transaction.debitAccount.number} - ${transaction.debitAccount.name}`
+                  : ''
+                }
+              </TableCell>
+              <TableCell>
+                {transaction.creditAccount 
+                  ? `${transaction.creditAccount.number} - ${transaction.creditAccount.name}`
+                  : ''
+                }
+              </TableCell>
               <TableCell className="text-right">
                 {transaction.debit_amount !== undefined ? transaction.debit_amount.toFixed(2) : transaction.amount?.toFixed(2)}
               </TableCell>

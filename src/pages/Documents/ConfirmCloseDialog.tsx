@@ -24,7 +24,7 @@ const ConfirmCloseDialog = ({ isOpen, onConfirm, onCancel }: ConfirmCloseDialogP
         <AlertDialogHeader>
           <AlertDialogTitle>Niezapisane zmiany</AlertDialogTitle>
           <AlertDialogDescription>
-            Masz niezapisane zmiany w dokumencie. Czy chcesz je zapisać przed zamknięciem?
+            Masz niezapisane zmiany w dokumencie. Czy chcesz je odrzucić i zamknąć?
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -32,7 +32,7 @@ const ConfirmCloseDialog = ({ isOpen, onConfirm, onCancel }: ConfirmCloseDialogP
             Anuluj
           </AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} className="bg-red-600 hover:bg-red-700">
-            Zamknij bez zapisywania
+            Odrzuć zmiany
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

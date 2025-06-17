@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -434,9 +435,8 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
         {/* Confirm Close Dialog */}
         <ConfirmCloseDialog
           isOpen={showConfirmDialog}
-          onConfirm={() => setShowConfirmDialog(false)}
-          onSave={handleSaveDocument}
-          onDiscard={onClose}
+          onConfirm={handleDiscardChanges}
+          onCancel={() => setShowConfirmDialog(false)}
         />
       </DialogContent>
     </Dialog>
