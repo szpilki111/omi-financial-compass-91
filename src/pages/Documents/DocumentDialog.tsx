@@ -125,22 +125,43 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
 
     try {
-      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
-        p_location_id: user.location,
-        p_document_date: format(documentDate, 'yyyy-MM-dd')
-      });
+      // KLUCZOWA POPRAWKA: Sprawdź status raportu dla miesiąca dokumentu
+      const year = documentDate.getFullYear();
+      const month = documentDate.getMonth() + 1;
+
+      console.log('Checking report status for:', { year, month, locationId: user.location });
+
+      const { data: reports, error } = await supabase
+        .from('reports')
+        .select('status')
+        .eq('location_id', user.location)
+        .eq('year', year)
+        .eq('month', month);
 
       if (error) {
-        console.error('Error checking report editing status:', error);
+        console.error('Error checking report status:', error);
         return false;
       }
 
-      const isBlocked = data === true;
+      console.log('Found reports:', reports);
+
+      // Sprawdź czy istnieje raport ze statusem "Złożony" lub "Zatwierdzony"
+      const hasBlockingReport = reports?.some(report => 
+        report.status === 'Złożony' || report.status === 'Zatwierdzony'
+      );
+
+      console.log('Has blocking report:', hasBlockingReport);
+
+      const isBlocked = hasBlockingReport || false;
       setIsReportBlocked(isBlocked);
       
       if (isBlocked) {
-        const monthYear = format(documentDate, 'MMMM yyyy');
-        setReportBlockedMessage(`Nie można zapisać dokumentu. Raport za ${monthYear} został już złożony lub zatwierdzony.`);
+        const monthNames = [
+          'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+          'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'
+        ];
+        const monthName = monthNames[month - 1];
+        setReportBlockedMessage(`Nie można zapisać dokumentu. Raport za ${monthName} ${year} został już złożony lub zatwierdzony.`);
       } else {
         setReportBlockedMessage('');
       }
@@ -340,12 +361,36 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return;
     }
 
-    // Check if report editing is blocked before saving
+    // KLUCZOWA POPRAWKA: Sprawdź czy zapisywanie jest zablokowane przed kontynuowaniem
     const isBlocked = await checkReportEditingBlocked(data.document_date);
     if (isBlocked) {
       toast({
-        title: "Błąd",
+        title: "Błąd zapisu",
         description: reportBlockedMessage,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Dodaj dodatkową walidację transakcji
+    if (transactions.length === 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Dokument musi zawierać co najmniej jedną operację",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Sprawdź czy wszystkie transakcje mają wybrane konta
+    const invalidTransactions = transactions.filter(t => 
+      !t.debit_account_id || !t.credit_account_id
+    );
+
+    if (invalidTransactions.length > 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Wszystkie operacje muszą mieć wybrane konta Winien i Ma",
         variant: "destructive",
       });
       return;
@@ -453,6 +498,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       setHasUnsavedChanges(false);
       onDocumentCreated();
       onClose();
+      
+      toast({
+        title: "Sukces",
+        description: document ? "Dokument został zaktualizowany" : "Dokument został utworzony",
+      });
     } catch (error: any) {
       console.error('Error saving document:', error);
       toast({

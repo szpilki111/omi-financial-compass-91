@@ -61,10 +61,16 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           .maybeSingle();
 
         if (data) {
-          setDisplayedAccountName(`${data.number} - ${data.name}`);
+          // KLUCZOWA POPRAWKA: Sprawdź czy konto jest dozwolone dla tej strony
+          const isAccountAllowed = isAccountAllowedForSide(data.number, side);
+          if (isAccountAllowed) {
+            setDisplayedAccountName(`${data.number} - ${data.name}`);
+          } else {
+            // Konto nie jest dozwolone dla tej strony - wyczyść wybór
+            setDisplayedAccountName('');
+            onChange(''); // Wyczyść wybrane konto
+          }
         } else {
-          // The selected account is not valid for this location, so we clear the display.
-          // We don't call onChange here to avoid unintended form state changes.
           setDisplayedAccountName('');
         }
       };
@@ -72,7 +78,22 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, accounts, locationId]);
+  }, [value, accounts, locationId, side, onChange]);
+
+  // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
+  const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
+    if (!side) return true;
+    
+    if (side === 'debit') {
+      // Winien side: nie może mieć kont zaczynających się od "7"
+      return !accountNumber.startsWith('7');
+    } else if (side === 'credit') {
+      // Ma side: nie może mieć kont zaczynających się od "4"
+      return !accountNumber.startsWith('4');
+    }
+    
+    return true;
+  };
 
   useEffect(() => {
     if (!open) {
@@ -122,20 +143,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         console.error('Error fetching accounts:', error);
         setAccounts([]);
       } else {
-        // Filter accounts based on side restrictions
+        // KLUCZOWA POPRAWKA: Filtruj konta na podstawie restrykcji stron
         let filteredAccounts = data || [];
         
-        if (side === 'debit') {
-          // Winien side: exclude accounts starting with "7"
-          filteredAccounts = filteredAccounts.filter(account => 
-            !account.number.startsWith('7')
-          );
-        } else if (side === 'credit') {
-          // Ma side: exclude accounts starting with "4"
-          filteredAccounts = filteredAccounts.filter(account => 
-            !account.number.startsWith('4')
-          );
-        }
+        filteredAccounts = filteredAccounts.filter(account => 
+          isAccountAllowedForSide(account.number, side)
+        );
         
         setAccounts(filteredAccounts);
       }
@@ -184,7 +197,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                <CommandEmpty>Wpisz co najmniej 2 znaki, aby wyszukać.</CommandEmpty>
             )}
             {locationId && searchTerm.length >= 2 && !loading && accounts.length === 0 && (
-              <CommandEmpty>Nie znaleziono kont dla tej lokalizacji.</CommandEmpty>
+              <CommandEmpty>Nie znaleziono dozwolonych kont dla tej lokalizacji.</CommandEmpty>
             )}
             <CommandGroup>
               {accounts.map((account) => (
