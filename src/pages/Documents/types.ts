@@ -1,6 +1,7 @@
 
 export interface Transaction {
   id?: string;
+  date?: string; // Add missing date property
   debit_account_id: string;
   credit_account_id: string;
   amount: number;
@@ -24,4 +25,11 @@ export interface Transaction {
     number: string;
     name: string;
   };
+  // Add missing document property
+  document?: {
+    id: string;
+    document_number: string;
+    document_name: string;
+    document_date: string;
+  } | null;
 }
