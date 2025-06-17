@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -9,17 +8,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirTransaction, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 interface KpirEditDialogProps {
   open: boolean;
@@ -48,6 +43,23 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Check if editing is blocked for this transaction
+  const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
+    queryKey: ['editingBlocked', transaction?.id, user?.location],
+    queryFn: async () => {
+      if (!transaction || !user?.location) return false;
+      
+      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: user.location,
+        p_document_date: transaction.date
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!transaction && !!user?.location && open,
+  });
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -94,7 +106,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
 
   // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
   const handleClose = () => {
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && !isEditingBlocked) {
       if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
         // Jeśli użytkownik chce zapisać, wywołaj handleSubmit
         document.getElementById('edit-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -105,6 +117,8 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    if (isEditingBlocked) return; // Prevent changes when editing is blocked
+    
     const { name, value } = e.target;
     setHasUnsavedChanges(true);
     
@@ -145,6 +159,8 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditingBlocked) return;
+    
     const value = e.target.value;
     const numericValue = parseFloat(value) || 0;
     
@@ -182,6 +198,8 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isEditingBlocked) return;
     
     if (!validateForm()) {
       return;
@@ -231,6 +249,19 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
       setLoading(false);
     }
   };
+
+  if (checkingBlock) {
+    return (
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sprawdzanie uprawnień...</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">Sprawdzanie czy operacja może być edytowana...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -238,6 +269,15 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         <DialogHeader>
           <DialogTitle>Edytuj operację finansową</DialogTitle>
         </DialogHeader>
+
+        {isEditingBlocked && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Nie można edytować tej operacji, ponieważ raport za ten okres został już złożony lub zatwierdzony.
+            </AlertDescription>
+          </Alert>
+        )}
         
         <form id="edit-form" onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -253,6 +293,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 value={formData.date}
                 onChange={handleChange}
                 className={`w-full p-2 border rounded-md ${errors.date ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               />
               {errors.date && <p className="text-red-500 text-xs">{errors.date}</p>}
             </div>
@@ -270,6 +311,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 onChange={handleChange}
                 placeholder="FV/2023/01"
                 className="w-full p-2 border border-omi-gray-300 rounded-md"
+                disabled={isEditingBlocked}
               />
             </div>
           </div>
@@ -287,6 +329,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
               rows={2}
               placeholder="Opis operacji finansowej"
               className={`w-full p-2 border rounded-md ${errors.description ? 'border-red-500' : 'border-omi-gray-300'}`}
+              disabled={isEditingBlocked}
             />
             {errors.description && <p className="text-red-500 text-xs">{errors.description}</p>}
           </div>
@@ -309,6 +352,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 step="0.01"
                 max="9999999999"
                 className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               />
               {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
             </div>
@@ -324,6 +368,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 value={formData.currency}
                 onChange={handleChange}
                 className={`w-full p-2 border rounded-md ${errors.currency ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               >
                 <option value="PLN">PLN</option>
                 <option value="EUR">EUR</option>
@@ -347,7 +392,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
                 onChange={handleChange}
                 min="0.0001"
                 step="0.0001"
-                disabled={formData.currency === 'PLN'}
+                disabled={formData.currency === 'PLN' || isEditingBlocked}
                 className={`w-full p-2 border rounded-md ${
                   errors.exchange_rate ? 'border-red-500' : 'border-omi-gray-300'
                 } ${formData.currency === 'PLN' ? 'bg-omi-gray-100' : ''}`}
@@ -367,6 +412,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
               value={formData.settlement_type}
               onChange={handleChange}
               className={`w-full p-2 border rounded-md ${errors.settlement_type ? 'border-red-500' : 'border-omi-gray-300'}`}
+              disabled={isEditingBlocked}
             >
               <option value="Gotówka">Gotówka</option>
               <option value="Bank">Bank</option>
@@ -383,7 +429,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Anuluj
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || isEditingBlocked}>
               {loading ? 'Zapisywanie...' : 'Zapisz operację'}
             </Button>
           </DialogFooter>

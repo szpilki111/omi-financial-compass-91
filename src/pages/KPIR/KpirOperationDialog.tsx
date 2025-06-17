@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -26,9 +25,10 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { KpirOperationFormData, Account } from '@/types/kpir';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 
 interface KpirOperationDialogProps {
   open: boolean;
@@ -61,6 +61,23 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Check if adding new operations is blocked for the current date
+  const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
+    queryKey: ['editingBlocked', formData.date, user?.location],
+    queryFn: async () => {
+      if (!user?.location || !formData.date) return false;
+      
+      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: user.location,
+        p_document_date: formData.date
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.location && !!formData.date && open,
+  });
 
   useEffect(() => {
     // Sprawdzenie czy użytkownik ma przypisaną lokalizację
@@ -143,7 +160,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 
   // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
   const handleClose = () => {
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && !isEditingBlocked) {
       if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
         // Jeśli użytkownik chce zapisać, wywołaj handleSubmit
         document.getElementById('operation-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -154,6 +171,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    if (isEditingBlocked) return; // Prevent changes when editing is blocked
+    
     const { name, value } = e.target;
     setHasUnsavedChanges(true);
     
@@ -194,6 +213,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditingBlocked) return;
+    
     const value = e.target.value;
     const numericValue = parseFloat(value) || 0;
     
@@ -214,6 +235,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   };
 
   const handleAccountChange = (accountId: string) => {
+    if (isEditingBlocked) return;
+    
     const selectedAccount = accounts.find(acc => acc.id === accountId);
     
     setFormData({
@@ -272,6 +295,8 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isEditingBlocked) return;
     
     if (!validateForm()) {
       return;
@@ -348,6 +373,15 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             </AlertDescription>
           </Alert>
         )}
+
+        {isEditingBlocked && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Nie można dodawać nowych operacji na tę datę, ponieważ raport za ten okres został już złożony lub zatwierdzony.
+            </AlertDescription>
+          </Alert>
+        )}
         
         <form id="operation-form" onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,6 +397,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 value={formData.date}
                 onChange={handleChange}
                 className={`w-full p-2 border rounded-md ${errors.date ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               />
               {errors.date && <p className="text-red-500 text-xs">{errors.date}</p>}
             </div>
@@ -380,6 +415,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 onChange={handleChange}
                 placeholder="FV/2023/01"
                 className="w-full p-2 border border-omi-gray-300 rounded-md"
+                disabled={isEditingBlocked}
               />
             </div>
           </div>
@@ -397,6 +433,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
               rows={2}
               placeholder="Opis operacji finansowej"
               className={`w-full p-2 border rounded-md ${errors.description ? 'border-red-500' : 'border-omi-gray-300'}`}
+              disabled={isEditingBlocked}
             />
             {errors.description && <p className="text-red-500 text-xs">{errors.description}</p>}
           </div>
@@ -419,6 +456,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 step="0.01"
                 max="9999999999"
                 className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               />
               {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
             </div>
@@ -434,6 +472,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 value={formData.currency}
                 onChange={handleChange}
                 className={`w-full p-2 border rounded-md ${errors.currency ? 'border-red-500' : 'border-omi-gray-300'}`}
+                disabled={isEditingBlocked}
               >
                 <option value="PLN">PLN</option>
                 <option value="EUR">EUR</option>
@@ -457,7 +496,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                 onChange={handleChange}
                 min="0.0001"
                 step="0.0001"
-                disabled={formData.currency === 'PLN'}
+                disabled={formData.currency === 'PLN' || isEditingBlocked}
                 className={`w-full p-2 border rounded-md ${
                   errors.exchange_rate ? 'border-red-500' : 'border-omi-gray-300'
                 } ${formData.currency === 'PLN' ? 'bg-omi-gray-100' : ''}`}
@@ -483,6 +522,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                   role="combobox"
                   aria-expanded={accountSelectOpen}
                   className={`w-full justify-between ${errors.debit_account_id ? 'border-red-500' : ''}`}
+                  disabled={isEditingBlocked}
                 >
                   {selectedAccount ? 
                     `${selectedAccount.number} - ${selectedAccount.name}` : 
@@ -497,6 +537,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
                     placeholder="Wpisz numer lub nazwę konta..."
                     value={searchQuery}
                     onValueChange={handleSearchChange}
+                    disabled={isEditingBlocked}
                   />
                   <CommandList className="max-h-60 overflow-y-auto">
                     {searchQuery.length < 2 ? (
@@ -547,6 +588,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
               value={formData.settlement_type}
               onChange={handleChange}
               className={`w-full p-2 border rounded-md ${errors.settlement_type ? 'border-red-500' : 'border-omi-gray-300'}`}
+              disabled={isEditingBlocked}
             >
               <option value="Gotówka">Gotówka</option>
               <option value="Bank">Bank</option>
@@ -563,7 +605,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Anuluj
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || isEditingBlocked}>
               {loading ? 'Zapisywanie...' : 'Zapisz operację'}
             </Button>
           </DialogFooter>
