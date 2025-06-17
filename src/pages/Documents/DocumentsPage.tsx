@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -74,22 +73,30 @@ const DocumentsPage = () => {
           // Get all transactions for this document to calculate total amount
           const { data: transactions, error: transactionsError } = await supabase
             .from('transactions')
-            .select('amount, currency, exchange_rate')
+            .select('debit_amount, credit_amount, amount, currency, exchange_rate')
             .eq('document_id', doc.id);
           
           if (transactionsError) {
             console.error('Error fetching transactions for document:', doc.id, transactionsError);
           }
           
-          // Calculate total amount in PLN (considering exchange rates)
+          // Calculate total amount using the same logic as in DocumentDialog
+          // This matches the "Razem" calculation: debitTotal + creditTotal
           const totalAmount = transactions?.reduce((sum, transaction) => {
-            const amount = Number(transaction.amount) || 0;
+            const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+            const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
             const exchangeRate = Number(transaction.exchange_rate) || 1;
             
             // Convert to PLN if currency is not PLN
-            const amountInPLN = transaction.currency === 'PLN' ? amount : amount * exchangeRate;
+            let debitInPLN = debitAmount;
+            let creditInPLN = creditAmount;
             
-            return sum + amountInPLN;
+            if (transaction.currency !== 'PLN') {
+              debitInPLN = debitAmount * exchangeRate;
+              creditInPLN = creditAmount * exchangeRate;
+            }
+            
+            return sum + debitInPLN + creditInPLN;
           }, 0) || 0;
           
           console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} PLN`);
