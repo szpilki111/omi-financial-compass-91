@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/integrations/supabase/client';
@@ -464,6 +465,30 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       description: "Strona Winien została powielona",
     });
   };
+
+  const duplicateCreditSide = (index: number) => {
+    const originalTransaction = transactions[index];
+    
+    // For child transactions, don't modify the original - just duplicate as is
+    if (originalTransaction.isCloned) {
+      const duplicatedTransaction: Transaction = {
+        ...originalTransaction,
+        id: undefined, // Remove ID so it gets a new one when saved
+      };
+      
+      setTransactions(prev => {
+        const updated = [...prev];
+        // Insert the duplicated transaction right after the original one
+        updated.splice(index + 1, 0, duplicatedTransaction);
+        return updated;
+      });
+
+      toast({
+        title: "Sukces",
+        description: "Operacja została powielona",
+      });
+      return;
+    }
     
     // For parent transactions, use the original logic
     const updatedOriginal = {
