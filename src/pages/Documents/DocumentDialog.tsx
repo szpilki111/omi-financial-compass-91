@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
+import ConfirmCloseDialog from './ConfirmCloseDialog';
 import { Transaction } from './types';
 
 interface DocumentDialogProps {
@@ -52,6 +53,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [hiddenFieldsInEdit, setHiddenFieldsInEdit] = useState<{debit?: boolean, credit?: boolean}>({});
   const [isClonedTransaction, setIsClonedTransaction] = useState(false);
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -60,6 +63,47 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       document_date: new Date(),
     },
   });
+
+  // Track form changes to detect unsaved changes
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      setHasUnsavedChanges(true);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Track transaction changes
+  useEffect(() => {
+    if (transactions.length > 0) {
+      setHasUnsavedChanges(true);
+    }
+  }, [transactions]);
+
+  // Reset unsaved changes flag when dialog opens for new document
+  useEffect(() => {
+    if (isOpen && !document) {
+      setHasUnsavedChanges(false);
+    }
+  }, [isOpen, document]);
+
+  // Handle dialog close with confirmation if there are unsaved changes
+  const handleCloseDialog = () => {
+    if (hasUnsavedChanges) {
+      setShowConfirmClose(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowConfirmClose(false);
+    setHasUnsavedChanges(false);
+    onClose();
+  };
+
+  const handleCancelClose = () => {
+    setShowConfirmClose(false);
+  };
 
   // Generate document number using the database function
   const generateDocumentNumber = async (date: Date) => {
@@ -113,6 +157,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       
       // Load existing transactions only for existing documents
       loadTransactions(document.id);
+      setHasUnsavedChanges(false);
     } else {
       // For new documents, always start with empty form and no transactions
       form.reset({
@@ -121,6 +166,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         document_date: new Date(),
       });
       setTransactions([]); // Explicitly clear transactions for new documents
+      setHasUnsavedChanges(false);
     }
   }, [document, form, isOpen]); // Added isOpen to dependency array
 
@@ -328,6 +374,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
       }
 
+      setHasUnsavedChanges(false);
       onDocumentCreated();
       onClose();
     } catch (error: any) {
@@ -544,258 +591,274 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   console.log('Credit total:', creditTotal);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {document ? 'Edytuj dokument' : 'Nowy dokument'}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {document ? 'Edytuj dokument' : 'Nowy dokument'}
+            </DialogTitle>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="document_number"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Numer dokumentu</FormLabel>
-                    <div className="flex gap-2">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="document_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Numer dokumentu</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input {...field} placeholder="np. DOM/2024/01/001" />
+                        </FormControl>
+                        {!document && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRegenerateNumber}
+                            disabled={isGeneratingNumber}
+                            title="Wygeneruj ponownie numer dokumentu"
+                          >
+                            <RefreshCw className={cn("h-4 w-4", isGeneratingNumber && "animate-spin")} />
+                          </Button>
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="document_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data dokumentu</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="np. DOM/2024/01/001" />
+                        <DatePicker
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Wybierz datę"
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                        />
                       </FormControl>
-                      {!document && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleRegenerateNumber}
-                          disabled={isGeneratingNumber}
-                          title="Wygeneruj ponownie numer dokumentu"
-                        >
-                          <RefreshCw className={cn("h-4 w-4", isGeneratingNumber && "animate-spin")} />
-                        </Button>
-                      )}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
-                name="document_date"
+                name="document_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data dokumentu</FormLabel>
+                    <FormLabel>Nazwa dokumentu</FormLabel>
                     <FormControl>
-                      <DatePicker
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Wybierz datę"
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                      />
+                      <Input {...field} placeholder="Opisowa nazwa dokumentu" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setHasUnsavedChanges(false);
+                    onClose();
+                  }}
+                >
+                  Anuluj
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
+                </Button>
+              </div>
+            </form>
+          </Form>
+
+          {/* Operations section - outside the main form to prevent nesting */}
+          <div className="space-y-4 border-t pt-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Operacje</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowTransactionForm(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Dodaj operację
+              </Button>
             </div>
 
-            <FormField
-              control={form.control}
-              name="document_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nazwa dokumentu</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Opisowa nazwa dokumentu" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Transaction form appears right after the button */}
+            {showTransactionForm && (
+              <TransactionForm
+                onAdd={addTransaction}
+                onCancel={() => setShowTransactionForm(false)}
+              />
+            )}
 
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Anuluj
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
-              </Button>
-            </div>
-          </form>
-        </Form>
-
-        {/* Operations section - outside the main form to prevent nesting */}
-        <div className="space-y-4 border-t pt-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">Operacje</h3>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowTransactionForm(true)}
-              className="flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Dodaj operację
-            </Button>
-          </div>
-
-          {/* Transaction form appears right after the button */}
-          {showTransactionForm && (
-            <TransactionForm
-              onAdd={addTransaction}
-              onCancel={() => setShowTransactionForm(false)}
-            />
-          )}
-
-          {/* Transaction list appears after the form */}
-          {transactions.length > 0 && (
-            <div className="space-y-2">
-              {transactions.map((transaction, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium">{transaction.description}</p>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-600 font-medium">
-                            Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
-                              style: 'currency', 
-                              currency: 'PLN' 
-                            })}
-                          </span>
-                          {transaction.debitAccountNumber && (
-                            <span className="text-gray-500 text-xs">
-                              → {transaction.debitAccountNumber}
+            {/* Transaction list appears after the form */}
+            {transactions.length > 0 && (
+              <div className="space-y-2">
+                {transactions.map((transaction, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium">{transaction.description}</p>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-green-600 font-medium">
+                              Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
+                                style: 'currency', 
+                                currency: 'PLN' 
+                              })}
                             </span>
-                          )}
-                        </div>
-                      )}
-                      {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-blue-600 font-medium">
-                            Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
-                              style: 'currency', 
-                              currency: 'PLN' 
-                            })}
-                          </span>
-                          {transaction.creditAccountNumber && (
-                            <span className="text-gray-500 text-xs">
-                              → {transaction.creditAccountNumber}
+                            {transaction.debitAccountNumber && (
+                              <span className="text-gray-500 text-xs">
+                                → {transaction.debitAccountNumber}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600 font-medium">
+                              Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
+                                style: 'currency', 
+                                currency: 'PLN' 
+                              })}
                             </span>
-                          )}
-                        </div>
+                            {transaction.creditAccountNumber && (
+                              <span className="text-gray-500 text-xs">
+                                → {transaction.creditAccountNumber}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {/* Show duplication buttons based on cloned type restrictions */}
+                      {(!transaction.isCloned || transaction.clonedType === 'debit') && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => duplicateDebitSide(index)}
+                          className="text-green-600 hover:text-green-700"
+                          title="Powiel stronę Winien"
+                        >
+                          <Copy className="h-4 w-4" />
+                          W
+                        </Button>
                       )}
+                      {(!transaction.isCloned || transaction.clonedType === 'credit') && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => duplicateCreditSide(index)}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Powiel stronę Ma"
+                        >
+                          <Copy className="h-4 w-4" />
+                          M
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditTransaction(transaction, index)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeTransaction(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    {/* Show duplication buttons based on cloned type restrictions */}
-                    {(!transaction.isCloned || transaction.clonedType === 'debit') && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => duplicateDebitSide(index)}
-                        className="text-green-600 hover:text-green-700"
-                        title="Powiel stronę Winien"
-                      >
-                        <Copy className="h-4 w-4" />
-                        W
-                      </Button>
-                    )}
-                    {(!transaction.isCloned || transaction.clonedType === 'credit') && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => duplicateCreditSide(index)}
-                        className="text-blue-600 hover:text-blue-700"
-                        title="Powiel stronę Ma"
-                      >
-                        <Copy className="h-4 w-4" />
-                        M
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditTransaction(transaction, index)}
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeTransaction(index)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              
-              {/* Updated summary section with separate debit and credit totals */}
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between items-center text-lg">
-                  <span className="font-medium text-green-700">Winien:</span>
-                  <span className="font-semibold text-green-700">
-                    {debitTotal.toLocaleString('pl-PL', { 
-                      style: 'currency', 
-                      currency: 'PLN' 
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-lg">
-                  <span className="font-medium text-blue-700">Ma:</span>
-                  <span className="font-semibold text-blue-700">
-                    {creditTotal.toLocaleString('pl-PL', { 
-                      style: 'currency', 
-                      currency: 'PLN' 
-                    })}
-                  </span>
-                </div>
-                <div className="border-t pt-2">
-                  <div className="flex justify-between items-center text-xl font-bold">
-                    <span>Razem:</span>
-                    <span>
-                      {(debitTotal + creditTotal).toLocaleString('pl-PL', { 
+                ))}
+                
+                {/* Updated summary section with separate debit and credit totals */}
+                <div className="border-t pt-4 space-y-2">
+                  <div className="flex justify-between items-center text-lg">
+                    <span className="font-medium text-green-700">Winien:</span>
+                    <span className="font-semibold text-green-700">
+                      {debitTotal.toLocaleString('pl-PL', { 
                         style: 'currency', 
                         currency: 'PLN' 
                       })}
                     </span>
                   </div>
+                  <div className="flex justify-between items-center text-lg">
+                    <span className="font-medium text-blue-700">Ma:</span>
+                    <span className="font-semibold text-blue-700">
+                      {creditTotal.toLocaleString('pl-PL', { 
+                        style: 'currency', 
+                        currency: 'PLN' 
+                      })}
+                    </span>
+                  </div>
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between items-center text-xl font-bold">
+                      <span>Razem:</span>
+                      <span>
+                        {(debitTotal + creditTotal).toLocaleString('pl-PL', { 
+                          style: 'currency', 
+                          currency: 'PLN' 
+                        })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
+            )}
+          </div>
+        </DialogContent>
 
-      {/* Transaction Edit Dialog */}
-      <TransactionEditDialog
-        isOpen={showEditDialog}
-        onClose={() => {
-          setShowEditDialog(false);
-          setEditingTransaction(null);
-          setEditingTransactionIndex(null);
-          setHiddenFieldsInEdit({});
-          setIsClonedTransaction(false);
-        }}
-        onSave={handleTransactionUpdated}
-        transaction={editingTransaction}
-        isNewDocument={!document}
-        hiddenFields={hiddenFieldsInEdit}
+        {/* Transaction Edit Dialog */}
+        <TransactionEditDialog
+          isOpen={showEditDialog}
+          onClose={() => {
+            setShowEditDialog(false);
+            setEditingTransaction(null);
+            setEditingTransactionIndex(null);
+            setHiddenFieldsInEdit({});
+            setIsClonedTransaction(false);
+          }}
+          onSave={handleTransactionUpdated}
+          transaction={editingTransaction}
+          isNewDocument={!document}
+          hiddenFields={hiddenFieldsInEdit}
+        />
+      </Dialog>
+
+      {/* Confirm close dialog */}
+      <ConfirmCloseDialog
+        isOpen={showConfirmClose}
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
       />
-    </Dialog>
+    </>
   );
 };
 
