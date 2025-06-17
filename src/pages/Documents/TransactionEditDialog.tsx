@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -21,7 +20,7 @@ interface AmountField {
   id: string;
   amount: number;
   accountId: string;
-  description?: string; // Dodano pole opisu dla każdego pola
+  description?: string;
 }
 
 interface TransactionEditDialogProps {
@@ -152,7 +151,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
           id: Date.now().toString(),
           amount: difference,
           accountId: '',
-          description: formData.description // Skopiuj opis z głównej operacji
+          description: formData.description
         };
         
         if (currentTotal < oppositeTotal) {
@@ -208,7 +207,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       id: Date.now().toString(),
       amount: 0,
       accountId: '',
-      description: formData.description // Skopiuj opis z głównej operacji
+      description: formData.description
     };
 
     if (type === 'debit') {
@@ -344,6 +343,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           value={field.accountId}
                           onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                           locationId={userProfile?.location_id}
+                          side="debit"
                         />
                       </div>
                       {index > 0 && (
@@ -399,6 +399,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                           value={field.accountId}
                           onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                           locationId={userProfile?.location_id}
+                          side="credit"
                         />
                       </div>
                       {index > 0 && (
