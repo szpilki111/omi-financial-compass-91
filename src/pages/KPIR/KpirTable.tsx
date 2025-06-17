@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { KpirTransaction } from '@/types/kpir';
 import { Spinner } from '@/components/ui/Spinner';
-import { Pencil, Split } from 'lucide-react';
+import { Split } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface KpirTableProps {
@@ -104,9 +104,9 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
               variant="ghost"
               size="icon"
               onClick={() => onShowDocument?.(transaction.document)}
-              title="Edytuj dokument"
+              title="Zobacz dokument"
             >
-              <span className="sr-only">Edytuj dokument</span>
+              <span className="sr-only">Zobacz dokument</span>
               <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>

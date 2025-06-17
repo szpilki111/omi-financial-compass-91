@@ -24,6 +24,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 
+interface AmountField {
+  id: string;
+  amount: number;
+  accountId: string;
+}
+
 interface TransactionEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,13 +53,16 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: '',
-    debit_account_id: '',
-    credit_account_id: '',
-    debit_amount: 0,
-    credit_amount: 0,
-    amount: 0,
     settlement_type: 'Bank',
   });
+
+  const [debitFields, setDebitFields] = useState<AmountField[]>([
+    { id: '1', amount: 0, accountId: '' }
+  ]);
+
+  const [creditFields, setCreditFields] = useState<AmountField[]>([
+    { id: '1', amount: 0, accountId: '' }
+  ]);
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -78,37 +87,28 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     if (transaction) {
       setFormData({
         description: transaction.description || '',
-        debit_account_id: transaction.debit_account_id || '',
-        credit_account_id: transaction.credit_account_id || '',
-        debit_amount: transaction.debit_amount || 0,
-        credit_amount: transaction.credit_amount || 0,
-        amount: transaction.amount || 0,
         settlement_type: transaction.settlement_type || 'Bank',
       });
+
+      setDebitFields([{
+        id: '1',
+        amount: transaction.debit_amount || 0,
+        accountId: transaction.debit_account_id || ''
+      }]);
+
+      setCreditFields([{
+        id: '1',
+        amount: transaction.credit_amount || 0,
+        accountId: transaction.credit_account_id || ''
+      }]);
+
       setHasUnsavedChanges(false);
     }
   }, [transaction]);
 
-  // Synchronizacja kwot - gdy jedna zmienia się, druga też (tylko jeśli nie są ukryte)
-  useEffect(() => {
-    if (!hiddenFields.credit && formData.debit_amount > 0 && formData.credit_amount !== formData.debit_amount) {
-      setFormData(prev => ({
-        ...prev,
-        credit_amount: prev.debit_amount,
-        amount: prev.debit_amount
-      }));
-    }
-  }, [formData.debit_amount, hiddenFields.credit]);
-
-  useEffect(() => {
-    if (!hiddenFields.debit && formData.credit_amount > 0 && formData.debit_amount !== formData.credit_amount) {
-      setFormData(prev => ({
-        ...prev,
-        debit_amount: prev.credit_amount,
-        amount: prev.credit_amount
-      }));
-    }
-  }, [formData.credit_amount, hiddenFields.debit]);
+  // Calculate totals
+  const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
+  const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
 
   // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
   const handleClose = () => {
@@ -131,38 +131,99 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     }
   };
 
-  // Funkcje do obsługi inteligentnych pól kwot
   const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === '0') {
       e.target.value = '';
     }
   };
 
-  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, field: string) => {
-    if (e.target.value === '') {
-      e.target.value = '0';
-      setFormData(prev => ({ ...prev, [field]: 0 }));
+  const handleAmountBlur = (fieldId: string, type: 'debit' | 'credit', amount: number) => {
+    const fields = type === 'debit' ? debitFields : creditFields;
+    const setFields = type === 'debit' ? setDebitFields : setCreditFields;
+    const oppositeTotal = type === 'debit' ? creditTotal : debitTotal;
+    const currentTotal = fields.reduce((sum, field) => sum + field.amount, 0);
+    
+    // Check if we need to add more fields to balance the amounts
+    if (currentTotal !== oppositeTotal && currentTotal > 0 && oppositeTotal > 0) {
+      const difference = Math.abs(currentTotal - oppositeTotal);
+      if (difference > 0) {
+        // Add a new field with the difference amount
+        const newField: AmountField = {
+          id: Date.now().toString(),
+          amount: difference,
+          accountId: ''
+        };
+        
+        if (currentTotal < oppositeTotal) {
+          setFields(prev => [...prev, newField]);
+        }
+      }
     }
   };
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    const value = e.target.value;
-    const numericValue = parseFloat(value) || 0;
-    
+  const handleDebitAmountChange = (fieldId: string, amount: number) => {
     setHasUnsavedChanges(true);
-    
-    // Sprawdzenie czy wartość nie jest za duża
-    if (value && value.length > 10) {
-      setErrors(prev => ({ ...prev, [field]: 'za dużo cyfr w polu' }));
-      return;
+    setDebitFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
+
+    // Copy to first credit field only if it's 0
+    if (fieldId === '1' && creditFields[0]?.amount === 0) {
+      setCreditFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
-    
-    setFormData(prev => ({ ...prev, [field]: numericValue }));
-    
-    // Usuń błąd dla pola kwoty
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  const handleCreditAmountChange = (fieldId: string, amount: number) => {
+    setHasUnsavedChanges(true);
+    setCreditFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
+
+    // Copy to first debit field only if it's 0
+    if (fieldId === '1' && debitFields[0]?.amount === 0) {
+      setDebitFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
+  };
+
+  const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+    setHasUnsavedChanges(true);
+    if (type === 'debit') {
+      setDebitFields(prev => prev.map(field => 
+        field.id === fieldId ? { ...field, accountId } : field
+      ));
+    } else {
+      setCreditFields(prev => prev.map(field => 
+        field.id === fieldId ? { ...field, accountId } : field
+      ));
+    }
+  };
+
+  const addNewField = (type: 'debit' | 'credit') => {
+    const newField: AmountField = {
+      id: Date.now().toString(),
+      amount: 0,
+      accountId: ''
+    };
+
+    if (type === 'debit') {
+      setDebitFields(prev => [...prev, newField]);
+    } else {
+      setCreditFields(prev => [...prev, newField]);
+    }
+    setHasUnsavedChanges(true);
+  };
+
+  const removeField = (fieldId: string, type: 'debit' | 'credit') => {
+    if (type === 'debit' && debitFields.length > 1) {
+      setDebitFields(prev => prev.filter(field => field.id !== fieldId));
+    } else if (type === 'credit' && creditFields.length > 1) {
+      setCreditFields(prev => prev.filter(field => field.id !== fieldId));
+    }
+    setHasUnsavedChanges(true);
   };
 
   const validateForm = (): boolean => {
@@ -171,17 +232,25 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     if (!formData.description.trim()) {
       newErrors.description = 'Opis jest wymagany';
     }
+
+    if (debitTotal !== creditTotal) {
+      newErrors.amounts = 'Suma kwot Winien i Ma musi być równa';
+    }
+
+    if (debitTotal <= 0) {
+      newErrors.amounts = 'Kwoty muszą być większe od zera';
+    }
+
+    // Check if all accounts are selected
+    const emptyDebitAccounts = debitFields.filter(field => field.amount > 0 && !field.accountId);
+    const emptyCreditAccounts = creditFields.filter(field => field.amount > 0 && !field.accountId);
     
-    if (!hiddenFields.debit && !formData.debit_account_id) {
-      newErrors.debit_account_id = 'Konto Winien jest wymagane';
+    if (emptyDebitAccounts.length > 0) {
+      newErrors.accounts = 'Wszystkie konta Winien muszą być wybrane';
     }
     
-    if (!hiddenFields.credit && !formData.credit_account_id) {
-      newErrors.credit_account_id = 'Konto Ma jest wymagane';
-    }
-    
-    if (formData.debit_amount <= 0 && formData.credit_amount <= 0) {
-      newErrors.amount = 'Kwota musi być większa od zera';
+    if (emptyCreditAccounts.length > 0) {
+      newErrors.accounts = 'Wszystkie konta Ma muszą być wybrane';
     }
     
     setErrors(newErrors);
@@ -193,14 +262,18 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       return;
     }
 
+    // Create transaction for the first debit/credit pair
+    const mainDebit = debitFields[0];
+    const mainCredit = creditFields[0];
+
     const updatedTransaction: Transaction = {
       ...transaction,
       description: formData.description,
-      debit_account_id: formData.debit_account_id,
-      credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      debit_account_id: mainDebit.accountId,
+      credit_account_id: mainCredit.accountId,
+      debit_amount: mainDebit.amount,
+      credit_amount: mainCredit.amount,
+      amount: Math.max(mainDebit.amount, mainCredit.amount),
       settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
     };
 
@@ -210,7 +283,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edytuj operację</DialogTitle>
         </DialogHeader>
@@ -230,78 +303,125 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Debit Fields */}
             {!hiddenFields.debit && (
               <div>
-                <Label>Konto Winien *</Label>
-                <AccountCombobox
-                  value={formData.debit_account_id}
-                  onChange={(accountId) => handleChange('debit_account_id', accountId)}
-                  locationId={userProfile?.location_id}
-                  className={errors.debit_account_id ? 'border-red-500' : ''}
-                />
-                {errors.debit_account_id && (
-                  <p className="text-red-500 text-sm mt-1">{errors.debit_account_id}</p>
-                )}
+                <Label className="text-base font-medium mb-3 block">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+                <div className="space-y-3">
+                  {debitFields.map((field, index) => (
+                    <div key={field.id} className="space-y-2">
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-sm">Kwota</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={field.amount}
+                            onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                            onFocus={handleAmountFocus}
+                            onBlur={() => handleAmountBlur(field.id, 'debit', field.amount)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        {debitFields.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeField(field.id, 'debit')}
+                            className="text-red-600"
+                          >
+                            ✕
+                          </Button>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-sm">Konto</Label>
+                        <AccountCombobox
+                          value={field.accountId}
+                          onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
+                          locationId={userProfile?.location_id}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('debit')}
+                    className="w-full"
+                  >
+                    + Dodaj pole Winien
+                  </Button>
+                </div>
               </div>
             )}
 
+            {/* Credit Fields */}
             {!hiddenFields.credit && (
               <div>
-                <Label>Konto Ma *</Label>
-                <AccountCombobox
-                  value={formData.credit_account_id}
-                  onChange={(accountId) => handleChange('credit_account_id', accountId)}
-                  locationId={userProfile?.location_id}
-                  className={errors.credit_account_id ? 'border-red-500' : ''}
-                />
-                {errors.credit_account_id && (
-                  <p className="text-red-500 text-sm mt-1">{errors.credit_account_id}</p>
-                )}
+                <Label className="text-base font-medium mb-3 block">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+                <div className="space-y-3">
+                  {creditFields.map((field, index) => (
+                    <div key={field.id} className="space-y-2">
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-sm">Kwota</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={field.amount}
+                            onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                            onFocus={handleAmountFocus}
+                            onBlur={() => handleAmountBlur(field.id, 'credit', field.amount)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        {creditFields.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeField(field.id, 'credit')}
+                            className="text-red-600"
+                          >
+                            ✕
+                          </Button>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-sm">Konto</Label>
+                        <AccountCombobox
+                          value={field.accountId}
+                          onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
+                          locationId={userProfile?.location_id}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('credit')}
+                    className="w-full"
+                  >
+                    + Dodaj pole Ma
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {!hiddenFields.debit && (
-              <div>
-                <Label htmlFor="debit_amount">Kwota Winien *</Label>
-                <Input
-                  id="debit_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.debit_amount}
-                  onChange={(e) => handleAmountChange(e, 'debit_amount')}
-                  onFocus={handleAmountFocus}
-                  onBlur={(e) => handleAmountBlur(e, 'debit_amount')}
-                  placeholder="0.00"
-                  className={errors.amount ? 'border-red-500' : ''}
-                />
-              </div>
-            )}
-
-            {!hiddenFields.credit && (
-              <div>
-                <Label htmlFor="credit_amount">Kwota Ma *</Label>
-                <Input
-                  id="credit_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.credit_amount}
-                  onChange={(e) => handleAmountChange(e, 'credit_amount')}
-                  onFocus={handleAmountFocus}
-                  onBlur={(e) => handleAmountBlur(e, 'credit_amount')}
-                  placeholder="0.00"
-                  className={errors.amount ? 'border-red-500' : ''}
-                />
-              </div>
-            )}
-          </div>
-
-          {errors.amount && (
-            <p className="text-red-500 text-sm">{errors.amount}</p>
+          {(errors.amounts || errors.accounts) && (
+            <div className="text-red-500 text-sm">
+              {errors.amounts && <p>{errors.amounts}</p>}
+              {errors.accounts && <p>{errors.accounts}</p>}
+            </div>
           )}
 
           <div>
