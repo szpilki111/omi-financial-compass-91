@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -80,24 +79,21 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
     enabled: !!user?.id,
   });
 
-  // Check if editing is blocked for this document
+  // Check if editing is blocked for this document - only when we have a date selected
   const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
     queryKey: ['editingBlocked', document?.id, userProfile?.location_id, formData.document_date],
     queryFn: async () => {
-      if (!userProfile?.location_id) return false;
-      
-      // Use document date if editing existing document, otherwise use form date
-      const dateToCheck = document?.document_date || formData.document_date;
+      if (!userProfile?.location_id || !formData.document_date) return false;
       
       const { data, error } = await supabase.rpc('check_report_editing_blocked', {
         p_location_id: userProfile.location_id,
-        p_document_date: dateToCheck
+        p_document_date: formData.document_date
       });
 
       if (error) throw error;
       return data;
     },
-    enabled: !!userProfile?.location_id && isOpen,
+    enabled: !!userProfile?.location_id && !!formData.document_date && isOpen,
   });
 
   useEffect(() => {
@@ -138,7 +134,15 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
   });
 
   const handleSaveDocument = async () => {
-    if (isEditingBlocked) return;
+    // Check if saving is blocked only when trying to save
+    if (isEditingBlocked) {
+      toast({
+        title: "Błąd",
+        description: "Nie można zapisać dokumentu - raport za ten okres został już złożony lub zatwierdzony",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsLoading(true);
 
@@ -294,14 +298,14 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        {isEditingBlocked && (
+        {/* Show warning only when trying to save and editing is blocked */}
+        {isEditingBlocked && formData.document_date && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {document 
-                ? "Nie można edytować tego dokumentu, ponieważ raport za ten okres został już złożony lub zatwierdzony."
-                : "Nie można tworzyć dokumentów na tę datę, ponieważ raport za ten okres został już złożony lub zatwierdzony."
-              }
+              Nie można zapisać dokumentu na datę {format(new Date(formData.document_date), 'dd.MM.yyyy')}, 
+              ponieważ raport za ten okres został już złożony lub zatwierdzony.
+              {!document && " Możesz wybrać inną datę."}
             </AlertDescription>
           </Alert>
         )}
@@ -315,13 +319,10 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
                 id="document_number"
                 value={formData.document_number}
                 onChange={(e) => {
-                  if (!isEditingBlocked) {
-                    setFormData({ ...formData, document_number: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }
+                  setFormData({ ...formData, document_number: e.target.value });
+                  setHasUnsavedChanges(true);
                 }}
                 placeholder="Zostanie wygenerowany automatycznie"
-                disabled={isEditingBlocked}
               />
             </div>
 
@@ -331,13 +332,10 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
                 id="document_name"
                 value={formData.document_name}
                 onChange={(e) => {
-                  if (!isEditingBlocked) {
-                    setFormData({ ...formData, document_name: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }
+                  setFormData({ ...formData, document_name: e.target.value });
+                  setHasUnsavedChanges(true);
                 }}
                 placeholder="Np. Faktura sprzedaży"
-                disabled={isEditingBlocked}
               />
             </div>
 
@@ -348,12 +346,9 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
                 type="date"
                 value={formData.document_date}
                 onChange={(e) => {
-                  if (!isEditingBlocked) {
-                    setFormData({ ...formData, document_date: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }
+                  setFormData({ ...formData, document_date: e.target.value });
+                  setHasUnsavedChanges(true);
                 }}
-                disabled={isEditingBlocked}
               />
             </div>
           </div>
@@ -365,7 +360,7 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
             </Button>
             <Button 
               onClick={handleSaveDocument} 
-              disabled={isLoading || isEditingBlocked}
+              disabled={isLoading || (isEditingBlocked && formData.document_date)}
             >
               {isLoading ? 'Zapisywanie...' : 'Zapisz dokument'}
             </Button>
