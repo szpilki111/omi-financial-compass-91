@@ -15,7 +15,7 @@ interface AmountField {
   id: string;
   amount: number;
   accountId: string;
-  description?: string; // Dodano pole opisu dla każdego pola
+  description?: string;
 }
 
 interface TransactionFormProps {
@@ -99,7 +99,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           id: Date.now().toString(),
           amount: difference,
           accountId: '',
-          description: formData.description // Skopiuj opis z głównej operacji
+          description: formData.description
         };
         
         if (currentTotal < oppositeTotal) {
@@ -152,7 +152,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       id: Date.now().toString(),
       amount: 0,
       accountId: '',
-      description: formData.description // Skopiuj opis z głównej operacji
+      description: formData.description
     };
 
     if (type === 'debit') {
@@ -184,18 +184,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     if (debitTotal <= 0) {
       newErrors.amounts = 'Kwoty muszą być większe od zera';
     }
-
-    // Check if all accounts are selected
-    const emptyDebitAccounts = debitFields.filter(field => field.amount > 0 && !field.accountId);
-    const emptyCreditAccounts = creditFields.filter(field => field.amount > 0 && !field.accountId);
-    
-    if (emptyDebitAccounts.length > 0) {
-      newErrors.accounts = 'Wszystkie konta Winien muszą być wybrane';
-    }
-    
-    if (emptyCreditAccounts.length > 0) {
-      newErrors.accounts = 'Wszystkie konta Ma muszą być wybrane';
-    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -208,21 +196,26 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       return;
     }
 
-    // Create transaction for the first debit/credit pair
-    const mainDebit = debitFields[0];
-    const mainCredit = creditFields[0];
+    // Create transactions for all fields that have amounts > 0
+    const validDebitFields = debitFields.filter(field => field.amount > 0);
+    const validCreditFields = creditFields.filter(field => field.amount > 0);
 
-    const transaction: Transaction = {
-      description: formData.description,
-      debit_account_id: mainDebit.accountId,
-      credit_account_id: mainCredit.accountId,
-      debit_amount: mainDebit.amount,
-      credit_amount: mainCredit.amount,
-      amount: Math.max(mainDebit.amount, mainCredit.amount),
-      settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
-    };
+    // Create multiple transactions based on all valid combinations
+    validDebitFields.forEach(debitField => {
+      validCreditFields.forEach(creditField => {
+        const transaction: Transaction = {
+          description: formData.description,
+          debit_account_id: debitField.accountId,
+          credit_account_id: creditField.accountId,
+          debit_amount: debitField.amount,
+          credit_amount: creditField.amount,
+          amount: Math.max(debitField.amount, creditField.amount),
+          settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
+        };
 
-    onAdd(transaction);
+        onAdd(transaction);
+      });
+    });
   };
 
   return (
@@ -285,25 +278,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       locationId={userProfile?.location_id}
                     />
                   </div>
-                  {index > 0 && (
-                    <div>
-                      <Label className="text-sm text-gray-600">Opis operacji</Label>
-                      <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
-                        {field.description || formData.description}
-                      </p>
-                    </div>
-                  )}
                 </div>
               ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addNewField('debit')}
-                className="w-full"
-              >
-                + Dodaj pole Winien
-              </Button>
             </div>
           </div>
 
@@ -347,14 +323,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       locationId={userProfile?.location_id}
                     />
                   </div>
-                  {index > 0 && (
-                    <div>
-                      <Label className="text-sm text-gray-600">Opis operacji</Label>
-                      <p className="text-sm text-gray-800 bg-gray-100 p-2 rounded border">
-                        {field.description || formData.description}
-                      </p>
-                    </div>
-                  )}
                 </div>
               ))}
               <Button
@@ -370,10 +338,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           </div>
         </div>
 
-        {(errors.amounts || errors.accounts) && (
+        {errors.amounts && (
           <div className="text-red-500 text-sm">
-            {errors.amounts && <p>{errors.amounts}</p>}
-            {errors.accounts && <p>{errors.accounts}</p>}
+            <p>{errors.amounts}</p>
           </div>
         )}
 
