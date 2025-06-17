@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,29 +49,30 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
       }
 
       // Transform the data to match the Transaction interface
-      return data?.map(item => ({
-        ...item,
-        debitAccount: item.debitAccount && 
-                     typeof item.debitAccount === 'object' && 
-                     item.debitAccount !== null &&
-                     'number' in item.debitAccount &&
-                     'name' in item.debitAccount
-          ? { 
-              number: item.debitAccount.number as string, 
-              name: item.debitAccount.name as string 
-            }
-          : undefined,
-        creditAccount: item.creditAccount && 
-                      typeof item.creditAccount === 'object' && 
-                      item.creditAccount !== null &&
-                      'number' in item.creditAccount &&
-                      'name' in item.creditAccount
-          ? { 
-              number: item.creditAccount.number as string, 
-              name: item.creditAccount.name as string 
-            }
-          : undefined,
-      })) as Transaction[];
+      return data?.map(item => {
+        // Helper function to safely extract account data
+        const extractAccountData = (account: any) => {
+          if (account && 
+              typeof account === 'object' && 
+              account !== null &&
+              'number' in account &&
+              'name' in account &&
+              typeof account.number === 'string' &&
+              typeof account.name === 'string') {
+            return {
+              number: account.number,
+              name: account.name
+            };
+          }
+          return undefined;
+        };
+
+        return {
+          ...item,
+          debitAccount: extractAccountData(item.debitAccount),
+          creditAccount: extractAccountData(item.creditAccount),
+        };
+      }) as Transaction[];
     },
   });
 
