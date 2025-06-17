@@ -87,6 +87,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   }, [isOpen, document]);
 
   // Handle dialog close with confirmation if there are unsaved changes
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      // Dialog is being closed
+      if (hasUnsavedChanges) {
+        setShowConfirmClose(true);
+      } else {
+        onClose();
+      }
+    }
+  };
+
   const handleCloseDialog = () => {
     if (hasUnsavedChanges) {
       setShowConfirmClose(true);
@@ -592,7 +603,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
+      <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
