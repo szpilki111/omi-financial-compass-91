@@ -2,7 +2,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { FileText, Calendar, MapPin, Eye, Trash } from 'lucide-react';
+import { FileText, Calendar, MapPin, Eye, Trash, Calculator } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -29,6 +29,7 @@ interface Document {
     name: string;
   } | null;
   transaction_count?: number;
+  total_amount?: number;
 }
 
 interface DocumentTableProps {
@@ -39,6 +40,15 @@ interface DocumentTableProps {
 }
 
 const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading }: DocumentTableProps) => {
+  const formatAmount = (amount?: number) => {
+    if (!amount) return '0,00 zł';
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -71,6 +81,7 @@ const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading
             <TableHead>Data dokumentu</TableHead>
             <TableHead>Lokalizacja</TableHead>
             <TableHead>Operacje</TableHead>
+            <TableHead className="text-right">Suma kwot</TableHead>
             <TableHead>Data utworzenia</TableHead>
             <TableHead className="w-[140px]">Akcje</TableHead>
           </TableRow>
@@ -103,6 +114,12 @@ const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading
                 <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
                   {document.transaction_count || 0}
                 </span>
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                <div className="flex items-center justify-end gap-1">
+                  <Calculator className="h-4 w-4 text-gray-500" />
+                  {formatAmount(document.total_amount)}
+                </div>
               </TableCell>
               <TableCell className="text-sm text-gray-500">
                 {format(new Date(document.created_at), 'dd.MM.yyyy HH:mm')}

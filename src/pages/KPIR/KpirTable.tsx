@@ -50,6 +50,14 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     );
   }
 
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   const renderTransactionRow = (transaction: KpirTransaction) => {
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
@@ -70,12 +78,25 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
           </div>
         </TableCell>
         <TableCell>
-          {transaction.currency}
+          <div className="space-y-1">
+            <div className="text-sm font-medium">
+              Wn: {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+            </div>
+            <div className="text-sm text-gray-600">
+              Ma: {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          {formatAmount(transaction.amount, transaction.currency)}
           {transaction.currency !== 'PLN' && transaction.exchange_rate && (
-            <span className="text-xs text-omi-gray-500 block">
+            <div className="text-xs text-omi-gray-500">
               kurs: {transaction.exchange_rate.toFixed(4)}
-            </span>
+            </div>
           )}
+        </TableCell>
+        <TableCell>
+          {transaction.currency}
         </TableCell>
         <TableCell>
           {transaction.document ? (
@@ -107,6 +128,8 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
+            <TableHead>Konta</TableHead>
+            <TableHead className="text-right">Kwota</TableHead>
             <TableHead>Waluta</TableHead>
             <TableHead>Dokument</TableHead>
           </TableRow>

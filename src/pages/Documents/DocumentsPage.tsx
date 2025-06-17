@@ -28,6 +28,7 @@ interface Document {
     name: string;
   } | null;
   transaction_count?: number;
+  total_amount?: number;
 }
 
 const DocumentsPage = () => {
@@ -60,7 +61,7 @@ const DocumentsPage = () => {
 
       console.log('Raw documents data:', data);
 
-      // Get transaction counts for each document
+      // Get transaction counts and total amounts for each document
       const documentsWithCounts = await Promise.all(
         (data || []).map(async (doc) => {
           const { count } = await supabase
@@ -68,11 +69,20 @@ const DocumentsPage = () => {
             .select('*', { count: 'exact', head: true })
             .eq('document_id', doc.id);
           
+          // Get total amount for the document
+          const { data: transactions } = await supabase
+            .from('transactions')
+            .select('amount')
+            .eq('document_id', doc.id);
+          
+          const totalAmount = transactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+          
           return {
             ...doc,
             // Handle the profiles array by taking the first element or null
             profiles: Array.isArray(doc.profiles) && doc.profiles.length > 0 ? doc.profiles[0] : null,
-            transaction_count: count || 0
+            transaction_count: count || 0,
+            total_amount: totalAmount
           };
         })
       );
