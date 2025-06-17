@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -196,18 +195,25 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       return;
     }
 
-    // Create one transaction for each debit field with its corresponding credit field
-    // If there are different numbers of debit/credit fields, create transactions for each unique combination
-    const maxLength = Math.max(debitFields.length, creditFields.length);
-    
-    for (let i = 0; i < maxLength; i++) {
-      const debitField = debitFields[i] || debitFields[debitFields.length - 1]; // Use last debit field if fewer
-      const creditField = creditFields[i] || creditFields[creditFields.length - 1]; // Use last credit field if fewer
-      
-      // Only create transaction if both fields have amounts > 0 and accounts selected
-      if (debitField && creditField && 
-          debitField.amount > 0 && creditField.amount > 0 &&
-          debitField.accountId && creditField.accountId) {
+    // Get fields with amounts > 0 and selected accounts
+    const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
+    const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
+
+    // Create unique account groups to avoid duplication
+    const usedAccounts = new Set<string>();
+    const createdTransactions: Transaction[] = [];
+
+    // Process each valid debit field
+    validDebitFields.forEach((debitField, debitIndex) => {
+      // Find the best matching credit field that hasn't been used with this debit account
+      const availableCreditFields = validCreditFields.filter(creditField => {
+        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
+        return !usedAccounts.has(accountPair);
+      });
+
+      if (availableCreditFields.length > 0) {
+        // Use the first available credit field or the one at the same index if available
+        const creditField = availableCreditFields[debitIndex] || availableCreditFields[0];
         
         const transaction: Transaction = {
           description: formData.description,
@@ -215,31 +221,58 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           credit_account_id: creditField.accountId,
           debit_amount: debitField.amount,
           credit_amount: creditField.amount,
-          amount: Math.max(debitField.amount, creditField.amount), // For compatibility
+          amount: Math.max(debitField.amount, creditField.amount),
           settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
         };
 
-        onAdd(transaction);
+        createdTransactions.push(transaction);
+        
+        // Mark this account pair as used
+        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
+        usedAccounts.add(accountPair);
+        
+        // Remove the used credit field from further processing
+        const creditIndex = validCreditFields.indexOf(creditField);
+        if (creditIndex > -1) {
+          validCreditFields.splice(creditIndex, 1);
+        }
       }
-    }
+    });
 
-    // Also handle cases where we have unmatched debit or credit fields
-    // Create separate transactions for any remaining fields
-    for (let i = 0; i < debitFields.length; i++) {
-      const debitField = debitFields[i];
-      if (debitField.amount > 0 && debitField.accountId && i >= creditFields.length) {
-        // This debit field has no corresponding credit field
-        console.log('Unmatched debit field at index:', i, debitField);
-      }
-    }
+    // Process any remaining credit fields that weren't paired
+    validCreditFields.forEach(creditField => {
+      // Find a debit field that can be paired (preferably not already fully used)
+      const availableDebitFields = validDebitFields.filter(debitField => {
+        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
+        return !usedAccounts.has(accountPair);
+      });
 
-    for (let i = 0; i < creditFields.length; i++) {
-      const creditField = creditFields[i];
-      if (creditField.amount > 0 && creditField.accountId && i >= debitFields.length) {
-        // This credit field has no corresponding debit field
-        console.log('Unmatched credit field at index:', i, creditField);
+      if (availableDebitFields.length > 0) {
+        const debitField = availableDebitFields[0];
+        
+        const transaction: Transaction = {
+          description: formData.description,
+          debit_account_id: debitField.accountId,
+          credit_account_id: creditField.accountId,
+          debit_amount: debitField.amount,
+          credit_amount: creditField.amount,
+          amount: Math.max(debitField.amount, creditField.amount),
+          settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
+        };
+
+        createdTransactions.push(transaction);
+        
+        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
+        usedAccounts.add(accountPair);
       }
-    }
+    });
+
+    // Add all created transactions
+    createdTransactions.forEach(transaction => {
+      onAdd(transaction);
+    });
+
+    console.log('Created transactions:', createdTransactions);
   };
 
   return (
