@@ -65,6 +65,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     // Determine which document number to show (from document or transaction)
     const documentNumber = transaction.document?.document_number || transaction.document_number || '-';
 
+    // Get amounts - use debit_amount/credit_amount if available, otherwise use amount
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
+
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
         <TableCell>{transaction.formattedDate}</TableCell>
@@ -78,17 +82,29 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
           </div>
         </TableCell>
         <TableCell>
-          <div className="space-y-1">
-            <div className="text-sm font-medium">
-              Wn: {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
-            </div>
-            <div className="text-sm text-gray-600">
-              Ma: {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+          <div className="text-sm">
+            <div className="font-medium">
+              {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
             </div>
           </div>
         </TableCell>
         <TableCell className="text-right font-medium">
-          {formatAmount(transaction.amount, transaction.currency)}
+          {formatAmount(debitAmount, transaction.currency)}
+          {transaction.currency !== 'PLN' && transaction.exchange_rate && (
+            <div className="text-xs text-omi-gray-500">
+              kurs: {transaction.exchange_rate.toFixed(4)}
+            </div>
+          )}
+        </TableCell>
+        <TableCell>
+          <div className="text-sm">
+            <div className="font-medium">
+              {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          {formatAmount(creditAmount, transaction.currency)}
           {transaction.currency !== 'PLN' && transaction.exchange_rate && (
             <div className="text-xs text-omi-gray-500">
               kurs: {transaction.exchange_rate.toFixed(4)}
@@ -128,8 +144,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
-            <TableHead>Konta</TableHead>
-            <TableHead className="text-right">Kwota</TableHead>
+            <TableHead>Konto Wn</TableHead>
+            <TableHead className="text-right">Kwota Wn</TableHead>
+            <TableHead>Konto Ma</TableHead>
+            <TableHead className="text-right">Kwota Ma</TableHead>
             <TableHead>Waluta</TableHead>
             <TableHead>Dokument</TableHead>
           </TableRow>
