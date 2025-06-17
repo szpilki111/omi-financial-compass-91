@@ -195,84 +195,45 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       return;
     }
 
-    // Get fields with amounts > 0 and selected accounts
+    // Get valid fields (amount > 0 and account selected)
     const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
     const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
 
-    // Create unique account groups to avoid duplication
-    const usedAccounts = new Set<string>();
+    console.log('Valid debit fields:', validDebitFields);
+    console.log('Valid credit fields:', validCreditFields);
+
     const createdTransactions: Transaction[] = [];
 
-    // Process each valid debit field
-    validDebitFields.forEach((debitField, debitIndex) => {
-      // Find the best matching credit field that hasn't been used with this debit account
-      const availableCreditFields = validCreditFields.filter(creditField => {
-        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
-        return !usedAccounts.has(accountPair);
-      });
+    // Determine the maximum number of transactions we'll create
+    const maxTransactions = Math.max(validDebitFields.length, validCreditFields.length);
 
-      if (availableCreditFields.length > 0) {
-        // Use the first available credit field or the one at the same index if available
-        const creditField = availableCreditFields[debitIndex] || availableCreditFields[0];
-        
-        const transaction: Transaction = {
-          description: formData.description,
-          debit_account_id: debitField.accountId,
-          credit_account_id: creditField.accountId,
-          debit_amount: debitField.amount,
-          credit_amount: creditField.amount,
-          amount: Math.max(debitField.amount, creditField.amount),
-          settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
-        };
+    // Create transactions by pairing fields one-to-one
+    for (let i = 0; i < maxTransactions; i++) {
+      const debitField = validDebitFields[i] || null;
+      const creditField = validCreditFields[i] || null;
 
-        createdTransactions.push(transaction);
-        
-        // Mark this account pair as used
-        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
-        usedAccounts.add(accountPair);
-        
-        // Remove the used credit field from further processing
-        const creditIndex = validCreditFields.indexOf(creditField);
-        if (creditIndex > -1) {
-          validCreditFields.splice(creditIndex, 1);
-        }
-      }
-    });
+      // Skip if both sides are null (shouldn't happen given maxTransactions logic)
+      if (!debitField && !creditField) continue;
 
-    // Process any remaining credit fields that weren't paired
-    validCreditFields.forEach(creditField => {
-      // Find a debit field that can be paired (preferably not already fully used)
-      const availableDebitFields = validDebitFields.filter(debitField => {
-        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
-        return !usedAccounts.has(accountPair);
-      });
+      const transaction: Transaction = {
+        description: formData.description,
+        debit_account_id: debitField?.accountId || null,
+        credit_account_id: creditField?.accountId || null,
+        debit_amount: debitField?.amount || 0,
+        credit_amount: creditField?.amount || 0,
+        amount: Math.max(debitField?.amount || 0, creditField?.amount || 0),
+        settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      };
 
-      if (availableDebitFields.length > 0) {
-        const debitField = availableDebitFields[0];
-        
-        const transaction: Transaction = {
-          description: formData.description,
-          debit_account_id: debitField.accountId,
-          credit_account_id: creditField.accountId,
-          debit_amount: debitField.amount,
-          credit_amount: creditField.amount,
-          amount: Math.max(debitField.amount, creditField.amount),
-          settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
-        };
+      createdTransactions.push(transaction);
+    }
 
-        createdTransactions.push(transaction);
-        
-        const accountPair = `${debitField.accountId}-${creditField.accountId}`;
-        usedAccounts.add(accountPair);
-      }
-    });
+    console.log('Created transactions:', createdTransactions);
 
     // Add all created transactions
     createdTransactions.forEach(transaction => {
       onAdd(transaction);
     });
-
-    console.log('Created transactions:', createdTransactions);
   };
 
   return (
