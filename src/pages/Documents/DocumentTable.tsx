@@ -42,7 +42,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     );
   }
 
-  if (!transactions.length) {
+  if (!transactions || transactions.length === 0) {
     return (
       <div className="text-center py-10 text-omi-gray-500">
         Brak operacji do wyświetlenia
@@ -79,20 +79,20 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
               <TableCell>
                 <div className="space-y-1">
                   <div className="text-sm font-medium">
-                    Wn: {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                    Wn: {transaction.debitAccount?.number || transaction.debitAccountNumber || 'N/A'} - {transaction.debitAccount?.name || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
-                    Ma: {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                    Ma: {transaction.creditAccount?.number || transaction.creditAccountNumber || 'N/A'} - {transaction.creditAccount?.name || 'N/A'}
                   </div>
                 </div>
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatAmount(transaction.debit_amount || transaction.amount, transaction.currency)}
+                {formatAmount(transaction.debit_amount || transaction.amount, transaction.currency || 'PLN')}
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatAmount(transaction.credit_amount || transaction.amount, transaction.currency)}
+                {formatAmount(transaction.credit_amount || transaction.amount, transaction.currency || 'PLN')}
               </TableCell>
-              <TableCell>{transaction.currency}</TableCell>
+              <TableCell>{transaction.currency || 'PLN'}</TableCell>
               <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>
                 <div className="flex space-x-1">

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Search, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
-import DocumentTable from './DocumentTable';
+import DocumentsTable from './DocumentsTable';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -228,7 +229,7 @@ const DocumentsPage = () => {
         </div>
 
         {/* Documents table */}
-        <DocumentTable
+        <DocumentsTable
           documents={filteredDocuments}
           onDocumentClick={handleDocumentClick}
           onDocumentDelete={handleDocumentDelete}
