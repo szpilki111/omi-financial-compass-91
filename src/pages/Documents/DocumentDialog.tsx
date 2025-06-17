@@ -611,36 +611,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowEditDialog(true);
   };
 
-  const handleTransactionUpdated = async (updatedTransaction: Transaction) => {
+  const handleTransactionUpdated = async (updatedTransactions: Transaction[]) => {
     if (document?.id) {
+      // For existing documents, reload from database
       loadTransactions(document.id);
     } else {
+      // For new documents, update the local state
       if (editingTransactionIndex !== null) {
-        const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
+        const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(updatedTransactions);
+        
         setTransactions(prev => {
           const updated = [...prev];
-          const originalTransaction = updated[editingTransactionIndex];
-
-          // Nowa logika: zawsze nadpisujemy pod tym indeksem, nie klonujemy już raz sklonowanej transakcji!
-          let finalTransaction = transactionWithAccountNumbers[0];
-
-          if (originalTransaction.isCloned && originalTransaction.clonedType) {
-            finalTransaction = {
-              ...finalTransaction,
-              isCloned: true,
-              clonedType: originalTransaction.clonedType,
-            };
-
-            if (originalTransaction.clonedType === 'debit') {
-              finalTransaction.credit_amount = 0;
-              finalTransaction.amount = finalTransaction.debit_amount || 0;
-            } else if (originalTransaction.clonedType === 'credit') {
-              finalTransaction.debit_amount = 0;
-              finalTransaction.amount = finalTransaction.credit_amount || 0;
-            }
-          }
-
-          updated[editingTransactionIndex] = finalTransaction;
+          
+          // Remove the original transaction being edited
+          updated.splice(editingTransactionIndex, 1);
+          
+          // Insert all new transactions at the same position
+          updated.splice(editingTransactionIndex, 0, ...transactionsWithAccountNumbers);
+          
           return updated;
         });
       }

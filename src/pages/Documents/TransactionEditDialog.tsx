@@ -26,7 +26,7 @@ interface AmountField {
 interface TransactionEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (transaction: Transaction) => void;
+  onSave: (transactions: Transaction[]) => void; // Changed to return array of transactions
   transaction: Transaction | null;
   isNewDocument?: boolean;
   hiddenFields?: {
@@ -263,21 +263,38 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       return;
     }
 
-    // Create transaction for the first debit/credit pair
-    const mainDebit = debitFields[0];
-    const mainCredit = creditFields[0];
+    // Create transactions for all debit/credit pairs with amounts > 0
+    const transactions: Transaction[] = [];
+    
+    // Filter fields with non-zero amounts
+    const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
+    const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
+    
+    // Create transactions for each valid combination
+    const maxFields = Math.max(validDebitFields.length, validCreditFields.length);
+    
+    for (let i = 0; i < maxFields; i++) {
+      const debitField = validDebitFields[i] || validDebitFields[0]; // Use first debit if no more
+      const creditField = validCreditFields[i] || validCreditFields[0]; // Use first credit if no more
+      
+      if (debitField && creditField) {
+        const transactionAmount = Math.min(debitField.amount, creditField.amount);
+        
+        const newTransaction: Transaction = {
+          ...transaction,
+          description: formData.description,
+          debit_account_id: debitField.accountId,
+          credit_account_id: creditField.accountId,
+          debit_amount: transactionAmount,
+          credit_amount: transactionAmount,
+          amount: transactionAmount,
+        };
+        
+        transactions.push(newTransaction);
+      }
+    }
 
-    const updatedTransaction: Transaction = {
-      ...transaction,
-      description: formData.description,
-      debit_account_id: mainDebit.accountId,
-      credit_account_id: mainCredit.accountId,
-      debit_amount: mainDebit.amount,
-      credit_amount: mainCredit.amount,
-      amount: Math.max(mainDebit.amount, mainCredit.amount),
-    };
-
-    onSave(updatedTransaction);
+    onSave(transactions);
     setHasUnsavedChanges(false);
   };
 
@@ -307,7 +324,18 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
             {/* Debit Fields */}
             {!hiddenFields.debit && (
               <div>
-                <Label className="text-base font-medium mb-3 block">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+                <div className="flex justify-between items-center mb-3">
+                  <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('debit')}
+                    className="text-green-600"
+                  >
+                    + Dodaj
+                  </Button>
+                </div>
                 <div className="space-y-3">
                   {debitFields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
@@ -363,7 +391,18 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
             {/* Credit Fields */}
             {!hiddenFields.credit && (
               <div>
-                <Label className="text-base font-medium mb-3 block">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+                <div className="flex justify-between items-center mb-3">
+                  <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('credit')}
+                    className="text-blue-600"
+                  >
+                    + Dodaj
+                  </Button>
+                </div>
                 <div className="space-y-3">
                   {creditFields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
