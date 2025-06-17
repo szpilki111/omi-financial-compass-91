@@ -17,7 +17,7 @@ interface DatePickerProps {
   value?: Date
   onChange?: (date: Date | undefined) => void
   placeholder?: string
-  disabled?: boolean
+  disabled?: boolean | ((date: Date) => boolean)
   className?: string
 }
 
@@ -35,6 +35,8 @@ export function DatePicker({
     setOpen(false) // Zamknij kalendarz po wyborze daty
   }
 
+  const isButtonDisabled = typeof disabled === 'boolean' ? disabled : false
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -45,7 +47,7 @@ export function DatePicker({
             !value && "text-muted-foreground",
             className
           )}
-          disabled={disabled}
+          disabled={isButtonDisabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {value ? format(value, "dd MMMM yyyy", { locale: pl }) : placeholder}
@@ -56,9 +58,7 @@ export function DatePicker({
           mode="single"
           selected={value}
           onSelect={handleDateSelect}
-          disabled={(date) =>
-            date > new Date() || date < new Date("1900-01-01")
-          }
+          disabled={typeof disabled === 'function' ? disabled : undefined}
           initialFocus
           className="pointer-events-auto"
         />
