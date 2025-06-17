@@ -193,24 +193,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       setDebitFields(prev => prev.map(field => 
         field.id === fieldId ? { ...field, accountId } : field
       ));
-      
-      // Auto-fill first credit account if it's empty
-      if (fieldId === '1' && !creditFields[0]?.accountId) {
-        setCreditFields(prev => prev.map((field, index) => 
-          index === 0 ? { ...field, accountId } : field
-        ));
-      }
     } else {
       setCreditFields(prev => prev.map(field => 
         field.id === fieldId ? { ...field, accountId } : field
       ));
-      
-      // Auto-fill first debit account if it's empty
-      if (fieldId === '1' && !debitFields[0]?.accountId) {
-        setDebitFields(prev => prev.map((field, index) => 
-          index === 0 ? { ...field, accountId } : field
-        ));
-      }
     }
   };
 

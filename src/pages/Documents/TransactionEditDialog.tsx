@@ -166,13 +166,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     setDebitFields(prev => prev.map(field => 
       field.id === fieldId ? { ...field, amount } : field
     ));
-
-    // Copy to first credit field only if it's 0
-    if (fieldId === '1' && creditFields[0]?.amount === 0) {
-      setCreditFields(prev => prev.map((field, index) => 
-        index === 0 ? { ...field, amount } : field
-      ));
-    }
   };
 
   const handleCreditAmountChange = (fieldId: string, amount: number) => {
@@ -180,13 +173,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     setCreditFields(prev => prev.map(field => 
       field.id === fieldId ? { ...field, amount } : field
     ));
-
-    // Copy to first debit field only if it's 0
-    if (fieldId === '1' && debitFields[0]?.amount === 0) {
-      setDebitFields(prev => prev.map((field, index) => 
-        index === 0 ? { ...field, amount } : field
-      ));
-    }
   };
 
   const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
