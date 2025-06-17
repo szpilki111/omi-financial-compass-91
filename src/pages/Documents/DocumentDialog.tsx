@@ -612,6 +612,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleTransactionUpdated = async (updatedTransactions: Transaction[]) => {
+    console.log('handleTransactionUpdated called with:', updatedTransactions);
+    console.log('editingTransactionIndex:', editingTransactionIndex);
+
     if (document?.id) {
       // For existing documents, reload from database
       loadTransactions(document.id);
@@ -623,12 +626,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         setTransactions(prev => {
           const updated = [...prev];
           
-          // Remove the original transaction being edited
+          // KLUCZOWA ZMIANA: Usuń oryginalną transakcję
           updated.splice(editingTransactionIndex, 1);
           
-          // Insert all new transactions at the same position
+          // Dodaj wszystkie nowe transakcje na tej samej pozycji
           updated.splice(editingTransactionIndex, 0, ...transactionsWithAccountNumbers);
           
+          console.log('Updated transactions array:', updated);
           return updated;
         });
       }

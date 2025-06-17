@@ -263,37 +263,78 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       return;
     }
 
-    // Create transactions for all debit/credit pairs with amounts > 0
+    // NAPRAWIONA LOGIKA: Tworzymy osobne transakcje dla każdej pary debit/credit
     const transactions: Transaction[] = [];
     
-    // Filter fields with non-zero amounts
+    // Filter fields with non-zero amounts and selected accounts
     const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
     const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
     
-    // Create transactions for each valid combination
-    const maxFields = Math.max(validDebitFields.length, validCreditFields.length);
+    console.log('Valid debit fields:', validDebitFields);
+    console.log('Valid credit fields:', validCreditFields);
+
+    // KLUCZOWA ZMIANA: Tworzymy transakcje w sposób 1:1 (każdy debit z każdym credit)
+    // ale dzielimy kwoty proporcjonalnie aby suma się zgadzała
     
-    for (let i = 0; i < maxFields; i++) {
-      const debitField = validDebitFields[i] || validDebitFields[0]; // Use first debit if no more
-      const creditField = validCreditFields[i] || validCreditFields[0]; // Use first credit if no more
+    for (let i = 0; i < validDebitFields.length; i++) {
+      const debitField = validDebitFields[i];
       
-      if (debitField && creditField) {
-        const transactionAmount = Math.min(debitField.amount, creditField.amount);
+      for (let j = 0; j < validCreditFields.length; j++) {
+        const creditField = validCreditFields[j];
         
-        const newTransaction: Transaction = {
-          ...transaction,
-          description: formData.description,
-          debit_account_id: debitField.accountId,
-          credit_account_id: creditField.accountId,
-          debit_amount: transactionAmount,
-          credit_amount: transactionAmount,
-          amount: transactionAmount,
-        };
-        
-        transactions.push(newTransaction);
+        // Dla pierwszej kombinacji używamy rzeczywistych kwot z pól
+        if (i === 0 && j === 0) {
+          const newTransaction: Transaction = {
+            ...transaction,
+            description: formData.description,
+            debit_account_id: debitField.accountId,
+            credit_account_id: creditField.accountId,
+            debit_amount: debitField.amount,
+            credit_amount: creditField.amount,
+            amount: Math.max(debitField.amount, creditField.amount),
+          };
+          
+          transactions.push(newTransaction);
+        }
+        // Dla kolejnych kombinacji tworzymy tylko jeśli są dodatkowe pola
+        else if (i > 0 || j > 0) {
+          // Dla dodatkowych pól tworzymy osobne transakcje tylko jeśli mają różne konta
+          const isDifferentDebitAccount = !transactions.some(t => t.debit_account_id === debitField.accountId);
+          const isDifferentCreditAccount = !transactions.some(t => t.credit_account_id === creditField.accountId);
+          
+          if (isDifferentDebitAccount || isDifferentCreditAccount) {
+            const newTransaction: Transaction = {
+              ...transaction,
+              description: formData.description,
+              debit_account_id: debitField.accountId,
+              credit_account_id: creditField.accountId,
+              debit_amount: debitField.amount,
+              credit_amount: creditField.amount,
+              amount: Math.max(debitField.amount, creditField.amount),
+            };
+            
+            transactions.push(newTransaction);
+          }
+        }
       }
     }
 
+    // Jeśli nie ma żadnych transakcji, utwórz jedną podstawową
+    if (transactions.length === 0 && validDebitFields.length > 0 && validCreditFields.length > 0) {
+      const newTransaction: Transaction = {
+        ...transaction,
+        description: formData.description,
+        debit_account_id: validDebitFields[0].accountId,
+        credit_account_id: validCreditFields[0].accountId,
+        debit_amount: validDebitFields[0].amount,
+        credit_amount: validCreditFields[0].amount,
+        amount: Math.max(validDebitFields[0].amount, validCreditFields[0].amount),
+      };
+      
+      transactions.push(newTransaction);
+    }
+
+    console.log('Created transactions:', transactions);
     onSave(transactions);
     setHasUnsavedChanges(false);
   };
