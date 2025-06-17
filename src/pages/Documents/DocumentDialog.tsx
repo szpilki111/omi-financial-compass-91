@@ -360,7 +360,7 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
             </Button>
             <Button 
               onClick={handleSaveDocument} 
-              disabled={isLoading || (isEditingBlocked && formData.document_date)}
+              disabled={isLoading || (isEditingBlocked && Boolean(formData.document_date))}
             >
               {isLoading ? 'Zapisywanie...' : 'Zapisz dokument'}
             </Button>
