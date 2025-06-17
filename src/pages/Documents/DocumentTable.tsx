@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,7 +48,22 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
         throw error;
       }
 
-      return data as Transaction[];
+      // Transform the data to match the Transaction interface
+      return data?.map(item => ({
+        ...item,
+        debitAccount: item.debitAccount && typeof item.debitAccount === 'object' && 'number' in item.debitAccount 
+          ? { 
+              number: item.debitAccount.number as string, 
+              name: item.debitAccount.name as string 
+            }
+          : undefined,
+        creditAccount: item.creditAccount && typeof item.creditAccount === 'object' && 'number' in item.creditAccount
+          ? { 
+              number: item.creditAccount.number as string, 
+              name: item.creditAccount.name as string 
+            }
+          : undefined,
+      })) as Transaction[];
     },
   });
 

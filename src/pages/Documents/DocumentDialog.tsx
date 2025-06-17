@@ -267,6 +267,10 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
     handleSaveDocument();
   };
 
+  const handleTransactionAdded = (transaction: Transaction) => {
+    queryClient.invalidateQueries({ queryKey: ['transactions', document?.id] });
+  };
+
   if (checkingBlock) {
     return (
       <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -373,10 +377,8 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
               
               {!isEditingBlocked && (
                 <TransactionForm
-                  documentId={document.id}
-                  onTransactionAdded={() => {
-                    queryClient.invalidateQueries({ queryKey: ['transactions', document.id] });
-                  }}
+                  onAdd={handleTransactionAdded}
+                  onCancel={() => {}}
                 />
               )}
 
@@ -420,18 +422,19 @@ const DocumentDialog: React.FC<DocumentDialogProps> = ({
             setIsSplitDialogOpen(false);
             setSelectedTransaction(null);
           }}
-          onSave={() => {
+          onSplit={() => {
             setIsSplitDialogOpen(false);
             setSelectedTransaction(null);
             queryClient.invalidateQueries({ queryKey: ['transactions', document?.id] });
           }}
           transaction={selectedTransaction}
+          splitSide="debit"
         />
 
         {/* Confirm Close Dialog */}
         <ConfirmCloseDialog
           isOpen={showConfirmDialog}
-          onClose={() => setShowConfirmDialog(false)}
+          onConfirm={() => setShowConfirmDialog(false)}
           onSave={handleSaveDocument}
           onDiscard={onClose}
         />
