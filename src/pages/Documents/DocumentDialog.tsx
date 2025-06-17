@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +25,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, Trash2, RefreshCw, Edit, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
@@ -55,8 +59,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isClonedTransaction, setIsClonedTransaction] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isReportBlocked, setIsReportBlocked] = useState(false);
-  const [reportBlockedMessage, setReportBlockedMessage] = useState('');
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -64,6 +66,40 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       document_name: '',
       document_date: new Date(),
     },
+  });
+
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Check if editing is blocked for this document
+  const documentDate = form.watch('document_date');
+  const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
+    queryKey: ['editingBlocked', document?.id, userProfile?.location_id, documentDate],
+    queryFn: async () => {
+      if (!userProfile?.location_id || !documentDate) return false;
+      
+      const { data, error } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: userProfile.location_id,
+        p_document_date: format(documentDate, 'yyyy-MM-dd')
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id && !!documentDate && isOpen,
   });
 
   // Track form changes to detect unsaved changes
@@ -117,78 +153,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const handleCancelClose = () => {
     setShowConfirmClose(false);
   };
-
-  // Check if report editing is blocked for the selected date
-  const checkReportEditingBlocked = async (documentDate: Date) => {
-    if (!user?.location) {
-      return false;
-    }
-
-    try {
-      const year = documentDate.getFullYear();
-      const month = documentDate.getMonth() + 1;
-
-      console.log('Checking report status for:', { year, month, locationId: user.location });
-
-      const { data: reports, error } = await supabase
-        .from('reports')
-        .select('status')
-        .eq('location_id', user.location)
-        .eq('year', year)
-        .eq('month', month);
-
-      if (error) {
-        console.error('Error checking report status:', error);
-        return false;
-      }
-
-      console.log('Found reports:', reports);
-
-      // Sprawdź czy istnieje raport ze statusem "Złożony" lub "Zatwierdzony"
-      const hasBlockingReport = reports?.some(report => 
-        report.status === 'Złożony' || report.status === 'Zatwierdzony'
-      );
-
-      console.log('Has blocking report:', hasBlockingReport);
-
-      const isBlocked = hasBlockingReport || false;
-      setIsReportBlocked(isBlocked);
-      
-      if (isBlocked) {
-        const monthNames = [
-          'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
-          'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'
-        ];
-        const monthName = monthNames[month - 1];
-        setReportBlockedMessage(`Nie można zapisać dokumentu. Raport za ${monthName} ${year} został już złożony lub zatwierdzony.`);
-      } else {
-        setReportBlockedMessage('');
-      }
-
-      return isBlocked;
-    } catch (error) {
-      console.error('Error checking report editing status:', error);
-      return false;
-    }
-  };
-
-  // Check report status when document date changes
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'document_date' && value.document_date) {
-        checkReportEditingBlocked(new Date(value.document_date));
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, user?.location]);
-
-  // Check report status when dialog opens for existing document
-  useEffect(() => {
-    if (document && isOpen) {
-      const documentDate = new Date(document.document_date);
-      checkReportEditingBlocked(documentDate);
-    }
-  }, [document, isOpen, user?.location]);
 
   // Generate document number using the database function
   const generateDocumentNumber = async (date: Date) => {
@@ -360,12 +324,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return;
     }
 
-    // KLUCZOWA POPRAWKA: Sprawdź czy zapisywanie jest zablokowane przed kontynuowaniem
-    const isBlocked = await checkReportEditingBlocked(data.document_date);
-    if (isBlocked) {
+    // Check if saving is blocked only when trying to save
+    if (isEditingBlocked) {
       toast({
-        title: "Nie można zapisać dokumentu",
-        description: reportBlockedMessage,
+        title: "Błąd",
+        description: "Nie można zapisać dokumentu - raport za ten okres został już złożony lub zatwierdzony",
         variant: "destructive",
       });
       return;
@@ -505,6 +468,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const removeTransaction = (index: number) => {
+    if (isEditingBlocked) {
+      toast({
+        title: "Błąd",
+        description: "Nie można usuwać operacji - raport za ten okres został już złożony lub zatwierdzony",
+        variant: "destructive",
+      });
+      return;
+    }
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -619,6 +590,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleEditTransaction = (transaction: Transaction, index: number) => {
+    if (isEditingBlocked) {
+      toast({
+        title: "Błąd",
+        description: "Nie można edytować operacji - raport za ten okres został już złożony lub zatwierdzony",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Check if this is a cloned transaction and determine hidden fields
     let hideFields = {};
     
@@ -691,6 +671,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   console.log('Debit total:', debitTotal);
   console.log('Credit total:', creditTotal);
 
+  if (checkingBlock) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sprawdzanie uprawnień...</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">Sprawdzanie czy dokument może być edytowany...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
@@ -701,13 +694,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </DialogTitle>
           </DialogHeader>
 
-          {/* Display warning message if report is blocked */}
-          {isReportBlocked && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-              <p className="text-red-800 text-sm font-medium">
-                ⚠️ {reportBlockedMessage}
-              </p>
-            </div>
+          {/* Show warning only when editing is blocked and we have a date */}
+          {isEditingBlocked && documentDate && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Nie można zapisać dokumentu na datę {format(documentDate, 'dd.MM.yyyy')}, 
+                ponieważ raport za ten okres został już złożony lub zatwierdzony.
+                {!document && " Możesz wybrać inną datę."}
+              </AlertDescription>
+            </Alert>
           )}
 
           <Form {...form}>
@@ -790,7 +786,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={isLoading || isReportBlocked}
+                  disabled={isLoading || (isEditingBlocked && Boolean(documentDate))}
                 >
                   {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
                 </Button>
@@ -807,7 +803,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 variant="outline"
                 onClick={() => setShowTransactionForm(true)}
                 className="flex items-center gap-2"
-                disabled={isReportBlocked}
+                disabled={isEditingBlocked}
               >
                 <Plus className="h-4 w-4" />
                 Dodaj operację
@@ -815,7 +811,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </div>
 
             {/* Transaction form appears right after the button */}
-            {showTransactionForm && !isReportBlocked && (
+            {showTransactionForm && !isEditingBlocked && (
               <TransactionForm
                 onAdd={addTransaction}
                 onCancel={() => setShowTransactionForm(false)}
@@ -869,7 +865,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         size="sm"
                         onClick={() => handleEditTransaction(transaction, index)}
                         className="text-blue-600 hover:text-blue-700"
-                        disabled={isReportBlocked}
+                        disabled={isEditingBlocked}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -879,7 +875,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         size="sm"
                         onClick={() => removeTransaction(index)}
                         className="text-red-600 hover:text-red-700"
-                        disabled={isReportBlocked}
+                        disabled={isEditingBlocked}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
