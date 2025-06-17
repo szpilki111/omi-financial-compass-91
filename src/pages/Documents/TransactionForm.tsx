@@ -326,15 +326,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                   </div>
                 </div>
               ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addNewField('credit')}
-                className="w-full"
-              >
-                + Dodaj pole Ma
-              </Button>
             </div>
           </div>
         </div>
