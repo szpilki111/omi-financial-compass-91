@@ -25,9 +25,16 @@ interface AccountComboboxProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   locationId?: string;
+  className?: string;
 }
 
-export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChange, disabled, locationId }) => {
+export const AccountCombobox: React.FC<AccountComboboxProps> = ({ 
+  value, 
+  onChange, 
+  disabled, 
+  locationId,
+  className 
+}) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -137,7 +144,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn("w-full justify-between font-normal", className)}
           disabled={disabled}
         >
           <span className="truncate">
