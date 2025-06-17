@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -196,13 +195,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       return;
     }
 
-    // Create transactions for all fields that have amounts > 0
-    const validDebitFields = debitFields.filter(field => field.amount > 0);
-    const validCreditFields = creditFields.filter(field => field.amount > 0);
-
-    // Create multiple transactions based on all valid combinations
-    validDebitFields.forEach(debitField => {
-      validCreditFields.forEach(creditField => {
+    // Create transactions only for adjacent pairs (same index)
+    const maxLength = Math.max(debitFields.length, creditFields.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+      const debitField = debitFields[i];
+      const creditField = creditFields[i];
+      
+      // Only create transaction if both debit and credit exist with amounts > 0
+      if (debitField && creditField && debitField.amount > 0 && creditField.amount > 0) {
         const transaction: Transaction = {
           description: formData.description,
           debit_account_id: debitField.accountId,
@@ -214,8 +215,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         };
 
         onAdd(transaction);
-      });
-    });
+      }
+    }
   };
 
   return (

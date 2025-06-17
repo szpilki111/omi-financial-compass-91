@@ -1,152 +1,141 @@
 
 import React from 'react';
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { FileText, Calendar, MapPin, Eye, Trash, Calculator } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell 
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-
-interface Document {
-  id: string;
-  document_number: string;
-  document_name: string;
-  document_date: string;
-  location_id: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  locations?: {
-    name: string;
-  } | null;
-  profiles?: {
-    name: string;
-  } | null;
-  transaction_count?: number;
-  total_amount?: number;
-}
+import { Transaction } from './types';
+import { Pencil, Trash2, Copy, Split } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
+import { useAuth } from '@/context/AuthContext';
 
 interface DocumentTableProps {
-  documents: Document[];
-  onDocumentClick: (document: Document) => void;
-  onDocumentDelete: (documentId: string) => void;
-  isLoading: boolean;
+  transactions: Transaction[];
+  loading: boolean;
+  onEdit?: (transaction: Transaction) => void;
+  onDelete?: (transactionId: string) => void;
+  onCopy?: (transaction: Transaction) => void;
+  onSplit?: (transaction: Transaction) => void;
 }
 
-const DocumentTable = ({ documents, onDocumentClick, onDocumentDelete, isLoading }: DocumentTableProps) => {
-  const formatAmount = (amount?: number) => {
-    if (!amount) return '0,00 zł';
+const DocumentTable: React.FC<DocumentTableProps> = ({ 
+  transactions, 
+  loading, 
+  onEdit, 
+  onDelete, 
+  onCopy, 
+  onSplit 
+}) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-10">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!transactions.length) {
+    return (
+      <div className="text-center py-10 text-omi-gray-500">
+        Brak operacji do wyświetlenia
+      </div>
+    );
+  }
+
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
-      currency: 'PLN',
+      currency: currency,
       minimumFractionDigits: 2,
     }).format(amount);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (documents.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          Brak dokumentów
-        </h3>
-        <p className="text-gray-600 mb-4">
-          Utwórz pierwszy dokument, aby rozpocząć
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Numer dokumentu</TableHead>
-            <TableHead>Nazwa</TableHead>
-            <TableHead>Data dokumentu</TableHead>
-            <TableHead>Lokalizacja</TableHead>
-            <TableHead>Operacje</TableHead>
-            <TableHead className="text-right">Suma kwot</TableHead>
-            <TableHead>Data utworzenia</TableHead>
-            <TableHead className="w-[140px]">Akcje</TableHead>
+            <TableHead>Opis</TableHead>
+            <TableHead>Konta</TableHead>
+            <TableHead className="text-right">Winien</TableHead>
+            <TableHead className="text-right">Ma</TableHead>
+            <TableHead>Waluta</TableHead>
+            <TableHead>Typ rozliczenia</TableHead>
+            <TableHead>Akcje</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {documents.map((document) => (
-            <TableRow key={document.id} className="cursor-pointer hover:bg-gray-50">
-              <TableCell className="font-medium">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-blue-600" />
-                  {document.document_number}
-                </div>
-              </TableCell>
-              <TableCell>{document.document_name}</TableCell>
+          {transactions.map((transaction) => (
+            <TableRow key={transaction.id} className="hover:bg-omi-100">
+              <TableCell>{transaction.description}</TableCell>
               <TableCell>
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  {format(new Date(document.document_date), 'dd MMMM yyyy', { locale: pl })}
-                </div>
-              </TableCell>
-              <TableCell>
-                {document.locations && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    {document.locations.name}
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">
+                    Wn: {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
                   </div>
-                )}
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                  {document.transaction_count || 0}
-                </span>
+                  <div className="text-sm text-gray-600">
+                    Ma: {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                  </div>
+                </div>
               </TableCell>
               <TableCell className="text-right font-medium">
-                <div className="flex items-center justify-end gap-1">
-                  <Calculator className="h-4 w-4 text-gray-500" />
-                  {formatAmount(document.total_amount)}
-                </div>
+                {formatAmount(transaction.debit_amount || transaction.amount, transaction.currency)}
               </TableCell>
-              <TableCell className="text-sm text-gray-500">
-                {format(new Date(document.created_at), 'dd.MM.yyyy HH:mm')}
+              <TableCell className="text-right font-medium">
+                {formatAmount(transaction.credit_amount || transaction.amount, transaction.currency)}
               </TableCell>
+              <TableCell>{transaction.currency}</TableCell>
+              <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDocumentClick(document);
-                    }}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDocumentDelete(document.id);
-                    }}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
+                <div className="flex space-x-1">
+                  {onEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEdit(transaction)}
+                      title="Edytuj"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onCopy && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onCopy(transaction)}
+                      title="Kopiuj"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onSplit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onSplit(transaction)}
+                      title="Podziel"
+                    >
+                      <Split className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onDelete && isAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDelete(transaction.id!)}
+                      title="Usuń"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </TableCell>
             </TableRow>
