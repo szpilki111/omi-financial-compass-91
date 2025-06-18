@@ -37,6 +37,9 @@ export function DatePicker({
 
   const isButtonDisabled = typeof disabled === 'boolean' ? disabled : false
 
+  // Ustaw defaultMonth na wybraną datę lub obecny miesiąc jeśli brak daty
+  const defaultMonth = value || new Date()
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -59,6 +62,7 @@ export function DatePicker({
           selected={value}
           onSelect={handleDateSelect}
           disabled={typeof disabled === 'function' ? disabled : undefined}
+          defaultMonth={defaultMonth}
           initialFocus
           className="pointer-events-auto"
         />
