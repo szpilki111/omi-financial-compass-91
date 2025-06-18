@@ -658,11 +658,44 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     console.log('editingTransactionIndex:', editingTransactionIndex);
 
     if (document?.id) {
-      // For existing documents, reload from database to ensure we have the latest data
-      // KLUCZOWA ZMIANA: Po przeładowaniu z bazy danych, numery kont będą załadowane w loadTransactions
-      await loadTransactions(document.id);
+      // For existing documents, save to database and reload
+      if (updatedTransactions.length > 0) {
+        const transactionToUpdate = updatedTransactions[0];
+        
+        try {
+          // Update transaction in database
+          const { error } = await supabase
+            .from('transactions')
+            .update({
+              description: transactionToUpdate.description,
+              debit_account_id: transactionToUpdate.debit_account_id,
+              credit_account_id: transactionToUpdate.credit_account_id,
+              debit_amount: transactionToUpdate.debit_amount,
+              credit_amount: transactionToUpdate.credit_amount,
+              amount: transactionToUpdate.amount,
+            })
+            .eq('id', transactionToUpdate.id);
+
+          if (error) throw error;
+
+          // Reload transactions from database
+          await loadTransactions(document.id);
+          
+          toast({
+            title: "Sukces",
+            description: "Operacja została zaktualizowana w bazie danych",
+          });
+        } catch (error) {
+          console.error('Error updating transaction in database:', error);
+          toast({
+            title: "Błąd",
+            description: "Nie udało się zaktualizować operacji w bazie danych",
+            variant: "destructive",
+          });
+        }
+      }
     } else {
-      // For new documents, update the local state with account numbers
+      // For new documents, update local state with account numbers
       if (editingTransactionIndex !== null) {
         const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(updatedTransactions);
         
