@@ -648,10 +648,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     console.log('editingTransactionIndex:', editingTransactionIndex);
 
     if (document?.id) {
-      // For existing documents, reload from database
-      loadTransactions(document.id);
+      // For existing documents, reload from database and ensure account numbers are loaded
+      await loadTransactions(document.id);
     } else {
-      // For new documents, update the local state
+      // For new documents, update the local state with account numbers
       if (editingTransactionIndex !== null) {
         const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(updatedTransactions);
         
@@ -661,7 +661,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           // Remove original transaction
           updated.splice(editingTransactionIndex, 1);
           
-          // Add all new transactions at the same position
+          // Add all new transactions at the same position with loaded account numbers
           updated.splice(editingTransactionIndex, 0, ...transactionsWithAccountNumbers);
           
           console.log('Updated transactions array:', updated);
