@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -462,7 +461,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         )}
       </div>
 
-      {/* Nowa sekcja ze stanem kasowym i finansowym */}
+      {/* Sekcja ze stanem kasowym i finansowym PRZED szczegółową rozpiską */}
       {report && (
         <YearToDateCashFlowBreakdown
           locationId={report.location_id}
@@ -471,7 +470,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         />
       )}
 
-      {/* Istniejąca sekcja ze szczegółową rozpiską kont */}
+      {/* Szczegółowa rozpiska kont PO sekcji stanu kasowego */}
       {report && (
         <ReportAccountsBreakdown
           reportId={reportId!}
