@@ -84,13 +84,17 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
     if (!side) return true;
     
-    if (side === 'debit') {
-      // Winien side: nie może mieć kont zaczynających się od "7"
-      return !accountNumber.startsWith('7');
-    } else if (side === 'credit') {
-      // Ma side: nie może mieć kont zaczynających się od "4"
-      return !accountNumber.startsWith('4');
-    }
+        if (side === 'debit') {
+          // Winien side: exclude accounts starting with "7"
+          filteredAccounts = filteredAccounts.filter(account => 
+            !account.number.startsWith('7')
+          );
+        } else if (side === 'credit') {
+          // Ma side: exclude accounts starting with "4"
+          filteredAccounts = filteredAccounts.filter(account => 
+            !account.number.startsWith('4')
+          );
+        }
     
     return true;
   };
