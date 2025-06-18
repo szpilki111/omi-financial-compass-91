@@ -61,14 +61,14 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           .maybeSingle();
 
         if (data) {
-          // KLUCZOWA POPRAWKA: Sprawdź czy konto jest dozwolone dla tej strony
+          // Check if the account is allowed for this side
           const isAccountAllowed = isAccountAllowedForSide(data.number, side);
           if (isAccountAllowed) {
             setDisplayedAccountName(`${data.number} - ${data.name}`);
           } else {
-            // Konto nie jest dozwolone dla tej strony - wyczyść wybór
+            // Account not allowed for this side - clear selection
             setDisplayedAccountName('');
-            onChange(''); // Wyczyść wybrane konto
+            onChange(''); // Clear selected account
           }
         } else {
           setDisplayedAccountName('');
@@ -80,21 +80,17 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     }
   }, [value, accounts, locationId, side, onChange]);
 
-  // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
+  // Function to check if an account is allowed for a given side
   const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
     if (!side) return true;
     
-        if (side === 'debit') {
-          // Winien side: exclude accounts starting with "7"
-          filteredAccounts = filteredAccounts.filter(account => 
-            !account.number.startsWith('7')
-          );
-        } else if (side === 'credit') {
-          // Ma side: exclude accounts starting with "4"
-          filteredAccounts = filteredAccounts.filter(account => 
-            !account.number.startsWith('4')
-          );
-        }
+    if (side === 'debit') {
+      // Debit side: exclude accounts starting with "7"
+      return !accountNumber.startsWith('7');
+    } else if (side === 'credit') {
+      // Credit side: exclude accounts starting with "4"
+      return !accountNumber.startsWith('4');
+    }
     
     return true;
   };
@@ -147,7 +143,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         console.error('Error fetching accounts:', error);
         setAccounts([]);
       } else {
-        // KLUCZOWA POPRAWKA: Filtruj konta na podstawie restrykcji stron
+        // Filter accounts based on side restrictions
         let filteredAccounts = data || [];
         
         filteredAccounts = filteredAccounts.filter(account => 
