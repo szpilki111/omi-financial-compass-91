@@ -359,6 +359,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       value={field.accountId}
                       onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                       locationId={userProfile?.location_id}
+                      side="debit"
                     />
                   </div>
                 </div>
@@ -415,6 +416,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       value={field.accountId}
                       onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                       locationId={userProfile?.location_id}
+                      side="credit"
                     />
                   </div>
                 </div>
