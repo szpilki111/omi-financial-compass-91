@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -234,7 +233,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         .from('documents')
         .insert({
           document_number: documentNumber,
-          document_name: `Wyciąg ${previewData.statementNumber} - ${previewData.accountNumber}`,
+          document_name: `Wyciąg - ${previewData.statementNumber} - ${previewData.accountNumber}`,
           document_date: documentDate.toISOString().split('T')[0],
           location_id: user.location,
           user_id: user.id
