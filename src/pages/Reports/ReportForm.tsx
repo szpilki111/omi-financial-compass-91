@@ -389,6 +389,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           />
         )}
 
+      {/* Sekcja ze stanem kasowym i finansowym PO szczegółową rozpiską */}
+      {selectedMonth && selectedYear && user?.location && (
+        <YearToDateCashFlowBreakdown
+          locationId={report.location_id}
+          month={report.month}
+          year={report.year}
+        />
+      )}
+
         <div className="flex justify-end space-x-2">
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
