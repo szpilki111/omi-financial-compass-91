@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -140,13 +139,18 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
           
           accountBalances.forEach(({ balance, account }, accountNumber) => {
             if (matchesPrefix(accountNumber, prefixes)) {
+              // Dla kategorii "Intencje" użyj wartości bezwzględnej
+              const displayBalance = mainCategory === 'B. Intencje' ? Math.abs(balance) : balance;
+              
               matchingAccounts.push({
                 account_number: accountNumber,
                 account_name: account.name,
-                balance: balance,
+                balance: displayBalance,
                 side: balance >= 0 ? 'debit' : 'credit'
               });
-              categoryTotal += balance;
+              
+              // Również dla sumy kategorii użyj wartości bezwzględnej dla Intencji
+              categoryTotal += mainCategory === 'B. Intencje' ? Math.abs(balance) : balance;
             }
           });
           
