@@ -287,6 +287,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   const loadTransactions = async (documentId: string) => {
     try {
+      console.log('Loading transactions for document:', documentId);
+      
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
@@ -294,7 +296,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (error) throw error;
       
+      console.log('Raw transactions loaded:', data);
+      
       const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(data || []);
+      
+      console.log('Transactions with account numbers:', transactionsWithAccountNumbers);
+      
       setTransactions(transactionsWithAccountNumbers);
     } catch (error) {
       console.error('Error loading transactions:', error);

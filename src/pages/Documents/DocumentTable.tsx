@@ -58,6 +58,16 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     }).format(amount);
   };
 
+  const getAccountDisplay = (accountNumber: string | undefined, account: any, accountId: string | undefined) => {
+    // Try to get account number from various sources
+    const number = accountNumber || account?.number || 'N/A';
+    const name = account?.name || 'N/A';
+    
+    console.log('Account display debug:', { accountNumber, account, accountId, number, name });
+    
+    return `${number} - ${name}`;
+  };
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -79,10 +89,10 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
               <TableCell>
                 <div className="space-y-1">
                   <div className="text-sm font-medium">
-                    Wn: {transaction.debitAccount?.number || transaction.debitAccountNumber || 'N/A'} - {transaction.debitAccount?.name || 'N/A'}
+                    Wn: {getAccountDisplay(transaction.debitAccountNumber, transaction.debitAccount, transaction.debit_account_id)}
                   </div>
                   <div className="text-sm text-gray-600">
-                    Ma: {transaction.creditAccount?.number || transaction.creditAccountNumber || 'N/A'} - {transaction.creditAccount?.name || 'N/A'}
+                    Ma: {getAccountDisplay(transaction.creditAccountNumber, transaction.creditAccount, transaction.credit_account_id)}
                   </div>
                 </div>
               </TableCell>
