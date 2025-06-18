@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,10 +5,11 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator } from 'lucide-react';
+import { Plus, Search, Calculator, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
+import Mt940ImportDialog from './Mt940ImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -38,6 +38,7 @@ const DocumentsPage = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
 
   // Fetch documents with related data
@@ -186,6 +187,15 @@ const DocumentsPage = () => {
     navigate('/kpir');
   };
 
+  const handleMt940ImportComplete = (count: number) => {
+    refetch();
+    setIsMt940ImportOpen(false);
+    toast({
+      title: "Sukces",
+      description: `Zaimportowano ${count} dokumentów z pliku MT940`,
+    });
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -209,6 +219,10 @@ const DocumentsPage = () => {
             <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               Wyszukaj operacje
+            </Button>
+            <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Import MT940
             </Button>
             <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -256,6 +270,12 @@ const DocumentsPage = () => {
         }}
         onDocumentCreated={handleDocumentCreated}
         document={selectedDocument}
+      />
+
+      <Mt940ImportDialog
+        open={isMt940ImportOpen}
+        onClose={() => setIsMt940ImportOpen(false)}
+        onImportComplete={handleMt940ImportComplete}
       />
     </MainLayout>
   );
