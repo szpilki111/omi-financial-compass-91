@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -228,10 +229,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     
     if (!formData.description.trim()) {
       newErrors.description = 'Opis jest wymagany';
-    }
-
-    if (debitTotal !== creditTotal) {
-      newErrors.amounts = 'Suma kwot Winien i Ma musi być równa';
     }
 
     if (debitTotal <= 0) {

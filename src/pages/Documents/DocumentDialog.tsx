@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -339,6 +338,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       toast({
         title: "Błąd walidacji",
         description: "Dokument musi zawierać co najmniej jedną operację",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Walidacja bilansowości dokumentu - suma kwot Winien i Ma musi być równa
+    const totalDebit = transactions.reduce((sum, t) => {
+      const debitAmount = t.debit_amount !== undefined ? t.debit_amount : 0;
+      return sum + debitAmount;
+    }, 0);
+    
+    const totalCredit = transactions.reduce((sum, t) => {
+      const creditAmount = t.credit_amount !== undefined ? t.credit_amount : 0;
+      return sum + creditAmount;
+    }, 0);
+
+    if (Math.abs(totalDebit - totalCredit) > 0.01) { // Allow for small rounding differences
+      toast({
+        title: "Błąd walidacji",
+        description: "Suma kwot Winien i Ma musi być równa",
         variant: "destructive",
       });
       return;
@@ -914,6 +933,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       </span>
                     </div>
                   </div>
+                  {/* Balance check indicator */}
+                  {Math.abs(debitTotal - creditTotal) > 0.01 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-yellow-800">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-sm font-medium">
+                          Dokument nie jest zbilansowany. Różnica: {Math.abs(debitTotal - creditTotal).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
