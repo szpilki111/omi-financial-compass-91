@@ -220,10 +220,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       newErrors.description = 'Opis jest wymagany';
     }
 
-    if (debitTotal !== creditTotal) {
-      newErrors.amounts = 'Suma kwot Winien i Ma musi być równa';
-    }
-
     if (debitTotal <= 0) {
       newErrors.amounts = 'Kwoty muszą być większe od zera';
     }
