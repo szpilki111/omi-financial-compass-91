@@ -14,6 +14,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { calculateAndSaveReportSummary } from '@/utils/financeUtils';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import YearToDateAccountsBreakdown from '@/components/reports/YearToDateAccountsBreakdown';
+import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
 
 const reportFormSchema = z.object({
   month: z.string().min(1, 'Miesiąc jest wymagany'),
@@ -389,14 +390,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           />
         )}
 
-      {/* Sekcja ze stanem kasowym i finansowym PO szczegółową rozpiską */}
-      {selectedMonth && selectedYear && user?.location && (
-        <YearToDateCashFlowBreakdown
-          locationId={report.location_id}
-          month={report.month}
-          year={report.year}
-        />
-      )}
+        {/* Sekcja ze stanem kasowym i finansowym PO szczegółową rozpiską */}
+        {selectedMonth && selectedYear && user?.location && (
+          <YearToDateCashFlowBreakdown
+            locationId={user.location}
+            month={parseInt(selectedMonth)}
+            year={parseInt(selectedYear)}
+          />
+        )}
 
         <div className="flex justify-end space-x-2">
           {onCancel && (
