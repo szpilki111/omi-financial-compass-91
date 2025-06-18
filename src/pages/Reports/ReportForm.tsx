@@ -390,7 +390,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           />
         )}
 
-        {/* Sekcja ze stanem kasowym i finansowym PO szczegółową rozpiską */}
+        {/* Sekcja ze stanem kasowym i finansowym dla miesięcznego podsumowania */}
         {selectedMonth && selectedYear && user?.location && (
           <YearToDateCashFlowBreakdown
             locationId={user.location}
@@ -497,6 +497,22 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
               month={parseInt(selectedMonth || '1')}
               year={parseInt(selectedYear || new Date().getFullYear().toString())}
             />
+
+            {/* Stan kasowy i finansowy domu dla podsumowania rok-do-daty */}
+            {selectedMonth && selectedYear && user?.location && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4">
+                  Stan kasowy i finansowy domu od początku {selectedYear} roku
+                  {selectedMonth && ` do końca ${months.find(m => m.value === selectedMonth)?.label}`}
+                </h3>
+                
+                <YearToDateCashFlowBreakdown
+                  locationId={user.location}
+                  month={parseInt(selectedMonth)}
+                  year={parseInt(selectedYear)}
+                />
+              </div>
+            )}
           </>
         )}
       </form>
