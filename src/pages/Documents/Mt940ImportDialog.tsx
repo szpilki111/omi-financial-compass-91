@@ -216,63 +216,67 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
     setLoading(true);
     
     try {
-      let documentsCreated = 0;
+      // Generate document number using the existing function
+      const { data: documentNumber, error: numberError } = await supabase
+        .rpc('generate_document_number', {
+          p_location_id: user.location,
+          p_year: documentDate.getFullYear(),
+          p_month: documentDate.getMonth() + 1
+        });
+
+      if (numberError) {
+        console.error('Error generating document number:', numberError);
+        throw numberError;
+      }
+
+      // Create one document for all transactions
+      const { data: document, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          document_number: documentNumber,
+          document_name: `Wyciąg ${previewData.statementNumber} - ${previewData.accountNumber}`,
+          document_date: documentDate.toISOString().split('T')[0],
+          location_id: user.location,
+          user_id: user.id
+        })
+        .select()
+        .single();
       
-      // Create a document for each transaction
-      for (const transaction of previewData.transactions) {
-        // Generate document number based on statement number and transaction index
-        const transactionIndex = previewData.transactions.indexOf(transaction) + 1;
-        const documentNumber = `MT940-${previewData.statementNumber}-${transactionIndex.toString().padStart(3, '0')}`;
-        
-        // Create document
-        const { data: document, error: docError } = await supabase
-          .from('documents')
-          .insert({
-            document_number: documentNumber,
-            document_name: `Wyciąg ${previewData.statementNumber} - ${transaction.counterparty || 'Operacja bankowa'}`,
-            document_date: documentDate.toISOString().split('T')[0],
-            location_id: user.location,
-            user_id: user.id
-          })
-          .select()
-          .single();
-        
-        if (docError) {
-          console.error('Error creating document:', docError);
-          continue;
-        }
-        
-        // Create transaction for the document
-        const { error: transError } = await supabase
-          .from('transactions')
-          .insert({
-            document_id: document.id,
-            document_number: documentNumber,
-            date: transaction.date,
-            description: transaction.description,
-            debit_amount: transaction.amount,
-            credit_amount: transaction.amount,
-            currency: 'PLN',
-            exchange_rate: 1,
-            settlement_type: 'Bank',
-            location_id: user.location,
-            user_id: user.id
-          });
-        
-        if (transError) {
-          console.error('Error creating transaction:', transError);
-          continue;
-        }
-        
-        documentsCreated++;
+      if (docError) {
+        console.error('Error creating document:', docError);
+        throw docError;
+      }
+
+      // Create all transactions for this document
+      const transactionsToInsert = previewData.transactions.map(transaction => ({
+        document_id: document.id,
+        document_number: documentNumber,
+        date: transaction.date,
+        description: transaction.description,
+        debit_amount: transaction.amount,
+        credit_amount: transaction.amount,
+        currency: 'PLN',
+        exchange_rate: 1,
+        settlement_type: 'Bank',
+        location_id: user.location,
+        user_id: user.id
+      }));
+
+      const { error: transError } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert);
+      
+      if (transError) {
+        console.error('Error creating transactions:', transError);
+        throw transError;
       }
       
       toast({
         title: "Sukces",
-        description: `Utworzono ${documentsCreated} dokumentów z pliku MT940`,
+        description: `Utworzono dokument ${documentNumber} z ${previewData.transactions.length} operacjami`,
       });
       
-      onImportComplete(documentsCreated);
+      onImportComplete(1); // Only 1 document created
       onClose();
       
     } catch (error) {
@@ -377,7 +381,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
 
               <div>
                 <h4 className="text-sm font-medium mb-2">
-                  Transakcje do utworzenia ({previewData.transactions.length})
+                  Operacje do dodania ({previewData.transactions.length})
                 </h4>
                 <div className="max-h-60 overflow-y-auto border rounded-lg">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -431,7 +435,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
             onClick={handleImport} 
             disabled={loading || !previewData || !documentDate}
           >
-            {loading ? 'Importowanie...' : `Importuj ${previewData?.transactions.length || 0} dokumentów`}
+            {loading ? 'Importowanie...' : `Importuj jako 1 dokument`}
           </Button>
         </DialogFooter>
       </DialogContent>
