@@ -190,7 +190,7 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <h3 className="text-lg font-semibold mb-4">Stan kasowy i finansowy domu</h3>
+      <h3 className="text-lg font-semibold mb-4 text-black">Stan kasowy i finansowy domu</h3>
       <p className="text-sm text-gray-600 mb-6">
         Szczegółowa rozpiska stanu finansowego według kategorii księgowych na koniec okresu
       </p>
@@ -198,14 +198,14 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
       <div className="space-y-8">
         {Object.entries(cashFlowData).map(([mainCategory, categories]) => (
           <div key={mainCategory} className="border-b border-gray-200 pb-6 last:border-b-0">
-            <h4 className="text-md font-semibold mb-4 text-blue-800">{mainCategory}</h4>
+            <h4 className="text-md font-semibold mb-4 text-black">{mainCategory}</h4>
             
             <div className="space-y-4">
               {categories.map((category) => (
                 <div key={category.title} className="bg-gray-50 p-4 rounded">
                   <div className="flex justify-between items-center mb-3">
                     <h5 className="font-medium text-gray-800">{category.title}</h5>
-                    <div className={`font-bold ${category.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="font-bold text-black">
                       {formatCurrency(category.total)}
                     </div>
                   </div>
@@ -218,7 +218,7 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
                             <span className="font-medium text-gray-700">{account.account_number}</span>
                             <span className="ml-2 text-gray-600">{account.account_name}</span>
                           </div>
-                          <div className={`font-medium ${account.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <div className="font-medium text-black">
                             {formatCurrency(account.balance)}
                           </div>
                         </div>
