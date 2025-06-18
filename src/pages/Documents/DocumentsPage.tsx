@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,10 +5,11 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator } from 'lucide-react';
+import { Plus, Search, Calculator, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
-import DocumentTable from './DocumentTable';
+import DocumentsTable from './DocumentsTable';
+import Mt940ImportDialog from './Mt940ImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -29,6 +29,7 @@ interface Document {
     name: string;
   } | null;
   transaction_count?: number;
+  total_amount?: number;
 }
 
 const DocumentsPage = () => {
@@ -37,6 +38,7 @@ const DocumentsPage = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
 
   // Fetch documents with related data
@@ -61,24 +63,57 @@ const DocumentsPage = () => {
 
       console.log('Raw documents data:', data);
 
-      // Get transaction counts for each document
+      // Get transaction counts and total amounts for each document
       const documentsWithCounts = await Promise.all(
         (data || []).map(async (doc) => {
+          // Get transaction count
           const { count } = await supabase
             .from('transactions')
             .select('*', { count: 'exact', head: true })
             .eq('document_id', doc.id);
           
+          // Get all transactions for this document to calculate total amount
+          const { data: transactions, error: transactionsError } = await supabase
+            .from('transactions')
+            .select('debit_amount, credit_amount, amount, currency, exchange_rate')
+            .eq('document_id', doc.id);
+          
+          if (transactionsError) {
+            console.error('Error fetching transactions for document:', doc.id, transactionsError);
+          }
+          
+          // Calculate total amount using the same logic as in DocumentDialog
+          // This matches the "Razem" calculation: debitTotal + creditTotal
+          const totalAmount = transactions?.reduce((sum, transaction) => {
+            const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+            const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
+            const exchangeRate = Number(transaction.exchange_rate) || 1;
+            
+            // Convert to PLN if currency is not PLN
+            let debitInPLN = debitAmount;
+            let creditInPLN = creditAmount;
+            
+            if (transaction.currency !== 'PLN') {
+              debitInPLN = debitAmount * exchangeRate;
+              creditInPLN = creditAmount * exchangeRate;
+            }
+            
+            return sum + debitInPLN + creditInPLN;
+          }, 0) || 0;
+          
+          console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} PLN`);
+          
           return {
             ...doc,
             // Handle the profiles array by taking the first element or null
             profiles: Array.isArray(doc.profiles) && doc.profiles.length > 0 ? doc.profiles[0] : null,
-            transaction_count: count || 0
+            transaction_count: count || 0,
+            total_amount: totalAmount
           };
         })
       );
 
-      console.log('Documents with counts:', documentsWithCounts);
+      console.log('Documents with counts and totals:', documentsWithCounts);
       return documentsWithCounts;
     },
   });
@@ -152,6 +187,15 @@ const DocumentsPage = () => {
     navigate('/kpir');
   };
 
+  const handleMt940ImportComplete = (count: number) => {
+    refetch();
+    setIsMt940ImportOpen(false);
+    toast({
+      title: "Sukces",
+      description: `Zaimportowano ${count} dokumentów z pliku MT940`,
+    });
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -176,6 +220,10 @@ const DocumentsPage = () => {
               <Search className="h-4 w-4" />
               Wyszukaj operacje
             </Button>
+            <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Import MT940
+            </Button>
             <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Nowy dokument
@@ -187,15 +235,15 @@ const DocumentsPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Szukaj po numerze, nazwie lub dacie..."
+            placeholder="             Szukaj po numerze, nazwie lub dacie..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-11"
           />
         </div>
 
         {/* Documents table */}
-        <DocumentTable
+        <DocumentsTable
           documents={filteredDocuments}
           onDocumentClick={handleDocumentClick}
           onDocumentDelete={handleDocumentDelete}
@@ -222,6 +270,12 @@ const DocumentsPage = () => {
         }}
         onDocumentCreated={handleDocumentCreated}
         document={selectedDocument}
+      />
+
+      <Mt940ImportDialog
+        open={isMt940ImportOpen}
+        onClose={() => setIsMt940ImportOpen(false)}
+        onImportComplete={handleMt940ImportComplete}
       />
     </MainLayout>
   );

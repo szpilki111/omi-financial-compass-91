@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileTextIcon } from 'lucide-react';
@@ -17,6 +16,18 @@ interface AccountBreakdown {
   total_amount: number;
   category: 'income' | 'expense' | 'other';
   side: 'debit' | 'credit';
+}
+
+interface CashFlowAccount {
+  account_number: string;
+  account_name: string;
+  balance: number;
+}
+
+interface CashFlowCategory {
+  title: string;
+  accounts: CashFlowAccount[];
+  total: number;
 }
 
 interface ReportPDFGeneratorProps {
@@ -149,6 +160,133 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
         .sort((a, b) => a.account_number.localeCompare(b.account_number));
 
       return breakdown;
+    },
+    enabled: !!report
+  });
+
+  // Pobieranie danych stanu kasowego dla PDF
+  const { data: cashFlowData } = useQuery({
+    queryKey: ['cash_flow_breakdown_pdf', report.id, report.location_id, report.month, report.year],
+    queryFn: async () => {
+      // Oblicz daty na podstawie miesiąca i roku
+      const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
+      const lastDayOfMonth = new Date(report.year, report.month, 0);
+      
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+
+      const { data: transactions, error } = await supabase
+        .from('transactions')
+        .select(`
+          amount,
+          debit_account_id,
+          credit_account_id,
+          debit_amount,
+          credit_amount,
+          debit_account:accounts!debit_account_id(number, name, type),
+          credit_account:accounts!credit_account_id(number, name, type)
+        `)
+        .eq('location_id', report.location_id)
+        .gte('date', dateFrom)
+        .lte('date', dateTo);
+
+      if (error) throw error;
+
+      // Definiuj kategorie zgodnie z obrazkiem
+      const categoryDefinitions = {
+        'A. Stan finansowy domu': {
+          'Kasa domu': ['100'],
+          'Kasa dewiz': ['101', '102', '103', '104', '105', '106', '107', '108'],
+          'Bank': ['110'],
+          'Lokaty bankowe': ['117'],
+          'Bank dewizowy': ['113', '114', '115', '116']
+        },
+        'B. Intencje': {
+          'Intencje': ['210', '701']
+        },
+        'C. Towary': {
+          'Towary': ['301', '449']
+        },
+        'D. Należności i zobowiązania': {
+          'Pożyczki udzielone': ['212', '213'],
+          'Pożyczki zaciągnięte': ['215'],
+          'Sumy przechodnie': ['149', '150'],
+          'Rozliczenia z prowincją': ['200', '201'],
+          'Rozliczenia z innymi': ['202', '208']
+        }
+      };
+
+      const matchesPrefix = (accountNumber: string, prefixes: string[]) => {
+        return prefixes.some(prefix => accountNumber.startsWith(prefix));
+      };
+
+      const accountBalances = new Map<string, { balance: number, account: any }>();
+      
+      transactions?.forEach(transaction => {
+        const { debit_account, credit_account, debit_amount, credit_amount, amount } = transaction;
+        
+        if (debit_account) {
+          const key = debit_account.number;
+          const transactionAmount = debit_amount && debit_amount > 0 ? debit_amount : Number(amount);
+          
+          if (accountBalances.has(key)) {
+            accountBalances.get(key)!.balance += transactionAmount;
+          } else {
+            accountBalances.set(key, {
+              balance: transactionAmount,
+              account: debit_account
+            });
+          }
+        }
+        
+        if (credit_account) {
+          const key = credit_account.number;
+          const transactionAmount = credit_amount && credit_amount > 0 ? credit_amount : Number(amount);
+          
+          if (accountBalances.has(key)) {
+            accountBalances.get(key)!.balance -= transactionAmount;
+          } else {
+            accountBalances.set(key, {
+              balance: -transactionAmount,
+              account: credit_account
+            });
+          }
+        }
+      });
+
+      const result: Record<string, CashFlowCategory[]> = {};
+
+      Object.entries(categoryDefinitions).forEach(([mainCategory, subCategories]) => {
+        const categoryData: CashFlowCategory[] = [];
+        
+        Object.entries(subCategories).forEach(([subCategoryName, prefixes]) => {
+          const matchingAccounts: CashFlowAccount[] = [];
+          let categoryTotal = 0;
+          
+          accountBalances.forEach(({ balance, account }, accountNumber) => {
+            if (matchesPrefix(accountNumber, prefixes)) {
+              matchingAccounts.push({
+                account_number: accountNumber,
+                account_name: account.name,
+                balance: balance
+              });
+              categoryTotal += balance;
+            }
+          });
+          
+          matchingAccounts.sort((a, b) => a.account_number.localeCompare(b.account_number));
+          
+          categoryData.push({
+            title: subCategoryName,
+            accounts: matchingAccounts,
+            total: categoryTotal
+          });
+        });
+        
+        result[mainCategory] = categoryData;
+      });
+
+      return result;
     },
     enabled: !!report
   });
@@ -358,6 +496,62 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Stan kasowy i finansowy domu */}
+          {cashFlowData && Object.keys(cashFlowData).length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Stan kasowy i finansowy domu</h3>
+              <p className="text-xs text-gray-600 mb-4">
+                Szczegółowa rozpiska stanu finansowego według kategorii księgowych na koniec okresu
+              </p>
+              
+              {Object.entries(cashFlowData).map(([mainCategory, categories]) => (
+                <div key={mainCategory} className="mb-6">
+                  <div className="flex justify-between items-center mb-3 bg-blue-100 p-2 rounded">
+                    <h4 className="text-md font-semibold text-blue-800">{mainCategory}</h4>
+                  </div>
+                  
+                  {categories.map((category) => (
+                    <div key={category.title} className="mb-4">
+                      <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
+                        <h5 className="font-medium text-gray-800">{category.title}</h5>
+                        <div className="text-md font-bold">
+                          {formatCurrency(category.total)}
+                        </div>
+                      </div>
+                      
+                      {category.accounts.length > 0 && (
+                        <table className="w-full text-xs border-collapse border border-gray-300 mb-2">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="border border-gray-300 p-1 text-left">Numer konta</th>
+                              <th className="border border-gray-300 p-1 text-left">Nazwa konta</th>
+                              <th className="border border-gray-300 p-1 text-right">Saldo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {category.accounts.map((account) => (
+                              <tr key={account.account_number}>
+                                <td className="border border-gray-300 p-1 font-medium">
+                                  {account.account_number}
+                                </td>
+                                <td className="border border-gray-300 p-1">
+                                  {account.account_name}
+                                </td>
+                                <td className="border border-gray-300 p-1 text-right font-medium">
+                                  {formatCurrency(account.balance)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Szczegółowa rozpiska kont */}
           {accountsBreakdown && accountsBreakdown.length > 0 && (

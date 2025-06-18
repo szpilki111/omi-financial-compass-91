@@ -565,13 +565,13 @@ export type Database = {
       }
       transactions: {
         Row: {
-          amount: number
+          amount: number | null
           created_at: string
-          credit_account_id: string
+          credit_account_id: string | null
           credit_amount: number | null
           currency: string
           date: string
-          debit_account_id: string
+          debit_account_id: string | null
           debit_amount: number | null
           description: string
           document_id: string | null
@@ -586,13 +586,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          amount: number
+          amount?: number | null
           created_at?: string
-          credit_account_id: string
+          credit_account_id?: string | null
           credit_amount?: number | null
           currency?: string
           date: string
-          debit_account_id: string
+          debit_account_id?: string | null
           debit_amount?: number | null
           description: string
           document_id?: string | null
@@ -607,13 +607,13 @@ export type Database = {
           user_id: string
         }
         Update: {
-          amount?: number
+          amount?: number | null
           created_at?: string
-          credit_account_id?: string
+          credit_account_id?: string | null
           credit_amount?: number | null
           currency?: string
           date?: string
-          debit_account_id?: string
+          debit_account_id?: string | null
           debit_amount?: number | null
           description?: string
           document_id?: string | null
@@ -705,6 +705,10 @@ export type Database = {
         Args:
           | { user_id: number; new_password: string }
           | { user_id: string; new_password: string }
+        Returns: boolean
+      }
+      check_report_editing_blocked: {
+        Args: { p_location_id: string; p_document_date: string }
         Returns: boolean
       }
       create_user_admin: {

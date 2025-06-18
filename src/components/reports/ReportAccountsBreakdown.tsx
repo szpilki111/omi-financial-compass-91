@@ -53,8 +53,6 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         dateTo = lastDayOfMonth.toISOString().split('T')[0];
       }
 
-      console.log('🔍 Pobieranie rozpiski kont dla okresu:', dateFrom, 'do', dateTo);
-
       // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
       const { data: transactions, error } = await supabase
         .from('transactions')
@@ -74,8 +72,6 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         .lte('date', dateTo);
 
       if (error) throw error;
-
-      console.log('📊 Pobrane transakcje:', transactions?.length || 0);
 
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
       const isRelevantAccount = (accountNumber: string) => {
@@ -142,11 +138,6 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         })
         .filter(account => Math.abs(account.total_amount) > 0.01) // Filtruj konta z zerowym saldem
         .sort((a, b) => a.account_number.localeCompare(b.account_number));
-
-      console.log('📋 Wygenerowana rozpiska kont (tylko 2xx, 4xx, 7xx):', breakdown.length);
-      breakdown.forEach(acc => {
-        console.log(`  ${acc.account_number} (${acc.side}): ${acc.total_amount} zł - ${acc.category}`);
-      });
 
       return breakdown;
     },

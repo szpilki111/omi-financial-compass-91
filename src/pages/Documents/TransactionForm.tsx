@@ -1,492 +1,425 @@
+
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { Transaction } from './types';
+import { AccountCombobox } from './AccountCombobox';
+
+interface AmountField {
+  id: string;
+  amount: number;
+  accountId: string;
+  description?: string;
+}
 
 interface TransactionFormProps {
-  onAdd: (transaction: any) => void;
+  onAdd: (transaction: Transaction) => void;
   onCancel: () => void;
-  parentTransactionId?: string;
 }
 
-interface TransactionFormData {
-  description: string;
-  debit_account_id: string;
-  credit_account_id: string;
-  debit_amount: number;
-  credit_amount: number;
-}
-
-interface Account {
-  id: string;
-  number: string;
-  name: string;
-  type: string;
-}
-
-const TransactionForm = ({ onAdd, onCancel, parentTransactionId }: TransactionFormProps) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) => {
   const { user } = useAuth();
-  const [debitAccounts, setDebitAccounts] = useState<Account[]>([]);
-  const [creditAccounts, setCreditAccounts] = useState<Account[]>([]);
-  const [debitSearchQuery, setDebitSearchQuery] = useState('');
-  const [creditSearchQuery, setCreditSearchQuery] = useState('');
-  const [isDebitSearching, setIsDebitSearching] = useState(false);
-  const [isCreditSearching, setIsCreditSearching] = useState(false);
-  const [debitSelectOpen, setDebitSelectOpen] = useState(false);
-  const [creditSelectOpen, setCreditSelectOpen] = useState(false);
-
-  const form = useForm<TransactionFormData>({
-    defaultValues: {
-      description: '',
-      debit_account_id: '',
-      credit_account_id: '',
-      debit_amount: 0,
-      credit_amount: 0,
-    },
+  const { toast } = useToast();
+  
+  const [formData, setFormData] = useState({
+    description: '',
+    settlement_type: 'Bank',
   });
 
-  // Function to search accounts based on query with location and type filtering
-  const searchAccounts = async (query: string, isDebit: boolean) => {
-    if (!query || query.length < 2) {
-      if (isDebit) {
-        setDebitAccounts([]);
-      } else {
-        setCreditAccounts([]);
-      }
-      return;
+  const [debitFields, setDebitFields] = useState<AmountField[]>([
+    { id: '1', amount: 0, accountId: '', description: '' }
+  ]);
+
+  const [creditFields, setCreditFields] = useState<AmountField[]>([
+    { id: '1', amount: 0, accountId: '', description: '' }
+  ]);
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isFirstDebitFieldFocused, setIsFirstDebitFieldFocused] = useState(false);
+  const [isFirstCreditFieldFocused, setIsFirstCreditFieldFocused] = useState(false);
+  const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
+
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Calculate totals
+  const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
+  const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Usuń błąd dla danego pola
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
 
-    if (!user?.location) {
-      console.warn('Brak informacji o lokalizacji użytkownika');
-      return;
+    // Jeśli zmienił się opis głównej operacji, zaktualizuj opisy we wszystkich polach
+    if (field === 'description') {
+      setDebitFields(prev => prev.map(field => ({ ...field, description: value })));
+      setCreditFields(prev => prev.map(field => ({ ...field, description: value })));
+    }
+  };
+
+  // Funkcje do obsługi inteligentnych pól kwot
+  const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
+    // Jeśli wartość to "0", usuń ją całkowicie
+    if (e.target.value === '0') {
+      e.target.value = '';
+      // Ustaw wartość w state na 0, żeby input był pusty
+      if (type === 'debit') {
+        setDebitFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      } else {
+        setCreditFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      }
+    }
+    
+    // Ustaw focus dla pierwszego pola i zapamiętaj czy drugie pole było zerem
+    if (fieldId === '1') {
+      if (type === 'debit') {
+        setIsFirstDebitFieldFocused(true);
+        setWasSecondFieldZeroOnFirstFocus(creditFields[0]?.amount === 0);
+      } else {
+        setIsFirstCreditFieldFocused(true);
+        setWasSecondFieldZeroOnFirstFocus(debitFields[0]?.amount === 0);
+      }
+    }
+  };
+
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
+    // Jeśli pole jest puste po utracie fokusa, ustaw na 0
+    if (e.target.value === '' || e.target.value === undefined) {
+      if (type === 'debit') {
+        setDebitFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      } else {
+        setCreditFields(prev => prev.map(field => 
+          field.id === fieldId ? { ...field, amount: 0 } : field
+        ));
+      }
     }
 
-    try {
-      if (isDebit) {
-        setIsDebitSearching(true);
+    // Wyłącz auto-uzupełnianie gdy pierwsze pole traci fokus
+    if (fieldId === '1') {
+      if (type === 'debit') {
+        setIsFirstDebitFieldFocused(false);
       } else {
-        setIsCreditSearching(true);
+        setIsFirstCreditFieldFocused(false);
       }
-      
-      console.log('Wyszukiwanie kont dla zapytania:', query, 'w lokalizacji:', user.location);
-      
-      // First get the location_account assignments for this location
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('location_accounts')
-        .select('account_id')
-        .eq('location_id', user.location);
+      setWasSecondFieldZeroOnFirstFocus(false);
+    }
+
+    const fields = type === 'debit' ? debitFields : creditFields;
+    const setFields = type === 'debit' ? setDebitFields : setCreditFields;
+    const oppositeTotal = type === 'debit' ? creditTotal : debitTotal;
+    const currentTotal = fields.reduce((sum, field) => sum + field.amount, 0);
+    
+    // Check if we need to add more fields to balance the amounts
+    if (currentTotal !== oppositeTotal && currentTotal > 0 && oppositeTotal > 0) {
+      const difference = Math.abs(currentTotal - oppositeTotal);
+      if (difference > 0) {
+        // Add a new field with the difference amount
+        const newField: AmountField = {
+          id: Date.now().toString(),
+          amount: difference,
+          accountId: '',
+          description: formData.description
+        };
         
-      if (assignmentsError) {
-        console.error('Błąd podczas pobierania przypisań kont:', assignmentsError);
-        throw assignmentsError;
-      }
-      
-      if (!assignments || assignments.length === 0) {
-        console.log('Brak przypisanych kont dla tej lokalizacji');
-        if (isDebit) {
-          setDebitAccounts([]);
-        } else {
-          setCreditAccounts([]);
+        if (currentTotal < oppositeTotal) {
+          setFields(prev => [...prev, newField]);
         }
-        return;
-      }
-
-      const accountIds = assignments.map(a => a.account_id);
-      console.log('Znalezione ID kont przypisanych do lokalizacji:', accountIds);
-
-      // Now get the actual accounts that match the search query
-      const { data: accounts, error: accountsError } = await supabase
-        .from('accounts')
-        .select('*')
-        .in('id', accountIds)
-        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
-        .order('number');
-        
-      if (accountsError) {
-        console.error('Błąd podczas wyszukiwania kont:', accountsError);
-        throw accountsError;
-      }
-      
-      console.log('Znalezione konta przed filtrowaniem:', accounts);
-      
-      // Filter accounts based on debit/credit type
-      let filteredData = accounts || [];
-      
-      if (isDebit) {
-        // For debit accounts, exclude accounts in 700-799 range
-        filteredData = filteredData.filter(account => {
-          const accountNumber = parseInt(account.number);
-          return !(accountNumber >= 700 && accountNumber <= 799);
-        });
-      } else {
-        // For credit accounts, exclude accounts in 400-499 range
-        filteredData = filteredData.filter(account => {
-          const accountNumber = parseInt(account.number);
-          return !(accountNumber >= 400 && accountNumber <= 499);
-        });
-      }
-      
-      console.log('Znalezione konta po filtrowaniu:', filteredData);
-      console.log('Liczba znalezionych kont po filtrowaniu:', filteredData.length);
-      
-      if (isDebit) {
-        setDebitAccounts(filteredData);
-      } else {
-        setCreditAccounts(filteredData);
-      }
-    } catch (error) {
-      console.error('Błąd podczas wyszukiwania kont:', error);
-    } finally {
-      if (isDebit) {
-        setIsDebitSearching(false);
-      } else {
-        setIsCreditSearching(false);
       }
     }
   };
 
-  // Effect for debit account search with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchAccounts(debitSearchQuery, true);
-    }, 300);
+  const handleDebitAmountChange = (fieldId: string, amount: number) => {
+    setDebitFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
 
-    return () => clearTimeout(timer);
-  }, [debitSearchQuery, user?.location]);
-
-  // Effect for credit account search with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchAccounts(creditSearchQuery, false);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [creditSearchQuery, user?.location]);
-
-  const handleDebitAccountChange = (accountId: string) => {
-    const selectedAccount = debitAccounts.find(acc => acc.id === accountId);
-    
-    form.setValue('debit_account_id', accountId);
-    
-    if (selectedAccount) {
-      setDebitSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
-    }
-    
-    setDebitSelectOpen(false);
-  };
-
-  const handleCreditAccountChange = (accountId: string) => {
-    const selectedAccount = creditAccounts.find(acc => acc.id === accountId);
-    
-    form.setValue('credit_account_id', accountId);
-    
-    if (selectedAccount) {
-      setCreditSearchQuery(`${selectedAccount.number} - ${selectedAccount.name}`);
-    }
-    
-    setCreditSelectOpen(false);
-  };
-
-  const handleDebitSearchChange = (value: string) => {
-    setDebitSearchQuery(value);
-    
-    // Clear selected account if user changes search text
-    if (form.getValues('debit_account_id')) {
-      const selectedAccount = debitAccounts.find(acc => acc.id === form.getValues('debit_account_id'));
-      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
-        form.setValue('debit_account_id', '');
-      }
+    // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole debit
+    // 2. Pierwsze pole debit ma fokus  
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstDebitFieldFocused && wasSecondFieldZeroOnFirstFocus) {
+      setCreditFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
   };
 
-  const handleCreditSearchChange = (value: string) => {
-    setCreditSearchQuery(value);
-    
-    // Clear selected account if user changes search text
-    if (form.getValues('credit_account_id')) {
-      const selectedAccount = creditAccounts.find(acc => acc.id === form.getValues('credit_account_id'));
-      if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
-        form.setValue('credit_account_id', '');
-      }
+  const handleCreditAmountChange = (fieldId: string, amount: number) => {
+    setCreditFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
+
+    // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole credit
+    // 2. Pierwsze pole credit ma fokus
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstCreditFieldFocused && wasSecondFieldZeroOnFirstFocus) {
+      setDebitFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
   };
 
-  const onSubmit = (data: TransactionFormData) => {
-    // Wymuś by description był stringiem, nigdy null/undefined
-    const safeDescription = (typeof data.description === "string" && data.description.trim() !== "") ? data.description : "";
+  const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+    if (type === 'debit') {
+      setDebitFields(prev => prev.map(field => 
+        field.id === fieldId ? { ...field, accountId } : field
+      ));
+    } else {
+      setCreditFields(prev => prev.map(field => 
+        field.id === fieldId ? { ...field, accountId } : field
+      ));
+    }
+  };
 
-    onAdd({
-      debit_account_id: data.debit_account_id,
-      credit_account_id: data.credit_account_id,
-      amount: Number(data.debit_amount),
-      description: safeDescription,
-      settlement_type: 'gotówka',
-      debit_amount: Number(data.debit_amount),
-      credit_amount: Number(data.credit_amount),
-      parent_transaction_id: parentTransactionId || null,
+  const addNewField = (type: 'debit' | 'credit') => {
+    const newField: AmountField = {
+      id: Date.now().toString(),
+      amount: 0,
+      accountId: '',
+      description: formData.description
+    };
+
+    if (type === 'debit') {
+      setDebitFields(prev => [...prev, newField]);
+    } else {
+      setCreditFields(prev => [...prev, newField]);
+    }
+  };
+
+  const removeField = (fieldId: string, type: 'debit' | 'credit') => {
+    if (type === 'debit' && debitFields.length > 1) {
+      setDebitFields(prev => prev.filter(field => field.id !== fieldId));
+    } else if (type === 'credit' && creditFields.length > 1) {
+      setCreditFields(prev => prev.filter(field => field.id !== fieldId));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.description.trim()) {
+      newErrors.description = 'Opis jest wymagany';
+    }
+
+    if (debitTotal <= 0) {
+      newErrors.amounts = 'Kwoty muszą być większe od zera';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    // Get valid fields (amount > 0 and account selected)
+    const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
+    const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
+
+    console.log('Valid debit fields:', validDebitFields);
+    console.log('Valid credit fields:', validCreditFields);
+
+    const createdTransactions: Transaction[] = [];
+
+    // Determine the maximum number of transactions we'll create
+    const maxTransactions = Math.max(validDebitFields.length, validCreditFields.length);
+
+    // Create transactions by pairing fields one-to-one
+    for (let i = 0; i < maxTransactions; i++) {
+      const debitField = validDebitFields[i] || null;
+      const creditField = validCreditFields[i] || null;
+
+      // Skip if both sides are null (shouldn't happen given maxTransactions logic)
+      if (!debitField && !creditField) continue;
+
+      const transaction: Transaction = {
+        description: formData.description,
+        debit_account_id: debitField?.accountId || null,
+        credit_account_id: creditField?.accountId || null,
+        debit_amount: debitField?.amount || 0,
+        credit_amount: creditField?.amount || 0,
+        amount: Math.max(debitField?.amount || 0, creditField?.amount || 0),
+        settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      };
+
+      createdTransactions.push(transaction);
+    }
+
+    console.log('Created transactions:', createdTransactions);
+
+    // Add all created transactions
+    createdTransactions.forEach(transaction => {
+      onAdd(transaction);
     });
-
-    form.reset();
-    setDebitSearchQuery('');
-    setCreditSearchQuery('');
-    setDebitAccounts([]);
-    setCreditAccounts([]);
   };
-
-  const selectedDebitAccount = debitAccounts.find(account => account.id === form.watch('debit_account_id'));
-  const selectedCreditAccount = creditAccounts.find(account => account.id === form.watch('credit_account_id'));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">
-          {parentTransactionId ? 'Nowa sub-transakcja' : 'Nowa transakcja'}
-        </CardTitle>
-        {parentTransactionId && (
-          <p className="text-sm text-blue-600">
-            Ta transakcja będzie powiązana z transakcją nadrzędną
-          </p>
+    <div className="border rounded-lg p-4 bg-gray-50">
+      <h4 className="font-medium mb-4">Dodaj operację</h4>
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="description">Opis operacji *</Label>
+          <Textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            placeholder="Opis operacji finansowej"
+            className={errors.description ? 'border-red-500' : ''}
+          />
+          {errors.description && (
+            <p className="text-red-500 text-sm mt-1">{errors.description}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Debit Fields */}
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+            </div>
+            <div className="space-y-3">
+              {debitFields.map((field, index) => (
+                <div key={field.id} className="space-y-2">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Label className="text-sm">Kwota</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={field.amount === 0 ? '' : field.amount}
+                        onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
+                        onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {debitFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeField(field.id, 'debit')}
+                        className="text-red-600"
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-sm">Konto</Label>
+                    <AccountCombobox
+                      value={field.accountId}
+                      onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
+                      locationId={userProfile?.location_id}
+                      side="debit"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Credit Fields */}
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+            </div>
+            <div className="space-y-3">
+              {creditFields.map((field, index) => (
+                <div key={field.id} className="space-y-2">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Label className="text-sm">Kwota</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={field.amount === 0 ? '' : field.amount}
+                        onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
+                        onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {creditFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeField(field.id, 'credit')}
+                        className="text-red-600"
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-sm">Konto</Label>
+                    <AccountCombobox
+                      value={field.accountId}
+                      onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
+                      locationId={userProfile?.location_id}
+                      side="credit"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {errors.amounts && (
+          <div className="text-red-500 text-sm">
+            <p>{errors.amounts}</p>
+          </div>
         )}
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Opis transakcji</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Opis operacji księgowej" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="debit_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Konto Winien</FormLabel>
-                    <Popover open={debitSelectOpen} onOpenChange={setDebitSelectOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={debitSelectOpen}
-                            className="w-full justify-between"
-                          >
-                            {selectedDebitAccount ? 
-                              `${selectedDebitAccount.number} - ${selectedDebitAccount.name}` : 
-                              debitSearchQuery || "Wybierz konto winien..."
-                            }
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                        <Command>
-                          <CommandInput 
-                            placeholder="Wpisz numer lub nazwę konta..."
-                            value={debitSearchQuery}
-                            onValueChange={handleDebitSearchChange}
-                          />
-                          <CommandList className="max-h-60 overflow-y-auto">
-                            {debitSearchQuery.length < 2 ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
-                              </div>
-                            ) : isDebitSearching ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wyszukiwanie...
-                              </div>
-                            ) : debitAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {debitAccounts.map((account) => (
-                                  <CommandItem
-                                    key={account.id}
-                                    value={`${account.number} ${account.name}`}
-                                    onSelect={() => handleDebitAccountChange(account.id)}
-                                    className="cursor-pointer hover:bg-gray-100"
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedDebitAccount?.id === account.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {account.number} - {account.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="credit_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Konto Ma</FormLabel>
-                    <Popover open={creditSelectOpen} onOpenChange={setCreditSelectOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={creditSelectOpen}
-                            className="w-full justify-between"
-                          >
-                            {selectedCreditAccount ? 
-                              `${selectedCreditAccount.number} - ${selectedCreditAccount.name}` : 
-                              creditSearchQuery || "Wybierz konto ma..."
-                            }
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                        <Command>
-                          <CommandInput 
-                            placeholder="Wpisz numer lub nazwę konta..."
-                            value={creditSearchQuery}
-                            onValueChange={handleCreditSearchChange}
-                          />
-                          <CommandList className="max-h-60 overflow-y-auto">
-                            {creditSearchQuery.length < 2 ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wpisz co najmniej 2 znaki, aby wyszukać konta...
-                              </div>
-                            ) : isCreditSearching ? (
-                              <div className="py-6 text-center text-sm text-gray-500">
-                                Wyszukiwanie...
-                              </div>
-                            ) : creditAccounts.length === 0 ? (
-                              <CommandEmpty>Nie znaleziono konta przypisanego do tej placówki.</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {creditAccounts.map((account) => (
-                                  <CommandItem
-                                    key={account.id}
-                                    value={`${account.number} ${account.name}`}
-                                    onSelect={() => handleCreditAccountChange(account.id)}
-                                    className="cursor-pointer hover:bg-gray-100"
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedCreditAccount?.id === account.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {account.number} - {account.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="debit_amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kwota Winien</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="credit_amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kwota Ma</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Anuluj
-              </Button>
-              <Button type="submit">
-                {parentTransactionId ? 'Dodaj sub-transakcję' : 'Dodaj transakcję'}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+        <div className="flex gap-2 pt-4">
+          <Button type="submit" size="sm">
+            Dodaj operację
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+            Anuluj
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 };
 

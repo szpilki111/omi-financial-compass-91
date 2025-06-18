@@ -10,8 +10,18 @@ export interface Transaction {
   settlement_type?: string;
   debit_amount?: number;
   credit_amount?: number;
+  currency?: string;
   isCloned?: boolean;
   clonedType?: 'debit' | 'credit';
   debitAccountNumber?: string;
   creditAccountNumber?: string;
+  // Add the missing properties that DocumentTable expects
+  debitAccount?: {
+    number: string;
+    name: string;
+  };
+  creditAccount?: {
+    number: string;
+    name: string;
+  };
 }

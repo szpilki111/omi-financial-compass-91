@@ -25,9 +25,18 @@ interface AccountComboboxProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   locationId?: string;
+  className?: string;
+  side?: 'debit' | 'credit';
 }
 
-export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChange, disabled, locationId }) => {
+export const AccountCombobox: React.FC<AccountComboboxProps> = ({ 
+  value, 
+  onChange, 
+  disabled, 
+  locationId,
+  className,
+  side 
+}) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -52,10 +61,16 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
           .maybeSingle();
 
         if (data) {
-          setDisplayedAccountName(`${data.number} - ${data.name}`);
+          // KLUCZOWA POPRAWKA: Sprawdź czy konto jest dozwolone dla tej strony
+          const isAccountAllowed = isAccountAllowedForSide(data.number, side);
+          if (isAccountAllowed) {
+            setDisplayedAccountName(`${data.number} - ${data.name}`);
+          } else {
+            // Konto nie jest dozwolone dla tej strony - wyczyść wybór
+            setDisplayedAccountName('');
+            onChange(''); // Wyczyść wybrane konto
+          }
         } else {
-          // The selected account is not valid for this location, so we clear the display.
-          // We don't call onChange here to avoid unintended form state changes.
           setDisplayedAccountName('');
         }
       };
@@ -63,7 +78,22 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, accounts, locationId]);
+  }, [value, accounts, locationId, side, onChange]);
+
+  // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
+  const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
+    if (!side) return true;
+    
+    if (side === 'debit') {
+      // Winien side: nie może mieć kont zaczynających się od "7"
+      return !accountNumber.startsWith('7');
+    } else if (side === 'credit') {
+      // Ma side: nie może mieć kont zaczynających się od "4"
+      return !accountNumber.startsWith('4');
+    }
+    
+    return true;
+  };
 
   useEffect(() => {
     if (!open) {
@@ -113,7 +143,14 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
         console.error('Error fetching accounts:', error);
         setAccounts([]);
       } else {
-        setAccounts(data || []);
+        // KLUCZOWA POPRAWKA: Filtruj konta na podstawie restrykcji stron
+        let filteredAccounts = data || [];
+        
+        filteredAccounts = filteredAccounts.filter(account => 
+          isAccountAllowedForSide(account.number, side)
+        );
+        
+        setAccounts(filteredAccounts);
       }
       setLoading(false);
     };
@@ -123,7 +160,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, open, locationId]);
+  }, [searchTerm, open, locationId, side]);
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
@@ -137,7 +174,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn("w-full justify-between font-normal", className)}
           disabled={disabled}
         >
           <span className="truncate">
@@ -160,7 +197,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({ value, onChang
                <CommandEmpty>Wpisz co najmniej 2 znaki, aby wyszukać.</CommandEmpty>
             )}
             {locationId && searchTerm.length >= 2 && !loading && accounts.length === 0 && (
-              <CommandEmpty>Nie znaleziono kont dla tej lokalizacji.</CommandEmpty>
+              <CommandEmpty>Nie znaleziono dozwolonych kont dla tej lokalizacji.</CommandEmpty>
             )}
             <CommandGroup>
               {accounts.map((account) => (

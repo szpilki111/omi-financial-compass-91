@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Edit, X, FileText } from 'lucide-react';
+import { Edit, X, FileText, Calculator } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -58,6 +58,14 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
   selectedMonth,
   onClearMonthFilter,
 }) => {
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -107,6 +115,8 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                   <TableHead>Data</TableHead>
                   <TableHead>Dokument</TableHead>
                   <TableHead>Opis</TableHead>
+                  <TableHead>Konta</TableHead>
+                  <TableHead className="text-right">Kwota</TableHead>
                   <TableHead className="text-right">Akcje</TableHead>
                 </TableRow>
               </TableHeader>
@@ -132,6 +142,22 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                       <TableCell className="max-w-xs">
                         <div className="truncate" title={transaction.description}>
                           {transaction.description}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1 text-sm">
+                          <div>
+                            <span className="font-medium">Wn:</span> {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+                          </div>
+                          <div>
+                            <span className="font-medium">Ma:</span> {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        <div className="flex items-center justify-end gap-1">
+                          <Calculator className="h-4 w-4 text-gray-500" />
+                          {formatAmount(transaction.amount)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

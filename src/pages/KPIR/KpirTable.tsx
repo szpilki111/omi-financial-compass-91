@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { KpirTransaction } from '@/types/kpir';
 import { Spinner } from '@/components/ui/Spinner';
-import { Pencil, Split } from 'lucide-react';
+import { Split } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface KpirTableProps {
@@ -50,12 +50,24 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     );
   }
 
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   const renderTransactionRow = (transaction: KpirTransaction) => {
     // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
     const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
 
     // Determine which document number to show (from document or transaction)
     const documentNumber = transaction.document?.document_number || transaction.document_number || '-';
+
+    // Get amounts - use debit_amount/credit_amount if available, otherwise use amount
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
 
     return (
       <TableRow key={transaction.id} className="hover:bg-omi-100">
@@ -70,12 +82,37 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
           </div>
         </TableCell>
         <TableCell>
-          {transaction.currency}
+          <div className="text-sm">
+            <div className="font-medium">
+              {transaction.debitAccount?.number} - {transaction.debitAccount?.name}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          {formatAmount(debitAmount, transaction.currency)}
           {transaction.currency !== 'PLN' && transaction.exchange_rate && (
-            <span className="text-xs text-omi-gray-500 block">
+            <div className="text-xs text-omi-gray-500">
               kurs: {transaction.exchange_rate.toFixed(4)}
-            </span>
+            </div>
           )}
+        </TableCell>
+        <TableCell>
+          <div className="text-sm">
+            <div className="font-medium">
+              {transaction.creditAccount?.number} - {transaction.creditAccount?.name}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          {formatAmount(creditAmount, transaction.currency)}
+          {transaction.currency !== 'PLN' && transaction.exchange_rate && (
+            <div className="text-xs text-omi-gray-500">
+              kurs: {transaction.exchange_rate.toFixed(4)}
+            </div>
+          )}
+        </TableCell>
+        <TableCell>
+          {transaction.currency}
         </TableCell>
         <TableCell>
           {transaction.document ? (
@@ -83,9 +120,9 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
               variant="ghost"
               size="icon"
               onClick={() => onShowDocument?.(transaction.document)}
-              title="Edytuj dokument"
+              title="Zobacz dokument"
             >
-              <span className="sr-only">Edytuj dokument</span>
+              <span className="sr-only">Zobacz dokument</span>
               <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -107,6 +144,10 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
             <TableHead>Data</TableHead>
             <TableHead>Nr dokumentu</TableHead>
             <TableHead>Opis</TableHead>
+            <TableHead>Konto Wn</TableHead>
+            <TableHead className="text-right">Kwota Wn</TableHead>
+            <TableHead>Konto Ma</TableHead>
+            <TableHead className="text-right">Kwota Ma</TableHead>
             <TableHead>Waluta</TableHead>
             <TableHead>Dokument</TableHead>
           </TableRow>
