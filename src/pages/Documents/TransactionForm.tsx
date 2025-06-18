@@ -314,15 +314,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           <div>
             <div className="flex justify-between items-center mb-3">
               <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addNewField('debit')}
-                className="text-green-600"
-              >
-                + Dodaj
-              </Button>
             </div>
             <div className="space-y-3">
               {debitFields.map((field, index) => (
@@ -371,15 +362,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           <div>
             <div className="flex justify-between items-center mb-3">
               <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addNewField('credit')}
-                className="text-green-600"
-              >
-                + Dodaj
-              </Button>
             </div>
             <div className="space-y-3">
               {creditFields.map((field, index) => (
