@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -26,7 +27,7 @@ interface AmountField {
 interface TransactionEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (transactions: Transaction[]) => void; // Changed to return array of transactions
+  onSave: (transactions: Transaction[]) => void;
   transaction: Transaction | null;
   isNewDocument?: boolean;
   hiddenFields?: {
@@ -103,7 +104,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
   const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
 
-  // Obsługa zamknięcia dialogu z ostrzeżeniem o niezapisanych zmianach
   const handleClose = () => {
     if (hasUnsavedChanges) {
       if (confirm('Masz niezapisane zmiany. Czy chcesz je zapisać?')) {
@@ -118,12 +118,10 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
     
-    // Usuń błąd dla danego pola
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
 
-    // Jeśli zmienił się opis głównej operacji, zaktualizuj opisy we wszystkich polach
     if (field === 'description') {
       setDebitFields(prev => prev.map(field => ({ ...field, description: value })));
       setCreditFields(prev => prev.map(field => ({ ...field, description: value })));
@@ -142,11 +140,9 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     const oppositeTotal = type === 'debit' ? creditTotal : debitTotal;
     const currentTotal = fields.reduce((sum, field) => sum + field.amount, 0);
     
-    // Check if we need to add more fields to balance the amounts
     if (currentTotal !== oppositeTotal && currentTotal > 0 && oppositeTotal > 0) {
       const difference = Math.abs(currentTotal - oppositeTotal);
       if (difference > 0) {
-        // Add a new field with the difference amount
         const newField: AmountField = {
           id: Date.now().toString(),
           amount: difference,
@@ -224,7 +220,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       newErrors.amounts = 'Kwoty muszą być większe od zera';
     }
 
-    // Check if all accounts are selected
     const emptyDebitAccounts = debitFields.filter(field => field.amount > 0 && !field.accountId);
     const emptyCreditAccounts = creditFields.filter(field => field.amount > 0 && !field.accountId);
     
@@ -245,26 +240,20 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       return;
     }
 
-    // NAPRAWIONA LOGIKA: Tworzymy osobne transakcje dla każdej pary debit/credit
     const transactions: Transaction[] = [];
     
-    // Filter fields with non-zero amounts and selected accounts
     const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
     const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
     
     console.log('Valid debit fields:', validDebitFields);
     console.log('Valid credit fields:', validCreditFields);
 
-    // KLUCZOWA ZMIANA: Tworzymy transakcje w sposób 1:1 (każdy debit z każdym credit)
-    // ale dzielimy kwoty proporcjonalnie aby suma się zgadzała
-    
     for (let i = 0; i < validDebitFields.length; i++) {
       const debitField = validDebitFields[i];
       
       for (let j = 0; j < validCreditFields.length; j++) {
         const creditField = validCreditFields[j];
         
-        // Dla pierwszej kombinacji używamy rzeczywistych kwot z pól
         if (i === 0 && j === 0) {
           const newTransaction: Transaction = {
             ...transaction,
@@ -277,10 +266,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
           };
           
           transactions.push(newTransaction);
-        }
-        // Dla kolejnych kombinacji tworzymy tylko jeśli są dodatkowe pola
-        else if (i > 0 || j > 0) {
-          // Dla dodatkowych pól tworzymy osobne transakcje tylko jeśli mają różne konta
+        } else if (i > 0 || j > 0) {
           const isDifferentDebitAccount = !transactions.some(t => t.debit_account_id === debitField.accountId);
           const isDifferentCreditAccount = !transactions.some(t => t.credit_account_id === creditField.accountId);
           
@@ -301,7 +287,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       }
     }
 
-    // Jeśli nie ma żadnych transakcji, utwórz jedną podstawową
     if (transactions.length === 0 && validDebitFields.length > 0 && validCreditFields.length > 0) {
       const newTransaction: Transaction = {
         ...transaction,
@@ -349,6 +334,15 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('debit')}
+                  >
+                    + Dodaj pole
+                  </Button>
+                </div>
                 <div className="space-y-3">
                   {debitFields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
@@ -406,6 +400,14 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNewField('credit')}
+                  >
+                    + Dodaj pole
+                  </Button>
                 </div>
                 <div className="space-y-3">
                   {creditFields.map((field, index) => (
