@@ -278,6 +278,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         ...transaction,
         debitAccountNumber: accountsMap.get(transaction.debit_account_id)?.number || '',
         creditAccountNumber: accountsMap.get(transaction.credit_account_id)?.number || '',
+        debitAccount: accountsMap.get(transaction.debit_account_id),
+        creditAccount: accountsMap.get(transaction.credit_account_id),
       }));
     } catch (error) {
       console.error('Error loading account numbers:', error);
@@ -298,6 +300,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       
       console.log('Raw transactions loaded:', data);
       
+      // ZAWSZE ładuj numery kont dla transakcji z bazy danych
       const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(data || []);
       
       console.log('Transactions with account numbers:', transactionsWithAccountNumbers);
@@ -655,7 +658,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     console.log('editingTransactionIndex:', editingTransactionIndex);
 
     if (document?.id) {
-      // For existing documents, reload from database and ensure account numbers are loaded
+      // For existing documents, reload from database to ensure we have the latest data
+      // KLUCZOWA ZMIANA: Po przeładowaniu z bazy danych, numery kont będą załadowane w loadTransactions
       await loadTransactions(document.id);
     } else {
       // For new documents, update the local state with account numbers
