@@ -78,14 +78,14 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
       if (line.startsWith(':60F:')) {
         const balanceLine = line.substring(5);
         const amount = balanceLine.substring(8);
-        openingBalance = parseFloat(amount.replace(',', '.')) / 100;
+        openingBalance = parseFloat(amount.replace(',', '.'));
       }
       
       // Closing balance
       if (line.startsWith(':62F:')) {
         const balanceLine = line.substring(5);
         const amount = balanceLine.substring(8);
-        closingBalance = parseFloat(amount.replace(',', '.')) / 100;
+        closingBalance = parseFloat(amount.replace(',', '.'));
       }
       
       // Transaction line
@@ -109,9 +109,9 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         const typeMatch = transactionLine.match(/[CD]N/);
         const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
         
-        // Extract amount
+        // Extract amount - fix: don't divide by 100, just replace comma with dot
         const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) / 100 : 0;
+        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
         
         // Extract reference
         const referenceMatch = transactionLine.match(/N(\d+)/);
