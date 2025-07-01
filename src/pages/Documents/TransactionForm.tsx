@@ -388,6 +388,34 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     }
   };
 
+  // Funkcja do przechodzenia fokusa na następne pole konta
+  const focusNextAccountField = (currentFieldId: string, currentType: 'debit' | 'credit') => {
+    // Znajdź indeks aktualnego pola
+    const currentFields = currentType === 'debit' ? debitFields : creditFields;
+    const currentIndex = currentFields.findIndex(field => field.id === currentFieldId);
+    
+    // Spróbuj przejść na następne pole tego samego typu
+    if (currentIndex < currentFields.length - 1) {
+      const nextFieldId = currentFields[currentIndex + 1].id;
+      const nextButton = document.querySelector(`[data-account-field="${currentType}-${nextFieldId}"] button`);
+      if (nextButton) {
+        (nextButton as HTMLElement).focus();
+        return;
+      }
+    }
+    
+    // Jeśli nie ma następnego pola tego samego typu, przejdź na pierwszy z przeciwnego typu
+    const oppositeType = currentType === 'debit' ? 'credit' : 'debit';
+    const oppositeFields = oppositeType === 'debit' ? debitFields : creditFields;
+    if (oppositeFields.length > 0) {
+      const firstOppositeFieldId = oppositeFields[0].id;
+      const firstOppositeButton = document.querySelector(`[data-account-field="${oppositeType}-${firstOppositeFieldId}"] button`);
+      if (firstOppositeButton) {
+        (firstOppositeButton as HTMLElement).focus();
+      }
+    }
+  };
+
   return (
     <div className="border rounded-lg p-4 bg-gray-50">
       <div className="flex justify-between items-center mb-4">
@@ -453,7 +481,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       </Button>
                     )}
                   </div>
-                  <div>
+                  <div data-account-field={`debit-${field.id}`}>
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
@@ -461,6 +489,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       locationId={userProfile?.location_id}
                       side="debit"
                       autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField(field.id, 'debit')}
                     />
                   </div>
                 </div>
@@ -502,7 +531,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       </Button>
                     )}
                   </div>
-                  <div>
+                  <div data-account-field={`credit-${field.id}`}>
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
@@ -510,6 +539,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       locationId={userProfile?.location_id}
                       side="credit"
                       autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField(field.id, 'credit')}
                     />
                   </div>
                 </div>

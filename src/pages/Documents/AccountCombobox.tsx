@@ -29,6 +29,7 @@ interface AccountComboboxProps {
   className?: string;
   side?: 'debit' | 'credit';
   autoOpenOnFocus?: boolean;
+  onAccountSelected?: () => void;
 }
 
 export const AccountCombobox: React.FC<AccountComboboxProps> = ({ 
@@ -38,7 +39,8 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   locationId,
   className,
   side,
-  autoOpenOnFocus = false
+  autoOpenOnFocus = false,
+  onAccountSelected
 }) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -219,6 +221,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                     onChange(currentValue === value ? '' : currentValue);
                     setOpen(false);
                     setSearchTerm('');
+                    // Wywołaj callback po wybraniu konta
+                    if (onAccountSelected && currentValue !== value && currentValue !== '') {
+                      setTimeout(() => {
+                        onAccountSelected();
+                      }, 100);
+                    }
                   }}
                 >
                   <Check
