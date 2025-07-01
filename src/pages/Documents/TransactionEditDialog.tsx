@@ -105,6 +105,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
 
   // Funkcja sprawdzająca czy można automatycznie zapisać
   const checkAutoSave = (updatedFormData: typeof formData) => {
+    console.log('Checking auto-save with data:', updatedFormData);
+    
     // Sprawdź czy wszystkie wymagane pola są wypełnione
     const hasDescription = updatedFormData.description.trim().length > 0;
     const hasValidAmounts = updatedFormData.debit_amount > 0 || updatedFormData.credit_amount > 0;
@@ -114,10 +116,19 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     // Sprawdź czy oba konta są wybrane (jeśli oba są wymagane)
     const bothAccountsSelected = updatedFormData.debit_account_id !== '' && updatedFormData.credit_account_id !== '';
     
+    console.log('Auto-save check:', {
+      hasDescription,
+      hasValidAmounts,
+      hasDebitAccount,
+      hasCreditAccount,
+      bothAccountsSelected
+    });
+    
     if (hasDescription && hasValidAmounts && hasDebitAccount && hasCreditAccount && bothAccountsSelected) {
+      console.log('Auto-save conditions met, saving...');
       // Opóźnij zapis żeby pozwolić na aktualizację stanu
       setTimeout(() => {
-        handleSubmit();
+        handleSubmitWithData(updatedFormData);
       }, 100);
     }
   };
@@ -156,22 +167,22 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateFormWithData = (data: typeof formData): boolean => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.description.trim()) {
+    if (!data.description.trim()) {
       newErrors.description = 'Opis jest wymagany';
     }
 
-    if (formData.debit_amount <= 0 && formData.credit_amount <= 0) {
+    if (data.debit_amount <= 0 && data.credit_amount <= 0) {
       newErrors.amounts = 'Co najmniej jedna kwota musi być większa od zera';
     }
     
-    if (formData.debit_amount > 0 && !formData.debit_account_id) {
+    if (data.debit_amount > 0 && !data.debit_account_id) {
       newErrors.debit_account = 'Konto Winien jest wymagane gdy kwota > 0';
     }
     
-    if (formData.credit_amount > 0 && !formData.credit_account_id) {
+    if (data.credit_amount > 0 && !data.credit_account_id) {
       newErrors.credit_account = 'Konto Ma jest wymagane gdy kwota > 0';
     }
     
@@ -179,24 +190,35 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (!validateForm()) {
+  const validateForm = (): boolean => {
+    return validateFormWithData(formData);
+  };
+
+  const handleSubmitWithData = (data: typeof formData) => {
+    console.log('Submitting with data:', data);
+    
+    if (!validateFormWithData(data)) {
+      console.log('Validation failed');
       return;
     }
 
     const updatedTransaction: Transaction = {
       ...transaction,
-      description: formData.description,
-      debit_account_id: formData.debit_account_id || null,
-      credit_account_id: formData.credit_account_id || null,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      description: data.description,
+      debit_account_id: data.debit_account_id || null,
+      credit_account_id: data.credit_account_id || null,
+      debit_amount: data.debit_amount,
+      credit_amount: data.credit_amount,
+      amount: Math.max(data.debit_amount, data.credit_amount),
     };
 
     console.log('Saving transaction:', updatedTransaction);
     onSave([updatedTransaction]);
     setHasUnsavedChanges(false);
+  };
+
+  const handleSubmit = () => {
+    handleSubmitWithData(formData);
   };
 
   return (
