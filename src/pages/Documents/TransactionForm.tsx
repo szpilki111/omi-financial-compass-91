@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,6 +63,37 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   // Calculate totals
   const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
   const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
+
+  // Check if form is ready for auto-save
+  const checkAutoSave = () => {
+    const hasDescription = formData.description.trim().length > 0;
+    const firstDebitField = debitFields[0];
+    const firstCreditField = creditFields[0];
+    
+    const hasValidDebit = firstDebitField.amount > 0 && firstDebitField.accountId.length > 0;
+    const hasValidCredit = firstCreditField.amount > 0 && firstCreditField.accountId.length > 0;
+    
+    if (hasDescription && hasValidDebit && hasValidCredit) {
+      console.log('Auto-save triggered - all required fields filled');
+      handleSubmit(null, true); // true indicates auto-save
+    }
+  };
+
+  // Auto-save effect - triggered when key fields change
+  useEffect(() => {
+    // Only check auto-save after a small delay to avoid rapid triggers
+    const timer = setTimeout(() => {
+      checkAutoSave();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    formData.description,
+    debitFields[0]?.amount,
+    debitFields[0]?.accountId,
+    creditFields[0]?.amount,
+    creditFields[0]?.accountId
+  ]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -239,10 +269,36 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetForm = () => {
+    setFormData({
+      description: '',
+      settlement_type: 'Bank',
+    });
+    
+    setDebitFields([
+      { id: '1', amount: 0, accountId: '', description: '' }
+    ]);
+    
+    setCreditFields([
+      { id: '1', amount: 0, accountId: '', description: '' }
+    ]);
+    
+    setErrors({});
+  };
+
+  const handleSubmit = (e: React.FormEvent | null, isAutoSave: boolean = false) => {
+    if (e) {
+      e.preventDefault();
+    }
     
     if (!validateForm()) {
+      if (!isAutoSave) {
+        toast({
+          title: "Błąd",
+          description: "Sprawdź poprawność danych",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -285,6 +341,24 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     createdTransactions.forEach(transaction => {
       onAdd(transaction);
     });
+
+    if (isAutoSave) {
+      toast({
+        title: "Operacja zapisana",
+        description: "Automatycznie zapisano operację",
+      });
+      
+      // Reset form for next operation
+      resetForm();
+      
+      // Focus on description field for quick next entry
+      setTimeout(() => {
+        const descriptionField = document.getElementById('description');
+        if (descriptionField) {
+          descriptionField.focus();
+        }
+      }, 100);
+    }
   };
 
   return (
@@ -412,7 +486,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
 
         <div className="flex gap-2 pt-4">
           <Button type="submit" size="sm">
-            Dodaj operację
+            Dodaj operację ręcznie
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             Anuluj
