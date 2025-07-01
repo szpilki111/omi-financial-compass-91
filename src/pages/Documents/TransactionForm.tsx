@@ -78,6 +78,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       console.log('Auto-save triggered - all required fields filled');
       setIsAutoSaving(true);
       handleSubmit(null, true); // true indicates auto-save
+      setShowTransactionForm(true)
     }
   };
 
