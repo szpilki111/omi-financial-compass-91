@@ -154,6 +154,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setShowConfirmClose(false);
   };
 
+  const handleSaveAndClose = async () => {
+    // Save the document first
+    const formData = form.getValues();
+    await onSubmit(formData);
+    // Close confirmation dialog and main dialog
+    setShowConfirmClose(false);
+    setHasUnsavedChanges(false);
+  };
+
   // Generate document number using the database function
   const generateDocumentNumber = async (date: Date) => {
     if (!user?.location) {
@@ -1035,6 +1044,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         isOpen={showConfirmClose}
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+        onSave={handleSaveAndClose}
       />
     </>
   );
