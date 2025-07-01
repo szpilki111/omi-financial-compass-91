@@ -58,6 +58,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isClonedTransaction, setIsClonedTransaction] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [shouldAutoOpenNewForm, setShouldAutoOpenNewForm] = useState(false);
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -255,6 +256,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
     }
   }, [document, isOpen, user?.location]);
+
+  // Auto-open new transaction form after auto-save completion
+  useEffect(() => {
+    if (shouldAutoOpenNewForm && !showTransactionForm) {
+      console.log('Auto-opening new transaction form after auto-save');
+      setShowTransactionForm(true);
+      setShouldAutoOpenNewForm(false);
+    }
+  }, [shouldAutoOpenNewForm, showTransactionForm]);
 
   // Load account numbers for transactions
   const loadAccountNumbersForTransactions = async (transactionsToLoad: Transaction[]) => {
@@ -499,8 +509,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleAutoSaveComplete = () => {
-    // Automatically show a new TransactionForm after auto-save
-    setShowTransactionForm(true);
+    console.log('Auto-save completed, setting flag to auto-open new form');
+    // Set flag to automatically open a new TransactionForm after returning to document view
+    setShouldAutoOpenNewForm(true);
   };
 
   const removeTransaction = (index: number) => {
