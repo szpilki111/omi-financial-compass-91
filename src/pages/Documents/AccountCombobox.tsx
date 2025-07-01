@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 
@@ -105,10 +104,8 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         setAccounts([]);
         return;
     }
-    if (searchTerm.length < 2) {
-      setAccounts([]);
-      return;
-    }
+    
+    // Jeśli brak locationId, nie rób nic
     if (!locationId) {
       setAccounts([]);
       return;
@@ -136,13 +133,22 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         return;
       }
 
-      const { data, error } = await supabase
+      // Buduj query - jeśli jest searchTerm, filtruj po nim, jeśli nie, pokaż wszystkie
+      let query = supabase
         .from('accounts')
         .select('id, number, name, type')
         .in('id', accountIds)
-        .or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`)
-        .order('number', { ascending: true })
-        .limit(50);
+        .order('number', { ascending: true });
+
+      // Jeśli jest searchTerm, dodaj filtrowanie
+      if (searchTerm.trim()) {
+        query = query.or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
+      }
+
+      // Limit wyników
+      query = query.limit(50);
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching accounts:', error);
@@ -160,11 +166,16 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       setLoading(false);
     };
 
-    const timer = setTimeout(() => {
+    // Opóźnij zapytanie tylko gdy jest searchTerm
+    if (searchTerm.trim()) {
+      const timer = setTimeout(() => {
+        fetchAccounts();
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      // Jeśli nie ma searchTerm, ładuj od razu
       fetchAccounts();
-    }, 300);
-
-    return () => clearTimeout(timer);
+    }
   }, [searchTerm, open, locationId, side]);
 
   // Funkcja obsługująca focus na przycisku
@@ -199,18 +210,18 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Szukaj (nr lub nazwa, min. 2 znaki)..."
+            placeholder="Szukaj (nr lub nazwa)..."
             value={searchTerm}
             onValueChange={setSearchTerm}
           />
           <CommandList>
-            {loading && <CommandEmpty>Szukanie...</CommandEmpty>}
+            {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
             {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
-            {locationId && searchTerm.length < 2 && !loading && (
-               <CommandEmpty>Wpisz co najmniej 2 znaki, aby wyszukać.</CommandEmpty>
+            {locationId && !loading && accounts.length === 0 && !searchTerm.trim() && (
+               <CommandEmpty>Brak dostępnych kont dla tej lokalizacji.</CommandEmpty>
             )}
-            {locationId && searchTerm.length >= 2 && !loading && accounts.length === 0 && (
-              <CommandEmpty>Nie znaleziono dozwolonych kont dla tej lokalizacji.</CommandEmpty>
+            {locationId && !loading && accounts.length === 0 && searchTerm.trim() && (
+              <CommandEmpty>Nie znaleziono kont pasujących do wyszukiwania.</CommandEmpty>
             )}
             <CommandGroup>
               {accounts.map((account) => (
