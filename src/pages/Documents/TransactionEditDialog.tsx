@@ -171,9 +171,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
       newErrors.debit_account = 'Konto Winien jest wymagane gdy kwota > 0';
     }
     
-    if (formData.credit_amount > 0 && !formData.credit_account_id) {
-      newErrors.credit_account = 'Konto Ma jest wymagane gdy kwota > 0';
-    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
