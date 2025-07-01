@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -26,6 +26,7 @@ interface TransactionFormProps {
 const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAutoSaveComplete }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   
   const [formData, setFormData] = useState({
     description: '',
@@ -45,6 +46,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
   const [isFirstCreditFieldFocused, setIsFirstCreditFieldFocused] = useState(false);
   const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+
+  // Auto-focus na pole opisu gdy komponent się montuje
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (descriptionRef.current) {
+        descriptionRef.current.focus();
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -393,6 +405,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
         <div>
           <Label htmlFor="description">Opis operacji *</Label>
           <Textarea
+            ref={descriptionRef}
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
@@ -447,6 +460,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                       locationId={userProfile?.location_id}
                       side="debit"
+                      autoOpenOnFocus={true}
                     />
                   </div>
                 </div>
@@ -495,6 +509,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                       locationId={userProfile?.location_id}
                       side="credit"
+                      autoOpenOnFocus={true}
                     />
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 
@@ -27,6 +28,7 @@ interface AccountComboboxProps {
   locationId?: string;
   className?: string;
   side?: 'debit' | 'credit';
+  autoOpenOnFocus?: boolean;
 }
 
 export const AccountCombobox: React.FC<AccountComboboxProps> = ({ 
@@ -35,7 +37,8 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   disabled, 
   locationId,
   className,
-  side 
+  side,
+  autoOpenOnFocus = false
 }) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -162,6 +165,13 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     return () => clearTimeout(timer);
   }, [searchTerm, open, locationId, side]);
 
+  // Funkcja obsługująca focus na przycisku
+  const handleButtonFocus = () => {
+    if (autoOpenOnFocus && !disabled && locationId) {
+      setOpen(true);
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
@@ -176,6 +186,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           aria-expanded={open}
           className={cn("w-full justify-between font-normal", className)}
           disabled={disabled}
+          onFocus={handleButtonFocus}
         >
           <span className="truncate">
             {displayedAccountName || "Wybierz konto..."}
