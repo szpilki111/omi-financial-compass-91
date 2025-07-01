@@ -43,6 +43,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   const [isFirstDebitFieldFocused, setIsFirstDebitFieldFocused] = useState(false);
   const [isFirstCreditFieldFocused, setIsFirstCreditFieldFocused] = useState(false);
   const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -73,8 +74,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     const hasValidDebit = firstDebitField.amount > 0 && firstDebitField.accountId.length > 0;
     const hasValidCredit = firstCreditField.amount > 0 && firstCreditField.accountId.length > 0;
     
-    if (hasDescription && hasValidDebit && hasValidCredit) {
+    if (hasDescription && hasValidDebit && hasValidCredit && !isAutoSaving) {
       console.log('Auto-save triggered - all required fields filled');
+      setIsAutoSaving(true);
       handleSubmit(null, true); // true indicates auto-save
     }
   };
@@ -92,7 +94,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     debitFields[0]?.amount,
     debitFields[0]?.accountId,
     creditFields[0]?.amount,
-    creditFields[0]?.accountId
+    creditFields[0]?.accountId,
+    isAutoSaving
   ]);
 
   const handleChange = (field: string, value: any) => {
@@ -284,6 +287,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     ]);
     
     setErrors({});
+    setIsAutoSaving(false);
   };
 
   const handleSubmit = (e: React.FormEvent | null, isAutoSave: boolean = false) => {
@@ -299,6 +303,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
           variant: "destructive",
         });
       }
+      setIsAutoSaving(false);
       return;
     }
 
@@ -345,25 +350,38 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     if (isAutoSave) {
       toast({
         title: "Operacja zapisana",
-        description: "Automatycznie zapisano operację",
+        description: "Automatycznie zapisano operację - gotowy na następną",
+        duration: 2000,
       });
       
-      // Reset form for next operation
+      // Reset form for next operation but keep it open
       resetForm();
       
-      // Focus on description field for quick next entry
+      // Focus on description field for immediate next entry
       setTimeout(() => {
         const descriptionField = document.getElementById('description');
         if (descriptionField) {
           descriptionField.focus();
         }
       }, 100);
+    } else {
+      // Manual save - close the form
+      onCancel();
     }
   };
 
   return (
     <div className="border rounded-lg p-4 bg-gray-50">
-      <h4 className="font-medium mb-4">Dodaj operację</h4>
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-medium">
+          {isAutoSaving ? "Zapisywanie..." : "Dodaj operację"}
+        </h4>
+        {isAutoSaving && (
+          <div className="text-sm text-green-600 font-medium">
+            ✓ Automatyczny zapis aktywny
+          </div>
+        )}
+      </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -374,6 +392,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
             onChange={(e) => handleChange('description', e.target.value)}
             placeholder="Opis operacji finansowej"
             className={errors.description ? 'border-red-500' : ''}
+            disabled={isAutoSaving}
           />
           {errors.description && (
             <p className="text-red-500 text-sm mt-1">{errors.description}</p>
@@ -485,11 +504,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         )}
 
         <div className="flex gap-2 pt-4">
-          <Button type="submit" size="sm">
-            Dodaj operację ręcznie
+          <Button type="submit" size="sm" disabled={isAutoSaving}>
+            {isAutoSaving ? "Zapisywanie..." : "Dodaj operację ręcznie"}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            Anuluj
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={isAutoSaving}>
+            {isAutoSaving ? "Czekaj..." : "Anuluj"}
           </Button>
         </div>
       </form>
