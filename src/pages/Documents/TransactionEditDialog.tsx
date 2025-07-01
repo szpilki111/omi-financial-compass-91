@@ -103,6 +103,26 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     }
   };
 
+  // Funkcja do przechodzenia fokusa na następne pole konta
+  const focusNextAccountField = (currentType: 'debit' | 'credit') => {
+    // Jeśli obecnie jest debit, przejdź na credit i odwrotnie
+    const nextType = currentType === 'debit' ? 'credit' : 'debit';
+    
+    // Sprawdź czy następne pole nie jest ukryte
+    const isNextFieldHidden = hiddenFields[nextType];
+    if (isNextFieldHidden) {
+      return; // Nie ma gdzie przejść
+    }
+    
+    // Znajdź przycisk następnego pola konta
+    const nextButton = document.querySelector(`[data-account-field="${nextType}"] button`);
+    if (nextButton) {
+      setTimeout(() => {
+        (nextButton as HTMLElement).focus();
+      }, 100);
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     
@@ -188,13 +208,15 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                       placeholder="0.00"
                     />
                   </div>
-                  <div>
+                  <div data-account-field="debit">
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={formData.debit_account_id}
                       onChange={(accountId) => handleChange('debit_account_id', accountId)}
                       locationId={userProfile?.location_id}
                       side="debit"
+                      autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField('debit')}
                     />
                     {errors.debit_account && (
                       <p className="text-red-500 text-sm mt-1">{errors.debit_account}</p>
@@ -223,13 +245,15 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                       placeholder="0.00"
                     />
                   </div>
-                  <div>
+                  <div data-account-field="credit">
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={formData.credit_account_id}
                       onChange={(accountId) => handleChange('credit_account_id', accountId)}
                       locationId={userProfile?.location_id}
                       side="credit"
+                      autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField('credit')}
                     />
                     {errors.credit_account && (
                       <p className="text-red-500 text-sm mt-1">{errors.credit_account}</p>
