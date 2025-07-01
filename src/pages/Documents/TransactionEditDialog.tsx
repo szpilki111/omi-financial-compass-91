@@ -88,6 +88,10 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     onClose();
   };
 
+  const handleCloseWithoutSaving = () => {
+    onClose();
+  };
+
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
@@ -327,11 +331,14 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleCloseWithoutSaving}>
             Anuluj
           </Button>
+          <Button variant="outline" onClick={handleClose}>
+            Zamknij bez zapisywania
+          </Button>
           <Button onClick={handleSubmit}>
-            Zapisz operację
+            Zapisz
           </Button>
         </DialogFooter>
       </DialogContent>
