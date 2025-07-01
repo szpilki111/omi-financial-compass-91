@@ -103,6 +103,39 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     }
   };
 
+  // Funkcja sprawdzająca czy można automatycznie zapisać
+  const checkAutoSave = (updatedFormData: typeof formData) => {
+    // Sprawdź czy wszystkie wymagane pola są wypełnione
+    const hasDescription = updatedFormData.description.trim().length > 0;
+    const hasValidAmounts = updatedFormData.debit_amount > 0 || updatedFormData.credit_amount > 0;
+    const hasDebitAccount = updatedFormData.debit_amount > 0 ? updatedFormData.debit_account_id !== '' : true;
+    const hasCreditAccount = updatedFormData.credit_amount > 0 ? updatedFormData.credit_account_id !== '' : true;
+    
+    // Sprawdź czy oba konta są wybrane (jeśli oba są wymagane)
+    const bothAccountsSelected = updatedFormData.debit_account_id !== '' && updatedFormData.credit_account_id !== '';
+    
+    if (hasDescription && hasValidAmounts && hasDebitAccount && hasCreditAccount && bothAccountsSelected) {
+      // Opóźnij zapis żeby pozwolić na aktualizację stanu
+      setTimeout(() => {
+        handleSubmit();
+      }, 100);
+    }
+  };
+
+  // Funkcja obsługująca wybór konta z automatycznym zapisem
+  const handleAccountChange = (field: string, accountId: string) => {
+    const updatedFormData = { ...formData, [field]: accountId };
+    setFormData(updatedFormData);
+    setHasUnsavedChanges(true);
+    
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+
+    // Sprawdź czy można automatycznie zapisać
+    checkAutoSave(updatedFormData);
+  };
+
   // Funkcja do przechodzenia fokusa na następne pole konta
   const focusNextAccountField = (currentType: 'debit' | 'credit') => {
     // Jeśli obecnie jest debit, przejdź na credit i odwrotnie
@@ -212,7 +245,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={formData.debit_account_id}
-                      onChange={(accountId) => handleChange('debit_account_id', accountId)}
+                      onChange={(accountId) => handleAccountChange('debit_account_id', accountId)}
                       locationId={userProfile?.location_id}
                       side="debit"
                       autoOpenOnFocus={true}
@@ -249,7 +282,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={formData.credit_account_id}
-                      onChange={(accountId) => handleChange('credit_account_id', accountId)}
+                      onChange={(accountId) => handleAccountChange('credit_account_id', accountId)}
                       locationId={userProfile?.location_id}
                       side="credit"
                       autoOpenOnFocus={true}
