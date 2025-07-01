@@ -20,9 +20,10 @@ interface AmountField {
 interface TransactionFormProps {
   onAdd: (transaction: Transaction) => void;
   onCancel: () => void;
+  onAutoSaveComplete?: () => void; // Nowa prop do obsługi zakończenia auto-save
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAutoSaveComplete }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -78,7 +79,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
       console.log('Auto-save triggered - all required fields filled');
       setIsAutoSaving(true);
       handleSubmit(null, true); // true indicates auto-save
-      setShowTransactionForm(true)
     }
   };
 
@@ -351,12 +351,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     if (isAutoSave) {
       toast({
         title: "Operacja zapisana",
-        description: "Automatycznie zapisano operację - gotowy na następną",
+        description: "Automatycznie zapisano operację - otwieramy nowe okno",
         duration: 2000,
       });
       
-      // Reset form for next operation but keep it open
+      // Reset form for next operation
       resetForm();
+      
+      // Wywołaj callback żeby otworzyć nowe okno
+      if (onAutoSaveComplete) {
+        onAutoSaveComplete();
+      }
       
       // Focus on description field for immediate next entry
       setTimeout(() => {
