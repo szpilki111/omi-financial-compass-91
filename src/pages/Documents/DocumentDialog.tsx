@@ -223,6 +223,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     if (isOpen && !document) {
       // This is a new document - ensure transactions are cleared
       setTransactions([]);
+      // Show transaction form by default for new documents
+      setShowTransactionForm(true);
     }
   }, [isOpen, document]);
 
@@ -494,6 +496,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
     setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
     setShowTransactionForm(false);
+  };
+
+  const handleAutoSaveComplete = () => {
+    // Automatically show a new TransactionForm after auto-save
+    setShowTransactionForm(true);
   };
 
   const removeTransaction = (index: number) => {
@@ -878,6 +885,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               <TransactionForm
                 onAdd={addTransaction}
                 onCancel={() => setShowTransactionForm(false)}
+                onAutoSaveComplete={handleAutoSaveComplete}
               />
             )}
 
