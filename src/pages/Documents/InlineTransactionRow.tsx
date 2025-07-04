@@ -52,6 +52,24 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     enabled: !!user?.id,
   });
 
+  // Check if all fields are filled
+  const isFormValid = formData.description.trim() && 
+                     formData.debit_account_id && 
+                     formData.credit_account_id && 
+                     formData.debit_amount > 0 && 
+                     formData.credit_amount > 0;
+
+  // Auto-accept when all fields are filled
+  useEffect(() => {
+    if (isFormValid && !isEditingBlocked) {
+      const timer = setTimeout(() => {
+        handleSave();
+      }, 500); // Small delay to allow user to see the filled form
+
+      return () => clearTimeout(timer);
+    }
+  }, [isFormValid, isEditingBlocked]);
+
   // Auto-populate logic for debit amount changes
   const handleDebitAmountChange = (value: number) => {
     setFormData(prev => {
@@ -109,12 +127,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     onSave(transaction);
   };
-
-  const isFormValid = formData.description.trim() && 
-                     formData.debit_account_id && 
-                     formData.credit_account_id && 
-                     formData.debit_amount > 0 && 
-                     formData.credit_amount > 0;
 
   return (
     <TableRow className="bg-blue-50 border-2 border-blue-200">

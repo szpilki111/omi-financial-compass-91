@@ -121,6 +121,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   }, [isOpen, document]);
 
+  // Auto-show inline form when document is new and no transactions exist
+  useEffect(() => {
+    if (isOpen && !document && transactions.length === 0 && !showInlineForm) {
+      setShowInlineForm(true);
+    }
+  }, [isOpen, document, transactions.length, showInlineForm]);
+
   // Handle dialog close with confirmation if there are unsaved changes
   const handleDialogOpenChange = (open: boolean) => {
     if (!open) {
@@ -501,6 +508,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
     setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
     setShowInlineForm(false);
+    
+    // Automatically show new inline form for next transaction
+    setTimeout(() => {
+      setShowInlineForm(true);
+    }, 100);
   };
 
   const removeTransaction = (index: number) => {
