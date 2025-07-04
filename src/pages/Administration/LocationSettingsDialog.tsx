@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 
 interface Location {
@@ -32,7 +31,6 @@ interface LocationSetting {
   id: string;
   location_id: string;
   house_abbreviation: string;
-  allow_foreign_currencies: boolean;
 }
 
 interface LocationSettingsDialogProps {
@@ -43,7 +41,6 @@ interface LocationSettingsDialogProps {
 
 interface LocationSettingFormData {
   house_abbreviation: string;
-  allow_foreign_currencies: boolean;
 }
 
 const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
@@ -75,7 +72,6 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
   const form = useForm<LocationSettingFormData>({
     defaultValues: {
       house_abbreviation: '',
-      allow_foreign_currencies: false,
     },
   });
 
@@ -84,7 +80,6 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
     if (isOpen && !isLoading) {
       form.reset({
         house_abbreviation: locationSetting?.house_abbreviation || '',
-        allow_foreign_currencies: locationSetting?.allow_foreign_currencies || false,
       });
     }
   }, [locationSetting, isOpen, isLoading, form]);
@@ -99,7 +94,6 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
           .from('location_settings')
           .update({
             house_abbreviation: data.house_abbreviation,
-            allow_foreign_currencies: data.allow_foreign_currencies,
           })
           .eq('id', locationSetting.id);
 
@@ -111,7 +105,6 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
           .insert({
             location_id: location.id,
             house_abbreviation: data.house_abbreviation,
-            allow_foreign_currencies: data.allow_foreign_currencies,
           });
 
         if (error) throw error;
@@ -122,7 +115,7 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
       queryClient.invalidateQueries({ queryKey: ['locations'] });
       toast({
         title: "Sukces",
-        description: "Ustawienia placówki zostały zapisane.",
+        description: "Skrót domu został zapisany.",
       });
       onClose(true);
     },
@@ -185,29 +178,6 @@ const LocationSettingsDialog: React.FC<LocationSettingsDialogProps> = ({
                   <p className="text-sm text-gray-500">
                     Skrót używany do identyfikacji placówki (max. 10 znaków)
                   </p>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="allow_foreign_currencies"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">
-                      Waluty obce
-                    </FormLabel>
-                    <div className="text-sm text-gray-500">
-                      Zezwól na operacje w walutach obcych w tej placówce
-                    </div>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
                 </FormItem>
               )}
             />
