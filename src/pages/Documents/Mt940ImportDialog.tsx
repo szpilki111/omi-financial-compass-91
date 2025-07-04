@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -331,7 +330,7 @@ const parseMt940File = (content: string): Mt940Data => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
       currency: 'PLN',
-      minimunFractionDigits: 2,
+      minimumFractionDigits: 2,
     }).format(amount);
   };
 
