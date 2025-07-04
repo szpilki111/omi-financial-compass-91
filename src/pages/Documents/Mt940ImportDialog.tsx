@@ -133,61 +133,44 @@ const parseMt940File = (content: string): Mt940Data => {
       const detailsLine = line.substring(4);
       console.log('Processing details line:', detailsLine);
       
-      const parts = detailsLine.split('^');
-      console.log('Split parts:', parts);
-      
+      // Extract description from ^20 to next ^
+      const match20 = detailsLine.match(/\^20([^^]*)/);
       let description = '';
+      
+      if (match20 && match20[1]) {
+        description = match20[1].trim();
+        console.log('Found description between ^20 and next ^:', description);
+      }
+      
+      // If no description found in ^20, use default
+      if (!description) {
+        description = 'Operacja bankowa';
+      }
+      
+      // Extract counterparty info
+      const parts = detailsLine.split('^');
       let counterparty = '';
       let accountNumber = '';
       
       for (const part of parts) {
-        console.log('Processing part:', part);
-        
-        if (part.startsWith('20')) {
-          // ^20 contains the main description - this is what we want!
-          const descriptionFrom20 = part.substring(2).trim();
-          console.log('Found ^20 description:', descriptionFrom20);
-          if (descriptionFrom20) {
-            description = descriptionFrom20;
-          }
-        } else if (part.startsWith('21')) {
-          // ^21 contains additional description info
-          const additionalDesc = part.substring(2).trim();
-          console.log('Found ^21 additional description:', additionalDesc);
-          if (additionalDesc) {
-            description += (description ? ' ' : '') + additionalDesc;
-          }
-        } else if (part.startsWith('22') || part.startsWith('23') || part.startsWith('24')) {
-          // Additional description fields
-          const additionalPart = part.substring(2).trim();
-          console.log('Found additional description part:', additionalPart);
-          if (additionalPart) {
-            description += (description ? ' ' : '') + additionalPart;
-          }
-        } else if (part.startsWith('32') || part.startsWith('33')) {
+        if (part.startsWith('32') || part.startsWith('33')) {
           // Counterparty name
           const namePart = part.substring(2).trim();
-          console.log('Found counterparty part:', namePart);
           if (namePart) {
             counterparty += (counterparty ? ' ' : '') + namePart;
           }
         } else if (part.startsWith('38')) {
           // Account number
           accountNumber = part.substring(2).trim();
-          console.log('Found account number:', accountNumber);
         }
       }
       
-      // Use the description from ^20 field, or fallback to default
-      const finalDescription = description || 'Operacja bankowa';
-      console.log('Final description for transaction:', finalDescription);
-      
       // Apply details to current transaction
-      currentTransaction.description = finalDescription;
+      currentTransaction.description = description;
       currentTransaction.counterparty = counterparty;
       currentTransaction.accountNumber = accountNumber;
       
-      console.log('Updated transaction with details:', currentTransaction);
+      console.log('Final transaction with description:', currentTransaction);
     }
   }
   
