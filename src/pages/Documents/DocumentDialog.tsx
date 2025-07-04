@@ -827,8 +827,10 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
     settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
   });
 
-  const [hasUserEditedDebit, setHasUserEditedDebit] = useState(false);
-  const [hasUserEditedCredit, setHasUserEditedCredit] = useState(false);
+  const [debitHasFocus, setDebitHasFocus] = useState(false);
+  const [creditHasFocus, setCreditHasFocus] = useState(false);
+  const [debitTouched, setDebitTouched] = useState(false);
+  const [creditTouched, setCreditTouched] = useState(false);
 
   useEffect(() => {
     if (isEditing) {
@@ -840,30 +842,72 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
         credit_amount: transaction.credit_amount || 0,
         settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
       });
-      setHasUserEditedDebit(false);
-      setHasUserEditedCredit(false);
+      setDebitTouched(false);
+      setCreditTouched(false);
+      setDebitHasFocus(false);
+      setCreditHasFocus(false);
     }
   }, [isEditing, transaction]);
 
-  // Auto-balance amounts with improved logic
+  // Auto-populate logic based on focus state
   const handleDebitAmountChange = (value: number) => {
-    setHasUserEditedDebit(true);
-    setFormData(prev => ({
-      ...prev,
-      debit_amount: value,
-      // Only auto-populate credit if credit hasn't been manually edited and it's currently 0
-      credit_amount: !hasUserEditedCredit && prev.credit_amount === 0 ? value : prev.credit_amount,
-    }));
+    setFormData(prev => {
+      const newData = { ...prev, debit_amount: value };
+      
+      // Auto-populate credit amount only if:
+      // 1. Credit field hasn't been touched by user yet AND
+      // 2. Debit field currently has focus AND
+      // 3. Credit amount is currently 0
+      if (!creditTouched && debitHasFocus && prev.credit_amount === 0) {
+        newData.credit_amount = value;
+      }
+      
+      return newData;
+    });
   };
 
   const handleCreditAmountChange = (value: number) => {
-    setHasUserEditedCredit(true);
-    setFormData(prev => ({
-      ...prev,
-      credit_amount: value,
-      // Only auto-populate debit if debit hasn't been manually edited and it's currently 0
-      debit_amount: !hasUserEditedDebit && prev.debit_amount === 0 ? value : prev.debit_amount,
-    }));
+    setFormData(prev => {
+      const newData = { ...prev, credit_amount: value };
+      
+      // Auto-populate debit amount only if:
+      // 1. Debit field hasn't been touched by user yet AND
+      // 2. Credit field currently has focus AND
+      // 3. Debit amount is currently 0
+      if (!debitTouched && creditHasFocus && prev.debit_amount === 0) {
+        newData.debit_amount = value;
+      }
+      
+      return newData;
+    });
+  };
+
+  const handleDebitFocus = () => {
+    setDebitHasFocus(true);
+  };
+
+  const handleDebitBlur = () => {
+    setDebitHasFocus(false);
+    setDebitTouched(true);
+    
+    // Copy amount to credit field if credit hasn't been touched and is 0
+    if (!creditTouched && formData.credit_amount === 0 && formData.debit_amount > 0) {
+      setFormData(prev => ({ ...prev, credit_amount: prev.debit_amount }));
+    }
+  };
+
+  const handleCreditFocus = () => {
+    setCreditHasFocus(true);
+  };
+
+  const handleCreditBlur = () => {
+    setCreditHasFocus(false);
+    setCreditTouched(true);
+    
+    // Copy amount to debit field if debit hasn't been touched and is 0
+    if (!debitTouched && formData.debit_amount === 0 && formData.credit_amount > 0) {
+      setFormData(prev => ({ ...prev, debit_amount: prev.credit_amount }));
+    }
   };
 
   const handleSave = () => {
@@ -923,6 +967,8 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
             min="0"
             value={formData.debit_amount || ''}
             onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
+            onFocus={handleDebitFocus}
+            onBlur={handleDebitBlur}
             placeholder="0.00"
             className="text-right"
             disabled={isEditingBlocked}
@@ -944,6 +990,8 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
             min="0"
             value={formData.credit_amount || ''}
             onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
+            onFocus={handleCreditFocus}
+            onBlur={handleCreditBlur}
             placeholder="0.00"
             className="text-right"
             disabled={isEditingBlocked}
