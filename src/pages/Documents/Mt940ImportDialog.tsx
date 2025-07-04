@@ -39,6 +39,14 @@ interface Mt940ImportDialogProps {
   onImportComplete: (count: number) => void;
 }
 
+const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, onImportComplete }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<Mt940Data | null>(null);
+  const [documentDate, setDocumentDate] = useState<Date>(new Date());
+  const { user } = useAuth();
+  const { toast } = useToast();
+
 const parseMt940File = (content: string): Mt940Data => {
   const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
   
@@ -48,13 +56,12 @@ const parseMt940File = (content: string): Mt940Data => {
   let closingBalance = 0;
   const transactions: Mt940Transaction[] = [];
   
-  // Store transaction details by reference for sharing between transactions
-  const transactionDetailsByRef: { [key: string]: { description: string; counterparty: string; accountNumber: string } } = {};
   let currentTransaction: Partial<Mt940Transaction> = {};
-  let currentDetails: { description: string; counterparty: string; accountNumber: string } = { description: '', counterparty: '', accountNumber: '' };
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    
+    console.log('Processing line:', line);
     
     // Account number
     if (line.startsWith(':25:')) {
@@ -114,75 +121,74 @@ const parseMt940File = (content: string): Mt940Data => {
         amount,
         type,
         reference,
-        description: '',
+        description: 'Operacja bankowa', // Default description
         counterparty: '',
         accountNumber: ''
       };
       
-      // Check if we have stored details for this reference
-      if (reference && transactionDetailsByRef[reference]) {
-        const storedDetails = transactionDetailsByRef[reference];
-        currentTransaction.description = storedDetails.description;
-        currentTransaction.counterparty = storedDetails.counterparty;
-        currentTransaction.accountNumber = storedDetails.accountNumber;
-      }
+      console.log('Created transaction:', currentTransaction);
     }
     
     // Transaction details
     if (line.startsWith(':86:') && currentTransaction.date) {
       const detailsLine = line.substring(4);
+      console.log('Processing details line:', detailsLine);
+      
       const parts = detailsLine.split('^');
+      console.log('Split parts:', parts);
       
       let description = '';
       let counterparty = '';
       let accountNumber = '';
       
       for (const part of parts) {
+        console.log('Processing part:', part);
+        
         if (part.startsWith('20')) {
-          // Use ^20 as the primary description
+          // ^20 contains the main description - this is what we want!
           const descriptionFrom20 = part.substring(2).trim();
+          console.log('Found ^20 description:', descriptionFrom20);
           if (descriptionFrom20) {
             description = descriptionFrom20;
           }
         } else if (part.startsWith('21')) {
-          // Append ^21 to description if it exists
-          const titlePart = part.substring(2).trim();
-          if (titlePart) {
-            description += (description ? ' ' : '') + titlePart;
+          // ^21 contains additional description info
+          const additionalDesc = part.substring(2).trim();
+          console.log('Found ^21 additional description:', additionalDesc);
+          if (additionalDesc) {
+            description += (description ? ' ' : '') + additionalDesc;
           }
         } else if (part.startsWith('22') || part.startsWith('23') || part.startsWith('24')) {
-          // Append additional description fields if needed
+          // Additional description fields
           const additionalPart = part.substring(2).trim();
+          console.log('Found additional description part:', additionalPart);
           if (additionalPart) {
             description += (description ? ' ' : '') + additionalPart;
           }
         } else if (part.startsWith('32') || part.startsWith('33')) {
-          // Build counterparty name
+          // Counterparty name
           const namePart = part.substring(2).trim();
+          console.log('Found counterparty part:', namePart);
           if (namePart) {
             counterparty += (counterparty ? ' ' : '') + namePart;
           }
         } else if (part.startsWith('38')) {
+          // Account number
           accountNumber = part.substring(2).trim();
+          console.log('Found account number:', accountNumber);
         }
       }
       
-      // Fallback to 'Operacja bankowa' if no description is found
-      currentDetails = {
-        description: description || 'Operacja bankowa',
-        counterparty: counterparty,
-        accountNumber: accountNumber
-      };
+      // Use the description from ^20 field, or fallback to default
+      const finalDescription = description || 'Operacja bankowa';
+      console.log('Final description for transaction:', finalDescription);
       
       // Apply details to current transaction
-      currentTransaction.description = currentDetails.description;
-      currentTransaction.counterparty = currentDetails.counterparty;
-      currentTransaction.accountNumber = currentDetails.accountNumber;
+      currentTransaction.description = finalDescription;
+      currentTransaction.counterparty = counterparty;
+      currentTransaction.accountNumber = accountNumber;
       
-      // Store details by reference for future transactions with the same reference
-      if (currentTransaction.reference) {
-        transactionDetailsByRef[currentTransaction.reference] = currentDetails;
-      }
+      console.log('Updated transaction with details:', currentTransaction);
     }
   }
   
@@ -190,6 +196,8 @@ const parseMt940File = (content: string): Mt940Data => {
   if (currentTransaction.date && currentTransaction.amount !== undefined) {
     transactions.push(currentTransaction as Mt940Transaction);
   }
+  
+  console.log('Final parsed transactions:', transactions);
   
   return {
     accountNumber,
@@ -211,6 +219,7 @@ const parseMt940File = (content: string): Mt940Data => {
     reader.onload = (event) => {
       try {
         const content = event.target?.result as string;
+        console.log('File content:', content);
         const parsedData = parseMt940File(content);
         setPreviewData(parsedData);
         
@@ -322,7 +331,7 @@ const parseMt940File = (content: string): Mt940Data => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
       currency: 'PLN',
-      minimumFractionDigits: 2,
+      minimunFractionDigits: 2,
     }).format(amount);
   };
 
