@@ -39,172 +39,166 @@ interface Mt940ImportDialogProps {
   onImportComplete: (count: number) => void;
 }
 
-const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ 
-  open, 
-  onClose, 
-  onImportComplete 
-}) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [previewData, setPreviewData] = useState<Mt940Data | null>(null);
-  const [documentDate, setDocumentDate] = useState<Date>(new Date());
-
-  const parseMt940File = (content: string): Mt940Data => {
-    const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
+const parseMt940File = (content: string): Mt940Data => {
+  const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
+  
+  let accountNumber = '';
+  let statementNumber = '';
+  let openingBalance = 0;
+  let closingBalance = 0;
+  const transactions: Mt940Transaction[] = [];
+  
+  // Store transaction details by reference for sharing between transactions
+  const transactionDetailsByRef: { [key: string]: { description: string; counterparty: string; accountNumber: string } } = {};
+  let currentTransaction: Partial<Mt940Transaction> = {};
+  let currentDetails: { description: string; counterparty: string; accountNumber: string } = { description: '', counterparty: '', accountNumber: '' };
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     
-    let accountNumber = '';
-    let statementNumber = '';
-    let openingBalance = 0;
-    let closingBalance = 0;
-    const transactions: Mt940Transaction[] = [];
+    // Account number
+    if (line.startsWith(':25:')) {
+      accountNumber = line.substring(4).replace('/', '');
+    }
     
-    // Store transaction details by reference for sharing between transactions
-    const transactionDetailsByRef: { [key: string]: { description: string; counterparty: string; accountNumber: string } } = {};
-    let currentTransaction: Partial<Mt940Transaction> = {};
-    let currentDetails: { description: string; counterparty: string; accountNumber: string } = { description: '', counterparty: '', accountNumber: '' };
+    // Statement number
+    if (line.startsWith(':28C:')) {
+      statementNumber = line.substring(5);
+    }
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Account number
-      if (line.startsWith(':25:')) {
-        accountNumber = line.substring(4).replace('/', '');
+    // Opening balance
+    if (line.startsWith(':60F:')) {
+      const balanceLine = line.substring(5);
+      const amount = balanceLine.substring(8);
+      openingBalance = parseFloat(amount.replace(',', '.'));
+    }
+    
+    // Closing balance
+    if (line.startsWith(':62F:')) {
+      const balanceLine = line.substring(5);
+      const amount = balanceLine.substring(8);
+      closingBalance = parseFloat(amount.replace(',', '.'));
+    }
+    
+    // Transaction line
+    if (line.startsWith(':61:')) {
+      // Save previous transaction if exists
+      if (currentTransaction.date && currentTransaction.amount !== undefined) {
+        transactions.push(currentTransaction as Mt940Transaction);
       }
       
-      // Statement number
-      if (line.startsWith(':28C:')) {
-        statementNumber = line.substring(5);
-      }
+      // Parse new transaction
+      const transactionLine = line.substring(4);
       
-      // Opening balance
-      if (line.startsWith(':60F:')) {
-        const balanceLine = line.substring(5);
-        const amount = balanceLine.substring(8);
-        openingBalance = parseFloat(amount.replace(',', '.'));
-      }
+      // Extract date (positions 0-5: YYMMDD)
+      const dateStr = transactionLine.substring(0, 6);
+      const year = 2000 + parseInt(dateStr.substring(0, 2));
+      const month = parseInt(dateStr.substring(2, 4));
+      const day = parseInt(dateStr.substring(4, 6));
+      const transactionDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
       
-      // Closing balance
-      if (line.startsWith(':62F:')) {
-        const balanceLine = line.substring(5);
-        const amount = balanceLine.substring(8);
-        closingBalance = parseFloat(amount.replace(',', '.'));
-      }
+      // Extract type (C for credit, D for debit)
+      const typeMatch = transactionLine.match(/[CD]N/);
+      const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
       
-      // Transaction line
-      if (line.startsWith(':61:')) {
-        // Save previous transaction if exists
-        if (currentTransaction.date && currentTransaction.amount !== undefined) {
-          transactions.push(currentTransaction as Mt940Transaction);
-        }
-        
-        // Parse new transaction
-        const transactionLine = line.substring(4);
-        
-        // Extract date (positions 0-5: YYMMDD)
-        const dateStr = transactionLine.substring(0, 6);
-        const year = 2000 + parseInt(dateStr.substring(0, 2));
-        const month = parseInt(dateStr.substring(2, 4));
-        const day = parseInt(dateStr.substring(4, 6));
-        const transactionDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-        
-        // Extract type (C for credit, D for debit)
-        const typeMatch = transactionLine.match(/[CD]N/);
-        const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
-        
-        // Extract amount
-        const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
-        
-        // Extract reference - get the part after // which is the reference
-        const refMatch = transactionLine.match(/\/\/([^/]+)$/);
-        const reference = refMatch ? refMatch[1] : '';
-        
-        currentTransaction = {
-          date: transactionDate,
-          amount,
-          type,
-          reference,
-          description: '',
-          counterparty: '',
-          accountNumber: ''
-        };
-        
-        // Check if we have stored details for this reference
-        if (reference && transactionDetailsByRef[reference]) {
-          const storedDetails = transactionDetailsByRef[reference];
-          currentTransaction.description = storedDetails.description;
-          currentTransaction.counterparty = storedDetails.counterparty;
-          currentTransaction.accountNumber = storedDetails.accountNumber;
-        }
-      }
+      // Extract amount
+      const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
+      const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
       
-      // Transaction details
-      if (line.startsWith(':86:') && currentTransaction.date) {
-        const detailsLine = line.substring(4);
-        const parts = detailsLine.split('^');
-        
-        let description = '';
-        let counterparty = '';
-        let accountNumber = '';
-        
-        for (const part of parts) {
-          if (part.startsWith('00')) {
-            description = part.substring(2).trim();
-          } else if (part.startsWith('20')) {
-            // Extract description specifically from ^20 section
-            const descriptionFrom20 = part.substring(2).trim();
-            if (descriptionFrom20) {
-              description = descriptionFrom20; // Use ^20 section as primary description
-            }
-          } else if (part.startsWith('21')) {
-            const titlePart = part.substring(2).trim();
-            if (titlePart) {
-              description += (description ? ' ' : '') + titlePart;
-            }
-          } else if (part.startsWith('32') || part.startsWith('33')) {
-            const namePart = part.substring(2).trim();
-            if (namePart) {
-              counterparty += (counterparty ? ' ' : '') + namePart;
-            }
-          } else if (part.startsWith('38')) {
-            accountNumber = part.substring(2).trim();
+      // Extract reference - get the part after // which is the reference
+      const refMatch = transactionLine.match(/\/\/([^/]+)$/);
+      const reference = refMatch ? refMatch[1] : '';
+      
+      currentTransaction = {
+        date: transactionDate,
+        amount,
+        type,
+        reference,
+        description: '',
+        counterparty: '',
+        accountNumber: ''
+      };
+      
+      // Check if we have stored details for this reference
+      if (reference && transactionDetailsByRef[reference]) {
+        const storedDetails = transactionDetailsByRef[reference];
+        currentTransaction.description = storedDetails.description;
+        currentTransaction.counterparty = storedDetails.counterparty;
+        currentTransaction.accountNumber = storedDetails.accountNumber;
+      }
+    }
+    
+    // Transaction details
+    if (line.startsWith(':86:') && currentTransaction.date) {
+      const detailsLine = line.substring(4);
+      const parts = detailsLine.split('^');
+      
+      let description = '';
+      let counterparty = '';
+      let accountNumber = '';
+      
+      for (const part of parts) {
+        if (part.startsWith('20')) {
+          // Use ^20 as the primary description
+          const descriptionFrom20 = part.substring(2).trim();
+          if (descriptionFrom20) {
+            description = descriptionFrom20;
           }
-        }
-        
-        // Store the details for the current transaction
-        currentDetails = {
-          description: description || 'Operacja bankowa',
-          counterparty: counterparty,
-          accountNumber: accountNumber
-        };
-        
-        // Apply details to current transaction
-        currentTransaction.description = currentDetails.description;
-        currentTransaction.counterparty = currentDetails.counterparty;
-        currentTransaction.accountNumber = currentDetails.accountNumber;
-        
-        // Store details by reference for future transactions with the same reference
-        if (currentTransaction.reference) {
-          transactionDetailsByRef[currentTransaction.reference] = currentDetails;
+        } else if (part.startsWith('21')) {
+          // Append ^21 to description if it exists
+          const titlePart = part.substring(2).trim();
+          if (titlePart) {
+            description += (description ? ' ' : '') + titlePart;
+          }
+        } else if (part.startsWith('22') || part.startsWith('23') || part.startsWith('24')) {
+          // Append additional description fields if needed
+          const additionalPart = part.substring(2).trim();
+          if (additionalPart) {
+            description += (description ? ' ' : '') + additionalPart;
+          }
+        } else if (part.startsWith('32') || part.startsWith('33')) {
+          // Build counterparty name
+          const namePart = part.substring(2).trim();
+          if (namePart) {
+            counterparty += (counterparty ? ' ' : '') + namePart;
+          }
+        } else if (part.startsWith('38')) {
+          accountNumber = part.substring(2).trim();
         }
       }
+      
+      // Fallback to 'Operacja bankowa' if no description is found
+      currentDetails = {
+        description: description || 'Operacja bankowa',
+        counterparty: counterparty,
+        accountNumber: accountNumber
+      };
+      
+      // Apply details to current transaction
+      currentTransaction.description = currentDetails.description;
+      currentTransaction.counterparty = currentDetails.counterparty;
+      currentTransaction.accountNumber = currentDetails.accountNumber;
+      
+      // Store details by reference for future transactions with the same reference
+      if (currentTransaction.reference) {
+        transactionDetailsByRef[currentTransaction.reference] = currentDetails;
+      }
     }
-    
-    // Add last transaction
-    if (currentTransaction.date && currentTransaction.amount !== undefined) {
-      transactions.push(currentTransaction as Mt940Transaction);
-    }
-    
-    return {
-      accountNumber,
-      statementNumber,
-      openingBalance,
-      closingBalance,
-      transactions
-    };
+  }
+  
+  // Add last transaction
+  if (currentTransaction.date && currentTransaction.amount !== undefined) {
+    transactions.push(currentTransaction as Mt940Transaction);
+  }
+  
+  return {
+    accountNumber,
+    statementNumber,
+    openingBalance,
+    closingBalance,
+    transactions
   };
+};
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
