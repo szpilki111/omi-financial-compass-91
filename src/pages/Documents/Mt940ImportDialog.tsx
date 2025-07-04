@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -101,14 +102,38 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         const amount = balanceLine.substring(8);
         closingBalance = parseFloat(amount.replace(',', '.'));
       } else if (line.startsWith(':61:')) {
+        // Zapisz poprzednią transakcję z opisem
         if (currentTransaction.date && currentTransaction.amount !== undefined) {
           if (currentDetails) {
+            console.log('Processing final details for previous transaction:', currentDetails);
             currentTransaction.description = extractDescription(currentDetails);
+            
+            // Wyodrębnij kontrahenta i numer konta
+            const parts = currentDetails.split('^');
+            let counterparty = '';
+            let accountNumber = '';
+
+            for (const part of parts) {
+              if (part.startsWith('32') || part.startsWith('33')) {
+                const namePart = part.substring(2).trim();
+                if (namePart) {
+                  counterparty += (counterparty ? ' ' : '') + namePart;
+                }
+              } else if (part.startsWith('38')) {
+                accountNumber = part.substring(2).trim();
+              }
+            }
+
+            currentTransaction.counterparty = counterparty;
+            currentTransaction.accountNumber = accountNumber;
           }
+          console.log('Final transaction before adding new:', currentTransaction);
           transactions.push(currentTransaction as Mt940Transaction);
-          currentDetails = '';
-          inDetailsSection = false;
         }
+
+        // Reset dla nowej transakcji
+        currentDetails = '';
+        inDetailsSection = false;
 
         const transactionLine = line.substring(4);
         const dateStr = transactionLine.substring(0, 6);
@@ -136,17 +161,22 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
           accountNumber: ''
         };
 
-        console.log('Created transaction:', currentTransaction);
+        console.log('Created new transaction:', currentTransaction);
       } else if (line.startsWith(':86:')) {
         inDetailsSection = true;
         currentDetails = line.substring(4);
+        console.log('Started details section:', currentDetails);
       } else if (inDetailsSection && !line.startsWith(':')) {
+        // Kontynuacja pola :86:
         currentDetails += line;
+        console.log('Continued details:', currentDetails);
       } else if (inDetailsSection && line.startsWith(':')) {
-        if (currentTransaction.date) {
-          console.log('Processing details:', currentDetails);
+        // Koniec pola :86:, przetwórz zebrane detale
+        if (currentTransaction.date && currentDetails) {
+          console.log('Processing complete details:', currentDetails);
           currentTransaction.description = extractDescription(currentDetails);
 
+          // Wyodrębnij kontrahenta i numer konta
           const parts = currentDetails.split('^');
           let counterparty = '';
           let accountNumber = '';
@@ -164,20 +194,27 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
 
           currentTransaction.counterparty = counterparty;
           currentTransaction.accountNumber = accountNumber;
-          console.log('Final transaction:', currentTransaction);
+          console.log('Updated transaction with details:', currentTransaction);
         }
+        
         inDetailsSection = false;
         currentDetails = '';
+        
+        // Sprawdź, czy nowa linia też zaczyna sekcję :86:
         if (line.startsWith(':86:')) {
           inDetailsSection = true;
           currentDetails = line.substring(4);
+          console.log('Started new details section:', currentDetails);
         }
       }
     }
 
+    // Przetwórz ostatnią transakcję
     if (currentTransaction.date && currentTransaction.amount !== undefined) {
       if (currentDetails) {
+        console.log('Processing final details for last transaction:', currentDetails);
         currentTransaction.description = extractDescription(currentDetails);
+        
         const parts = currentDetails.split('^');
         let counterparty = '';
         let accountNumber = '';
@@ -196,6 +233,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         currentTransaction.counterparty = counterparty;
         currentTransaction.accountNumber = accountNumber;
       }
+      console.log('Final last transaction:', currentTransaction);
       transactions.push(currentTransaction as Mt940Transaction);
     }
 
@@ -409,7 +447,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
               </div>
 
               <div>
-                <h4 className="text-smarante font-medium mb-2">
+                <h4 className="text-sm font-medium mb-2">
                   Operacje do dodania ({previewData.transactions.length})
                 </h4>
                 <div className="max-h-60 overflow-y-auto border rounded-lg">
