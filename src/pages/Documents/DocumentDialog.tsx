@@ -21,15 +21,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Edit, Copy } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
+import InlineTransactionRow from './InlineTransactionRow';
 import { Transaction } from './types';
 
 interface DocumentDialogProps {
@@ -51,7 +51,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -59,7 +58,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isClonedTransaction, setIsClonedTransaction] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [shouldAutoOpenNewForm, setShouldAutoOpenNewForm] = useState(false);
+  const [showInlineForm, setShowInlineForm] = useState(false);
 
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -234,8 +233,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     if (isOpen && !document) {
       // This is a new document - ensure transactions are cleared
       setTransactions([]);
-      // Show transaction form by default for new documents
-      setShowTransactionForm(true);
     }
   }, [isOpen, document]);
 
@@ -266,15 +263,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
     }
   }, [document, isOpen, user?.location]);
-
-  // Auto-open new transaction form after auto-save completion
-  useEffect(() => {
-    if (shouldAutoOpenNewForm && !showTransactionForm) {
-      console.log('Auto-opening new transaction form after auto-save');
-      setShowTransactionForm(true);
-      setShouldAutoOpenNewForm(false);
-    }
-  }, [shouldAutoOpenNewForm, showTransactionForm]);
 
   // Load account numbers for transactions
   const loadAccountNumbersForTransactions = async (transactionsToLoad: Transaction[]) => {
@@ -515,13 +503,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const addTransaction = async (transaction: Transaction) => {
     const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
     setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
-    setShowTransactionForm(false);
-  };
-
-  const handleAutoSaveComplete = () => {
-    console.log('Auto-save completed, setting flag to auto-open new form');
-    // Set flag to automatically open a new TransactionForm after returning to document view
-    setShouldAutoOpenNewForm(true);
+    setShowInlineForm(false);
   };
 
   const removeTransaction = (index: number) => {
@@ -534,116 +516,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return;
     }
     setTransactions(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const duplicateDebitSide = (index: number) => {
-    const originalTransaction = transactions[index];
-    
-    // For child transactions, don't modify the original - just duplicate as is
-    if (originalTransaction.isCloned) {
-      const duplicatedTransaction: Transaction = {
-        ...originalTransaction,
-        id: undefined, // Remove ID so it gets a new one when saved
-      };
-      
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Insert the duplicated transaction right after the original one
-        updated.splice(index + 1, 0, duplicatedTransaction);
-        return updated;
-      });
-
-      toast({
-        title: "Sukces",
-        description: "Operacja została powielona",
-      });
-      return;
-    }
-    
-    // For parent transactions, use the original logic
-    const updatedOriginal = {
-      ...originalTransaction,
-      debit_amount: 0,
-      amount: originalTransaction.credit_amount || originalTransaction.amount,
-    };
-    
-    const duplicatedTransaction: Transaction = {
-      ...originalTransaction,
-      description: '',
-      debit_amount: originalTransaction.debit_amount || originalTransaction.amount,
-      credit_amount: 0,
-      amount: originalTransaction.debit_amount || originalTransaction.amount,
-      id: undefined,
-      isCloned: true,
-      clonedType: 'debit' as const
-    };
-    
-    setTransactions(prev => {
-      const updated = [...prev];
-      updated[index] = updatedOriginal;
-      updated.splice(index + 1, 0, duplicatedTransaction);
-      return updated;
-    });
-
-    toast({
-      title: "Sukces",
-      description: "Strona Winien została powielona",
-    });
-  };
-
-  const duplicateCreditSide = (index: number) => {
-    const originalTransaction = transactions[index];
-    
-    // For child transactions, don't modify the original - just duplicate as is
-    if (originalTransaction.isCloned) {
-      const duplicatedTransaction: Transaction = {
-        ...originalTransaction,
-        id: undefined, // Remove ID so it gets a new one when saved
-      };
-      
-      setTransactions(prev => {
-        const updated = [...prev];
-        // Insert the duplicated transaction right after the original one
-        updated.splice(index + 1, 0, duplicatedTransaction);
-        return updated;
-      });
-
-      toast({
-        title: "Sukces",
-        description: "Operacja została powielona",
-      });
-      return;
-    }
-    
-    // For parent transactions, use the original logic
-    const updatedOriginal = {
-      ...originalTransaction,
-      credit_amount: 0,
-      amount: originalTransaction.debit_amount || originalTransaction.amount,
-    };
-    
-    const duplicatedTransaction: Transaction = {
-      ...originalTransaction,
-      description: '',
-      debit_amount: 0,
-      credit_amount: originalTransaction.credit_amount || originalTransaction.amount,
-      amount: originalTransaction.credit_amount || originalTransaction.amount,
-      id: undefined,
-      isCloned: true,
-      clonedType: 'credit' as const
-    };
-    
-    setTransactions(prev => {
-      const updated = [...prev];
-      updated[index] = updatedOriginal;
-      updated.splice(index + 1, 0, duplicatedTransaction);
-      return updated;
-    });
-
-    toast({
-      title: "Sukces",
-      description: "Strona Ma została powielona",
-    });
   };
 
   const handleEditTransaction = (transaction: Transaction, index: number) => {
@@ -885,121 +757,121 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </form>
           </Form>
 
-          {/* Operations section - outside the main form to prevent nesting */}
+          {/* Operations section with integrated table */}
           <div className="space-y-4 border-t pt-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Operacje</h3>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowTransactionForm(true)}
+                onClick={() => setShowInlineForm(true)}
                 className="flex items-center gap-2"
-                disabled={isEditingBlocked}
+                disabled={isEditingBlocked || showInlineForm}
               >
                 <Plus className="h-4 w-4" />
                 Dodaj operację
               </Button>
             </div>
 
-            {/* Transaction form appears right after the button */}
-            {showTransactionForm && !isEditingBlocked && (
-              <TransactionForm
-                onAdd={addTransaction}
-                onCancel={() => setShowTransactionForm(false)}
-                onAutoSaveComplete={handleAutoSaveComplete}
-              />
-            )}
-
-            {/* Transaction table appears after the form */}
-            {transactions.length > 0 && (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Opis</TableHead>
-                        <TableHead>Konto Wn</TableHead>
-                        <TableHead className="text-right">Winien</TableHead>
-                        <TableHead>Konto Ma</TableHead>
-                        <TableHead className="text-right">Ma</TableHead>
-                        <TableHead>Akcje</TableHead>
+            {/* Transaction table with inline editing */}
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Opis</TableHead>
+                      <TableHead>Konto Wn</TableHead>
+                      <TableHead className="text-right">Winien</TableHead>
+                      <TableHead>Konto Ma</TableHead>
+                      <TableHead className="text-right">Ma</TableHead>
+                      <TableHead>Akcje</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((transaction, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {transaction.description}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {transaction.debitAccountNumber && (
+                              <span className="text-gray-600">
+                                {transaction.debitAccountNumber}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
+                            <span className="font-medium text-green-600">
+                              {transaction.debit_amount.toLocaleString('pl-PL', { 
+                                style: 'currency', 
+                                currency: 'PLN' 
+                              })}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {transaction.creditAccountNumber && (
+                              <span className="text-gray-600">
+                                {transaction.creditAccountNumber}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
+                            <span className="font-medium text-blue-600">
+                              {transaction.credit_amount.toLocaleString('pl-PL', { 
+                                style: 'currency', 
+                                currency: 'PLN' 
+                              })}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditTransaction(transaction, index)}
+                              className="text-blue-600 hover:text-blue-700"
+                              disabled={isEditingBlocked}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeTransaction(index)}
+                              className="text-red-600 hover:text-red-700"
+                              disabled={isEditingBlocked}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transactions.map((transaction, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">
-                            {transaction.description}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {transaction.debitAccountNumber && (
-                                <span className="text-gray-600">
-                                  {transaction.debitAccountNumber}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                              <span className="font-medium text-green-600">
-                                {transaction.debit_amount.toLocaleString('pl-PL', { 
-                                  style: 'currency', 
-                                  currency: 'PLN' 
-                                })}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {transaction.creditAccountNumber && (
-                                <span className="text-gray-600">
-                                  {transaction.creditAccountNumber}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                              <span className="font-medium text-blue-600">
-                                {transaction.credit_amount.toLocaleString('pl-PL', { 
-                                  style: 'currency', 
-                                  currency: 'PLN' 
-                                })}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditTransaction(transaction, index)}
-                                className="text-blue-600 hover:text-blue-700"
-                                disabled={isEditingBlocked}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeTransaction(index)}
-                                className="text-red-600 hover:text-red-700"
-                                disabled={isEditingBlocked}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                
-                {/* Updated summary section with separate debit and credit totals */}
+                    ))}
+                    
+                    {/* Inline form row for adding new transactions */}
+                    {showInlineForm && (
+                      <InlineTransactionRow
+                        onSave={addTransaction}
+                        onCancel={() => setShowInlineForm(false)}
+                        isEditingBlocked={isEditingBlocked}
+                      />
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* Summary section */}
+              {transactions.length > 0 && (
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex justify-between items-center text-lg">
                     <span className="font-medium text-green-700">Winien:</span>
@@ -1042,8 +914,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </DialogContent>
 
