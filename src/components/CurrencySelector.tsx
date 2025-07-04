@@ -87,7 +87,7 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
       {label}
       
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger id="currency-select">
+        <SelectTrigger id="currency-select" className="my-[10px]">
           <SelectValue placeholder="Wybierz walutę" />
         </SelectTrigger>
         <SelectContent>
