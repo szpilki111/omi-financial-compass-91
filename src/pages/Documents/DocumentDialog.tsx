@@ -21,7 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Edit, Check, X } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -835,7 +835,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   );
 };
 
-// Updated inline edit transaction row component with auto-balancing on blur
+// Updated inline edit transaction row component - always in edit mode
 interface InlineEditTransactionRowProps {
   transaction: Transaction;
   index: number;
@@ -873,22 +873,17 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
   const [debitTouched, setDebitTouched] = useState(false);
   const [creditTouched, setCreditTouched] = useState(false);
 
+  // Always keep form data in sync with transaction data
   useEffect(() => {
-    if (isEditing) {
-      setFormData({
-        description: transaction.description || '',
-        debit_account_id: transaction.debit_account_id || '',
-        credit_account_id: transaction.credit_account_id || '',
-        debit_amount: transaction.debit_amount || 0,
-        credit_amount: transaction.credit_amount || 0,
-        settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
-      });
-      setDebitTouched(false);
-      setCreditTouched(false);
-      setDebitHasFocus(false);
-      setCreditHasFocus(false);
-    }
-  }, [isEditing, transaction]);
+    setFormData({
+      description: transaction.description || '',
+      debit_account_id: transaction.debit_account_id || '',
+      credit_account_id: transaction.credit_account_id || '',
+      debit_amount: transaction.debit_amount || 0,
+      credit_amount: transaction.credit_amount || 0,
+      settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+    });
+  }, [transaction]);
 
   // Auto-populate logic based on focus state
   const handleDebitAmountChange = (value: number) => {
@@ -1002,144 +997,74 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
                      formData.debit_amount > 0 && 
                      formData.credit_amount > 0;
 
-  if (isEditing) {
-    return (
-      <TableRow className="bg-blue-50 border-2 border-blue-200">
-        <TableCell>
-          <Textarea
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Opis operacji..."
-            className="min-h-[60px] resize-none"
-            disabled={isEditingBlocked}
-          />
-        </TableCell>
-        <TableCell>
-          <AccountCombobox
-            value={formData.debit_account_id}
-            onChange={(accountId) => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
-            locationId={locationId}
-            side="debit"
-            disabled={isEditingBlocked}
-          />
-        </TableCell>
-        <TableCell>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.debit_amount || ''}
-            onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
-            onFocus={handleDebitFocus}
-            onBlur={handleDebitBlur}
-            placeholder="0.00"
-            className="text-right"
-            disabled={isEditingBlocked}
-          />
-        </TableCell>
-        <TableCell>
-          <AccountCombobox
-            value={formData.credit_account_id}
-            onChange={(accountId) => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
-            locationId={locationId}
-            side="credit"
-            disabled={isEditingBlocked}
-          />
-        </TableCell>
-        <TableCell>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.credit_amount || ''}
-            onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
-            onFocus={handleCreditFocus}
-            onBlur={handleCreditBlur}
-            placeholder="0.00"
-            className="text-right"
-            disabled={isEditingBlocked}
-          />
-        </TableCell>
-        <TableCell>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              disabled={!isFormValid || isEditingBlocked}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onCancel}
-              disabled={isEditingBlocked}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    );
-  }
-
+  // Always render in edit mode - removed the if (isEditing) condition
   return (
-    <TableRow>
-      <TableCell className="font-medium">
-        {transaction.description}
+    <TableRow className="bg-blue-50 border-2 border-blue-200">
+      <TableCell>
+        <Textarea
+          value={formData.description}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Opis operacji..."
+          className="min-h-[60px] resize-none"
+          disabled={isEditingBlocked}
+        />
       </TableCell>
       <TableCell>
-        <div className="text-sm">
-          {transaction.debitAccountNumber && (
-            <span className="text-gray-600">
-              {transaction.debitAccountNumber}
-            </span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell className="text-right">
-        {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-          <span className="font-medium text-green-600">
-            {transaction.debit_amount.toLocaleString('pl-PL', { 
-              style: 'currency', 
-              currency: 'PLN' 
-            })}
-          </span>
-        )}
+        <AccountCombobox
+          value={formData.debit_account_id}
+          onChange={(accountId) => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
+          locationId={locationId}
+          side="debit"
+          disabled={isEditingBlocked}
+        />
       </TableCell>
       <TableCell>
-        <div className="text-sm">
-          {transaction.creditAccountNumber && (
-            <span className="text-gray-600">
-              {transaction.creditAccountNumber}
-            </span>
-          )}
-        </div>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.debit_amount || ''}
+          onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
+          onFocus={handleDebitFocus}
+          onBlur={handleDebitBlur}
+          placeholder="0.00"
+          className="text-right"
+          disabled={isEditingBlocked}
+        />
       </TableCell>
-      <TableCell className="text-right">
-        {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-          <span className="font-medium text-blue-600">
-            {transaction.credit_amount.toLocaleString('pl-PL', { 
-              style: 'currency', 
-              currency: 'PLN' 
-            })}
-          </span>
-        )}
+      <TableCell>
+        <AccountCombobox
+          value={formData.credit_account_id}
+          onChange={(accountId) => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
+          locationId={locationId}
+          side="credit"
+          disabled={isEditingBlocked}
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.credit_amount || ''}
+          onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
+          onFocus={handleCreditFocus}
+          onBlur={handleCreditBlur}
+          placeholder="0.00"
+          className="text-right"
+          disabled={isEditingBlocked}
+        />
       </TableCell>
       <TableCell>
         <div className="flex gap-2">
           <Button
             type="button"
-            variant="ghost"
             size="sm"
-            onClick={onEdit}
-            className="text-blue-600 hover:text-blue-700"
-            disabled={isEditingBlocked}
+            onClick={handleSave}
+            disabled={!isFormValid || isEditingBlocked}
+            className="bg-green-600 hover:bg-green-700"
           >
-            <Edit className="h-4 w-4" />
+            <Check className="h-4 w-4" />
           </Button>
           <Button
             type="button"
