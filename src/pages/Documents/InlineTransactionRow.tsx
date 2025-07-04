@@ -33,6 +33,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
   });
 
+  const [hasUserEditedDebit, setHasUserEditedDebit] = useState(false);
+  const [hasUserEditedCredit, setHasUserEditedCredit] = useState(false);
+
   // Get user's location from profile
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -49,20 +52,24 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     enabled: !!user?.id,
   });
 
-  // Auto-balance amounts when one side is entered
+  // Auto-balance amounts with improved logic
   const handleDebitAmountChange = (value: number) => {
+    setHasUserEditedDebit(true);
     setFormData(prev => ({
       ...prev,
       debit_amount: value,
-      credit_amount: value > 0 && prev.credit_amount === 0 ? value : prev.credit_amount,
+      // Only auto-populate credit if credit hasn't been manually edited and it's currently 0
+      credit_amount: !hasUserEditedCredit && prev.credit_amount === 0 ? value : prev.credit_amount,
     }));
   };
 
   const handleCreditAmountChange = (value: number) => {
+    setHasUserEditedCredit(true);
     setFormData(prev => ({
       ...prev,
       credit_amount: value,
-      debit_amount: value > 0 && prev.debit_amount === 0 ? value : prev.debit_amount,
+      // Only auto-populate debit if debit hasn't been manually edited and it's currently 0
+      debit_amount: !hasUserEditedDebit && prev.debit_amount === 0 ? value : prev.debit_amount,
     }));
   };
 

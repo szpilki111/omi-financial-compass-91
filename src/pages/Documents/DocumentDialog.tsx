@@ -21,15 +21,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Edit } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Edit, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import TransactionEditDialog from './TransactionEditDialog';
+import { Textarea } from '@/components/ui/textarea';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
 import InlineTransactionRow from './InlineTransactionRow';
+import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 
 interface DocumentDialogProps {
@@ -51,11 +52,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [hiddenFieldsInEdit, setHiddenFieldsInEdit] = useState<{debit?: boolean, credit?: boolean}>({});
-  const [isClonedTransaction, setIsClonedTransaction] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
@@ -518,7 +515,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleEditTransaction = (transaction: Transaction, index: number) => {
+  const handleEditTransaction = (index: number) => {
     if (isEditingBlocked) {
       toast({
         title: "Błąd",
@@ -527,96 +524,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
       return;
     }
-
-    // Check if this is a cloned transaction and determine hidden fields
-    let hideFields = {};
-    
-    if (transaction.isCloned) {
-      // For cloned transactions, hide the opposite side
-      hideFields = {
-        debit: transaction.clonedType === 'credit',
-        credit: transaction.clonedType === 'debit',
-      };
-      setIsClonedTransaction(true);
-    } else {
-      // For regular transactions, determine which fields to hide based on amounts
-      hideFields = {
-        debit: transaction.debit_amount === 0,
-        credit: transaction.credit_amount === 0,
-      };
-      setIsClonedTransaction(false);
-    }
-    
-    setHiddenFieldsInEdit(hideFields);
-    setEditingTransaction(transaction);
     setEditingTransactionIndex(index);
-    setShowEditDialog(true);
   };
 
-  const handleTransactionUpdated = async (updatedTransactions: Transaction[]) => {
-    console.log('handleTransactionUpdated called with:', updatedTransactions);
-    console.log('editingTransactionIndex:', editingTransactionIndex);
-
-    if (document?.id) {
-      // For existing documents, save to database and reload
-      if (updatedTransactions.length > 0) {
-        const transactionToUpdate = updatedTransactions[0];
-        
-        try {
-          // Update transaction in database
-          const { error } = await supabase
-            .from('transactions')
-            .update({
-              description: transactionToUpdate.description,
-              debit_account_id: transactionToUpdate.debit_account_id,
-              credit_account_id: transactionToUpdate.credit_account_id,
-              debit_amount: transactionToUpdate.debit_amount,
-              credit_amount: transactionToUpdate.credit_amount,
-              amount: transactionToUpdate.amount,
-            })
-            .eq('id', transactionToUpdate.id);
-
-          if (error) throw error;
-
-          // Reload transactions from database
-          await loadTransactions(document.id);
-          
-          toast({
-            title: "Sukces",
-            description: "Operacja została zaktualizowana w bazie danych",
-          });
-        } catch (error) {
-          console.error('Error updating transaction in database:', error);
-          toast({
-            title: "Błąd",
-            description: "Nie udało się zaktualizować operacji w bazie danych",
-            variant: "destructive",
-          });
-        }
-      }
-    } else {
-      // For new documents, update local state with account numbers
-      if (editingTransactionIndex !== null) {
-        const transactionsWithAccountNumbers = await loadAccountNumbersForTransactions(updatedTransactions);
-        
-        setTransactions(prev => {
-          const updated = [...prev];
-          
-          // Remove original transaction
-          updated.splice(editingTransactionIndex, 1);
-          
-          // Add all new transactions at the same position with loaded account numbers
-          updated.splice(editingTransactionIndex, 0, ...transactionsWithAccountNumbers);
-          
-          console.log('Updated transactions array:', updated);
-          return updated;
-        });
-      }
-    }
-    setShowEditDialog(false);
-    setEditingTransaction(null);
+  const handleSaveTransaction = async (index: number, updatedTransaction: Transaction) => {
+    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
+    setTransactions(prev => prev.map((t, i) => i === index ? transactionWithAccountNumbers[0] : t));
     setEditingTransactionIndex(null);
-    setIsClonedTransaction(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTransactionIndex(null);
   };
 
   // Calculate separate sums for debit and credit using the new columns
@@ -789,73 +707,18 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   </TableHeader>
                   <TableBody>
                     {transactions.map((transaction, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {transaction.description}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {transaction.debitAccountNumber && (
-                              <span className="text-gray-600">
-                                {transaction.debitAccountNumber}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                            <span className="font-medium text-green-600">
-                              {transaction.debit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {transaction.creditAccountNumber && (
-                              <span className="text-gray-600">
-                                {transaction.creditAccountNumber}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                            <span className="font-medium text-blue-600">
-                              {transaction.credit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditTransaction(transaction, index)}
-                              className="text-blue-600 hover:text-blue-700"
-                              disabled={isEditingBlocked}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeTransaction(index)}
-                              className="text-red-600 hover:text-red-700"
-                              disabled={isEditingBlocked}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <InlineEditTransactionRow
+                        key={index}
+                        transaction={transaction}
+                        index={index}
+                        isEditing={editingTransactionIndex === index}
+                        onEdit={() => handleEditTransaction(index)}
+                        onSave={(updatedTransaction) => handleSaveTransaction(index, updatedTransaction)}
+                        onCancel={handleCancelEdit}
+                        onDelete={() => removeTransaction(index)}
+                        isEditingBlocked={isEditingBlocked}
+                        locationId={userProfile?.location_id}
+                      />
                     ))}
                     
                     {/* Inline form row for adding new transactions */}
@@ -918,22 +781,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             </div>
           </div>
         </DialogContent>
-
-        {/* Transaction Edit Dialog */}
-        <TransactionEditDialog
-          isOpen={showEditDialog}
-          onClose={() => {
-            setShowEditDialog(false);
-            setEditingTransaction(null);
-            setEditingTransactionIndex(null);
-            setHiddenFieldsInEdit({});
-            setIsClonedTransaction(false);
-          }}
-          onSave={handleTransactionUpdated}
-          transaction={editingTransaction}
-          isNewDocument={!document}
-          hiddenFields={hiddenFieldsInEdit}
-        />
       </Dialog>
 
       {/* Confirm close dialog */}
@@ -944,6 +791,258 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         onSave={handleSaveAndClose}
       />
     </>
+  );
+};
+
+// New inline edit transaction row component
+interface InlineEditTransactionRowProps {
+  transaction: Transaction;
+  index: number;
+  isEditing: boolean;
+  onEdit: () => void;
+  onSave: (transaction: Transaction) => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  isEditingBlocked?: boolean;
+  locationId?: string;
+}
+
+const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
+  transaction,
+  index,
+  isEditing,
+  onEdit,
+  onSave,
+  onCancel,
+  onDelete,
+  isEditingBlocked = false,
+  locationId,
+}) => {
+  const [formData, setFormData] = useState({
+    description: transaction.description || '',
+    debit_account_id: transaction.debit_account_id || '',
+    credit_account_id: transaction.credit_account_id || '',
+    debit_amount: transaction.debit_amount || 0,
+    credit_amount: transaction.credit_amount || 0,
+    settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+  });
+
+  const [hasUserEditedDebit, setHasUserEditedDebit] = useState(false);
+  const [hasUserEditedCredit, setHasUserEditedCredit] = useState(false);
+
+  useEffect(() => {
+    if (isEditing) {
+      setFormData({
+        description: transaction.description || '',
+        debit_account_id: transaction.debit_account_id || '',
+        credit_account_id: transaction.credit_account_id || '',
+        debit_amount: transaction.debit_amount || 0,
+        credit_amount: transaction.credit_amount || 0,
+        settlement_type: transaction.settlement_type || 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      });
+      setHasUserEditedDebit(false);
+      setHasUserEditedCredit(false);
+    }
+  }, [isEditing, transaction]);
+
+  // Auto-balance amounts with improved logic
+  const handleDebitAmountChange = (value: number) => {
+    setHasUserEditedDebit(true);
+    setFormData(prev => ({
+      ...prev,
+      debit_amount: value,
+      // Only auto-populate credit if credit hasn't been manually edited and it's currently 0
+      credit_amount: !hasUserEditedCredit && prev.credit_amount === 0 ? value : prev.credit_amount,
+    }));
+  };
+
+  const handleCreditAmountChange = (value: number) => {
+    setHasUserEditedCredit(true);
+    setFormData(prev => ({
+      ...prev,
+      credit_amount: value,
+      // Only auto-populate debit if debit hasn't been manually edited and it's currently 0
+      debit_amount: !hasUserEditedDebit && prev.debit_amount === 0 ? value : prev.debit_amount,
+    }));
+  };
+
+  const handleSave = () => {
+    if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) {
+      return;
+    }
+
+    if (formData.debit_amount <= 0 || formData.credit_amount <= 0) {
+      return;
+    }
+
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      description: formData.description,
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      settlement_type: formData.settlement_type,
+    };
+
+    onSave(updatedTransaction);
+  };
+
+  const isFormValid = formData.description.trim() && 
+                     formData.debit_account_id && 
+                     formData.credit_account_id && 
+                     formData.debit_amount > 0 && 
+                     formData.credit_amount > 0;
+
+  if (isEditing) {
+    return (
+      <TableRow className="bg-blue-50 border-2 border-blue-200">
+        <TableCell>
+          <Textarea
+            value={formData.description}
+            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Opis operacji..."
+            className="min-h-[60px] resize-none"
+            disabled={isEditingBlocked}
+          />
+        </TableCell>
+        <TableCell>
+          <AccountCombobox
+            value={formData.debit_account_id}
+            onChange={(accountId) => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
+            locationId={locationId}
+            side="debit"
+            disabled={isEditingBlocked}
+          />
+        </TableCell>
+        <TableCell>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.debit_amount || ''}
+            onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
+            placeholder="0.00"
+            className="text-right"
+            disabled={isEditingBlocked}
+          />
+        </TableCell>
+        <TableCell>
+          <AccountCombobox
+            value={formData.credit_account_id}
+            onChange={(accountId) => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
+            locationId={locationId}
+            side="credit"
+            disabled={isEditingBlocked}
+          />
+        </TableCell>
+        <TableCell>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.credit_amount || ''}
+            onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
+            placeholder="0.00"
+            className="text-right"
+            disabled={isEditingBlocked}
+          />
+        </TableCell>
+        <TableCell>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSave}
+              disabled={!isFormValid || isEditingBlocked}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isEditingBlocked}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        {transaction.description}
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
+          {transaction.debitAccountNumber && (
+            <span className="text-gray-600">
+              {transaction.debitAccountNumber}
+            </span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
+          <span className="font-medium text-green-600">
+            {transaction.debit_amount.toLocaleString('pl-PL', { 
+              style: 'currency', 
+              currency: 'PLN' 
+            })}
+          </span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
+          {transaction.creditAccountNumber && (
+            <span className="text-gray-600">
+              {transaction.creditAccountNumber}
+            </span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
+          <span className="font-medium text-blue-600">
+            {transaction.credit_amount.toLocaleString('pl-PL', { 
+              style: 'currency', 
+              currency: 'PLN' 
+            })}
+          </span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+            className="text-blue-600 hover:text-blue-700"
+            disabled={isEditingBlocked}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="text-red-600 hover:text-red-700"
+            disabled={isEditingBlocked}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 };
 
