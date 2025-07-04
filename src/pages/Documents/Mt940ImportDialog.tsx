@@ -139,7 +139,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         for (const part of parts) {
           if (part.startsWith('00')) {
             description = part.substring(2).trim();
-          } else if (part.startsWith('20') || part.startsWith('21')) {
+          } else if (part.startsWith('20')) {
+            // Extract description specifically from ^20 section
+            const descriptionFrom20 = part.substring(2).trim();
+            if (descriptionFrom20) {
+              description = descriptionFrom20; // Use ^20 section as primary description
+            }
+          } else if (part.startsWith('21')) {
             const titlePart = part.substring(2).trim();
             if (titlePart) {
               description += (description ? ' - ' : '') + titlePart;
@@ -154,7 +160,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
           }
         }
         
-        // Use the actual description from the file instead of generic "Operacja bankowa"
+        // Use description from ^20 section if available, otherwise fallback
         currentTransaction.description = description || 'Operacja bankowa';
         currentTransaction.counterparty = counterparty;
         currentTransaction.accountNumber = accountNumber;
@@ -252,7 +258,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         document_id: document.id,
         document_number: documentNumber,
         date: transaction.date,
-        description: transaction.description, // Use the actual title from the file
+        description: transaction.description, // Use description from ^20 section of MT940 file
         debit_amount: transaction.amount,
         credit_amount: transaction.amount,
         currency: 'PLN',
