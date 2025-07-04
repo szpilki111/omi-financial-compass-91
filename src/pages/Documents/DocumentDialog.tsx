@@ -962,6 +962,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         showCopyButton={showParallelSection}
+                        locationId={userProfile?.location_id}
                       />
                     )}
                   </TableBody>
@@ -1071,6 +1072,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           showCopyButton={false}
+                          locationId={userProfile?.location_id}
                         />
                       )}
                     </TableBody>
