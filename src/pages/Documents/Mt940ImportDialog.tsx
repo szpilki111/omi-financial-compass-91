@@ -133,19 +133,56 @@ const parseMt940File = (content: string): Mt940Data => {
       const detailsLine = line.substring(4);
       console.log('Processing details line:', detailsLine);
       
-      // Extract description from ^20 to next ^
-      const match20 = detailsLine.match(/\^20([^^]*)/);
-      let description = '';
-      
-      if (match20 && match20[1]) {
-        description = match20[1].trim();
-        console.log('Found description between ^20 and next ^:', description);
+  function extractDescription(detailsLine) {
+    // Domyślny opis, jeśli nic nie zostanie znalezione
+    let description = 'Operacja bankowa';
+
+    // Sprawdź, czy linia zawiera znaczniki
+    if (detailsLine && detailsLine.includes('^')) {
+      // Podziel linię na fragmenty według znaczników
+      const parts = detailsLine.split(/(?=\^[0-9]{2})/);
+      let descParts = [];
+
+      // Przetwarzaj fragmenty
+      for (const part of parts) {
+        // Szukaj znaczników ^20, ^21, ^22, ..., aż do napotkania innego znacznika
+        if (part.match(/^\^[2][0-9]/)) {
+          // Wyodrębnij treść po znaczniku
+          const content = part.replace(/^\^[2][0-9]/, '').trim();
+          if (content) {
+            descParts.push(content);
+          }
+        }
+        // Opcjonalnie: dodaj nazwę odbiorcy z ^32 i adres z ^33
+        else if (part.match(/^\^3[2-3]/)) {
+          const content = part.replace(/^\^3[2-3]/, '').trim();
+          if (content) {
+            descParts.push(content);
+          }
+        }
       }
-      
-      // If no description found in ^20, use default
-      if (!description) {
-        description = 'Operacja bankowa';
+
+      // Połącz fragmenty opisu
+      if (descParts.length > 0) {
+        description = descParts.join(' ').trim();
       }
+    }
+
+    console.log('Extracted description:', description);
+    return description;
+  }
+
+  // Przykład użycia dla każdej linii :86:
+  const lines = [
+    ':86:052^00TRANS.BEZGOT. KARTĄ DEBET. ^34000 ^20535472------7683 Rafal Dabk^21owski KIELCE MAKRO CASH AND ^22 CARRY POL 164,97 PLN 2025-^2305-31 ^32',
+    ':86:723^00PRZELEW OTRZYMANY ELIXIR   ^34000 ^3085070004 ^20FR NR FVS 94/05/2025/JAD ^32URZĄD MIASTA I GMINY W NOWE^33J SŁUPI UL. RYNEK 15 26-006 ^3862850700042007700603810024 ^62 NOWA SŁUPIA',
+    ':86:P96^00WPŁATA WE WPŁATOMACIE - ODDZIAŁ^34000 ^3035203000 ^31PL35203000450001100130000000 ^20Wpłata we wpłatomacie nr RN^21ET6505 535472 1005 2025-06-^2204 11 03 18 ITCFLEXDMS74510^230825784241 ^32ITCARD SPÓŁKA AKCYJNA JUTRZ^33ENKI 139 WARSZAWA 02-231 PO^62LSKA',
+  ];
+
+  // Testowanie
+  lines.forEach(line => {
+    extractDescription(line);
+  });
       
       // Extract counterparty info
       const parts = detailsLine.split('^');
