@@ -559,13 +559,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     if (Math.abs(updatedTransaction.debit_amount! - updatedTransaction.credit_amount!) > 0.01) {
       const difference = Math.abs(updatedTransaction.debit_amount! - updatedTransaction.credit_amount!);
       
-      // Create balancing transaction
+      // Create balancing transaction - only fill the side that was originally smaller
       const balancingTransaction: Transaction = {
         description: updatedTransaction.description,
-        debit_account_id: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? updatedTransaction.credit_account_id : updatedTransaction.debit_account_id,
-        credit_account_id: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? updatedTransaction.debit_account_id : updatedTransaction.credit_account_id,
-        debit_amount: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? difference : 0,
-        credit_amount: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? difference : 0,
+        debit_account_id: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? '' : updatedTransaction.credit_account_id,
+        credit_account_id: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? '' : updatedTransaction.debit_account_id,
+        debit_amount: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? 0 : difference,
+        credit_amount: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? 0 : difference,
         amount: difference,
         settlement_type: updatedTransaction.settlement_type,
       };

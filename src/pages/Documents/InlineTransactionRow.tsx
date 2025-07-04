@@ -141,13 +141,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     if (Math.abs(formData.debit_amount - formData.credit_amount) > 0.01) {
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
       
-      // Create balancing transaction
+      // Create balancing transaction - only fill the side that was originally smaller
       const balancingTransaction: Transaction = {
         description: formData.description, // Copy the same description
-        debit_account_id: formData.debit_amount > formData.credit_amount ? formData.credit_account_id : formData.debit_account_id,
-        credit_account_id: formData.debit_amount > formData.credit_amount ? formData.debit_account_id : formData.credit_account_id,
-        debit_amount: formData.debit_amount > formData.credit_amount ? difference : 0,
-        credit_amount: formData.credit_amount > formData.debit_amount ? difference : 0,
+        debit_account_id: formData.debit_amount > formData.credit_amount ? '' : formData.credit_account_id,
+        credit_account_id: formData.credit_amount > formData.debit_amount ? '' : formData.debit_account_id,
+        debit_amount: formData.debit_amount > formData.credit_amount ? 0 : difference,
+        credit_amount: formData.credit_amount > formData.debit_amount ? 0 : difference,
         amount: difference,
         settlement_type: formData.settlement_type,
       };
