@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -30,6 +29,7 @@ interface TransactionEditDialogProps {
     debit?: boolean;
     credit?: boolean;
   };
+  documentCurrency?: string;
 }
 
 const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
@@ -38,7 +38,8 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
   onSave,
   transaction,
   isNewDocument = false,
-  hiddenFields = {}
+  hiddenFields = {},
+  documentCurrency = 'PLN'
 }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -78,12 +79,19 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
         credit_amount: transaction.credit_amount || 0,
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
-        currency: transaction.currency || 'PLN',
+        currency: transaction.currency || documentCurrency,
         exchange_rate: transaction.exchange_rate || 1,
       });
       setHasUnsavedChanges(false);
+    } else {
+      // For new transactions, use document currency
+      setFormData(prev => ({
+        ...prev,
+        currency: documentCurrency,
+        exchange_rate: documentCurrency === 'PLN' ? 1 : prev.exchange_rate
+      }));
     }
-  }, [transaction]);
+  }, [transaction, documentCurrency]);
 
   const handleClose = () => {
     if (hasUnsavedChanges) {
@@ -275,6 +283,7 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               value={formData.currency}
               onChange={handleCurrencyChange}
               required
+              disabled={true}
             />
             <ExchangeRateManager
               currency={formData.currency}
@@ -284,6 +293,9 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
             {errors.exchange_rate && (
               <p className="text-red-500 text-sm col-span-2">{errors.exchange_rate}</p>
             )}
+            <p className="text-sm text-gray-500 col-span-2">
+              Waluta jest dziedziczona z dokumentu
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

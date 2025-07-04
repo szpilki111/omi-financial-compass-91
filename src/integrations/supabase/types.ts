@@ -160,6 +160,7 @@ export type Database = {
       }
       location_settings: {
         Row: {
+          allow_foreign_currencies: boolean
           created_at: string
           house_abbreviation: string
           id: string
@@ -167,6 +168,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_foreign_currencies?: boolean
           created_at?: string
           house_abbreviation: string
           id?: string
@@ -174,6 +176,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_foreign_currencies?: boolean
           created_at?: string
           house_abbreviation?: string
           id?: string

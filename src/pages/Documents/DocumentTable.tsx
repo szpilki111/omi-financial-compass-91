@@ -50,12 +50,26 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     );
   }
 
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
   const formatAmount = (amount: number, currency: string = 'PLN') => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
+    const symbol = getCurrencySymbol(currency);
+    return `${amount.toLocaleString('pl-PL', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })} ${symbol}`;
   };
 
   const getAccountDisplay = (accountNumber: string | undefined, account: any, accountId: string | undefined) => {
@@ -102,7 +116,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
               <TableCell className="text-right font-medium">
                 {formatAmount(transaction.credit_amount || transaction.amount, transaction.currency || 'PLN')}
               </TableCell>
-              <TableCell>{transaction.currency || 'PLN'}</TableCell>
+              <TableCell>{getCurrencySymbol(transaction.currency || 'PLN')}</TableCell>
               <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>
                 <div className="flex space-x-1">

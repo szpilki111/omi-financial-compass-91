@@ -15,12 +15,14 @@ interface InlineTransactionRowProps {
   onCancel?: () => void; // Made optional since we won't use it
   isEditingBlocked?: boolean;
   showCopyButton?: boolean; // New prop to control copy button visibility
+  currency?: string; // New prop for currency
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   onSave,
   isEditingBlocked = false,
   showCopyButton = false,
+  currency = 'PLN',
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -133,6 +135,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
       settlement_type: formData.settlement_type,
+      currency: currency,
     };
 
     onSave(transaction);
@@ -150,6 +153,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_amount: formData.credit_amount > formData.debit_amount ? 0 : difference,
         amount: difference,
         settlement_type: formData.settlement_type,
+        currency: currency,
       };
 
       // Save balancing transaction after a short delay

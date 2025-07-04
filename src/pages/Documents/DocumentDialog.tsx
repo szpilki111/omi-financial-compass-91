@@ -32,6 +32,7 @@ import ConfirmCloseDialog from './ConfirmCloseDialog';
 import InlineTransactionRow from './InlineTransactionRow';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
+import CurrencySelector from '@/components/CurrencySelector';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ interface DocumentFormData {
   document_number: string;
   document_name: string;
   document_date: Date;
+  currency: string;
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
@@ -66,6 +68,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       document_number: '',
       document_name: '',
       document_date: new Date(),
+      currency: 'PLN',
     },
   });
 
@@ -83,6 +86,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return data;
     },
     enabled: !!user?.id,
+  });
+
+  // Get location settings to check if foreign currencies are allowed
+  const { data: locationSettings } = useQuery({
+    queryKey: ['locationSettings', userProfile?.location_id],
+    queryFn: async () => {
+      if (!userProfile?.location_id) return null;
+      
+      const { data, error } = await supabase
+        .from('location_settings')
+        .select('allow_foreign_currencies')
+        .eq('location_id', userProfile.location_id)
+        .single();
+
+      if (error) return { allow_foreign_currencies: false };
+      return data;
+    },
+    enabled: !!userProfile?.location_id,
   });
 
   // Check if editing is blocked for this document
@@ -219,6 +240,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         document_number: document.document_number,
         document_name: document.document_name,
         document_date: new Date(document.document_date),
+        currency: document.currency || 'PLN',
       });
       
       // Load existing transactions only for existing documents
@@ -230,6 +252,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         document_number: '',
         document_name: '',
         document_date: new Date(),
+        currency: 'PLN',
       });
       setTransactions([]); // Explicitly clear transactions for new documents
       setHasUnsavedChanges(false);
@@ -427,6 +450,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         credit_amount: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? 0 : difference,
         amount: difference,
         settlement_type: updatedTransaction.settlement_type,
+        currency: updatedTransaction.currency,
       };
 
       // Add balancing transaction after a short delay
@@ -542,9 +566,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         documentId = newDocument.id;
       }
 
-      // Combine all transactions for saving
+      // Combine all transactions for saving and set their currency
       const allTransactionsSafe = allTransactions.map((t, idx) => ({
         ...t,
+        currency: data.currency,
         description:
           typeof t.description === "string" && t.description.trim() !== ""
             ? t.description
@@ -576,6 +601,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
               description: t.description,
               settlement_type: t.settlement_type,
+              currency: t.currency,
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
               user_id: user.id,
@@ -619,7 +645,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const addTransaction = async (transaction: Transaction) => {
-    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transaction]);
+    const currency = form.getValues('currency');
+    const transactionWithCurrency = { ...transaction, currency };
+    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([transactionWithCurrency]);
     setTransactions(prev => [...prev, transactionWithAccountNumbers[0]]);
     setShowInlineForm(false);
     
@@ -682,6 +710,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         credit_amount: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? 0 : difference,
         amount: difference,
         settlement_type: updatedTransaction.settlement_type,
+        currency: updatedTransaction.currency,
       };
 
       // Add balancing transaction after a short delay
@@ -703,6 +732,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     return sum + creditAmount;
   }, 0);
 
+  // Get currency symbol
+  const getCurrencySymbol = (currency: string) => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
+    const symbol = getCurrencySymbol(currency);
+    return `${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+  };
+
   console.log('Transactions:', transactions);
   console.log('Debit total:', debitTotal);
   console.log('Credit total:', creditTotal);
@@ -719,6 +768,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       </Dialog>
     );
   }
+
+  const selectedCurrency = form.watch('currency');
 
   return (
     <>
@@ -744,7 +795,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="document_number"
@@ -790,6 +841,29 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="currency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Waluta</FormLabel>
+                      <FormControl>
+                        <CurrencySelector
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={!locationSettings?.allow_foreign_currencies || isEditingBlocked}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      {!locationSettings?.allow_foreign_currencies && (
+                        <p className="text-sm text-gray-500">
+                          Obsługa walut obcych wyłączona dla tej placówki
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -887,6 +961,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         isEditingBlocked={isEditingBlocked}
                         locationId={userProfile?.location_id}
                         showCopyButton={showParallelSection}
+                        currency={selectedCurrency}
                       />
                     ))}
                     
@@ -896,6 +971,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         showCopyButton={showParallelSection}
+                        currency={selectedCurrency}
                       />
                     )}
                   </TableBody>
@@ -908,29 +984,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   <div className="flex justify-between items-center text-lg">
                     <span className="font-medium text-green-700">Winien:</span>
                     <span className="font-semibold text-green-700">
-                      {debitTotal.toLocaleString('pl-PL', { 
-                        style: 'currency', 
-                        currency: 'PLN' 
-                      })}
+                      {formatAmount(debitTotal, selectedCurrency)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-lg">
                     <span className="font-medium text-blue-700">Ma:</span>
                     <span className="font-semibold text-blue-700">
-                      {creditTotal.toLocaleString('pl-PL', { 
-                        style: 'currency', 
-                        currency: 'PLN' 
-                      })}
+                      {formatAmount(creditTotal, selectedCurrency)}
                     </span>
                   </div>
                   <div className="border-t pt-2">
                     <div className="flex justify-between items-center text-xl font-bold">
                       <span>Razem:</span>
                       <span>
-                        {(debitTotal + creditTotal).toLocaleString('pl-PL', { 
-                          style: 'currency', 
-                          currency: 'PLN' 
-                        })}
+                        {formatAmount(debitTotal + creditTotal, selectedCurrency)}
                       </span>
                     </div>
                   </div>
@@ -940,7 +1007,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       <div className="flex items-center gap-2 text-yellow-800">
                         <AlertTriangle className="h-4 w-4" />
                         <span className="text-sm font-medium">
-                          Operacje główne nie są zbilansowane. Różnica: {Math.abs(debitTotal - creditTotal).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                          Operacje główne nie są zbilansowane. Różnica: {formatAmount(Math.abs(debitTotal - creditTotal), selectedCurrency)}
                         </span>
                       </div>
                     </div>
@@ -996,6 +1063,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           locationId={userProfile?.location_id}
                           isParallel={true}
                           showCopyButton={false}
+                          currency={selectedCurrency}
                         />
                       ))}
                       
@@ -1005,6 +1073,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           showCopyButton={false}
+                          currency={selectedCurrency}
                         />
                       )}
                     </TableBody>
@@ -1017,29 +1086,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     <div className="flex justify-between items-center text-lg">
                       <span className="font-medium text-green-700">Winien (równoległe):</span>
                       <span className="font-semibold text-green-700">
-                        {parallelDebitTotal.toLocaleString('pl-PL', { 
-                          style: 'currency', 
-                          currency: 'PLN' 
-                        })}
+                        {formatAmount(parallelDebitTotal, selectedCurrency)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-lg">
                       <span className="font-medium text-blue-700">Ma (równoległe):</span>
                       <span className="font-semibold text-blue-700">
-                        {parallelCreditTotal.toLocaleString('pl-PL', { 
-                          style: 'currency', 
-                          currency: 'PLN' 
-                        })}
+                        {formatAmount(parallelCreditTotal, selectedCurrency)}
                       </span>
                     </div>
                     <div className="border-t pt-2">
                       <div className="flex justify-between items-center text-xl font-bold">
                         <span>Razem (równoległe):</span>
                         <span>
-                          {(parallelDebitTotal + parallelCreditTotal).toLocaleString('pl-PL', { 
-                            style: 'currency', 
-                            currency: 'PLN' 
-                          })}
+                          {formatAmount(parallelDebitTotal + parallelCreditTotal, selectedCurrency)}
                         </span>
                       </div>
                     </div>
@@ -1049,7 +1109,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         <div className="flex items-center gap-2 text-yellow-800">
                           <AlertTriangle className="h-4 w-4" />
                           <span className="text-sm font-medium">
-                            Księgowanie równoległe nie jest zbilansowane. Różnica: {Math.abs(parallelDebitTotal - parallelCreditTotal).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                            Księgowanie równoległe nie jest zbilansowane. Różnica: {formatAmount(Math.abs(parallelDebitTotal - parallelCreditTotal), selectedCurrency)}
                           </span>
                         </div>
                       </div>
@@ -1073,7 +1133,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 )}>
                   {Math.abs((debitTotal + parallelDebitTotal) - (creditTotal + parallelCreditTotal)) <= 0.01 
                     ? "ZBILANSOWANE" 
-                    : `RÓŻNICA: ${Math.abs((debitTotal + parallelDebitTotal) - (creditTotal + parallelCreditTotal)).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    : `RÓŻNICA: ${formatAmount(Math.abs((debitTotal + parallelDebitTotal) - (creditTotal + parallelCreditTotal)), selectedCurrency)}
                   `}
                 </span>
               </div>
@@ -1107,6 +1167,7 @@ interface InlineEditTransactionRowProps {
   locationId?: string;
   isParallel?: boolean;
   showCopyButton?: boolean;
+  currency?: string;
 }
 
 const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
@@ -1122,6 +1183,7 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
   locationId,
   isParallel = false,
   showCopyButton = false,
+  currency = 'PLN',
 }) => {
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1250,6 +1312,7 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
       settlement_type: formData.settlement_type,
+      currency: currency,
     };
 
     onSave(updatedTransaction);
