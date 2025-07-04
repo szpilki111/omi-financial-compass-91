@@ -83,7 +83,7 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
     }
     return currencies;
   }, [locationSettings]);
-  return <div className={`space-y-1 ${className}`}>
+  return <div className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}>
       {label}
       
       <Select value={value} onValueChange={onChange} disabled={disabled}>
