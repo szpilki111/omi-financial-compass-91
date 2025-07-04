@@ -4,7 +4,7 @@ import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Check, X } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import { useQuery } from '@tanstack/react-query';
@@ -13,13 +13,12 @@ import { useAuth } from '@/context/AuthContext';
 
 interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
-  onCancel: () => void;
+  onCancel?: () => void; // Made optional since we won't use it
   isEditingBlocked?: boolean;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   onSave,
-  onCancel,
   isEditingBlocked = false,
 }) => {
   const { user } = useAuth();
@@ -216,26 +215,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         />
       </TableCell>
       <TableCell>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={!isFormValid || isEditingBlocked}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            disabled={isEditingBlocked}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleSave}
+          disabled={!isFormValid || isEditingBlocked}
+          className="bg-green-600 hover:bg-green-700"
+        >
+          <Check className="h-4 w-4" />
+        </Button>
       </TableCell>
     </TableRow>
   );
