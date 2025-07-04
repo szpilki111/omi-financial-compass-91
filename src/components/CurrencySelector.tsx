@@ -40,9 +40,9 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
 
   // Fetch location settings to check if foreign currencies are allowed
   const { data: locationSettings } = useQuery({
-    queryKey: ['location-settings', locationId || user?.location_id],
+    queryKey: ['location-settings', locationId || user?.location],
     queryFn: async () => {
-      const targetLocationId = locationId || user?.location_id;
+      const targetLocationId = locationId || user?.location;
       if (!targetLocationId) return null;
       
       const { data, error } = await supabase
@@ -58,7 +58,7 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
 
       return data;
     },
-    enabled: !!(locationId || user?.location_id),
+    enabled: !!(locationId || user?.location),
   });
 
   // Determine which currencies to show
