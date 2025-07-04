@@ -549,6 +549,35 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     setEditingTransactionIndex(null);
   };
 
+  // New function to handle auto-balancing for edited transactions
+  const handleEditTransactionWithBalancing = async (index: number, updatedTransaction: Transaction) => {
+    const transactionWithAccountNumbers = await loadAccountNumbersForTransactions([updatedTransaction]);
+    setTransactions(prev => prev.map((t, i) => i === index ? transactionWithAccountNumbers[0] : t));
+    setEditingTransactionIndex(null);
+
+    // Check if amounts don't match and create balancing transaction
+    if (Math.abs(updatedTransaction.debit_amount! - updatedTransaction.credit_amount!) > 0.01) {
+      const difference = Math.abs(updatedTransaction.debit_amount! - updatedTransaction.credit_amount!);
+      
+      // Create balancing transaction
+      const balancingTransaction: Transaction = {
+        description: updatedTransaction.description,
+        debit_account_id: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? updatedTransaction.credit_account_id : updatedTransaction.debit_account_id,
+        credit_account_id: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? updatedTransaction.debit_account_id : updatedTransaction.credit_account_id,
+        debit_amount: updatedTransaction.debit_amount! > updatedTransaction.credit_amount! ? difference : 0,
+        credit_amount: updatedTransaction.credit_amount! > updatedTransaction.debit_amount! ? difference : 0,
+        amount: difference,
+        settlement_type: updatedTransaction.settlement_type,
+      };
+
+      // Add balancing transaction after a short delay
+      setTimeout(async () => {
+        const balancingTransactionWithAccountNumbers = await loadAccountNumbersForTransactions([balancingTransaction]);
+        setTransactions(prev => [...prev, balancingTransactionWithAccountNumbers[0]]);
+      }, 200);
+    }
+  };
+
   // Calculate separate sums for debit and credit using the new columns
   const debitTotal = transactions.reduce((sum, t) => {
     const debitAmount = t.debit_amount !== undefined ? t.debit_amount : t.amount;
@@ -725,7 +754,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         index={index}
                         isEditing={editingTransactionIndex === index}
                         onEdit={() => handleEditTransaction(index)}
-                        onSave={(updatedTransaction) => handleSaveTransaction(index, updatedTransaction)}
+                        onSave={(updatedTransaction) => handleEditTransactionWithBalancing(index, updatedTransaction)}
                         onCancel={handleCancelEdit}
                         onDelete={() => removeTransaction(index)}
                         isEditingBlocked={isEditingBlocked}
@@ -806,7 +835,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   );
 };
 
-// New inline edit transaction row component
+// Updated inline edit transaction row component with auto-balancing on blur
 interface InlineEditTransactionRowProps {
   transaction: Transaction;
   index: number;
@@ -902,6 +931,17 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
     setDebitHasFocus(false);
     setDebitTouched(true);
     
+    // Auto-save and create balancing transaction if amounts don't match
+    if (formData.debit_amount > 0 && formData.credit_amount > 0 && 
+        Math.abs(formData.debit_amount - formData.credit_amount) > 0.01 &&
+        formData.description.trim() && formData.debit_account_id && formData.credit_account_id) {
+      
+      // If debit amount is smaller, trigger save with balancing
+      if (formData.debit_amount < formData.credit_amount) {
+        handleSave();
+      }
+    }
+    
     // Copy amount to credit field if credit hasn't been touched and is 0
     if (!creditTouched && formData.credit_amount === 0 && formData.debit_amount > 0) {
       setFormData(prev => ({ ...prev, credit_amount: prev.debit_amount }));
@@ -915,6 +955,17 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
   const handleCreditBlur = () => {
     setCreditHasFocus(false);
     setCreditTouched(true);
+    
+    // Auto-save and create balancing transaction if amounts don't match
+    if (formData.debit_amount > 0 && formData.credit_amount > 0 && 
+        Math.abs(formData.debit_amount - formData.credit_amount) > 0.01 &&
+        formData.description.trim() && formData.debit_account_id && formData.credit_account_id) {
+      
+      // If credit amount is smaller, trigger save with balancing
+      if (formData.credit_amount < formData.debit_amount) {
+        handleSave();
+      }
+    }
     
     // Copy amount to debit field if debit hasn't been touched and is 0
     if (!debitTouched && formData.debit_amount === 0 && formData.credit_amount > 0) {
