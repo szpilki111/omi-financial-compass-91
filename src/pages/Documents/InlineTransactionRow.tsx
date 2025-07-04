@@ -15,7 +15,7 @@ interface InlineTransactionRowProps {
   onCancel?: () => void; // Made optional since we won't use it
   isEditingBlocked?: boolean;
   showCopyButton?: boolean; // New prop to control copy button visibility
-  currency?: string; // New prop for currency
+  currency?: string; // Currency prop
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
@@ -135,7 +135,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
       settlement_type: formData.settlement_type,
-      currency: currency,
+      currency: currency, // Use the currency prop
     };
 
     onSave(transaction);
@@ -153,7 +153,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_amount: formData.credit_amount > formData.debit_amount ? 0 : difference,
         amount: difference,
         settlement_type: formData.settlement_type,
-        currency: currency,
+        currency: currency, // Use the currency prop
       };
 
       // Save balancing transaction after a short delay
@@ -161,6 +161,20 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         onSave(balancingTransaction);
       }, 200);
     }
+  };
+
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
   };
 
   return (
@@ -185,17 +199,20 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         />
       </TableCell>
       <TableCell>
-        <Input
-          type="number"
-          step="0.01"
-          min="0"
-          value={formData.debit_amount || ''}
-          onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
-          onFocus={handleDebitFocus}
-          placeholder="0.00"
-          className="text-right"
-          disabled={isEditingBlocked}
-        />
+        <div className="flex items-center space-x-2">
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.debit_amount || ''}
+            onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
+            onFocus={handleDebitFocus}
+            placeholder="0.00"
+            className="text-right"
+            disabled={isEditingBlocked}
+          />
+          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+        </div>
       </TableCell>
       <TableCell>
         <AccountCombobox
@@ -207,17 +224,20 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         />
       </TableCell>
       <TableCell>
-        <Input
-          type="number"
-          step="0.01"
-          min="0"
-          value={formData.credit_amount || ''}
-          onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
-          onFocus={handleCreditFocus}
-          placeholder="0.00"
-          className="text-right"
-          disabled={isEditingBlocked}
-        />
+        <div className="flex items-center space-x-2">
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.credit_amount || ''}
+            onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
+            onFocus={handleCreditFocus}
+            placeholder="0.00"
+            className="text-right"
+            disabled={isEditingBlocked}
+          />
+          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+        </div>
       </TableCell>
       <TableCell>
         {/* Removed the accept button completely - no action buttons in inline form */}

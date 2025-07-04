@@ -74,6 +74,7 @@ export type Database = {
       documents: {
         Row: {
           created_at: string
+          currency: string
           document_date: string
           document_name: string
           document_number: string
@@ -84,6 +85,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          currency?: string
           document_date: string
           document_name: string
           document_number: string
@@ -94,6 +96,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          currency?: string
           document_date?: string
           document_name?: string
           document_number?: string

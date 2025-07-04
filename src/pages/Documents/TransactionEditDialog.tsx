@@ -131,7 +131,6 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
     }
   };
 
-  // Funkcja sprawdzająca czy można automatycznie zapisać
   const checkAutoSave = (updatedFormData: typeof formData) => {
     console.log('Checking auto-save with data:', updatedFormData);
     
