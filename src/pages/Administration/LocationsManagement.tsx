@@ -2,101 +2,111 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import LocationDialog from './LocationDialog';
+import LocationSettingsDialog from './LocationSettingsDialog';
+import { Switch } from '@/components/ui/switch';
 
 interface Location {
   id: string;
   name: string;
   address: string | null;
   created_at: string;
-}
-
-interface LocationWithSettings extends Location {
-  house_abbreviation?: string;
+  location_settings?: {
+    house_abbreviation: string;
+    allow_foreign_currencies: boolean;
+  } | null;
 }
 
 const LocationsManagement = () => {
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
 
-  // Pobierz listę placówek z ustawieniami
+  // Pobierz lokalizacje z ustawieniami
   const { data: locations, isLoading } = useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
-      const { data: locationsData, error: locationsError } = await supabase
+      const { data, error } = await supabase
         .from('locations')
-        .select('*')
-        .order('name');
-      
-      if (locationsError) throw locationsError;
+        .select(`
+          *,
+          location_settings (
+            house_abbreviation,
+            allow_foreign_currencies
+          )
+        `)
+        .order('created_at', { ascending: true });
 
-      // Pobierz ustawienia dla wszystkich lokalizacji
-      const { data: settingsData, error: settingsError } = await supabase
+      if (error) throw error;
+      return data as Location[];
+    },
+  });
+
+  // Mutacja do aktualizacji uprawnień walutowych
+  const updateCurrencyPermissionMutation = useMutation({
+    mutationFn: async ({ locationId, allowForeignCurrencies }: { locationId: string; allowForeignCurrencies: boolean }) => {
+      // Sprawdź czy istnieją ustawienia dla tej lokalizacji
+      const { data: existingSettings } = await supabase
         .from('location_settings')
-        .select('location_id, house_abbreviation');
+        .select('id')
+        .eq('location_id', locationId)
+        .maybeSingle();
 
-      if (settingsError) throw settingsError;
+      if (existingSettings) {
+        // Aktualizuj istniejące ustawienia
+        const { error } = await supabase
+          .from('location_settings')
+          .update({ allow_foreign_currencies: allowForeignCurrencies })
+          .eq('location_id', locationId);
 
-      // Połącz dane
-      const locationsWithSettings: LocationWithSettings[] = locationsData.map(location => ({
-        ...location,
-        house_abbreviation: settingsData?.find(s => s.location_id === location.id)?.house_abbreviation
-      }));
+        if (error) throw error;
+      } else {
+        // Utwórz nowe ustawienia z domyślnym skrótem
+        const { error } = await supabase
+          .from('location_settings')
+          .insert({
+            location_id: locationId,
+            house_abbreviation: 'DOM',
+            allow_foreign_currencies: allowForeignCurrencies,
+          });
 
-      return locationsWithSettings;
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      toast({
+        title: "Sukces",
+        description: "Ustawienia walutowe zostały zaktualizowane.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   });
 
-  // Mutacja do usuwania placówki
-  const deleteMutation = useMutation({
+  // Mutacja do usuwania lokalizacji
+  const deleteLocationMutation = useMutation({
     mutationFn: async (locationId: string) => {
-      // Sprawdź czy istnieją powiązane transakcje
-      const { data: transactions, error: transactionsError } = await supabase
-        .from('transactions')
-        .select('id')
-        .eq('location_id', locationId)
-        .limit(1);
-
-      if (transactionsError) throw transactionsError;
-
-      if (transactions && transactions.length > 0) {
-        throw new Error('Nie można usunąć placówki - istnieją powiązane operacje');
-      }
-
-      // Sprawdź czy istnieją powiązane raporty
-      const { data: reports, error: reportsError } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('location_id', locationId)
-        .limit(1);
-
-      if (reportsError) throw reportsError;
-
-      if (reports && reports.length > 0) {
-        throw new Error('Nie można usunąć placówki - istnieją powiązane raporty');
-      }
-
-      // Usuń najpierw ustawienia lokalizacji (jeśli istnieją)
+      // Najpierw usuń ustawienia lokalizacji
       await supabase
         .from('location_settings')
         .delete()
         .eq('location_id', locationId);
-
-      // Usuwanie placówki
+      
+      // Następnie usuń lokalizację
       const { error } = await supabase
         .from('locations')
         .delete()
@@ -120,25 +130,43 @@ const LocationsManagement = () => {
     }
   });
 
-  const handleEdit = (location: Location) => {
-    setSelectedLocation(location);
-    setIsDialogOpen(true);
-  };
-
-  const handleAdd = () => {
+  const handleAddLocation = () => {
     setSelectedLocation(null);
-    setIsDialogOpen(true);
+    setIsLocationDialogOpen(true);
   };
 
-  const handleDelete = (location: Location) => {
-    if (confirm(`Czy na pewno chcesz usunąć placówkę "${location.name}"?`)) {
-      deleteMutation.mutate(location.id);
+  const handleEditLocation = (location: Location) => {
+    setSelectedLocation(location);
+    setIsLocationDialogOpen(true);
+  };
+
+  const handleEditSettings = (location: Location) => {
+    setSelectedLocation(location);
+    setIsSettingsDialogOpen(true);
+  };
+
+  const handleDeleteLocation = (locationId: string) => {
+    if (confirm('Czy na pewno chcesz usunąć tę placówkę?')) {
+      deleteLocationMutation.mutate(locationId);
     }
   };
 
-  const handleDialogClose = (saved: boolean) => {
-    setIsDialogOpen(false);
-    setSelectedLocation(null);
+  const handleCurrencyPermissionChange = (locationId: string, allowed: boolean) => {
+    updateCurrencyPermissionMutation.mutate({
+      locationId,
+      allowForeignCurrencies: allowed,
+    });
+  };
+
+  const handleLocationDialogClose = (saved: boolean) => {
+    setIsLocationDialogOpen(false);
+    if (saved) {
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+    }
+  };
+
+  const handleSettingsDialogClose = (saved: boolean) => {
+    setIsSettingsDialogOpen(false);
     if (saved) {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     }
@@ -148,88 +176,106 @@ const LocationsManagement = () => {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="text-center">Ładowanie placówek...</p>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Zarządzanie placówkami</CardTitle>
-            <Button onClick={handleAdd} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Dodaj placówkę
-            </Button>
-          </div>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Zarządzanie placówkami</CardTitle>
+          <Button onClick={handleAddLocation}>
+            <Plus className="h-4 w-4 mr-2" />
+            Dodaj placówkę
+          </Button>
         </CardHeader>
         <CardContent>
-          {!locations?.length ? (
-            <p className="text-center text-omi-gray-500">Brak placówek w systemie.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nazwa</TableHead>
-                  <TableHead>Skrót</TableHead>
-                  <TableHead>Adres</TableHead>
-                  <TableHead>Data utworzenia</TableHead>
-                  <TableHead className="text-right">Akcje</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {locations.map((location) => (
-                  <TableRow key={location.id}>
-                    <TableCell className="font-medium">{location.name}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        location.house_abbreviation 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {location.house_abbreviation || 'Brak'}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-3 font-medium">Nazwa</th>
+                  <th className="text-left p-3 font-medium">Skrót</th>
+                  <th className="text-left p-3 font-medium">Adres</th>
+                  <th className="text-left p-3 font-medium">Data utworzenia</th>
+                  <th className="text-left p-3 font-medium">Waluty obce</th>
+                  <th className="text-left p-3 font-medium">Akcje</th>
+                </tr>
+              </thead>
+              <tbody>
+                {locations?.map((location) => (
+                  <tr key={location.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">{location.name}</td>
+                    <td className="p-3">
+                      <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                        {location.location_settings?.house_abbreviation || 'DOM'}
                       </span>
-                    </TableCell>
-                    <TableCell>{location.address || '-'}</TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="p-3">{location.address || '-'}</td>
+                    <td className="p-3">
                       {new Date(location.created_at).toLocaleDateString('pl-PL')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={location.location_settings?.allow_foreign_currencies || false}
+                          onCheckedChange={(checked) => handleCurrencyPermissionChange(location.id, checked)}
+                          disabled={updateCurrencyPermissionMutation.isPending}
+                        />
+                        <span className="text-sm text-gray-600">
+                          {location.location_settings?.allow_foreign_currencies ? 'Dozwolone' : 'Zablokowane'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          onClick={() => handleEdit(location)}
-                          title="Edytuj placówkę"
+                          onClick={() => handleEditSettings(location)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(location)}
-                          disabled={deleteMutation.isPending}
-                          title="Usuń placówkę"
+                          onClick={() => handleEditLocation(location)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteLocation(location.id)}
+                          className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
-          )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 
       <LocationDialog
         location={selectedLocation}
-        isOpen={isDialogOpen}
-        onClose={handleDialogClose}
+        isOpen={isLocationDialogOpen}
+        onClose={handleLocationDialogClose}
+      />
+
+      <LocationSettingsDialog
+        location={selectedLocation}
+        isOpen={isSettingsDialogOpen}
+        onClose={handleSettingsDialogClose}
       />
     </div>
   );
