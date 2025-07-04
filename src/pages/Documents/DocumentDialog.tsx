@@ -364,6 +364,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
+  // Handle parallel posting
   const handleParallelPosting = (transactionIndex: number) => {
     const transactionToCopy = transactions[transactionIndex];
     if (!transactionToCopy) return;
@@ -532,13 +533,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       console.log('Creating/updating document with user_id:', user.id);
 
       if (document) {
-        // Update existing document
+        // Update existing document - NAPRAWKA: dodajemy currency do aktualizacji
         const { error } = await supabase
           .from('documents')
           .update({
             document_number: data.document_number,
             document_name: data.document_name,
             document_date: format(data.document_date, 'yyyy-MM-dd'),
+            currency: data.currency, // NAPRAWKA: zapisujemy walutę przy aktualizacji
           })
           .eq('id', document.id);
 
@@ -553,6 +555,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_date: format(data.document_date, 'yyyy-MM-dd'),
             location_id: user.location,
             user_id: user.id,
+            currency: data.currency, // Waluta jest już ustawiana przy tworzeniu
           })
           .select()
           .single();
