@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -29,6 +28,9 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import CurrencySelector from '@/components/CurrencySelector';
+import ExchangeRateManager from '@/components/ExchangeRateManager';
+import CurrencyAmountInput from '@/components/CurrencyAmountInput';
 
 interface KpirOperationDialogProps {
   open: boolean;
@@ -253,6 +255,15 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
     }
   };
 
+  const handleCurrencyChange = (currency: string) => {
+    setFormData(prev => ({
+      ...prev,
+      currency,
+      exchange_rate: currency === 'PLN' ? 1 : prev.exchange_rate
+    }));
+    setHasUnsavedChanges(true);
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     
@@ -334,7 +345,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
   const selectedAccount = accounts.find(account => account.id === formData.debit_account_id);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nowa operacja finansowa</DialogTitle>
@@ -402,69 +413,33 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Kwota */}
-            <div className="space-y-1">
-              <Label htmlFor="amount" className="text-sm font-medium">
-                Kwota *
-              </Label>
-              <input
-                type="number"
-                id="amount"
-                name="amount"
-                value={formData.amount}
-                onChange={handleAmountChange}
-                onFocus={handleAmountFocus}
-                onBlur={handleAmountBlur}
-                min="0"
-                step="0.01"
-                max="9999999999"
-                className={`w-full p-2 border rounded-md ${errors.amount ? 'border-red-500' : 'border-omi-gray-300'}`}
-              />
-              {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
-            </div>
+            {/* Enhanced Amount field with currency support */}
+            <CurrencyAmountInput
+              label="Kwota *"
+              value={formData.amount}
+              onChange={(value) => setFormData({ ...formData, amount: value })}
+              currency={formData.currency}
+              exchangeRate={formData.exchange_rate}
+              required
+            />
             
-            {/* Waluta */}
-            <div className="space-y-1">
-              <Label htmlFor="currency" className="text-sm font-medium">
-                Waluta *
-              </Label>
-              <select
-                id="currency"
-                name="currency"
-                value={formData.currency}
-                onChange={handleChange}
-                className={`w-full p-2 border rounded-md ${errors.currency ? 'border-red-500' : 'border-omi-gray-300'}`}
-              >
-                <option value="PLN">PLN</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-                <option value="GBP">GBP</option>
-                <option value="CHF">CHF</option>
-              </select>
-              {errors.currency && <p className="text-red-500 text-xs">{errors.currency}</p>}
-            </div>
+            {/* Enhanced Currency field */}
+            <CurrencySelector
+              value={formData.currency}
+              onChange={handleCurrencyChange}
+              label="Waluta *"
+              required
+            />
             
-            {/* Kurs wymiany */}
-            <div className="space-y-1">
-              <Label htmlFor="exchange_rate" className="text-sm font-medium">
-                Kurs wymiany {formData.currency !== 'PLN' ? '*' : ''}
-              </Label>
-              <input
-                type="number"
-                id="exchange_rate"
-                name="exchange_rate"
-                value={formData.exchange_rate}
-                onChange={handleChange}
-                min="0.0001"
-                step="0.0001"
-                disabled={formData.currency === 'PLN'}
-                className={`w-full p-2 border rounded-md ${
-                  errors.exchange_rate ? 'border-red-500' : 'border-omi-gray-300'
-                } ${formData.currency === 'PLN' ? 'bg-omi-gray-100' : ''}`}
-              />
-              {errors.exchange_rate && <p className="text-red-500 text-xs">{errors.exchange_rate}</p>}
-            </div>
+            {/* Exchange Rate Manager */}
+            <ExchangeRateManager
+              currency={formData.currency}
+              value={formData.exchange_rate}
+              onChange={(rate) => setFormData({ ...formData, exchange_rate: rate })}
+            />
           </div>
+          
+          {errors.exchange_rate && <p className="text-red-500 text-xs">{errors.exchange_rate}</p>}
           
           {/* Rodzaj konta z wyszukiwarką */}
           <div className="space-y-1">
@@ -560,7 +535,7 @@ const KpirOperationDialog: React.FC<KpirOperationDialogProps> = ({ open, onClose
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Anuluj
             </Button>
             <Button type="submit" disabled={loading}>
