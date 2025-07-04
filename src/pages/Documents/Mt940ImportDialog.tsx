@@ -154,6 +154,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
           }
         }
         
+        // Use the actual description from the file instead of generic "Operacja bankowa"
         currentTransaction.description = description || 'Operacja bankowa';
         currentTransaction.counterparty = counterparty;
         currentTransaction.accountNumber = accountNumber;
@@ -246,19 +247,21 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         throw docError;
       }
 
-      // Create all transactions for this document
-      const transactionsToInsert = previewData.transactions.map(transaction => ({
+      // Create all transactions for this document - MAINTAIN FILE ORDER
+      const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
         date: transaction.date,
-        description: transaction.description,
+        description: transaction.description, // Use the actual title from the file
         debit_amount: transaction.amount,
         credit_amount: transaction.amount,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
         location_id: user.location,
-        user_id: user.id
+        user_id: user.id,
+        // Add a sort order to maintain file sequence
+        created_at: new Date(Date.now() + index * 1000).toISOString() // Offset by seconds to maintain order
       }));
 
       const { error: transError } = await supabase
