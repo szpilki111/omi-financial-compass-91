@@ -11,6 +11,7 @@ export interface Transaction {
   debit_amount?: number;
   credit_amount?: number;
   currency?: string;
+  exchange_rate?: number;
   isCloned?: boolean;
   clonedType?: 'debit' | 'credit';
   debitAccountNumber?: string;
