@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -22,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import CurrencySelector from '@/components/CurrencySelector';
 import ExchangeRateManager from '@/components/ExchangeRateManager';
 import CurrencyAmountInput from '@/components/CurrencyAmountInput';
+import { useQuery } from '@tanstack/react-query';
 
 interface KpirEditDialogProps {
   open: boolean;
@@ -50,6 +52,40 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Get location settings to check if foreign currencies are allowed
+  const { data: locationSettings } = useQuery({
+    queryKey: ['locationSettings', userProfile?.location_id],
+    queryFn: async () => {
+      if (!userProfile?.location_id) return null;
+      
+      const { data, error } = await supabase
+        .from('location_settings')
+        .select('allow_foreign_currencies')
+        .eq('location_id', userProfile.location_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id,
+  });
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -87,7 +123,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         debit_account_id: transaction.debit_account_id,
         credit_account_id: transaction.credit_account_id,
         settlement_type: transaction.settlement_type,
-        currency: transaction.currency,
+        currency: transaction.currency || 'PLN',
         exchange_rate: transaction.exchange_rate || 1,
       });
       setHasUnsavedChanges(false);
@@ -317,6 +353,7 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
               onChange={handleCurrencyChange}
               label="Waluta *"
               required
+              disabled={!locationSettings?.allow_foreign_currencies}
             />
             
             {/* Exchange Rate Manager */}
@@ -324,10 +361,19 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
               currency={formData.currency}
               value={formData.exchange_rate}
               onChange={(rate) => setFormData({ ...formData, exchange_rate: rate })}
+              disabled={!locationSettings?.allow_foreign_currencies}
             />
           </div>
           
           {errors.exchange_rate && <p className="text-red-500 text-xs">{errors.exchange_rate}</p>}
+          
+          {!locationSettings?.allow_foreign_currencies && formData.currency !== 'PLN' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                Ta placówka nie ma uprawnień do operacji walutami obcymi. Waluta została przywrócona do PLN.
+              </p>
+            </div>
+          )}
           
           {/* Forma rozrachunku */}
           <div className="space-y-1">
