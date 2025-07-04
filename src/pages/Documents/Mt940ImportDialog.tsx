@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -59,7 +60,10 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
     let closingBalance = 0;
     const transactions: Mt940Transaction[] = [];
     
+    // Store transaction details by reference for sharing between transactions
+    const transactionDetailsByRef: { [key: string]: { description: string; counterparty: string; accountNumber: string } } = {};
     let currentTransaction: Partial<Mt940Transaction> = {};
+    let currentDetails: { description: string; counterparty: string; accountNumber: string } = { description: '', counterparty: '', accountNumber: '' };
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -109,13 +113,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         const typeMatch = transactionLine.match(/[CD]N/);
         const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
         
-        // Extract amount - fix: don't divide by 100, just replace comma with dot
+        // Extract amount
         const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
         const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
         
-        // Extract reference
-        const referenceMatch = transactionLine.match(/N(\d+)/);
-        const reference = referenceMatch ? referenceMatch[1] : '';
+        // Extract reference - get the part after // which is the reference
+        const refMatch = transactionLine.match(/\/\/([^/]+)$/);
+        const reference = refMatch ? refMatch[1] : '';
         
         currentTransaction = {
           date: transactionDate,
@@ -123,8 +127,17 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
           type,
           reference,
           description: '',
-          counterparty: ''
+          counterparty: '',
+          accountNumber: ''
         };
+        
+        // Check if we have stored details for this reference
+        if (reference && transactionDetailsByRef[reference]) {
+          const storedDetails = transactionDetailsByRef[reference];
+          currentTransaction.description = storedDetails.description;
+          currentTransaction.counterparty = storedDetails.counterparty;
+          currentTransaction.accountNumber = storedDetails.accountNumber;
+        }
       }
       
       // Transaction details
@@ -148,7 +161,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
           } else if (part.startsWith('21')) {
             const titlePart = part.substring(2).trim();
             if (titlePart) {
-              description += (description ? ' - ' : '') + titlePart;
+              description += (description ? ' ' : '') + titlePart;
             }
           } else if (part.startsWith('32') || part.startsWith('33')) {
             const namePart = part.substring(2).trim();
@@ -160,10 +173,22 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
           }
         }
         
-        // Use description from ^20 section if available, otherwise fallback
-        currentTransaction.description = description || 'Operacja bankowa';
-        currentTransaction.counterparty = counterparty;
-        currentTransaction.accountNumber = accountNumber;
+        // Store the details for the current transaction
+        currentDetails = {
+          description: description || 'Operacja bankowa',
+          counterparty: counterparty,
+          accountNumber: accountNumber
+        };
+        
+        // Apply details to current transaction
+        currentTransaction.description = currentDetails.description;
+        currentTransaction.counterparty = currentDetails.counterparty;
+        currentTransaction.accountNumber = currentDetails.accountNumber;
+        
+        // Store details by reference for future transactions with the same reference
+        if (currentTransaction.reference) {
+          transactionDetailsByRef[currentTransaction.reference] = currentDetails;
+        }
       }
     }
     
