@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Check, Copy } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Check, Copy, Edit, Save, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -64,11 +64,16 @@ const DocumentDialog = ({
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('location_id').eq('id', user?.id).single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id
+    enabled: !!user?.id,
   });
 
   // Get location settings to check if foreign currencies are allowed
@@ -160,6 +165,14 @@ const DocumentDialog = ({
     await onSubmit(formData);
     setShowConfirmClose(false);
     setHasUnsavedChanges(false);
+  };
+
+  const handleRegenerateNumber = async () => {
+    const currentDate = form.getValues('document_date');
+    const generatedNumber = await generateDocumentNumber(currentDate);
+    if (generatedNumber) {
+      form.setValue('document_number', generatedNumber);
+    }
   };
 
   const generateDocumentNumber = async (date: Date) => {
@@ -595,21 +608,29 @@ const DocumentDialog = ({
                   </TableHeader>
                   <TableBody>
                     {transactions.map((transaction, index) => (
-                      <InlineTransactionRow
-                        key={index}
-                        transaction={transaction}
-                        index={index}
-                        isEditing={editingTransactionIndex === index}
-                        onEdit={() => handleEditTransaction(index)}
-                        onSave={updatedTransaction => handleSaveTransaction(index, updatedTransaction)}
-                        onCancel={handleCancelEdit}
-                        onDelete={() => removeTransaction(index)}
-                      />
+                      editingTransactionIndex === index ? (
+                        <EditTransactionRow
+                          key={index}
+                          transaction={transaction}
+                          onSave={(updatedTransaction) => handleSaveTransaction(index, updatedTransaction)}
+                          onCancel={handleCancelEdit}
+                          currency={selectedCurrency}
+                        />
+                      ) : (
+                        <ViewTransactionRow
+                          key={index}
+                          transaction={transaction}
+                          onEdit={() => handleEditTransaction(index)}
+                          onDelete={() => removeTransaction(index)}
+                          currency={selectedCurrency}
+                        />
+                      )
                     ))}
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
+                        currency={selectedCurrency}
                       />
                     )}
                   </TableBody>
@@ -630,25 +651,64 @@ const DocumentDialog = ({
   );
 };
 
-interface InlineEditTransactionRowProps {
+// Component for displaying transaction in view mode
+const ViewTransactionRow: React.FC<{
   transaction: Transaction;
-  index: number;
-  isEditing: boolean;
   onEdit: () => void;
+  onDelete: () => void;
+  currency: string;
+}> = ({ transaction, onEdit, onDelete, currency }) => {
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
+  return (
+    <TableRow>
+      <TableCell>{transaction.description}</TableCell>
+      <TableCell>
+        {transaction.debitAccount?.number || 'N/A'}
+      </TableCell>
+      <TableCell className="text-right">
+        {transaction.debit_amount?.toFixed(2)} {getCurrencySymbol(currency)}
+      </TableCell>
+      <TableCell>
+        {transaction.creditAccount?.number || 'N/A'}
+      </TableCell>
+      <TableCell className="text-right">
+        {transaction.credit_amount?.toFixed(2)} {getCurrencySymbol(currency)}
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-700">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
+// Component for editing transaction
+const EditTransactionRow: React.FC<{
+  transaction: Transaction;
   onSave: (transaction: Transaction) => void;
   onCancel: () => void;
-  onDelete: () => void;
-}
-
-const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
-  transaction,
-  index,
-  isEditing,
-  onEdit,
-  onSave,
-  onCancel,
-  onDelete
-}) => {
+  currency: string;
+}> = ({ transaction, onSave, onCancel, currency }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
     debit_account_id: transaction.debit_account_id || '',
@@ -657,15 +717,21 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
     credit_amount: transaction.credit_amount || 0,
   });
 
-  useEffect(() => {
-    setFormData({
-      description: transaction.description || '',
-      debit_account_id: transaction.debit_account_id || '',
-      credit_account_id: transaction.credit_account_id || '',
-      debit_amount: transaction.debit_amount || 0,
-      credit_amount: transaction.credit_amount || 0,
-    });
-  }, [transaction]);
+  // Get user's location from profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   const handleSave = () => {
     if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) {
@@ -682,46 +748,86 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
       debit_amount: formData.debit_amount,
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
+      currency: currency,
     };
     onSave(updatedTransaction);
   };
 
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
   return (
-    <TableRow>
+    <TableRow className="bg-yellow-50 border-2 border-yellow-200">
       <TableCell>
-        <Textarea value={formData.description} onChange={e => setFormData(prev => ({
-          ...prev,
-          description: e.target.value
-        }))} placeholder="Opis operacji..." className="min-h-[60px] resize-none" />
+        <Textarea 
+          value={formData.description} 
+          onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
+          placeholder="Opis operacji..." 
+          className="min-h-[60px] resize-none" 
+        />
       </TableCell>
       <TableCell>
-        <AccountCombobox value={formData.debit_account_id} onChange={accountId => setFormData(prev => ({
-          ...prev,
-          debit_account_id: accountId
-        }))} />
+        <AccountCombobox 
+          value={formData.debit_account_id} 
+          onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
+          locationId={userProfile?.location_id}
+          side="debit"
+        />
       </TableCell>
       <TableCell>
-        <Input type="number" step="0.01" min="0" value={formData.debit_amount || ''} onChange={e => setFormData(prev => ({
-          ...prev,
-          debit_amount: parseFloat(e.target.value) || 0
-        }))} placeholder="0.00" className="text-right" />
+        <div className="flex items-center space-x-2">
+          <Input 
+            type="number" 
+            step="0.01" 
+            min="0" 
+            value={formData.debit_amount || ''} 
+            onChange={e => setFormData(prev => ({ ...prev, debit_amount: parseFloat(e.target.value) || 0 }))} 
+            placeholder="0.00" 
+            className="text-right" 
+          />
+          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+        </div>
       </TableCell>
       <TableCell>
-        <AccountCombobox value={formData.credit_account_id} onChange={accountId => setFormData(prev => ({
-          ...prev,
-          credit_account_id: accountId
-        }))} />
+        <AccountCombobox 
+          value={formData.credit_account_id} 
+          onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
+          locationId={userProfile?.location_id}
+          side="credit"
+        />
       </TableCell>
       <TableCell>
-        <Input type="number" step="0.01" min="0" value={formData.credit_amount || ''} onChange={e => setFormData(prev => ({
-          ...prev,
-          credit_amount: parseFloat(e.target.value) || 0
-        }))} placeholder="0.00" className="text-right" />
+        <div className="flex items-center space-x-2">
+          <Input 
+            type="number" 
+            step="0.01" 
+            min="0" 
+            value={formData.credit_amount || ''} 
+            onChange={e => setFormData(prev => ({ ...prev, credit_amount: parseFloat(e.target.value) || 0 }))} 
+            placeholder="0.00" 
+            className="text-right" 
+          />
+          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+        </div>
       </TableCell>
       <TableCell>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-700">
-            <Trash2 className="h-4 w-4" />
+          <Button type="button" variant="ghost" size="sm" onClick={handleSave} className="text-green-600 hover:text-green-700">
+            <Save className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </TableCell>
