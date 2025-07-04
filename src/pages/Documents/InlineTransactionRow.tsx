@@ -33,10 +33,8 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
   });
 
-  const [debitHasFocus, setDebitHasFocus] = useState(false);
-  const [creditHasFocus, setCreditHasFocus] = useState(false);
-  const [debitTouched, setDebitTouched] = useState(false);
   const [creditTouched, setCreditTouched] = useState(false);
+  const [debitTouched, setDebitTouched] = useState(false);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -54,16 +52,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     enabled: !!user?.id,
   });
 
-  // Auto-populate logic based on focus state
+  // Auto-populate logic for debit amount changes
   const handleDebitAmountChange = (value: number) => {
     setFormData(prev => {
       const newData = { ...prev, debit_amount: value };
       
-      // Auto-populate credit amount only if:
-      // 1. Credit field hasn't been touched by user yet AND
-      // 2. Debit field currently has focus AND
-      // 3. Credit amount is currently 0
-      if (!creditTouched && debitHasFocus && prev.credit_amount === 0) {
+      // Auto-populate credit amount if credit hasn't been manually touched and value > 0
+      if (!creditTouched && value > 0) {
         newData.credit_amount = value;
       }
       
@@ -71,15 +66,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     });
   };
 
+  // Auto-populate logic for credit amount changes
   const handleCreditAmountChange = (value: number) => {
     setFormData(prev => {
       const newData = { ...prev, credit_amount: value };
       
-      // Auto-populate debit amount only if:
-      // 1. Debit field hasn't been touched by user yet AND
-      // 2. Credit field currently has focus AND
-      // 3. Debit amount is currently 0
-      if (!debitTouched && creditHasFocus && prev.debit_amount === 0) {
+      // Auto-populate debit amount if debit hasn't been manually touched and value > 0
+      if (!debitTouched && value > 0) {
         newData.debit_amount = value;
       }
       
@@ -88,31 +81,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   const handleDebitFocus = () => {
-    setDebitHasFocus(true);
-  };
-
-  const handleDebitBlur = () => {
-    setDebitHasFocus(false);
     setDebitTouched(true);
-    
-    // Copy amount to credit field if credit hasn't been touched and is 0
-    if (!creditTouched && formData.credit_amount === 0 && formData.debit_amount > 0) {
-      setFormData(prev => ({ ...prev, credit_amount: prev.debit_amount }));
-    }
   };
 
   const handleCreditFocus = () => {
-    setCreditHasFocus(true);
-  };
-
-  const handleCreditBlur = () => {
-    setCreditHasFocus(false);
     setCreditTouched(true);
-    
-    // Copy amount to debit field if debit hasn't been touched and is 0
-    if (!debitTouched && formData.debit_amount === 0 && formData.credit_amount > 0) {
-      setFormData(prev => ({ ...prev, debit_amount: prev.credit_amount }));
-    }
   };
 
   const handleSave = () => {
@@ -171,7 +144,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           value={formData.debit_amount || ''}
           onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
           onFocus={handleDebitFocus}
-          onBlur={handleDebitBlur}
           placeholder="0.00"
           className="text-right"
           disabled={isEditingBlocked}
@@ -194,7 +166,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           value={formData.credit_amount || ''}
           onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
           onFocus={handleCreditFocus}
-          onBlur={handleCreditBlur}
           placeholder="0.00"
           className="text-right"
           disabled={isEditingBlocked}
