@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +23,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   isEditingBlocked = false,
 }) => {
   const { user } = useAuth();
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   
   const [formData, setFormData] = useState({
     description: '',
@@ -35,6 +36,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   const [creditTouched, setCreditTouched] = useState(false);
   const [debitTouched, setDebitTouched] = useState(false);
+
+  // Auto-focus on the first field when component mounts
+  useEffect(() => {
+    if (descriptionRef.current && !isEditingBlocked) {
+      setTimeout(() => {
+        descriptionRef.current?.focus();
+      }, 100);
+    }
+  }, [isEditingBlocked]);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -126,12 +136,34 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     };
 
     onSave(transaction);
+
+    // Check if amounts don't match and create balancing transaction
+    if (Math.abs(formData.debit_amount - formData.credit_amount) > 0.01) {
+      const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+      
+      // Create balancing transaction
+      const balancingTransaction: Transaction = {
+        description: formData.description, // Copy the same description
+        debit_account_id: formData.debit_amount > formData.credit_amount ? formData.credit_account_id : formData.debit_account_id,
+        credit_account_id: formData.debit_amount > formData.credit_amount ? formData.debit_account_id : formData.credit_account_id,
+        debit_amount: formData.debit_amount > formData.credit_amount ? difference : 0,
+        credit_amount: formData.credit_amount > formData.debit_amount ? difference : 0,
+        amount: difference,
+        settlement_type: formData.settlement_type,
+      };
+
+      // Save balancing transaction after a short delay
+      setTimeout(() => {
+        onSave(balancingTransaction);
+      }, 200);
+    }
   };
 
   return (
     <TableRow className="bg-blue-50 border-2 border-blue-200">
       <TableCell>
         <Textarea
+          ref={descriptionRef}
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="Opis operacji..."
