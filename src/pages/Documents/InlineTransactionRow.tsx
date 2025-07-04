@@ -4,7 +4,6 @@ import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import { useQuery } from '@tanstack/react-query';
@@ -15,11 +14,13 @@ interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
   onCancel?: () => void; // Made optional since we won't use it
   isEditingBlocked?: boolean;
+  showCopyButton?: boolean; // New prop to control copy button visibility
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   onSave,
   isEditingBlocked = false,
+  showCopyButton = false,
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -215,15 +216,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         />
       </TableCell>
       <TableCell>
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleSave}
-          disabled={!isFormValid || isEditingBlocked}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <Check className="h-4 w-4" />
-        </Button>
+        {/* Removed the accept button completely - no action buttons in inline form */}
       </TableCell>
     </TableRow>
   );

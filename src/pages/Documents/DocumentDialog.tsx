@@ -886,6 +886,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         onParallelPosting={() => handleParallelPosting(index)}
                         isEditingBlocked={isEditingBlocked}
                         locationId={userProfile?.location_id}
+                        showCopyButton={showParallelSection}
                       />
                     ))}
                     
@@ -893,8 +894,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
-                        onCancel={() => setShowInlineForm(false)}
                         isEditingBlocked={isEditingBlocked}
+                        showCopyButton={showParallelSection}
                       />
                     )}
                   </TableBody>
@@ -994,6 +995,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           isEditingBlocked={isEditingBlocked}
                           locationId={userProfile?.location_id}
                           isParallel={true}
+                          showCopyButton={false}
                         />
                       ))}
                       
@@ -1001,8 +1003,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       {showParallelInlineForm && (
                         <InlineTransactionRow
                           onSave={addParallelTransaction}
-                          onCancel={() => setShowParallelInlineForm(false)}
                           isEditingBlocked={isEditingBlocked}
+                          showCopyButton={false}
                         />
                       )}
                     </TableBody>
@@ -1104,6 +1106,7 @@ interface InlineEditTransactionRowProps {
   isEditingBlocked?: boolean;
   locationId?: string;
   isParallel?: boolean;
+  showCopyButton?: boolean;
 }
 
 const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
@@ -1118,6 +1121,7 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
   isEditingBlocked = false,
   locationId,
   isParallel = false,
+  showCopyButton = false,
 }) => {
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1319,16 +1323,7 @@ const InlineEditTransactionRow: React.FC<InlineEditTransactionRowProps> = ({
       </TableCell>
       <TableCell>
         <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={!isFormValid || isEditingBlocked}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-          {!isParallel && onParallelPosting && (
+          {!isParallel && onParallelPosting && showCopyButton && (
             <Button
               type="button"
               variant="outline"
