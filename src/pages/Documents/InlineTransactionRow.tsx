@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,7 @@ interface InlineTransactionRowProps {
   isEditingBlocked?: boolean;
   showCopyButton?: boolean;
   defaultCurrency?: string;
+  locationId?: string;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
@@ -20,6 +20,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   isEditingBlocked = false,
   showCopyButton = false,
   defaultCurrency = 'PLN',
+  locationId,
 }) => {
   const [formData, setFormData] = useState({
     description: '',
@@ -168,6 +169,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           onChange={(accountId) => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
           side="debit"
           disabled={isEditingBlocked}
+          locationId={locationId}
         />
       </TableCell>
       <TableCell>
@@ -190,6 +192,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           onChange={(accountId) => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
           side="credit"
           disabled={isEditingBlocked}
+          locationId={locationId}
         />
       </TableCell>
       <TableCell>
