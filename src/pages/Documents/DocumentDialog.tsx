@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import TransactionForm from './TransactionForm';
 import TransactionEditDialog from './TransactionEditDialog';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
@@ -909,70 +910,94 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               />
             )}
 
-            {/* Transaction list appears after the form */}
+            {/* Transaction table appears after the form */}
             {transactions.length > 0 && (
-              <div className="space-y-2">
-                {transactions.map((transaction, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium">{transaction.description}</p>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-600 font-medium">
-                              Winien: {transaction.debit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                            {transaction.debitAccountNumber && (
-                              <span className="text-gray-500 text-xs">
-                                → {transaction.debitAccountNumber}
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Opis</TableHead>
+                        <TableHead>Konto Wn</TableHead>
+                        <TableHead className="text-right">Winien</TableHead>
+                        <TableHead>Konto Ma</TableHead>
+                        <TableHead className="text-right">Ma</TableHead>
+                        <TableHead>Akcje</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.map((transaction, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">
+                            {transaction.description}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {transaction.debitAccountNumber && (
+                                <span className="text-gray-600">
+                                  {transaction.debitAccountNumber}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {transaction.debit_amount !== undefined && transaction.debit_amount > 0 && (
+                              <span className="font-medium text-green-600">
+                                {transaction.debit_amount.toLocaleString('pl-PL', { 
+                                  style: 'currency', 
+                                  currency: 'PLN' 
+                                })}
                               </span>
                             )}
-                          </div>
-                        )}
-                        {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-blue-600 font-medium">
-                              Ma: {transaction.credit_amount.toLocaleString('pl-PL', { 
-                                style: 'currency', 
-                                currency: 'PLN' 
-                              })}
-                            </span>
-                            {transaction.creditAccountNumber && (
-                              <span className="text-gray-500 text-xs">
-                                → {transaction.creditAccountNumber}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {transaction.creditAccountNumber && (
+                                <span className="text-gray-600">
+                                  {transaction.creditAccountNumber}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {transaction.credit_amount !== undefined && transaction.credit_amount > 0 && (
+                              <span className="font-medium text-blue-600">
+                                {transaction.credit_amount.toLocaleString('pl-PL', { 
+                                  style: 'currency', 
+                                  currency: 'PLN' 
+                                })}
                               </span>
                             )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditTransaction(transaction, index)}
-                        className="text-blue-600 hover:text-blue-700"
-                        disabled={isEditingBlocked}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTransaction(index)}
-                        className="text-red-600 hover:text-red-700"
-                        disabled={isEditingBlocked}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditTransaction(transaction, index)}
+                                className="text-blue-600 hover:text-blue-700"
+                                disabled={isEditingBlocked}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeTransaction(index)}
+                                className="text-red-600 hover:text-red-700"
+                                disabled={isEditingBlocked}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                 
                 {/* Updated summary section with separate debit and credit totals */}
                 <div className="border-t pt-4 space-y-2">
