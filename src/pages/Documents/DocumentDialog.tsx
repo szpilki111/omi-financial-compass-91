@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -21,6 +21,7 @@ import InlineTransactionRow from './InlineTransactionRow';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -50,6 +51,7 @@ const DocumentDialog = ({
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -424,6 +426,54 @@ const DocumentDialog = ({
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
   };
 
+  const handleSelectTransaction = (index: number, checked: boolean) => {
+    setSelectedTransactions(prev => 
+      checked 
+        ? [...prev, index]
+        : prev.filter(i => i !== index)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedTransactions(checked ? transactions.map((_, index) => index) : []);
+  };
+
+  const handleCopySelected = () => {
+    const selectedTrans = selectedTransactions.map(index => transactions[index]);
+    const copiedTransactions = selectedTrans.map(transaction => ({
+      ...transaction,
+      debit_account_id: '',
+      credit_account_id: '',
+    }));
+    
+    setTransactions(prev => [...prev, ...copiedTransactions]);
+    setSelectedTransactions([]);
+    
+    toast({
+      title: "Sukces",
+      description: `Skopiowano ${copiedTransactions.length} operacji`
+    });
+  };
+
+  const handleParallelPosting = () => {
+    const selectedTrans = selectedTransactions.map(index => transactions[index]);
+    const parallelTransactions = selectedTrans.map(transaction => ({
+      ...transaction,
+      debit_account_id: transaction.credit_account_id,
+      credit_account_id: transaction.debit_account_id,
+      debit_amount: transaction.credit_amount,
+      credit_amount: transaction.debit_amount,
+    }));
+    
+    setTransactions(prev => [...prev, ...parallelTransactions]);
+    setSelectedTransactions([]);
+    
+    toast({
+      title: "Sukces", 
+      description: `Utworzono ${parallelTransactions.length} operacji równoległych`
+    });
+  };
+
   if (checkingBlock) {
     return (
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
@@ -574,6 +624,30 @@ const DocumentDialog = ({
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Operacje główne</h3>
               <div className="flex gap-2">
+                {selectedTransactions.length > 0 && (
+                  <>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleCopySelected} 
+                      className="flex items-center gap-2"
+                      disabled={isEditingBlocked}
+                    >
+                      <Copy className="h-4 w-4" />
+                      Kopiuj ({selectedTransactions.length})
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleParallelPosting} 
+                      className="flex items-center gap-2"
+                      disabled={isEditingBlocked}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      Księgowanie równoległe ({selectedTransactions.length})
+                    </Button>
+                  </>
+                )}
                 <Button type="button" variant="outline" onClick={() => setShowInlineForm(true)} className="flex items-center gap-2" disabled={isEditingBlocked}>
                   <Plus className="h-4 w-4" />
                   Dodaj operację
@@ -583,17 +657,24 @@ const DocumentDialog = ({
 
             <div className="space-y-4">
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Opis</TableHead>
-                      <TableHead>Konto Wn</TableHead>
-                      <TableHead className="text-right">Winien</TableHead>
-                      <TableHead>Konto Ma</TableHead>
-                      <TableHead className="text-right">Ma</TableHead>
-                      <TableHead>Akcje</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                            onCheckedChange={handleSelectAll}
+                            disabled={isEditingBlocked || transactions.length === 0}
+                          />
+                        </TableHead>
+                        <TableHead>Opis</TableHead>
+                        <TableHead>Konto Wn</TableHead>
+                        <TableHead className="text-right">Winien</TableHead>
+                        <TableHead>Konto Ma</TableHead>
+                        <TableHead className="text-right">Ma</TableHead>
+                        <TableHead>Akcje</TableHead>
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {transactions.map((transaction, index) => (
                       <EditableTransactionRow
@@ -603,6 +684,8 @@ const DocumentDialog = ({
                         onDelete={() => removeTransaction(index)}
                         currency={selectedCurrency}
                         isEditingBlocked={isEditingBlocked}
+                        isSelected={selectedTransactions.includes(index)}
+                        onSelect={(checked) => handleSelectTransaction(index, checked)}
                       />
                     ))}
                     {showInlineForm && (
@@ -636,7 +719,9 @@ const EditableTransactionRow: React.FC<{
   onDelete: () => void;
   currency: string;
   isEditingBlocked?: boolean;
-}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false }) => {
+  isSelected?: boolean;
+  onSelect?: (checked: boolean) => void;
+}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -691,6 +776,13 @@ const EditableTransactionRow: React.FC<{
 
   return (
     <TableRow>
+      <TableCell>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={onSelect}
+          disabled={isEditingBlocked}
+        />
+      </TableCell>
       <TableCell>
         <Textarea 
           value={formData.description} 

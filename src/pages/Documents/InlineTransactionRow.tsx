@@ -136,39 +136,37 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     onSave(transaction);
 
-    // Check if amounts don't match and create balancing transaction
-    if (Math.abs(formData.debit_amount - formData.credit_amount) > 0.01) {
+    // Sprawdź czy kwoty są równe
+    const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
+    
+    if (amountsEqual) {
+      // Kwoty równe - resetuj formularz dla świeżej operacji
+      setFormData({
+        description: '',
+        debit_account_id: '',
+        credit_account_id: '',
+        debit_amount: 0,
+        credit_amount: 0,
+        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      });
+      setCreditTouched(false);
+      setDebitTouched(false);
+    } else {
+      // Kwoty różne - przygotuj operację bilansującą
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+      const isDebitLarger = formData.debit_amount > formData.credit_amount;
       
-      // Create balancing transaction - only fill the side that was originally smaller
-      const balancingTransaction: Transaction = {
+      setFormData({
         description: formData.description,
-        debit_account_id: formData.debit_amount > formData.credit_amount ? '' : formData.credit_account_id,
-        credit_account_id: formData.credit_amount > formData.debit_amount ? '' : formData.debit_account_id,
-        debit_amount: formData.debit_amount > formData.credit_amount ? 0 : difference,
-        credit_amount: formData.credit_amount > formData.debit_amount ? 0 : difference,
-        amount: difference,
+        debit_account_id: isDebitLarger ? '' : formData.credit_account_id,
+        credit_account_id: !isDebitLarger ? '' : formData.debit_account_id,
+        debit_amount: isDebitLarger ? 0 : difference,
+        credit_amount: !isDebitLarger ? 0 : difference,
         settlement_type: formData.settlement_type,
-        currency: currency,
-      };
-
-      // Save balancing transaction after a short delay
-      setTimeout(() => {
-        onSave(balancingTransaction);
-      }, 200);
+      });
+      setCreditTouched(false);
+      setDebitTouched(false);
     }
-
-    // Reset form for next transaction
-    setFormData({
-      description: '',
-      debit_account_id: '',
-      credit_account_id: '',
-      debit_amount: 0,
-      credit_amount: 0,
-      settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
-    });
-    setCreditTouched(false);
-    setDebitTouched(false);
   };
 
   const getCurrencySymbol = (currency: string = 'PLN') => {
@@ -187,6 +185,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   return (
     <TableRow className="bg-blue-50 border-2 border-blue-200">
+      <TableCell>
+        {/* Pusta komórka dla checkboxa */}
+      </TableCell>
       <TableCell>
         <Textarea
           ref={descriptionRef}
