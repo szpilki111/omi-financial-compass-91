@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import { useQuery } from '@tanstack/react-query';
@@ -12,16 +11,13 @@ import { useAuth } from '@/context/AuthContext';
 
 interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
-  onCancel?: () => void; // Made optional since we won't use it
   isEditingBlocked?: boolean;
-  showCopyButton?: boolean; // New prop to control copy button visibility
-  currency?: string; // Currency prop
+  currency?: string;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   onSave,
   isEditingBlocked = false,
-  showCopyButton = false,
   currency = 'PLN',
 }) => {
   const { user } = useAuth();
@@ -76,7 +72,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     if (isFormValid && !isEditingBlocked) {
       const timer = setTimeout(() => {
         handleSave();
-      }, 500); // Small delay to allow user to see the filled form
+      }, 500);
 
       return () => clearTimeout(timer);
     }
@@ -135,7 +131,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
       settlement_type: formData.settlement_type,
-      currency: currency, // Use the currency prop
+      currency: currency,
     };
 
     onSave(transaction);
@@ -146,14 +142,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       
       // Create balancing transaction - only fill the side that was originally smaller
       const balancingTransaction: Transaction = {
-        description: formData.description, // Copy the same description
+        description: formData.description,
         debit_account_id: formData.debit_amount > formData.credit_amount ? '' : formData.credit_account_id,
         credit_account_id: formData.credit_amount > formData.debit_amount ? '' : formData.debit_account_id,
         debit_amount: formData.debit_amount > formData.credit_amount ? 0 : difference,
         credit_amount: formData.credit_amount > formData.debit_amount ? 0 : difference,
         amount: difference,
         settlement_type: formData.settlement_type,
-        currency: currency, // Use the currency prop
+        currency: currency,
       };
 
       // Save balancing transaction after a short delay
@@ -161,6 +157,18 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         onSave(balancingTransaction);
       }, 200);
     }
+
+    // Reset form for next transaction
+    setFormData({
+      description: '',
+      debit_account_id: '',
+      credit_account_id: '',
+      debit_amount: 0,
+      credit_amount: 0,
+      settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+    });
+    setCreditTouched(false);
+    setDebitTouched(false);
   };
 
   const getCurrencySymbol = (currency: string = 'PLN') => {
@@ -240,7 +248,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         </div>
       </TableCell>
       <TableCell>
-        {/* Removed the accept button completely - no action buttons in inline form */}
+        {/* No action buttons - auto-save handles submission */}
       </TableCell>
     </TableRow>
   );

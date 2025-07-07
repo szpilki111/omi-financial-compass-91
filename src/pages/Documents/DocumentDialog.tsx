@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Check, Copy, Edit, Save, X } from 'lucide-react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -47,7 +47,6 @@ const DocumentDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [editingTransactionIndex, setEditingTransactionIndex] = useState<number | null>(null);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
@@ -60,7 +59,6 @@ const DocumentDialog = ({
     }
   });
 
-  // Get user's location from profile
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {
@@ -76,7 +74,6 @@ const DocumentDialog = ({
     enabled: !!user?.id,
   });
 
-  // Get location settings to check if foreign currencies are allowed
   const { data: locationSettings } = useQuery({
     queryKey: ['locationSettings', userProfile?.location_id],
     queryFn: async () => {
@@ -423,17 +420,8 @@ const DocumentDialog = ({
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleEditTransaction = (index: number) => {
-    setEditingTransactionIndex(index);
-  };
-
-  const handleSaveTransaction = async (index: number, updatedTransaction: Transaction) => {
+  const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
-    setEditingTransactionIndex(null);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTransactionIndex(null);
   };
 
   if (checkingBlock) {
@@ -608,23 +596,14 @@ const DocumentDialog = ({
                   </TableHeader>
                   <TableBody>
                     {transactions.map((transaction, index) => (
-                      editingTransactionIndex === index ? (
-                        <EditTransactionRow
-                          key={index}
-                          transaction={transaction}
-                          onSave={(updatedTransaction) => handleSaveTransaction(index, updatedTransaction)}
-                          onCancel={handleCancelEdit}
-                          currency={selectedCurrency}
-                        />
-                      ) : (
-                        <ViewTransactionRow
-                          key={index}
-                          transaction={transaction}
-                          onEdit={() => handleEditTransaction(index)}
-                          onDelete={() => removeTransaction(index)}
-                          currency={selectedCurrency}
-                        />
-                      )
+                      <EditableTransactionRow
+                        key={index}
+                        transaction={transaction}
+                        onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
+                        onDelete={() => removeTransaction(index)}
+                        currency={selectedCurrency}
+                        isEditingBlocked={isEditingBlocked}
+                      />
                     ))}
                     {showInlineForm && (
                       <InlineTransactionRow
@@ -651,13 +630,51 @@ const DocumentDialog = ({
   );
 };
 
-// Component for displaying transaction in view mode
-const ViewTransactionRow: React.FC<{
+const EditableTransactionRow: React.FC<{
   transaction: Transaction;
-  onEdit: () => void;
+  onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
   currency: string;
-}> = ({ transaction, onEdit, onDelete, currency }) => {
+  isEditingBlocked?: boolean;
+}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false }) => {
+  const { user } = useAuth();
+  const [formData, setFormData] = useState({
+    description: transaction.description || '',
+    debit_account_id: transaction.debit_account_id || '',
+    credit_account_id: transaction.credit_account_id || '',
+    debit_amount: transaction.debit_amount || 0,
+    credit_amount: transaction.credit_amount || 0,
+  });
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  useEffect(() => {
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      description: formData.description,
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      currency: currency,
+    };
+    onUpdate(updatedTransaction);
+  }, [formData, currency]);
+
   const getCurrencySymbol = (currency: string = 'PLN') => {
     const currencySymbols: { [key: string]: string } = {
       'PLN': 'zł',
@@ -674,107 +691,13 @@ const ViewTransactionRow: React.FC<{
 
   return (
     <TableRow>
-      <TableCell>{transaction.description}</TableCell>
-      <TableCell>
-        {transaction.debitAccount?.number || 'N/A'}
-      </TableCell>
-      <TableCell className="text-right">
-        {transaction.debit_amount?.toFixed(2)} {getCurrencySymbol(currency)}
-      </TableCell>
-      <TableCell>
-        {transaction.creditAccount?.number || 'N/A'}
-      </TableCell>
-      <TableCell className="text-right">
-        {transaction.credit_amount?.toFixed(2)} {getCurrencySymbol(currency)}
-      </TableCell>
-      <TableCell>
-        <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-700">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-};
-
-// Component for editing transaction
-const EditTransactionRow: React.FC<{
-  transaction: Transaction;
-  onSave: (transaction: Transaction) => void;
-  onCancel: () => void;
-  currency: string;
-}> = ({ transaction, onSave, onCancel, currency }) => {
-  const { user } = useAuth();
-  const [formData, setFormData] = useState({
-    description: transaction.description || '',
-    debit_account_id: transaction.debit_account_id || '',
-    credit_account_id: transaction.credit_account_id || '',
-    debit_amount: transaction.debit_amount || 0,
-    credit_amount: transaction.credit_amount || 0,
-  });
-
-  // Get user's location from profile
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('location_id')
-        .eq('id', user?.id)
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const handleSave = () => {
-    if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) {
-      return;
-    }
-    if (formData.debit_amount <= 0 || formData.credit_amount <= 0) {
-      return;
-    }
-    const updatedTransaction: Transaction = {
-      ...transaction,
-      description: formData.description,
-      debit_account_id: formData.debit_account_id,
-      credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
-      currency: currency,
-    };
-    onSave(updatedTransaction);
-  };
-
-  const getCurrencySymbol = (currency: string = 'PLN') => {
-    const currencySymbols: { [key: string]: string } = {
-      'PLN': 'zł',
-      'EUR': '€',
-      'USD': '$',
-      'GBP': '£',
-      'CHF': 'CHF',
-      'CZK': 'Kč',
-      'NOK': 'kr',
-      'SEK': 'kr',
-    };
-    return currencySymbols[currency] || currency;
-  };
-
-  return (
-    <TableRow className="bg-yellow-50 border-2 border-yellow-200">
       <TableCell>
         <Textarea 
           value={formData.description} 
           onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
           placeholder="Opis operacji..." 
           className="min-h-[60px] resize-none" 
+          disabled={isEditingBlocked}
         />
       </TableCell>
       <TableCell>
@@ -783,6 +706,7 @@ const EditTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="debit"
+          disabled={isEditingBlocked}
         />
       </TableCell>
       <TableCell>
@@ -795,6 +719,7 @@ const EditTransactionRow: React.FC<{
             onChange={e => setFormData(prev => ({ ...prev, debit_amount: parseFloat(e.target.value) || 0 }))} 
             placeholder="0.00" 
             className="text-right" 
+            disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
@@ -805,6 +730,7 @@ const EditTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="credit"
+          disabled={isEditingBlocked}
         />
       </TableCell>
       <TableCell>
@@ -817,17 +743,22 @@ const EditTransactionRow: React.FC<{
             onChange={e => setFormData(prev => ({ ...prev, credit_amount: parseFloat(e.target.value) || 0 }))} 
             placeholder="0.00" 
             className="text-right" 
+            disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={handleSave} className="text-green-600 hover:text-green-700">
-            <Save className="h-4 w-4" />
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            <X className="h-4 w-4" />
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="sm" 
+            onClick={onDelete} 
+            className="text-red-600 hover:text-red-700"
+            disabled={isEditingBlocked}
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </TableCell>
