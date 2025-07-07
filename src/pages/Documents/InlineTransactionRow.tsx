@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -85,6 +86,78 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     if (isFormValid && !isEditingBlocked) {
       handleSaveWithBalancing();
     }
+  };
+
+  // Handle losing focus from debit amount field
+  const handleDebitAmountBlur = () => {
+    console.log('Debit amount blur - checking for balancing');
+    console.log('Debit amount:', formData.debit_amount, 'Credit amount:', formData.credit_amount);
+    
+    // Check if debit amount is smaller than credit amount and form is valid
+    if (isFormValid && formData.debit_amount < formData.credit_amount && formData.debit_amount > 0) {
+      console.log('Creating balancing transaction - debit is smaller');
+      createBalancingTransaction('debit');
+    }
+  };
+
+  // Handle losing focus from credit amount field
+  const handleCreditAmountBlur = () => {
+    console.log('Credit amount blur - checking for balancing');
+    console.log('Debit amount:', formData.debit_amount, 'Credit amount:', formData.credit_amount);
+    
+    // Check if credit amount is smaller than debit amount and form is valid
+    if (isFormValid && formData.credit_amount < formData.debit_amount && formData.credit_amount > 0) {
+      console.log('Creating balancing transaction - credit is smaller');
+      createBalancingTransaction('credit');
+    }
+  };
+
+  // Create balancing transaction when one side is smaller
+  const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
+    console.log('Creating balancing transaction for smaller side:', smallerSide);
+    
+    // Save the original transaction first
+    const originalTransaction: Transaction = {
+      description: formData.description,
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      settlement_type: formData.settlement_type,
+      currency: currency,
+    };
+
+    onSave(originalTransaction);
+
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Create the balancing transaction
+    const balancingTransaction: Transaction = {
+      description: formData.description, // Copy the same description
+      debit_account_id: smallerSide === 'debit' ? '' : formData.credit_account_id, // Fill same side account
+      credit_account_id: smallerSide === 'credit' ? '' : formData.debit_account_id, // Fill same side account
+      debit_amount: smallerSide === 'debit' ? 0 : difference, // Fill the balancing amount
+      credit_amount: smallerSide === 'credit' ? 0 : difference, // Fill the balancing amount
+      amount: difference,
+      settlement_type: formData.settlement_type,
+      currency: currency,
+    };
+
+    console.log('Saving balancing transaction:', balancingTransaction);
+    onSave(balancingTransaction);
+
+    // Reset form for next operation
+    setFormData({
+      description: '',
+      debit_account_id: '',
+      credit_account_id: '',
+      debit_amount: 0,
+      credit_amount: 0,
+      settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+    });
+    setCreditTouched(false);
+    setDebitTouched(false);
   };
 
   // Auto-populate logic for debit amount changes
@@ -259,6 +332,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             value={formData.debit_amount || ''}
             onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
             onFocus={handleDebitFocus}
+            onBlur={handleDebitAmountBlur}
             placeholder="0.00"
             className="text-right"
             disabled={isEditingBlocked}
@@ -284,6 +358,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             value={formData.credit_amount || ''}
             onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
             onFocus={handleCreditFocus}
+            onBlur={handleCreditAmountBlur}
             placeholder="0.00"
             className="text-right"
             disabled={isEditingBlocked}
