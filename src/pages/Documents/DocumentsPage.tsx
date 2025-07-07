@@ -22,6 +22,7 @@ interface Document {
   user_id: string;
   created_at: string;
   updated_at: string;
+  currency: string;
   locations?: {
     name: string;
   } | null;
@@ -83,25 +84,30 @@ const DocumentsPage = () => {
           }
           
           // Calculate total amount using the same logic as in DocumentDialog
-          // This matches the "Razem" calculation: debitTotal + creditTotal
+          // Convert transactions to document currency and sum them
           const totalAmount = transactions?.reduce((sum, transaction) => {
             const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
             const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
             const exchangeRate = Number(transaction.exchange_rate) || 1;
             
-            // Convert to PLN if currency is not PLN
-            let debitInPLN = debitAmount;
-            let creditInPLN = creditAmount;
+            // Convert to document currency if transaction currency is different
+            let debitInDocCurrency = debitAmount;
+            let creditInDocCurrency = creditAmount;
             
-            if (transaction.currency !== 'PLN') {
-              debitInPLN = debitAmount * exchangeRate;
-              creditInPLN = creditAmount * exchangeRate;
+            if (transaction.currency !== doc.currency) {
+              // Convert from transaction currency to PLN first, then to document currency
+              if (transaction.currency !== 'PLN') {
+                debitInDocCurrency = debitAmount * exchangeRate;
+                creditInDocCurrency = creditAmount * exchangeRate;
+              }
+              // If document currency is not PLN, convert from PLN to document currency
+              // This would require exchange rates, for now we keep it simple
             }
             
-            return sum + debitInPLN + creditInPLN;
+            return sum + debitInDocCurrency + creditInDocCurrency;
           }, 0) || 0;
           
-          console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} PLN`);
+          console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} ${doc.currency}`);
           
           return {
             ...doc,

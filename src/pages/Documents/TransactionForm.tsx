@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -21,11 +20,13 @@ interface AmountField {
 interface TransactionFormProps {
   onAdd: (transaction: Transaction) => void;
   onCancel: () => void;
+  onAutoSaveComplete?: () => void; // Nowa prop do obsługi zakończenia auto-save
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAutoSaveComplete }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   
   const [formData, setFormData] = useState({
     description: '',
@@ -44,6 +45,18 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   const [isFirstDebitFieldFocused, setIsFirstDebitFieldFocused] = useState(false);
   const [isFirstCreditFieldFocused, setIsFirstCreditFieldFocused] = useState(false);
   const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+
+  // Auto-focus na pole opisu gdy komponent się montuje
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (descriptionRef.current) {
+        descriptionRef.current.focus();
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Get user's location from profile
   const { data: userProfile } = useQuery({
@@ -64,6 +77,39 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
   // Calculate totals
   const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
   const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
+
+  // Check if form is ready for auto-save
+  const checkAutoSave = () => {
+    const hasDescription = formData.description.trim().length > 0;
+    const firstDebitField = debitFields[0];
+    const firstCreditField = creditFields[0];
+    
+    const hasValidDebit = firstDebitField.amount > 0 && firstDebitField.accountId.length > 0;
+    const hasValidCredit = firstCreditField.amount > 0 && firstCreditField.accountId.length > 0;
+    
+    if (hasDescription && hasValidDebit && hasValidCredit && !isAutoSaving) {
+      console.log('Auto-save triggered - all required fields filled');
+      setIsAutoSaving(true);
+      handleSubmit(null, true); // true indicates auto-save
+    }
+  };
+
+  // Auto-save effect - triggered when key fields change
+  useEffect(() => {
+    // Only check auto-save after a small delay to avoid rapid triggers
+    const timer = setTimeout(() => {
+      checkAutoSave();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    formData.description,
+    debitFields[0]?.amount,
+    debitFields[0]?.accountId,
+    creditFields[0]?.amount,
+    creditFields[0]?.accountId,
+    isAutoSaving
+  ]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -239,10 +285,38 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetForm = () => {
+    setFormData({
+      description: '',
+      settlement_type: 'Bank',
+    });
+    
+    setDebitFields([
+      { id: '1', amount: 0, accountId: '', description: '' }
+    ]);
+    
+    setCreditFields([
+      { id: '1', amount: 0, accountId: '', description: '' }
+    ]);
+    
+    setErrors({});
+    setIsAutoSaving(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent | null, isAutoSave: boolean = false) => {
+    if (e) {
+      e.preventDefault();
+    }
     
     if (!validateForm()) {
+      if (!isAutoSave) {
+        toast({
+          title: "Błąd",
+          description: "Sprawdź poprawność danych",
+          variant: "destructive",
+        });
+      }
+      setIsAutoSaving(false);
       return;
     }
 
@@ -285,21 +359,87 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
     createdTransactions.forEach(transaction => {
       onAdd(transaction);
     });
+
+    if (isAutoSave) {
+      toast({
+        title: "Operacja zapisana",
+        description: "Automatycznie zapisano operację - otwieramy nowe okno",
+        duration: 2000,
+      });
+      
+      // Reset form for next operation
+      resetForm();
+      
+      // Wywołaj callback żeby otworzyć nowe okno
+      if (onAutoSaveComplete) {
+        onAutoSaveComplete();
+      }
+      
+      // Focus on description field for immediate next entry
+      setTimeout(() => {
+        const descriptionField = document.getElementById('description');
+        if (descriptionField) {
+          descriptionField.focus();
+        }
+      }, 100);
+    } else {
+      // Manual save - close the form
+      onCancel();
+    }
+  };
+
+  // Funkcja do przechodzenia fokusa na następne pole konta
+  const focusNextAccountField = (currentFieldId: string, currentType: 'debit' | 'credit') => {
+    // Znajdź indeks aktualnego pola
+    const currentFields = currentType === 'debit' ? debitFields : creditFields;
+    const currentIndex = currentFields.findIndex(field => field.id === currentFieldId);
+    
+    // Spróbuj przejść na następne pole tego samego typu
+    if (currentIndex < currentFields.length - 1) {
+      const nextFieldId = currentFields[currentIndex + 1].id;
+      const nextButton = document.querySelector(`[data-account-field="${currentType}-${nextFieldId}"] button`);
+      if (nextButton) {
+        (nextButton as HTMLElement).focus();
+        return;
+      }
+    }
+    
+    // Jeśli nie ma następnego pola tego samego typu, przejdź na pierwszy z przeciwnego typu
+    const oppositeType = currentType === 'debit' ? 'credit' : 'debit';
+    const oppositeFields = oppositeType === 'debit' ? debitFields : creditFields;
+    if (oppositeFields.length > 0) {
+      const firstOppositeFieldId = oppositeFields[0].id;
+      const firstOppositeButton = document.querySelector(`[data-account-field="${oppositeType}-${firstOppositeFieldId}"] button`);
+      if (firstOppositeButton) {
+        (firstOppositeButton as HTMLElement).focus();
+      }
+    }
   };
 
   return (
     <div className="border rounded-lg p-4 bg-gray-50">
-      <h4 className="font-medium mb-4">Dodaj operację</h4>
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-medium">
+          {isAutoSaving ? "Zapisywanie..." : "Dodaj operację"}
+        </h4>
+        {isAutoSaving && (
+          <div className="text-sm text-green-600 font-medium">
+            ✓ Automatyczny zapis aktywny
+          </div>
+        )}
+      </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label htmlFor="description">Opis operacji *</Label>
           <Textarea
+            ref={descriptionRef}
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
             placeholder="Opis operacji finansowej"
             className={errors.description ? 'border-red-500' : ''}
+            disabled={isAutoSaving}
           />
           {errors.description && (
             <p className="text-red-500 text-sm mt-1">{errors.description}</p>
@@ -341,13 +481,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       </Button>
                     )}
                   </div>
-                  <div>
+                  <div data-account-field={`debit-${field.id}`}>
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
                       onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
                       locationId={userProfile?.location_id}
                       side="debit"
+                      autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField(field.id, 'debit')}
                     />
                   </div>
                 </div>
@@ -389,13 +531,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
                       </Button>
                     )}
                   </div>
-                  <div>
+                  <div data-account-field={`credit-${field.id}`}>
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
                       onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
                       locationId={userProfile?.location_id}
                       side="credit"
+                      autoOpenOnFocus={true}
+                      onAccountSelected={() => focusNextAccountField(field.id, 'credit')}
                     />
                   </div>
                 </div>
@@ -411,11 +555,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel }) =>
         )}
 
         <div className="flex gap-2 pt-4">
-          <Button type="submit" size="sm">
-            Dodaj operację
+          <Button type="submit" size="sm" disabled={isAutoSaving}>
+            {isAutoSaving ? "Zapisywanie..." : "Dodaj operację ręcznie"}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            Anuluj
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={isAutoSaving}>
+            {isAutoSaving ? "Czekaj..." : "Anuluj"}
           </Button>
         </div>
       </form>

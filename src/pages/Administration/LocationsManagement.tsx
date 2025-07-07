@@ -12,9 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
+import LocationSettingsDialog from './LocationSettingsDialog';
 
 interface Location {
   id: string;
@@ -25,11 +26,14 @@ interface Location {
 
 interface LocationWithSettings extends Location {
   house_abbreviation?: string;
+  allow_foreign_currencies?: boolean;
 }
 
 const LocationsManagement = () => {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [selectedLocationForSettings, setSelectedLocationForSettings] = useState<Location | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,15 +51,19 @@ const LocationsManagement = () => {
       // Pobierz ustawienia dla wszystkich lokalizacji
       const { data: settingsData, error: settingsError } = await supabase
         .from('location_settings')
-        .select('location_id, house_abbreviation');
+        .select('location_id, house_abbreviation, allow_foreign_currencies');
 
       if (settingsError) throw settingsError;
 
       // Połącz dane
-      const locationsWithSettings: LocationWithSettings[] = locationsData.map(location => ({
-        ...location,
-        house_abbreviation: settingsData?.find(s => s.location_id === location.id)?.house_abbreviation
-      }));
+      const locationsWithSettings: LocationWithSettings[] = locationsData.map(location => {
+        const settings = settingsData?.find(s => s.location_id === location.id);
+        return {
+          ...location,
+          house_abbreviation: settings?.house_abbreviation,
+          allow_foreign_currencies: settings?.allow_foreign_currencies
+        };
+      });
 
       return locationsWithSettings;
     }
@@ -125,6 +133,11 @@ const LocationsManagement = () => {
     setIsDialogOpen(true);
   };
 
+  const handleSettings = (location: Location) => {
+    setSelectedLocationForSettings(location);
+    setIsSettingsDialogOpen(true);
+  };
+
   const handleAdd = () => {
     setSelectedLocation(null);
     setIsDialogOpen(true);
@@ -139,6 +152,14 @@ const LocationsManagement = () => {
   const handleDialogClose = (saved: boolean) => {
     setIsDialogOpen(false);
     setSelectedLocation(null);
+    if (saved) {
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+    }
+  };
+
+  const handleSettingsDialogClose = (saved: boolean) => {
+    setIsSettingsDialogOpen(false);
+    setSelectedLocationForSettings(null);
     if (saved) {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     }
@@ -175,6 +196,7 @@ const LocationsManagement = () => {
                 <TableRow>
                   <TableHead>Nazwa</TableHead>
                   <TableHead>Skrót</TableHead>
+                  <TableHead>Waluty zagraniczne</TableHead>
                   <TableHead>Adres</TableHead>
                   <TableHead>Data utworzenia</TableHead>
                   <TableHead className="text-right">Akcje</TableHead>
@@ -193,12 +215,29 @@ const LocationsManagement = () => {
                         {location.house_abbreviation || 'Brak'}
                       </span>
                     </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        location.allow_foreign_currencies 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {location.allow_foreign_currencies ? 'Dozwolone' : 'Tylko PLN'}
+                      </span>
+                    </TableCell>
                     <TableCell>{location.address || '-'}</TableCell>
                     <TableCell>
                       {new Date(location.created_at).toLocaleDateString('pl-PL')}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSettings(location)}
+                          title="Ustawienia placówki"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -230,6 +269,12 @@ const LocationsManagement = () => {
         location={selectedLocation}
         isOpen={isDialogOpen}
         onClose={handleDialogClose}
+      />
+
+      <LocationSettingsDialog
+        location={selectedLocationForSettings}
+        isOpen={isSettingsDialogOpen}
+        onClose={handleSettingsDialogClose}
       />
     </div>
   );

@@ -22,6 +22,7 @@ interface Document {
   user_id: string;
   created_at: string;
   updated_at: string;
+  currency: string; // Add currency field
   locations?: {
     name: string;
   } | null;
@@ -69,12 +70,26 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
     );
   }
 
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: 'PLN',
-      minimumFractionDigits: 2,
-    }).format(amount);
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
+    const symbol = getCurrencySymbol(currency);
+    return `${amount.toLocaleString('pl-PL', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })} ${symbol}`;
   };
 
   return (
@@ -102,7 +117,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
               <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
               <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
               <TableCell className="text-right font-medium">
-                {formatAmount(document.total_amount || 0)}
+                {formatAmount(document.total_amount || 0, document.currency)}
               </TableCell>
               <TableCell>
                 <div className="flex space-x-1">

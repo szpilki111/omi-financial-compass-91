@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -17,7 +18,7 @@ import { Upload, FileText } from 'lucide-react';
 interface Mt940Transaction {
   date: string;
   amount: number;
-  type: 'C' | 'D'; // Credit or Debit
+  type: 'C' | 'D';
   description: string;
   reference: string;
   accountNumber?: string;
@@ -38,17 +39,38 @@ interface Mt940ImportDialogProps {
   onImportComplete: (count: number) => void;
 }
 
-const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ 
-  open, 
-  onClose, 
-  onImportComplete 
-}) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
+const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, onImportComplete }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<Mt940Data | null>(null);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const extractDescription = (detailsLine: string): string => {
+    let description = 'Operacja bankowa';
+    if (!detailsLine || !detailsLine.includes('^')) {
+      console.log('No tags or empty line:', detailsLine);
+      return description;
+    }
+
+    const parts = detailsLine.split(/(?=\^[0-9]{2})/);
+    let descParts: string[] = [];
+
+    for (const part of parts) {
+      if (part.match(/^\^[2][0-9]|^3[2-3]|^00/)) {
+        const content = part.replace(/^\^[0-9]{2}/, '').trim();
+        if (content) descParts.push(content);
+      }
+    }
+
+    if (descParts.length > 0) {
+      description = descParts.join(' ').replace(/\s+/g, ' ').trim();
+    }
+
+    console.log('Extracted:', description, 'from:', descParts);
+    return description;
+  };
 
   const parseMt940File = (content: string): Mt940Data => {
     const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
@@ -60,91 +82,145 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
     const transactions: Mt940Transaction[] = [];
     
     let currentTransaction: Partial<Mt940Transaction> = {};
-    
+    let currentDetails = '';
+    let inDetailsSection = false;
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
-      // Account number
+      console.log('Processing line:', line);
+
       if (line.startsWith(':25:')) {
         accountNumber = line.substring(4).replace('/', '');
-      }
-      
-      // Statement number
-      if (line.startsWith(':28C:')) {
+      } else if (line.startsWith(':28C:')) {
         statementNumber = line.substring(5);
-      }
-      
-      // Opening balance
-      if (line.startsWith(':60F:')) {
+      } else if (line.startsWith(':60F:')) {
         const balanceLine = line.substring(5);
         const amount = balanceLine.substring(8);
         openingBalance = parseFloat(amount.replace(',', '.'));
-      }
-      
-      // Closing balance
-      if (line.startsWith(':62F:')) {
+      } else if (line.startsWith(':62F:')) {
         const balanceLine = line.substring(5);
         const amount = balanceLine.substring(8);
         closingBalance = parseFloat(amount.replace(',', '.'));
-      }
-      
-      // Transaction line
-      if (line.startsWith(':61:')) {
-        // Save previous transaction if exists
+      } else if (line.startsWith(':61:')) {
+        // Zapisz poprzednią transakcję z opisem
         if (currentTransaction.date && currentTransaction.amount !== undefined) {
+          if (currentDetails) {
+            console.log('Processing final details for previous transaction:', currentDetails);
+            currentTransaction.description = extractDescription(currentDetails);
+            
+            // Wyodrębnij kontrahenta i numer konta
+            const parts = currentDetails.split('^');
+            let counterparty = '';
+            let accountNumber = '';
+
+            for (const part of parts) {
+              if (part.startsWith('32') || part.startsWith('33')) {
+                const namePart = part.substring(2).trim();
+                if (namePart) {
+                  counterparty += (counterparty ? ' ' : '') + namePart;
+                }
+              } else if (part.startsWith('38')) {
+                accountNumber = part.substring(2).trim();
+              }
+            }
+
+            currentTransaction.counterparty = counterparty;
+            currentTransaction.accountNumber = accountNumber;
+          }
+          console.log('Final transaction before adding new:', currentTransaction);
           transactions.push(currentTransaction as Mt940Transaction);
         }
-        
-        // Parse new transaction
+
+        // Reset dla nowej transakcji
+        currentDetails = '';
+        inDetailsSection = false;
+
         const transactionLine = line.substring(4);
-        
-        // Extract date (positions 0-5: YYMMDD)
         const dateStr = transactionLine.substring(0, 6);
         const year = 2000 + parseInt(dateStr.substring(0, 2));
         const month = parseInt(dateStr.substring(2, 4));
         const day = parseInt(dateStr.substring(4, 6));
         const transactionDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-        
-        // Extract type (C for credit, D for debit)
+
         const typeMatch = transactionLine.match(/[CD]N/);
         const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
-        
-        // Extract amount - fix: don't divide by 100, just replace comma with dot
+
         const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
         const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
-        
-        // Extract reference
-        const referenceMatch = transactionLine.match(/N(\d+)/);
-        const reference = referenceMatch ? referenceMatch[1] : '';
-        
+
+        const refMatch = transactionLine.match(/\/\/([^/]+)$/);
+        const reference = refMatch ? refMatch[1] : '';
+
         currentTransaction = {
           date: transactionDate,
           amount,
           type,
           reference,
-          description: '',
-          counterparty: ''
+          description: 'Operacja bankowa',
+          counterparty: '',
+          accountNumber: ''
         };
-      }
-      
-      // Transaction details
-      if (line.startsWith(':86:') && currentTransaction.date) {
-        const detailsLine = line.substring(4);
-        const parts = detailsLine.split('^');
+
+        console.log('Created new transaction:', currentTransaction);
+      } else if (line.startsWith(':86:')) {
+        inDetailsSection = true;
+        currentDetails = line.substring(4);
+        console.log('Started details section:', currentDetails);
+      } else if (inDetailsSection && !line.startsWith(':')) {
+        // Kontynuacja pola :86:
+        currentDetails += line;
+        console.log('Continued details:', currentDetails);
+      } else if (inDetailsSection && line.startsWith(':')) {
+        // Koniec pola :86:, przetwórz zebrane detale
+        if (currentTransaction.date && currentDetails) {
+          console.log('Processing complete details:', currentDetails);
+          currentTransaction.description = extractDescription(currentDetails);
+
+          // Wyodrębnij kontrahenta i numer konta
+          const parts = currentDetails.split('^');
+          let counterparty = '';
+          let accountNumber = '';
+
+          for (const part of parts) {
+            if (part.startsWith('32') || part.startsWith('33')) {
+              const namePart = part.substring(2).trim();
+              if (namePart) {
+                counterparty += (counterparty ? ' ' : '') + namePart;
+              }
+            } else if (part.startsWith('38')) {
+              accountNumber = part.substring(2).trim();
+            }
+          }
+
+          currentTransaction.counterparty = counterparty;
+          currentTransaction.accountNumber = accountNumber;
+          console.log('Updated transaction with details:', currentTransaction);
+        }
         
-        let description = '';
+        inDetailsSection = false;
+        currentDetails = '';
+        
+        // Sprawdź, czy nowa linia też zaczyna sekcję :86:
+        if (line.startsWith(':86:')) {
+          inDetailsSection = true;
+          currentDetails = line.substring(4);
+          console.log('Started new details section:', currentDetails);
+        }
+      }
+    }
+
+    // Przetwórz ostatnią transakcję
+    if (currentTransaction.date && currentTransaction.amount !== undefined) {
+      if (currentDetails) {
+        console.log('Processing final details for last transaction:', currentDetails);
+        currentTransaction.description = extractDescription(currentDetails);
+        
+        const parts = currentDetails.split('^');
         let counterparty = '';
         let accountNumber = '';
-        
+
         for (const part of parts) {
-          if (part.startsWith('00')) {
-            description = part.substring(2).trim();
-          } else if (part.startsWith('20') || part.startsWith('21')) {
-            const titlePart = part.substring(2).trim();
-            if (titlePart) {
-              description += (description ? ' - ' : '') + titlePart;
-            }
-          } else if (part.startsWith('32') || part.startsWith('33')) {
+          if (part.startsWith('32') || part.startsWith('33')) {
             const namePart = part.substring(2).trim();
             if (namePart) {
               counterparty += (counterparty ? ' ' : '') + namePart;
@@ -153,18 +229,15 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
             accountNumber = part.substring(2).trim();
           }
         }
-        
-        currentTransaction.description = description || 'Operacja bankowa';
+
         currentTransaction.counterparty = counterparty;
         currentTransaction.accountNumber = accountNumber;
       }
-    }
-    
-    // Add last transaction
-    if (currentTransaction.date && currentTransaction.amount !== undefined) {
+      console.log('Final last transaction:', currentTransaction);
       transactions.push(currentTransaction as Mt940Transaction);
     }
-    
+
+    console.log('Final parsed transactions:', transactions);
     return {
       accountNumber,
       statementNumber,
@@ -180,14 +253,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
     
     setFile(selectedFile);
     
-    // Read and parse the file
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const content = event.target?.result as string;
+        console.log('File content:', content);
         const parsedData = parseMt940File(content);
         setPreviewData(parsedData);
-        
         console.log('Parsed MT940 data:', parsedData);
       } catch (error) {
         console.error('Error parsing MT940 file:', error);
@@ -199,7 +271,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
       }
     };
     
-    reader.readAsText(selectedFile, 'windows-1250'); // MT940 often uses Windows-1250 encoding
+    reader.readAsText(selectedFile, 'windows-1250');
   };
 
   const handleImport = async () => {
@@ -215,7 +287,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
     setLoading(true);
     
     try {
-      // Generate document number using the existing function
       const { data: documentNumber, error: numberError } = await supabase
         .rpc('generate_document_number', {
           p_location_id: user.location,
@@ -228,7 +299,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         throw numberError;
       }
 
-      // Create one document for all transactions
       const { data: document, error: docError } = await supabase
         .from('documents')
         .insert({
@@ -246,19 +316,19 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         throw docError;
       }
 
-      // Create all transactions for this document
-      const transactionsToInsert = previewData.transactions.map(transaction => ({
+      const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
         date: transaction.date,
         description: transaction.description,
-        debit_amount: transaction.amount,
-        credit_amount: transaction.amount,
+        debit_amount: transaction.type === 'D' ? transaction.amount : 0,
+        credit_amount: transaction.type === 'C' ? transaction.amount : 0,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
         location_id: user.location,
-        user_id: user.id
+        user_id: user.id,
+        created_at: new Date(Date.now() + index * 1000).toISOString()
       }));
 
       const { error: transError } = await supabase
@@ -275,7 +345,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         description: `Utworzono dokument ${documentNumber} z ${previewData.transactions.length} operacjami`,
       });
       
-      onImportComplete(1); // Only 1 document created
+      onImportComplete(1);
       onClose();
       
     } catch (error) {
@@ -309,7 +379,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* File upload */}
           <div className="space-y-2">
             <Label htmlFor="mt940-file" className="text-sm font-medium">
               Wybierz plik MT940
@@ -340,7 +409,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
             </p>
           </div>
 
-          {/* Document date */}
           {file && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">
@@ -354,27 +422,27 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({
             </div>
           )}
 
-          {/* Preview */}
           {previewData && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Podgląd danych</h3>
-              
-              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <span className="text-sm font-medium">Numer rachunku:</span>
-                  <p className="text-sm text-gray-600">{previewData.accountNumber}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Numer wyciągu:</span>
-                  <p className="text-sm text-gray-600">{previewData.statementNumber}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Saldo początkowe:</span>
-                  <p className="text-sm text-gray-600">{formatAmount(previewData.openingBalance)}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Saldo końcowe:</span>
-                  <p className="text-sm text-gray-600">{formatAmount(previewData.closingBalance)}</p>
+              <div>
+                <h3 className="text-lg font-medium">Podgląd danych</h3>
+                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <span className="text-sm font-medium">Numer rachunku:</span>
+                    <p className="text-sm text-gray-600">{previewData.accountNumber}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">Numer wyciągu:</span>
+                    <p className="text-sm text-gray-600">{previewData.statementNumber}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">Saldo początkowe:</span>
+                    <p className="text-sm text-gray-600">{formatAmount(previewData.openingBalance)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">Saldo końcowe:</span>
+                    <p className="text-sm text-gray-600">{formatAmount(previewData.closingBalance)}</p>
+                  </div>
                 </div>
               </div>
 

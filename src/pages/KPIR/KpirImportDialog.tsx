@@ -140,13 +140,15 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
         skipEmptyLines: true,
         complete: async (results) => {
           try {
-            // Przygotuj dane do importu
+            // Przygotuj dane do importu - MAINTAIN FILE ORDER
             const transactionsToImport = [];
             const defaultDebitAccountId = accounts.find(acc => acc.number.includes('100'))?.id || '';
             
-            for (const row of results.data as Record<string, any>[]) {
+            // Process rows in file order (results.data maintains original order)
+            for (let rowIndex = 0; rowIndex < results.data.length; rowIndex++) {
+              const row = results.data[rowIndex] as Record<string, any>;
               const date = row[mappings.dateColumn];
-              const description = row[mappings.descriptionColumn];
+              const description = row[mappings.descriptionColumn]; // Use actual description from file
               const amountStr = row[mappings.amountColumn];
               let amount = 0;
               
@@ -216,7 +218,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
               if (formattedDate && description && amount && defaultDebitAccountId && creditAccountId) {
                 transactionsToImport.push({
                   date: formattedDate,
-                  description: description,
+                  description: description, // Use the actual title/description from the file instead of transaction type
                   amount: Math.abs(amount),
                   debit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
                   credit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
@@ -224,12 +226,14 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
                   currency: 'PLN',
                   exchange_rate: 1,
                   location_id: user.location,
-                  user_id: user.id
+                  user_id: user.id,
+                  // Add timestamp offset to maintain file order
+                  created_at: new Date(Date.now() + rowIndex * 1000).toISOString()
                 });
               }
             }
             
-            // Importuj transakcje do bazy danych
+            // Importuj transakcje do bazy danych - they will be inserted in file order
             if (transactionsToImport.length > 0) {
               const { error } = await supabase
                 .from('transactions')
@@ -422,6 +426,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
                 </p>
                 <p className="mt-1">
                   Kwoty dodatnie są importowane jako przychody, ujemne jako wydatki.
+                  Operacje będą importowane w kolejności z pliku z zachowaniem oryginalnych tytułów.
                 </p>
               </div>
             </div>

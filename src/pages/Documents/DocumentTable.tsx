@@ -21,6 +21,7 @@ interface DocumentTableProps {
   onDelete?: (transactionId: string) => void;
   onCopy?: (transaction: Transaction) => void;
   onSplit?: (transaction: Transaction) => void;
+  documentCurrency?: string; // Add document currency prop
 }
 
 const DocumentTable: React.FC<DocumentTableProps> = ({ 
@@ -29,7 +30,8 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
   onEdit, 
   onDelete, 
   onCopy, 
-  onSplit 
+  onSplit,
+  documentCurrency = 'PLN' // Default to PLN
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
@@ -50,12 +52,26 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     );
   }
 
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
   const formatAmount = (amount: number, currency: string = 'PLN') => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
+    const symbol = getCurrencySymbol(currency);
+    return `${amount.toLocaleString('pl-PL', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })} ${symbol}`;
   };
 
   const getAccountDisplay = (accountNumber: string | undefined, account: any, accountId: string | undefined) => {
@@ -97,12 +113,12 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
                 </div>
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatAmount(transaction.debit_amount || transaction.amount, transaction.currency || 'PLN')}
+                {formatAmount(transaction.debit_amount || transaction.amount, documentCurrency)}
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatAmount(transaction.credit_amount || transaction.amount, transaction.currency || 'PLN')}
+                {formatAmount(transaction.credit_amount || transaction.amount, documentCurrency)}
               </TableCell>
-              <TableCell>{transaction.currency || 'PLN'}</TableCell>
+              <TableCell>{getCurrencySymbol(documentCurrency)}</TableCell>
               <TableCell>{transaction.settlement_type}</TableCell>
               <TableCell>
                 <div className="flex space-x-1">
