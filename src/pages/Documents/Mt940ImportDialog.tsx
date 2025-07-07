@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -321,8 +320,8 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         document_number: documentNumber,
         date: transaction.date,
         description: transaction.description,
-        debit_amount: transaction.type === 'D' ? transaction.amount : 0,
-        credit_amount: transaction.type === 'C' ? transaction.amount : 0,
+        debit_amount: transaction.amount,
+        credit_amount: transaction.amount,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
@@ -487,6 +486,9 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="text-xs text-gray-500 mt-2">
+                  <p><strong>Uwaga:</strong> Każda transakcja będzie miała wypełnione oba pola kwot (debit i credit) tą samą wartością z pliku.</p>
                 </div>
               </div>
             </div>

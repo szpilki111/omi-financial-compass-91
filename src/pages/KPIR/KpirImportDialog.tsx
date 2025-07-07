@@ -216,10 +216,13 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
               
               // Dodaj transakcję tylko jeśli wszystkie wartości są poprawne
               if (formattedDate && description && amount && defaultDebitAccountId && creditAccountId) {
+                const absoluteAmount = Math.abs(amount);
                 transactionsToImport.push({
                   date: formattedDate,
                   description: description, // Use the actual title/description from the file instead of transaction type
-                  amount: Math.abs(amount),
+                  amount: absoluteAmount,
+                  debit_amount: absoluteAmount, // Wypełnij oba pola kwot tą samą wartością
+                  credit_amount: absoluteAmount, // Wypełnij oba pola kwot tą samą wartością
                   debit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
                   credit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
                   settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
@@ -427,6 +430,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
                 <p className="mt-1">
                   Kwoty dodatnie są importowane jako przychody, ujemne jako wydatki.
                   Operacje będą importowane w kolejności z pliku z zachowaniem oryginalnych tytułów.
+                  Każda transakcja będzie miała wypełnione oba pola kwot (debit i credit) tą samą wartością.
                 </p>
               </div>
             </div>
