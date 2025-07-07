@@ -6,7 +6,8 @@ import {
   TableBody, 
   TableRow, 
   TableHead, 
-  TableCell 
+  TableCell,
+  TableFooter
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Transaction } from './types';
@@ -21,7 +22,7 @@ interface DocumentTableProps {
   onDelete?: (transactionId: string) => void;
   onCopy?: (transaction: Transaction) => void;
   onSplit?: (transaction: Transaction) => void;
-  documentCurrency?: string; // Add document currency prop
+  documentCurrency?: string;
 }
 
 const DocumentTable: React.FC<DocumentTableProps> = ({ 
@@ -31,7 +32,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
   onDelete, 
   onCopy, 
   onSplit,
-  documentCurrency = 'PLN' // Default to PLN
+  documentCurrency = 'PLN'
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
@@ -75,7 +76,6 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
   };
 
   const getAccountDisplay = (accountNumber: string | undefined, account: any, accountId: string | undefined) => {
-    // Try to get account number from various sources
     const number = accountNumber || account?.number || 'N/A';
     const name = account?.name || 'N/A';
     
@@ -83,6 +83,19 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     
     return `${number} - ${name}`;
   };
+
+  // Calculate sums
+  const debitSum = transactions.reduce((sum, transaction) => {
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+    return sum + (debitAmount || 0);
+  }, 0);
+
+  const creditSum = transactions.reduce((sum, transaction) => {
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
+    return sum + (creditAmount || 0);
+  }, 0);
+
+  const totalSum = debitSum + creditSum;
 
   return (
     <div className="overflow-x-auto">
@@ -167,6 +180,22 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
             </TableRow>
           ))}
         </TableBody>
+        <TableFooter>
+          <TableRow className="bg-gray-50 font-medium">
+            <TableCell colSpan={2} className="text-right font-bold">
+              RAZEM:
+            </TableCell>
+            <TableCell className="text-right font-bold text-lg">
+              {formatAmount(debitSum, documentCurrency)}
+            </TableCell>
+            <TableCell className="text-right font-bold text-lg">
+              {formatAmount(creditSum, documentCurrency)}
+            </TableCell>
+            <TableCell colSpan={3} className="text-left font-bold text-lg">
+              Suma całkowita: {formatAmount(totalSum, documentCurrency)}
+            </TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
     </div>
   );

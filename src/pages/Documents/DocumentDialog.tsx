@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,18 +9,19 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
 import InlineTransactionRow from './InlineTransactionRow';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -47,9 +48,14 @@ const DocumentDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [parallelTransactions, setParallelTransactions] = useState<Transaction[]>([]);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
+  const [showParallelInlineForm, setShowParallelInlineForm] = useState(false);
+  const [showParallelAccounting, setShowParallelAccounting] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
+  const [selectedParallelTransactions, setSelectedParallelTransactions] = useState<number[]>([]);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -112,10 +118,10 @@ const DocumentDialog = ({
   }, [form]);
 
   useEffect(() => {
-    if (transactions.length > 0) {
+    if (transactions.length > 0 || parallelTransactions.length > 0) {
       setHasUnsavedChanges(true);
     }
-  }, [transactions]);
+  }, [transactions, parallelTransactions]);
 
   useEffect(() => {
     if (isOpen && !document) {
@@ -228,6 +234,7 @@ const DocumentDialog = ({
         currency: 'PLN'
       });
       setTransactions([]);
+      setParallelTransactions([]);
       setHasUnsavedChanges(false);
     }
   }, [document, form, isOpen]);
@@ -235,6 +242,7 @@ const DocumentDialog = ({
   useEffect(() => {
     if (isOpen && !document) {
       setTransactions([]);
+      setParallelTransactions([]);
     }
   }, [isOpen, document]);
 
@@ -293,7 +301,7 @@ const DocumentDialog = ({
       return;
     }
 
-    const allTransactions = transactions;
+    const allTransactions = [...transactions, ...parallelTransactions];
 
     if (allTransactions.length === 0) {
       toast({
@@ -416,13 +424,142 @@ const DocumentDialog = ({
     }, 100);
   };
 
+  const addParallelTransaction = async (transaction: Transaction) => {
+    const currency = form.getValues('currency');
+    const transactionWithCurrency = {
+      ...transaction,
+      currency
+    };
+    setParallelTransactions(prev => [...prev, transactionWithCurrency]);
+    setShowParallelInlineForm(false);
+    setTimeout(() => {
+      setShowParallelInlineForm(true);
+    }, 100);
+  };
+
   const removeTransaction = (index: number) => {
     setTransactions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeParallelTransaction = (index: number) => {
+    setParallelTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
   };
+
+  const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
+    setParallelTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+  };
+
+  const handleSelectTransaction = (index: number, checked: boolean) => {
+    setSelectedTransactions(prev => 
+      checked 
+        ? [...prev, index]
+        : prev.filter(i => i !== index)
+    );
+  };
+
+  const handleSelectParallelTransaction = (index: number, checked: boolean) => {
+    setSelectedParallelTransactions(prev => 
+      checked 
+        ? [...prev, index]
+        : prev.filter(i => i !== index)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedTransactions(checked ? transactions.map((_, index) => index) : []);
+  };
+
+  const handleSelectAllParallel = (checked: boolean) => {
+    setSelectedParallelTransactions(checked ? parallelTransactions.map((_, index) => index) : []);
+  };
+
+  const handleCopySelected = () => {
+    const selectedTrans = selectedTransactions.map(index => transactions[index]);
+    const copiedTransactions = selectedTrans.map(transaction => ({
+      ...transaction,
+      debit_account_id: '',
+      credit_account_id: '',
+    }));
+    
+    setTransactions(prev => [...prev, ...copiedTransactions]);
+    setSelectedTransactions([]);
+    
+    toast({
+      title: "Sukces",
+      description: `Skopiowano ${copiedTransactions.length} operacji`
+    });
+  };
+
+  const handleParallelPosting = () => {
+    const selectedTrans = selectedTransactions.map(index => transactions[index]);
+    // FIX: Nie zamieniamy stron - kopiujemy kwoty do odpowiednich miejsc
+    const parallelTransactionsCopy = selectedTrans.map(transaction => ({
+      ...transaction,
+      // Zachowujemy strony - Wn → Wn, Ma → Ma
+      debit_account_id: '',  // Konto zostawiamy puste do wypełnienia
+      credit_account_id: '', // Konto zostawiamy puste do wypełnienia
+      debit_amount: transaction.debit_amount,   // Wn → Wn
+      credit_amount: transaction.credit_amount, // Ma → Ma
+    }));
+    
+    setParallelTransactions(prev => [...prev, ...parallelTransactionsCopy]);
+    setSelectedTransactions([]);
+    
+    toast({
+      title: "Sukces", 
+      description: `Utworzono ${parallelTransactionsCopy.length} operacji równoległych`
+    });
+  };
+
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
+  };
+
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
+    const symbol = getCurrencySymbol(currency);
+    return `${amount.toLocaleString('pl-PL', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })} ${symbol}`;
+  };
+
+  const mainDebitSum = transactions.reduce((sum, transaction) => {
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
+    return sum + (debitAmount || 0);
+  }, 0);
+
+  const mainCreditSum = transactions.reduce((sum, transaction) => {
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : 0;
+    return sum + (creditAmount || 0);
+  }, 0);
+
+  const parallelDebitSum = parallelTransactions.reduce((sum, transaction) => {
+    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
+    return sum + (debitAmount || 0);
+  }, 0);
+
+  const parallelCreditSum = parallelTransactions.reduce((sum, transaction) => {
+    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : 0;
+    return sum + (creditAmount || 0);
+  }, 0);
+
+  const totalDebitSum = mainDebitSum + parallelDebitSum;
+  const totalCreditSum = mainCreditSum + parallelCreditSum;
+  const grandTotalSum = totalDebitSum + totalCreditSum;
 
   if (checkingBlock) {
     return (
@@ -574,6 +711,30 @@ const DocumentDialog = ({
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Operacje główne</h3>
               <div className="flex gap-2">
+                {selectedTransactions.length > 0 && (
+                  <>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleCopySelected} 
+                      className="flex items-center gap-2"
+                      disabled={isEditingBlocked}
+                    >
+                      <Copy className="h-4 w-4" />
+                      Kopiuj ({selectedTransactions.length})
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleParallelPosting} 
+                      className="flex items-center gap-2"
+                      disabled={isEditingBlocked}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      Księgowanie równoległe ({selectedTransactions.length})
+                    </Button>
+                  </>
+                )}
                 <Button type="button" variant="outline" onClick={() => setShowInlineForm(true)} className="flex items-center gap-2" disabled={isEditingBlocked}>
                   <Plus className="h-4 w-4" />
                   Dodaj operację
@@ -583,17 +744,24 @@ const DocumentDialog = ({
 
             <div className="space-y-4">
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Opis</TableHead>
-                      <TableHead>Konto Wn</TableHead>
-                      <TableHead className="text-right">Winien</TableHead>
-                      <TableHead>Konto Ma</TableHead>
-                      <TableHead className="text-right">Ma</TableHead>
-                      <TableHead>Akcje</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                            onCheckedChange={handleSelectAll}
+                            disabled={isEditingBlocked || transactions.length === 0}
+                          />
+                        </TableHead>
+                        <TableHead>Opis</TableHead>
+                        <TableHead>Konto Wn</TableHead>
+                        <TableHead className="text-right">Winien</TableHead>
+                        <TableHead>Konto Ma</TableHead>
+                        <TableHead className="text-right">Ma</TableHead>
+                        <TableHead>Akcje</TableHead>
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {transactions.map((transaction, index) => (
                       <EditableTransactionRow
@@ -603,6 +771,8 @@ const DocumentDialog = ({
                         onDelete={() => removeTransaction(index)}
                         currency={selectedCurrency}
                         isEditingBlocked={isEditingBlocked}
+                        isSelected={selectedTransactions.includes(index)}
+                        onSelect={(checked) => handleSelectTransaction(index, checked)}
                       />
                     ))}
                     {showInlineForm && (
@@ -613,7 +783,158 @@ const DocumentDialog = ({
                       />
                     )}
                   </TableBody>
+                  <TableFooter>
+                    <TableRow className="bg-gray-50 font-medium">
+                      <TableCell colSpan={3} className="text-right font-bold">
+                        RAZEM:
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-lg">
+                        {formatAmount(mainDebitSum, selectedCurrency)}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-lg">
+                        {formatAmount(mainCreditSum, selectedCurrency)}
+                      </TableCell>
+                      <TableCell className="text-left font-bold">
+                        Suma: {formatAmount(mainDebitSum + mainCreditSum, selectedCurrency)}
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setShowParallelAccounting(!showParallelAccounting)}
+              className="flex items-center gap-2"
+              disabled={isEditingBlocked}
+            >
+              <BookOpen className="h-4 w-4" />
+              {showParallelAccounting ? 'Ukryj księgowanie równoległe' : 'Pokaż księgowanie równoległe'}
+            </Button>
+          </div>
+
+          {showParallelAccounting && (
+            <div className="space-y-4 border-t pt-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Księgowanie równoległe</h3>
+                <div className="flex gap-2">
+                  {selectedParallelTransactions.length > 0 && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => {
+                        const selectedTrans = selectedParallelTransactions.map(index => parallelTransactions[index]);
+                        const copiedTransactions = selectedTrans.map(transaction => ({
+                          ...transaction,
+                          debit_account_id: '',
+                          credit_account_id: '',
+                        }));
+                        
+                        setParallelTransactions(prev => [...prev, ...copiedTransactions]);
+                        setSelectedParallelTransactions([]);
+                        
+                        toast({
+                          title: "Sukces",
+                          description: `Skopiowano ${copiedTransactions.length} operacji równoległych`
+                        });
+                      }} 
+                      className="flex items-center gap-2"
+                      disabled={isEditingBlocked}
+                    >
+                      <Copy className="h-4 w-4" />
+                      Kopiuj ({selectedParallelTransactions.length})
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" onClick={() => setShowParallelInlineForm(true)} className="flex items-center gap-2" disabled={isEditingBlocked}>
+                    <Plus className="h-4 w-4" />
+                    Dodaj operację równoległą
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">
+                            <Checkbox
+                              checked={selectedParallelTransactions.length === parallelTransactions.length && parallelTransactions.length > 0}
+                              onCheckedChange={handleSelectAllParallel}
+                              disabled={isEditingBlocked || parallelTransactions.length === 0}
+                            />
+                          </TableHead>
+                          <TableHead>Opis</TableHead>
+                          <TableHead>Konto Wn</TableHead>
+                          <TableHead className="text-right">Winien</TableHead>
+                          <TableHead>Konto Ma</TableHead>
+                          <TableHead className="text-right">Ma</TableHead>
+                          <TableHead>Akcje</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                    <TableBody>
+                      {parallelTransactions.map((transaction, index) => (
+                        <EditableTransactionRow
+                          key={index}
+                          transaction={transaction}
+                          onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
+                          onDelete={() => removeParallelTransaction(index)}
+                          currency={selectedCurrency}
+                          isEditingBlocked={isEditingBlocked}
+                          isSelected={selectedParallelTransactions.includes(index)}
+                          onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
+                        />
+                      ))}
+                      {showParallelInlineForm && (
+                        <InlineTransactionRow
+                          onSave={addParallelTransaction}
+                          isEditingBlocked={isEditingBlocked}
+                          currency={selectedCurrency}
+                        />
+                      )}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow className="bg-gray-50 font-medium">
+                        <TableCell colSpan={3} className="text-right font-bold">
+                          RAZEM:
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-lg">
+                          {formatAmount(parallelDebitSum, selectedCurrency)}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-lg">
+                          {formatAmount(parallelCreditSum, selectedCurrency)}
+                        </TableCell>
+                        <TableCell className="text-left font-bold">
+                          Suma: {formatAmount(parallelDebitSum + parallelCreditSum, selectedCurrency)}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t pt-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-bold text-lg mb-2">Podsumowanie dokumentu</h4>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-sm text-gray-600">Winien razem</div>
+                  <div className="font-bold text-lg">{formatAmount(totalDebitSum, selectedCurrency)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Ma razem</div>
+                  <div className="font-bold text-lg">{formatAmount(totalCreditSum, selectedCurrency)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Suma całkowita</div>
+                  <div className="font-bold text-lg">{formatAmount(grandTotalSum, selectedCurrency)}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -636,7 +957,9 @@ const EditableTransactionRow: React.FC<{
   onDelete: () => void;
   currency: string;
   isEditingBlocked?: boolean;
-}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false }) => {
+  isSelected?: boolean;
+  onSelect?: (checked: boolean) => void;
+}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -690,7 +1013,14 @@ const EditableTransactionRow: React.FC<{
   };
 
   return (
-    <TableRow>
+    <TableRow className={isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : "hover:bg-gray-50"}>
+      <TableCell>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={onSelect}
+          disabled={isEditingBlocked}
+        />
+      </TableCell>
       <TableCell>
         <Textarea 
           value={formData.description} 
