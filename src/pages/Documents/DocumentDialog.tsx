@@ -1013,7 +1013,7 @@ const EditableTransactionRow: React.FC<{
   };
 
   return (
-    <TableRow>
+    <TableRow className={isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : "hover:bg-gray-50"}>
       <TableCell>
         <Checkbox
           checked={isSelected}
