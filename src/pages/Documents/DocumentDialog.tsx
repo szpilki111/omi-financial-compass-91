@@ -48,10 +48,13 @@ const DocumentDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [parallelTransactions, setParallelTransactions] = useState<Transaction[]>([]);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
+  const [showParallelInlineForm, setShowParallelInlineForm] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
+  const [selectedParallelTransactions, setSelectedParallelTransactions] = useState<number[]>([]);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -114,10 +117,10 @@ const DocumentDialog = ({
   }, [form]);
 
   useEffect(() => {
-    if (transactions.length > 0) {
+    if (transactions.length > 0 || parallelTransactions.length > 0) {
       setHasUnsavedChanges(true);
     }
-  }, [transactions]);
+  }, [transactions, parallelTransactions]);
 
   useEffect(() => {
     if (isOpen && !document) {
@@ -230,6 +233,7 @@ const DocumentDialog = ({
         currency: 'PLN'
       });
       setTransactions([]);
+      setParallelTransactions([]);
       setHasUnsavedChanges(false);
     }
   }, [document, form, isOpen]);
@@ -237,6 +241,7 @@ const DocumentDialog = ({
   useEffect(() => {
     if (isOpen && !document) {
       setTransactions([]);
+      setParallelTransactions([]);
     }
   }, [isOpen, document]);
 
@@ -295,7 +300,7 @@ const DocumentDialog = ({
       return;
     }
 
-    const allTransactions = transactions;
+    const allTransactions = [...transactions, ...parallelTransactions];
 
     if (allTransactions.length === 0) {
       toast({
@@ -418,12 +423,33 @@ const DocumentDialog = ({
     }, 100);
   };
 
+  const addParallelTransaction = async (transaction: Transaction) => {
+    const currency = form.getValues('currency');
+    const transactionWithCurrency = {
+      ...transaction,
+      currency
+    };
+    setParallelTransactions(prev => [...prev, transactionWithCurrency]);
+    setShowParallelInlineForm(false);
+    setTimeout(() => {
+      setShowParallelInlineForm(true);
+    }, 100);
+  };
+
   const removeTransaction = (index: number) => {
     setTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
+  const removeParallelTransaction = (index: number) => {
+    setParallelTransactions(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+  };
+
+  const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
+    setParallelTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
   };
 
   const handleSelectTransaction = (index: number, checked: boolean) => {
@@ -434,8 +460,20 @@ const DocumentDialog = ({
     );
   };
 
+  const handleSelectParallelTransaction = (index: number, checked: boolean) => {
+    setSelectedParallelTransactions(prev => 
+      checked 
+        ? [...prev, index]
+        : prev.filter(i => i !== index)
+    );
+  };
+
   const handleSelectAll = (checked: boolean) => {
     setSelectedTransactions(checked ? transactions.map((_, index) => index) : []);
+  };
+
+  const handleSelectAllParallel = (checked: boolean) => {
+    setSelectedParallelTransactions(checked ? parallelTransactions.map((_, index) => index) : []);
   };
 
   const handleCopySelected = () => {
@@ -457,7 +495,7 @@ const DocumentDialog = ({
 
   const handleParallelPosting = () => {
     const selectedTrans = selectedTransactions.map(index => transactions[index]);
-    const parallelTransactions = selectedTrans.map(transaction => ({
+    const parallelTransactionsCopy = selectedTrans.map(transaction => ({
       ...transaction,
       debit_account_id: transaction.credit_account_id,
       credit_account_id: transaction.debit_account_id,
@@ -465,12 +503,12 @@ const DocumentDialog = ({
       credit_amount: transaction.debit_amount,
     }));
     
-    setTransactions(prev => [...prev, ...parallelTransactions]);
+    setParallelTransactions(prev => [...prev, ...parallelTransactionsCopy]);
     setSelectedTransactions([]);
     
     toast({
       title: "Sukces", 
-      description: `Utworzono ${parallelTransactions.length} operacji równoległych`
+      description: `Utworzono ${parallelTransactionsCopy.length} operacji równoległych`
     });
   };
 
@@ -691,6 +729,91 @@ const DocumentDialog = ({
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
+                        isEditingBlocked={isEditingBlocked}
+                        currency={selectedCurrency}
+                      />
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+
+          {/* Sekcja księgowania równoległego */}
+          <div className="space-y-4 border-t pt-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Księgowanie równoległe</h3>
+              <div className="flex gap-2">
+                {selectedParallelTransactions.length > 0 && (
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      const selectedTrans = selectedParallelTransactions.map(index => parallelTransactions[index]);
+                      const copiedTransactions = selectedTrans.map(transaction => ({
+                        ...transaction,
+                        debit_account_id: '',
+                        credit_account_id: '',
+                      }));
+                      
+                      setParallelTransactions(prev => [...prev, ...copiedTransactions]);
+                      setSelectedParallelTransactions([]);
+                      
+                      toast({
+                        title: "Sukces",
+                        description: `Skopiowano ${copiedTransactions.length} operacji równoległych`
+                      });
+                    }} 
+                    className="flex items-center gap-2"
+                    disabled={isEditingBlocked}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Kopiuj ({selectedParallelTransactions.length})
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={() => setShowParallelInlineForm(true)} className="flex items-center gap-2" disabled={isEditingBlocked}>
+                  <Plus className="h-4 w-4" />
+                  Dodaj operację równoległą
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedParallelTransactions.length === parallelTransactions.length && parallelTransactions.length > 0}
+                            onCheckedChange={handleSelectAllParallel}
+                            disabled={isEditingBlocked || parallelTransactions.length === 0}
+                          />
+                        </TableHead>
+                        <TableHead>Opis</TableHead>
+                        <TableHead>Konto Wn</TableHead>
+                        <TableHead className="text-right">Winien</TableHead>
+                        <TableHead>Konto Ma</TableHead>
+                        <TableHead className="text-right">Ma</TableHead>
+                        <TableHead>Akcje</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                  <TableBody>
+                    {parallelTransactions.map((transaction, index) => (
+                      <EditableTransactionRow
+                        key={index}
+                        transaction={transaction}
+                        onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
+                        onDelete={() => removeParallelTransaction(index)}
+                        currency={selectedCurrency}
+                        isEditingBlocked={isEditingBlocked}
+                        isSelected={selectedParallelTransactions.includes(index)}
+                        onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
+                      />
+                    ))}
+                    {showParallelInlineForm && (
+                      <InlineTransactionRow
+                        onSave={addParallelTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
                       />
