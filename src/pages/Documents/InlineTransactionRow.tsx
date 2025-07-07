@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -133,37 +132,25 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       return;
     }
 
-    // Save the first transaction
-    const transaction: Transaction = {
-      description: formData.description,
-      debit_account_id: formData.debit_account_id,
-      credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
-      settlement_type: formData.settlement_type,
-      currency: currency,
-    };
-
-    onSave(transaction);
-
     // Check if amounts are equal
     const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
     
     if (amountsAreEqual) {
-      // Amounts equal - reset form for fresh operation and create new empty transaction
-      const newEmptyTransaction: Transaction = {
-        description: '',
-        debit_account_id: '',
-        credit_account_id: '',
-        debit_amount: 0,
-        credit_amount: 0,
-        amount: 0,
-        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      // Amounts equal - save current transaction and reset form for fresh operation
+      const transaction: Transaction = {
+        description: formData.description,
+        debit_account_id: formData.debit_account_id,
+        credit_account_id: formData.credit_account_id,
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        settlement_type: formData.settlement_type,
         currency: currency,
       };
 
-      // Reset form state
+      onSave(transaction);
+
+      // Reset form state for next transaction
       setFormData({
         description: '',
         debit_account_id: '',
@@ -174,11 +161,21 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       });
       setCreditTouched(false);
       setDebitTouched(false);
-
-      // Create new empty transaction ready for input
-      onSave(newEmptyTransaction);
     } else {
-      // Amounts different - create balancing transaction
+      // Amounts different - save original transaction and create balancing transaction
+      const transaction: Transaction = {
+        description: formData.description,
+        debit_account_id: formData.debit_account_id,
+        credit_account_id: formData.credit_account_id,
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+
+      onSave(transaction);
+
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
       const isDebitLarger = formData.debit_amount > formData.credit_amount;
       
