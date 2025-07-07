@@ -22,6 +22,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const rowRef = useRef<HTMLTableRowElement>(null);
   
   const [formData, setFormData] = useState({
     description: '',
@@ -67,16 +68,25 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
                      formData.debit_amount > 0 && 
                      formData.credit_amount > 0;
 
-  // Auto-accept when all fields are filled
-  useEffect(() => {
-    if (isFormValid && !isEditingBlocked) {
-      const timer = setTimeout(() => {
-        handleSave();
-      }, 500);
+  // Check if amounts are equal
+  const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
-      return () => clearTimeout(timer);
+  // Handle losing focus from the row - check for balancing need
+  const handleRowBlur = (event: React.FocusEvent) => {
+    // Check if the new focus target is still within this row
+    const currentTarget = event.currentTarget;
+    const relatedTarget = event.relatedTarget as Node;
+    
+    if (currentTarget.contains(relatedTarget)) {
+      // Focus is still within the row, don't trigger balancing
+      return;
     }
-  }, [isFormValid, isEditingBlocked]);
+
+    // Only create balancing transaction if form is valid and amounts are not equal
+    if (isFormValid && !amountsEqual && !isEditingBlocked) {
+      handleSaveWithBalancing();
+    }
+  };
 
   // Auto-populate logic for debit amount changes
   const handleDebitAmountChange = (value: number) => {
@@ -114,7 +124,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     setCreditTouched(true);
   };
 
-  const handleSave = () => {
+  const handleSaveWithBalancing = () => {
     if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) {
       return;
     }
@@ -123,6 +133,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       return;
     }
 
+    // Save the first transaction
     const transaction: Transaction = {
       description: formData.description,
       debit_account_id: formData.debit_account_id,
@@ -136,11 +147,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     onSave(transaction);
 
-    // Sprawdź czy kwoty są równe
-    const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
+    // Check if amounts are equal
+    const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
     
-    if (amountsEqual) {
-      // Kwoty równe - resetuj formularz dla świeżej operacji
+    if (amountsAreEqual) {
+      // Amounts equal - reset form for fresh operation
       setFormData({
         description: '',
         debit_account_id: '',
@@ -152,17 +163,33 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       setCreditTouched(false);
       setDebitTouched(false);
     } else {
-      // Kwoty różne - przygotuj operację bilansującą
+      // Amounts different - create balancing transaction
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
       const isDebitLarger = formData.debit_amount > formData.credit_amount;
       
-      setFormData({
-        description: formData.description,
-        debit_account_id: isDebitLarger ? '' : formData.credit_account_id,
-        credit_account_id: !isDebitLarger ? '' : formData.debit_account_id,
-        debit_amount: isDebitLarger ? 0 : difference,
-        credit_amount: !isDebitLarger ? 0 : difference,
+      // Create the balancing transaction
+      const balancingTransaction: Transaction = {
+        description: formData.description, // Copy the same description
+        debit_account_id: isDebitLarger ? '' : formData.credit_account_id, // Fill same side account
+        credit_account_id: !isDebitLarger ? '' : formData.debit_account_id, // Fill same side account
+        debit_amount: isDebitLarger ? 0 : difference, // Fill the balancing amount
+        credit_amount: !isDebitLarger ? 0 : difference, // Fill the balancing amount
+        amount: difference,
         settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+
+      // Save the balancing transaction
+      onSave(balancingTransaction);
+
+      // Reset form for next operation
+      setFormData({
+        description: '',
+        debit_account_id: '',
+        credit_account_id: '',
+        debit_amount: 0,
+        credit_amount: 0,
+        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
       });
       setCreditTouched(false);
       setDebitTouched(false);
@@ -184,7 +211,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   return (
-    <TableRow className="bg-blue-50 border-2 border-blue-200">
+    <TableRow 
+      ref={rowRef}
+      className="bg-blue-50 border-2 border-blue-200" 
+      onBlur={handleRowBlur}
+    >
       <TableCell>
         {/* Pusta komórka dla checkboxa */}
       </TableCell>
