@@ -71,19 +71,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   // Check if amounts are equal
   const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
-  // Handle losing focus from the row - check for balancing need
+  // Handle losing focus from the row - automatically process transaction
   const handleRowBlur = (event: React.FocusEvent) => {
     // Check if the new focus target is still within this row
     const currentTarget = event.currentTarget;
     const relatedTarget = event.relatedTarget as Node;
     
     if (currentTarget.contains(relatedTarget)) {
-      // Focus is still within the row, don't trigger balancing
+      // Focus is still within the row, don't trigger processing
       return;
     }
 
-    // Only create balancing transaction if form is valid and amounts are not equal
-    if (isFormValid && !amountsEqual && !isEditingBlocked) {
+    // Only process if form is valid and editing is not blocked
+    if (isFormValid && !isEditingBlocked) {
       handleSaveWithBalancing();
     }
   };
@@ -151,7 +151,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
     
     if (amountsAreEqual) {
-      // Amounts equal - reset form for fresh operation
+      // Amounts equal - reset form for fresh operation and create new empty transaction
+      const newEmptyTransaction: Transaction = {
+        description: '',
+        debit_account_id: '',
+        credit_account_id: '',
+        debit_amount: 0,
+        credit_amount: 0,
+        amount: 0,
+        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+        currency: currency,
+      };
+
+      // Reset form state
       setFormData({
         description: '',
         debit_account_id: '',
@@ -162,6 +174,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       });
       setCreditTouched(false);
       setDebitTouched(false);
+
+      // Create new empty transaction ready for input
+      onSave(newEmptyTransaction);
     } else {
       // Amounts different - create balancing transaction
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
