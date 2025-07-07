@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -68,10 +67,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
                      formData.debit_amount > 0 && 
                      formData.credit_amount > 0;
 
-  // Check if amounts are equal
+  // Check if amounts are equal (with tolerance for floating point precision)
   const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
-  // Handle losing focus from the row - automatically process transaction
+  // Handle losing focus from the row - only save when amounts are equal
   const handleRowBlur = (event: React.FocusEvent) => {
     // Check if the new focus target is still within this row
     const currentTarget = event.currentTarget;
@@ -82,39 +81,100 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       return;
     }
 
-    // Only process if form is valid and editing is not blocked
-    if (isFormValid && !isEditingBlocked) {
-      handleSaveWithBalancing();
+    // Only save if form is valid, amounts are equal, and editing is not blocked
+    if (isFormValid && amountsEqual && !isEditingBlocked) {
+      console.log('Row blur - saving equal amounts transaction');
+      const transaction: Transaction = {
+        description: formData.description,
+        debit_account_id: formData.debit_account_id,
+        credit_account_id: formData.credit_account_id,
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+
+      onSave(transaction);
+      resetForm();
     }
   };
 
   // Handle losing focus from debit amount field
   const handleDebitAmountBlur = () => {
-    console.log('Debit amount blur - checking for balancing');
-    console.log('Debit amount:', formData.debit_amount, 'Credit amount:', formData.credit_amount);
+    console.log('=== Debit amount blur triggered ===');
+    console.log('Form data:', formData);
+    console.log('Is form valid:', isFormValid);
+    console.log('Form validation breakdown:', {
+      description: !!formData.description.trim(),
+      debit_account_id: !!formData.debit_account_id,
+      credit_account_id: !!formData.credit_account_id,
+      debit_amount_positive: formData.debit_amount > 0,
+      credit_amount_positive: formData.credit_amount > 0,
+    });
+    
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    console.log('Amount comparison:', {
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      difference: difference,
+      debitSmaller: formData.debit_amount < formData.credit_amount,
+      significantDifference: difference > 0.01,
+    });
     
     // Check if debit amount is smaller than credit amount and form is valid
-    if (isFormValid && formData.debit_amount < formData.credit_amount && formData.debit_amount > 0) {
-      console.log('Creating balancing transaction - debit is smaller');
+    if (isFormValid && difference > 0.01 && formData.debit_amount < formData.credit_amount && formData.debit_amount > 0) {
+      console.log('✓ Creating balancing transaction - debit is smaller');
       createBalancingTransaction('debit');
+    } else {
+      console.log('✗ Balancing not triggered. Reasons:', {
+        isFormValid,
+        significantDifference: difference > 0.01,
+        debitSmaller: formData.debit_amount < formData.credit_amount,
+        debitPositive: formData.debit_amount > 0,
+      });
     }
   };
 
   // Handle losing focus from credit amount field
   const handleCreditAmountBlur = () => {
-    console.log('Credit amount blur - checking for balancing');
-    console.log('Debit amount:', formData.debit_amount, 'Credit amount:', formData.credit_amount);
+    console.log('=== Credit amount blur triggered ===');
+    console.log('Form data:', formData);
+    console.log('Is form valid:', isFormValid);
+    console.log('Form validation breakdown:', {
+      description: !!formData.description.trim(),
+      debit_account_id: !!formData.debit_account_id,
+      credit_account_id: !!formData.credit_account_id,
+      debit_amount_positive: formData.debit_amount > 0,
+      credit_amount_positive: formData.credit_amount > 0,
+    });
+    
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    console.log('Amount comparison:', {
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      difference: difference,
+      creditSmaller: formData.credit_amount < formData.debit_amount,
+      significantDifference: difference > 0.01,
+    });
     
     // Check if credit amount is smaller than debit amount and form is valid
-    if (isFormValid && formData.credit_amount < formData.debit_amount && formData.credit_amount > 0) {
-      console.log('Creating balancing transaction - credit is smaller');
+    if (isFormValid && difference > 0.01 && formData.credit_amount < formData.debit_amount && formData.credit_amount > 0) {
+      console.log('✓ Creating balancing transaction - credit is smaller');
       createBalancingTransaction('credit');
+    } else {
+      console.log('✗ Balancing not triggered. Reasons:', {
+        isFormValid,
+        significantDifference: difference > 0.01,
+        creditSmaller: formData.credit_amount < formData.debit_amount,
+        creditPositive: formData.credit_amount > 0,
+      });
     }
   };
 
   // Create balancing transaction when one side is smaller
   const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
-    console.log('Creating balancing transaction for smaller side:', smallerSide);
+    console.log('🔄 Creating balancing transaction for smaller side:', smallerSide);
     
     // Save the original transaction first
     const originalTransaction: Transaction = {
@@ -128,26 +188,33 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       currency: currency,
     };
 
+    console.log('💾 Saving original transaction:', originalTransaction);
     onSave(originalTransaction);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     
-    // Create the balancing transaction
+    // Create the balancing transaction with empty account on the balancing side
+    // This creates a transaction that the user will need to complete by selecting the account
     const balancingTransaction: Transaction = {
-      description: formData.description, // Copy the same description
-      debit_account_id: smallerSide === 'debit' ? '' : formData.credit_account_id, // Fill same side account
-      credit_account_id: smallerSide === 'credit' ? '' : formData.debit_account_id, // Fill same side account
-      debit_amount: smallerSide === 'debit' ? 0 : difference, // Fill the balancing amount
-      credit_amount: smallerSide === 'credit' ? 0 : difference, // Fill the balancing amount
+      description: `${formData.description} (Balancing)`,
+      debit_account_id: smallerSide === 'debit' ? '' : formData.credit_account_id,
+      credit_account_id: smallerSide === 'credit' ? '' : formData.debit_account_id,
+      debit_amount: smallerSide === 'debit' ? difference : 0,
+      credit_amount: smallerSide === 'credit' ? difference : 0,
       amount: difference,
       settlement_type: formData.settlement_type,
       currency: currency,
     };
 
-    console.log('Saving balancing transaction:', balancingTransaction);
+    console.log('💾 Saving balancing transaction:', balancingTransaction);
     onSave(balancingTransaction);
 
     // Reset form for next operation
+    resetForm();
+  };
+
+  // Helper function to reset form
+  const resetForm = () => {
     setFormData({
       description: '',
       debit_account_id: '',
@@ -194,6 +261,20 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   const handleCreditFocus = () => {
     setCreditTouched(true);
+  };
+
+  const getCurrencySymbol = (currency: string = 'PLN') => {
+    const currencySymbols: { [key: string]: string } = {
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
+    };
+    return currencySymbols[currency] || currency;
   };
 
   const handleSaveWithBalancing = () => {
@@ -279,20 +360,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       setCreditTouched(false);
       setDebitTouched(false);
     }
-  };
-
-  const getCurrencySymbol = (currency: string = 'PLN') => {
-    const currencySymbols: { [key: string]: string } = {
-      'PLN': 'zł',
-      'EUR': '€',
-      'USD': '$',
-      'GBP': '£',
-      'CHF': 'CHF',
-      'CZK': 'Kč',
-      'NOK': 'kr',
-      'SEK': 'kr',
-    };
-    return currencySymbols[currency] || currency;
   };
 
   return (
