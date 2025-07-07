@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -60,7 +61,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     enabled: !!user?.id,
   });
 
-  // Check if all fields are filled
+  // Check basic form validity (relaxed for balancing transactions)
+  const isBasicFormValid = () => {
+    return formData.description.trim() && 
+           formData.debit_amount > 0 && 
+           formData.credit_amount > 0;
+  };
+
+  // Check if all fields are filled (for equal amounts)
   const isFormValid = formData.description.trim() && 
                      formData.debit_account_id && 
                      formData.credit_account_id && 
@@ -104,14 +112,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const handleDebitAmountBlur = () => {
     console.log('=== Debit amount blur triggered ===');
     console.log('Form data:', formData);
-    console.log('Is form valid:', isFormValid);
-    console.log('Form validation breakdown:', {
-      description: !!formData.description.trim(),
-      debit_account_id: !!formData.debit_account_id,
-      credit_account_id: !!formData.credit_account_id,
-      debit_amount_positive: formData.debit_amount > 0,
-      credit_amount_positive: formData.credit_amount > 0,
-    });
     
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log('Amount comparison:', {
@@ -120,18 +120,26 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       difference: difference,
       debitSmaller: formData.debit_amount < formData.credit_amount,
       significantDifference: difference > 0.01,
+      basicFormValid: isBasicFormValid(),
+      creditAccountSelected: !!formData.credit_account_id,
     });
     
-    // Check if debit amount is smaller than credit amount and form is valid
-    if (isFormValid && difference > 0.01 && formData.debit_amount < formData.credit_amount && formData.debit_amount > 0) {
+    // Relaxed validation: check if we have basic form data + credit account (since debit is smaller)
+    const canCreateBalancing = isBasicFormValid() && 
+                              formData.credit_account_id && 
+                              difference > 0.01 && 
+                              formData.debit_amount < formData.credit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
       console.log('✓ Creating balancing transaction - debit is smaller');
       createBalancingTransaction('debit');
     } else {
       console.log('✗ Balancing not triggered. Reasons:', {
-        isFormValid,
+        basicFormValid: isBasicFormValid(),
+        creditAccountSelected: !!formData.credit_account_id,
         significantDifference: difference > 0.01,
         debitSmaller: formData.debit_amount < formData.credit_amount,
-        debitPositive: formData.debit_amount > 0,
+        editingBlocked: isEditingBlocked,
       });
     }
   };
@@ -140,14 +148,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const handleCreditAmountBlur = () => {
     console.log('=== Credit amount blur triggered ===');
     console.log('Form data:', formData);
-    console.log('Is form valid:', isFormValid);
-    console.log('Form validation breakdown:', {
-      description: !!formData.description.trim(),
-      debit_account_id: !!formData.debit_account_id,
-      credit_account_id: !!formData.credit_account_id,
-      debit_amount_positive: formData.debit_amount > 0,
-      credit_amount_positive: formData.credit_amount > 0,
-    });
     
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log('Amount comparison:', {
@@ -156,18 +156,26 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       difference: difference,
       creditSmaller: formData.credit_amount < formData.debit_amount,
       significantDifference: difference > 0.01,
+      basicFormValid: isBasicFormValid(),
+      debitAccountSelected: !!formData.debit_account_id,
     });
     
-    // Check if credit amount is smaller than debit amount and form is valid
-    if (isFormValid && difference > 0.01 && formData.credit_amount < formData.debit_amount && formData.credit_amount > 0) {
+    // Relaxed validation: check if we have basic form data + debit account (since credit is smaller)
+    const canCreateBalancing = isBasicFormValid() && 
+                              formData.debit_account_id && 
+                              difference > 0.01 && 
+                              formData.credit_amount < formData.debit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
       console.log('✓ Creating balancing transaction - credit is smaller');
       createBalancingTransaction('credit');
     } else {
       console.log('✗ Balancing not triggered. Reasons:', {
-        isFormValid,
+        basicFormValid: isBasicFormValid(),
+        debitAccountSelected: !!formData.debit_account_id,
         significantDifference: difference > 0.01,
         creditSmaller: formData.credit_amount < formData.debit_amount,
-        creditPositive: formData.credit_amount > 0,
+        editingBlocked: isEditingBlocked,
       });
     }
   };
@@ -193,12 +201,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     
-    // Create the balancing transaction with empty account on the balancing side
-    // This creates a transaction that the user will need to complete by selecting the account
+    // Create the balancing transaction
+    // If debit is smaller, we need to balance on the debit side (empty debit account, copy credit account)
+    // If credit is smaller, we need to balance on the credit side (empty credit account, copy debit account)
     const balancingTransaction: Transaction = {
-      description: `${formData.description} (Balancing)`,
-      debit_account_id: smallerSide === 'debit' ? '' : formData.credit_account_id,
-      credit_account_id: smallerSide === 'credit' ? '' : formData.debit_account_id,
+      description: formData.description,
+      debit_account_id: smallerSide === 'debit' ? '' : formData.debit_account_id,
+      credit_account_id: smallerSide === 'credit' ? '' : formData.credit_account_id,
       debit_amount: smallerSide === 'debit' ? difference : 0,
       credit_amount: smallerSide === 'credit' ? difference : 0,
       amount: difference,
