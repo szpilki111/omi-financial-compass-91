@@ -496,12 +496,14 @@ const DocumentDialog = ({
 
   const handleParallelPosting = () => {
     const selectedTrans = selectedTransactions.map(index => transactions[index]);
+    // FIX: Nie zamieniamy stron - kopiujemy kwoty do odpowiednich miejsc
     const parallelTransactionsCopy = selectedTrans.map(transaction => ({
       ...transaction,
-      debit_account_id: transaction.credit_account_id,
-      credit_account_id: transaction.debit_account_id,
-      debit_amount: transaction.credit_amount,
-      credit_amount: transaction.debit_amount,
+      // Zachowujemy strony - Wn → Wn, Ma → Ma
+      debit_account_id: '',  // Konto zostawiamy puste do wypełnienia
+      credit_account_id: '', // Konto zostawiamy puste do wypełnienia
+      debit_amount: transaction.debit_amount,   // Wn → Wn
+      credit_amount: transaction.credit_amount, // Ma → Ma
     }));
     
     setParallelTransactions(prev => [...prev, ...parallelTransactionsCopy]);
@@ -513,7 +515,6 @@ const DocumentDialog = ({
     });
   };
 
-  // Currency formatting functions
   const getCurrencySymbol = (currency: string = 'PLN') => {
     const currencySymbols: { [key: string]: string } = {
       'PLN': 'zł',
@@ -536,7 +537,6 @@ const DocumentDialog = ({
     })} ${symbol}`;
   };
 
-  // Calculate sums for main transactions
   const mainDebitSum = transactions.reduce((sum, transaction) => {
     const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
     return sum + (debitAmount || 0);
@@ -547,7 +547,6 @@ const DocumentDialog = ({
     return sum + (creditAmount || 0);
   }, 0);
 
-  // Calculate sums for parallel transactions
   const parallelDebitSum = parallelTransactions.reduce((sum, transaction) => {
     const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
     return sum + (debitAmount || 0);
@@ -558,7 +557,6 @@ const DocumentDialog = ({
     return sum + (creditAmount || 0);
   }, 0);
 
-  // Calculate total sums
   const totalDebitSum = mainDebitSum + parallelDebitSum;
   const totalCreditSum = mainCreditSum + parallelCreditSum;
   const grandTotalSum = totalDebitSum + totalCreditSum;
@@ -806,7 +804,6 @@ const DocumentDialog = ({
             </div>
           </div>
 
-          {/* Przycisk księgowania równoległego */}
           <div className="border-t pt-4">
             <Button 
               type="button" 
@@ -820,7 +817,6 @@ const DocumentDialog = ({
             </Button>
           </div>
 
-          {/* Sekcja księgowania równoległego */}
           {showParallelAccounting && (
             <div className="space-y-4 border-t pt-6">
               <div className="flex justify-between items-center">
@@ -923,7 +919,6 @@ const DocumentDialog = ({
             </div>
           )}
 
-          {/* Podsumowanie całkowite */}
           <div className="border-t pt-4">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h4 className="font-bold text-lg mb-2">Podsumowanie dokumentu</h4>
