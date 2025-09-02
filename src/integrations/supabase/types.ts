@@ -207,6 +207,8 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          nip: string | null
+          regon: string | null
           updated_at: string
         }
         Insert: {
@@ -214,6 +216,8 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          nip?: string | null
+          regon?: string | null
           updated_at?: string
         }
         Update: {
@@ -221,6 +225,8 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          nip?: string | null
+          regon?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -276,27 +282,42 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          first_name: string | null
           id: string
+          last_name: string | null
           location_id: string | null
+          login: string | null
           name: string
+          phone: string | null
+          position: string | null
           role: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
+          first_name?: string | null
           id: string
+          last_name?: string | null
           location_id?: string | null
+          login?: string | null
           name: string
+          phone?: string | null
+          position?: string | null
           role: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
+          first_name?: string | null
           id?: string
+          last_name?: string | null
           location_id?: string | null
+          login?: string | null
           name?: string
+          phone?: string | null
+          position?: string | null
           role?: string
           updated_at?: string
         }

@@ -21,6 +21,8 @@ interface Location {
   id: string;
   name: string;
   address: string | null;
+  nip: string | null;
+  regon: string | null;
   created_at: string;
 }
 
@@ -195,6 +197,8 @@ const LocationsManagement = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nazwa</TableHead>
+                  <TableHead>NIP</TableHead>
+                  <TableHead>REGON</TableHead>
                   <TableHead>Skrót</TableHead>
                   <TableHead>Waluty zagraniczne</TableHead>
                   <TableHead>Adres</TableHead>
@@ -206,6 +210,8 @@ const LocationsManagement = () => {
                 {locations.map((location) => (
                   <TableRow key={location.id}>
                     <TableCell className="font-medium">{location.name}</TableCell>
+                    <TableCell>{location.nip || '-'}</TableCell>
+                    <TableCell>{location.regon || '-'}</TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         location.house_abbreviation 

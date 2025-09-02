@@ -31,8 +31,13 @@ import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 
 const userSchema = z.object({
-  name: z.string().min(2, 'Imię i nazwisko musi mieć co najmniej 2 znaki'),
+  login: z.string().min(3, 'Login musi mieć co najmniej 3 znaki')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'Login może zawierać tylko litery, cyfry, myślniki i podkreślenia'),
+  first_name: z.string().min(2, 'Imię musi mieć co najmniej 2 znaki'),
+  last_name: z.string().min(2, 'Nazwisko musi mieć co najmniej 2 znaki'),
+  position: z.string().min(2, 'Stanowisko musi mieć co najmniej 2 znaki'),
   email: z.string().email('Nieprawidłowy adres email'),
+  phone: z.string().optional(),
   password: z.string().min(6, 'Hasło musi mieć co najmniej 6 znaków'),
   role: z.enum(['ekonom', 'prowincjal', 'admin'], {
     required_error: 'Wybierz rolę użytkownika',
@@ -61,8 +66,12 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      name: '',
+      login: '',
+      first_name: '',
+      last_name: '',
+      position: '',
       email: '',
+      phone: '',
       password: '',
       role: 'ekonom',
       location_id: 'no-location',
@@ -107,7 +116,7 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
           password: userData.password,
           options: {
             data: {
-              full_name: userData.name,
+              full_name: `${userData.first_name} ${userData.last_name}`,
               role: userData.role
             }
           }
@@ -162,9 +171,14 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
             .from('profiles')
             .insert({
               id: newUserData.user.id,
-              name: userData.name,
-              role: userData.role,
+              login: userData.login,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              position: userData.position,
+              name: `${userData.first_name} ${userData.last_name}`, // Keep for compatibility
               email: userData.email,
+              phone: userData.phone,
+              role: userData.role,
               location_id: selectedLocationId
             });
 
@@ -249,12 +263,56 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="name"
+              name="login"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Imię i nazwisko</FormLabel>
+                  <FormLabel>Login</FormLabel>
                   <FormControl>
-                    <Input placeholder="Jan Kowalski" {...field} />
+                    <Input placeholder="np. jan.kowalski" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Imię</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Jan" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nazwisko</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Kowalski" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="position"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stanowisko</FormLabel>
+                  <FormControl>
+                    <Input placeholder="np. Ekonom, Dyrektor" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -271,6 +329,24 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                     <Input 
                       type="email" 
                       placeholder="jan.kowalski@example.com" 
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Telefon (opcjonalny)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="tel" 
+                      placeholder="np. +48 123 456 789" 
                       {...field} 
                     />
                   </FormControl>

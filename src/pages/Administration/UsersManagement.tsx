@@ -30,8 +30,13 @@ import UserDialog from './UserDialog';
 
 interface UserProfile {
   id: string;
-  name: string;
+  login: string;
+  first_name: string;
+  last_name: string;
+  position: string;
+  name: string; // kept for compatibility
   email: string;
+  phone: string | null;
   role: string;
   location_id: string | null;
   created_at: string;
@@ -179,8 +184,11 @@ const deleteUserMutation = useMutation({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Login</TableHead>
                   <TableHead>Imię i nazwisko</TableHead>
+                  <TableHead>Stanowisko</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Telefon</TableHead>
                   <TableHead>Rola</TableHead>
                   <TableHead>Placówka</TableHead>
                   <TableHead>Data utworzenia</TableHead>
@@ -190,8 +198,11 @@ const deleteUserMutation = useMutation({
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell className="font-medium">{user.login}</TableCell>
+                    <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
+                    <TableCell>{user.position}</TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.phone || '-'}</TableCell>
                     <TableCell>
                       <Badge {...getRoleBadgeProps(user.role)}>
                         {getRoleLabel(user.role)}
@@ -219,7 +230,7 @@ const deleteUserMutation = useMutation({
                           <AlertDialogHeader>
                             <AlertDialogTitle>Usuń użytkownika</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Czy na pewno chcesz usunąć użytkownika <strong>{user.name}</strong>? 
+                              Czy na pewno chcesz usunąć użytkownika <strong>{user.first_name} {user.last_name}</strong>? 
                               Ta operacja jest nieodwracalna i usunie wszystkie dane związane z tym użytkownikiem.
                             </AlertDialogDescription>
                           </AlertDialogHeader>

@@ -25,6 +25,8 @@ interface Location {
   id: string;
   name: string;
   address: string | null;
+  nip: string | null;
+  regon: string | null;
 }
 
 interface LocationSetting {
@@ -43,6 +45,8 @@ interface LocationFormData {
   name: string;
   address: string;
   house_abbreviation: string;
+  nip: string;
+  regon: string;
 }
 
 const LocationDialog: React.FC<LocationDialogProps> = ({
@@ -77,6 +81,8 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
       name: '',
       address: '',
       house_abbreviation: '',
+      nip: '',
+      regon: '',
     },
   });
 
@@ -87,6 +93,8 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
         name: location?.name || '',
         address: location?.address || '',
         house_abbreviation: locationSetting?.house_abbreviation || '',
+        nip: location?.nip || '',
+        regon: location?.regon || '',
       });
     }
   }, [location, locationSetting, isOpen, isLoadingSettings, form]);
@@ -100,6 +108,8 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
           .update({
             name: data.name,
             address: data.address || null,
+            nip: data.nip || null,
+            regon: data.regon || null,
           })
           .eq('id', location.id);
 
@@ -144,6 +154,8 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
           .insert({
             name: data.name,
             address: data.address || null,
+            nip: data.nip || null,
+            regon: data.regon || null,
           })
           .select()
           .single();
@@ -230,6 +242,54 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
                     <Input
                       placeholder="np. ul. Przykładowa 123, Poznań"
                       {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nip"
+              rules={{ 
+                pattern: { 
+                  value: /^[0-9]{10}$/, 
+                  message: 'NIP musi składać się z 10 cyfr' 
+                } 
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>NIP (opcjonalny)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="np. 1234567890"
+                      {...field}
+                      maxLength={10}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="regon"
+              rules={{ 
+                pattern: { 
+                  value: /^[0-9]{9}([0-9]{5})?$/, 
+                  message: 'REGON musi składać się z 9 lub 14 cyfr' 
+                } 
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>REGON (opcjonalny)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="np. 123456789 lub 12345678901234"
+                      {...field}
+                      maxLength={14}
                     />
                   </FormControl>
                   <FormMessage />
