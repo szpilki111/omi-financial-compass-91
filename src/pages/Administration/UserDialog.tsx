@@ -51,6 +51,17 @@ type UserFormData = z.infer<typeof userSchema>;
 interface UserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editingUser?: {
+    id: string;
+    login: string;
+    first_name: string;
+    last_name: string;
+    position: string;
+    email: string;
+    phone: string | null;
+    role: string;
+    location_id: string | null;
+  } | null;
 }
 
 interface Location {
@@ -58,7 +69,7 @@ interface Location {
   name: string;
 }
 
-const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
+const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreatingNewLocation, setIsCreatingNewLocation] = useState(false);
@@ -66,18 +77,49 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      login: '',
-      first_name: '',
-      last_name: '',
-      position: '',
-      email: '',
-      phone: '',
+      login: editingUser?.login || '',
+      first_name: editingUser?.first_name || '',
+      last_name: editingUser?.last_name || '',
+      position: editingUser?.position || '',
+      email: editingUser?.email || '',
+      phone: editingUser?.phone || '',
       password: '',
-      role: 'ekonom',
-      location_id: 'no-location',
+      role: (editingUser?.role as any) || 'ekonom',
+      location_id: editingUser?.location_id || 'no-location',
       new_location_name: '',
     },
   });
+
+  // Reset form when editingUser changes
+  React.useEffect(() => {
+    if (editingUser) {
+      form.reset({
+        login: editingUser.login,
+        first_name: editingUser.first_name,
+        last_name: editingUser.last_name,
+        position: editingUser.position,
+        email: editingUser.email,
+        phone: editingUser.phone || '',
+        password: '',
+        role: editingUser.role as any,
+        location_id: editingUser.location_id || 'no-location',
+        new_location_name: '',
+      });
+    } else {
+      form.reset({
+        login: '',
+        first_name: '',
+        last_name: '',
+        position: '',
+        email: '',
+        phone: '',
+        password: '',
+        role: 'ekonom',
+        location_id: 'no-location',
+        new_location_name: '',
+      });
+    }
+  }, [editingUser, form]);
 
   // Pobierz listę placówek
   const { data: locations } = useQuery({
@@ -256,7 +298,9 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Dodaj nowego użytkownika</DialogTitle>
+          <DialogTitle>
+            {editingUser ? 'Edytuj użytkownika' : 'Dodaj nowego użytkownika'}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -355,23 +399,25 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hasło</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="Wprowadź hasło (min. 6 znaków)" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {editingUser ? 'Nowe hasło (zostaw puste aby nie zmieniać)' : 'Hasło'}
+                    </FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder={editingUser ? "Zostaw puste aby nie zmieniać" : "Wprowadź hasło (min. 6 znaków)"} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
             <FormField
               control={form.control}
@@ -467,7 +513,9 @@ const UserDialog = ({ open, onOpenChange }: UserDialogProps) => {
                 type="submit" 
                 disabled={createUserMutation.isPending}
               >
-                {createUserMutation.isPending ? 'Tworzenie...' : 'Utwórz użytkownika'}
+                {createUserMutation.isPending 
+                  ? (editingUser ? 'Aktualizacja...' : 'Tworzenie...') 
+                  : (editingUser ? 'Zaktualizuj użytkownika' : 'Utwórz użytkownika')}
               </Button>
             </DialogFooter>
           </form>
