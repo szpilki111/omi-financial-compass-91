@@ -38,7 +38,7 @@ const userSchema = z.object({
   position: z.string().min(2, 'Stanowisko musi mieć co najmniej 2 znaki'),
   email: z.string().email('Nieprawidłowy adres email'),
   phone: z.string().optional(),
-  password: z.string().min(6, 'Hasło musi mieć co najmniej 6 znaków'),
+  password: z.string().optional().or(z.literal('')),
   role: z.enum(['ekonom', 'prowincjal', 'admin'], {
     required_error: 'Wybierz rolę użytkownika',
   }),
@@ -135,121 +135,77 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     }
   });
 
-  // Mutacja do tworzenia użytkownika używając logiki z Login
+  // Mutacja do tworzenia użytkownika
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
-      console.log("Rozpoczynanie procesu tworzenia użytkownika przez administratora...");
-      
-      // Sprawdź czy administrator jest zalogowany
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (!currentSession) {
-        throw new Error('Brak sesji administratora');
+      console.log("Tworzenie użytkownika przez administratora/prowincjała...");
+
+      // Opcjonalne utworzenie nowej lokalizacji
+      let selectedLocationId: string | null = userData.location_id === 'no-location' ? null : (userData.location_id || null);
+
+      if (isCreatingNewLocation && userData.new_location_name?.trim()) {
+        console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
+        const { data: locationData, error: locationError } = await supabase
+          .from('locations')
+          .insert({ name: userData.new_location_name.trim() })
+          .select('id')
+          .maybeSingle();
+
+        if (locationError) {
+          console.error("Error creating location:", locationError);
+          throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
+        }
+        if (locationData) {
+          selectedLocationId = locationData.id;
+          console.log("Lokalizacja utworzona:", selectedLocationId);
+        }
       }
 
-      // Zapisz aktualną sesję
-      const adminSession = currentSession;
-      console.log("Sesja administratora zapisana:", adminSession.user.email);
+      // Utworzenie użytkownika w Auth
+      const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password || '',
+        options: {
+          data: {
+            full_name: `${userData.first_name} ${userData.last_name}`,
+            role: userData.role,
+          },
+        },
+      });
 
+      if (signUpError) {
+        console.error("Signup error:", signUpError);
+        throw new Error(signUpError.message);
+      }
+      if (!newUserData.user) {
+        throw new Error("Nie udało się utworzyć użytkownika");
+      }
 
-      try {
-        // Utwórz nowego użytkownika
-        const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
+      console.log("Nowy użytkownik utworzony:", newUserData.user.id);
+
+      // Utwórz profil użytkownika
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: newUserData.user.id,
+          login: userData.login,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          position: userData.position,
+          name: `${userData.first_name} ${userData.last_name}`,
           email: userData.email,
-          password: userData.password,
-          options: {
-            data: {
-              full_name: `${userData.first_name} ${userData.last_name}`,
-              role: userData.role
-            }
-          }
+          phone: userData.phone,
+          role: userData.role,
+          location_id: selectedLocationId,
         });
 
-        if (signUpError) {
-          console.error("Signup error:", signUpError);
-          throw new Error(signUpError.message);
-        }
-
-        if (!newUserData.user) {
-          throw new Error("Nie udało się utworzyć użytkownika");
-        }
-
-        console.log("Nowy użytkownik utworzony:", newUserData.user.id);
-
-        // Utwórz nową lokalizację jeśli wybrano taką opcję
-        let selectedLocationId = userData.location_id === 'no-location' ? null : userData.location_id;
-        
-        if (isCreatingNewLocation && userData.new_location_name?.trim()) {
-          console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
-          
-          // Przywróć sesję administratora żeby móc utworzyć lokalizację
-          await supabase.auth.setSession(adminSession);
-          
-          const { data: locationData, error: locationError } = await supabase
-            .from('locations')
-            .insert({
-              name: userData.new_location_name.trim(),
-            })
-            .select('id')
-            .single();
-
-          if (locationError) {
-            console.error("Error creating location:", locationError);
-            throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
-          }
-          
-          if (locationData) {
-            selectedLocationId = locationData.id;
-            console.log("Lokalizacja utworzona:", selectedLocationId);
-          }
-          
-          // Wyloguj administratora ponownie
-          await supabase.auth.signOut();
-        }
-
-        // Utwórz profil użytkownika
-        try {
-          console.log("Tworzenie profilu użytkownika...");
-          const { error: directProfileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: newUserData.user.id,
-              login: userData.login,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              position: userData.position,
-              name: `${userData.first_name} ${userData.last_name}`, // Keep for compatibility
-              email: userData.email,
-              phone: userData.phone,
-              role: userData.role,
-              location_id: selectedLocationId
-            });
-
-          if (directProfileError) {
-            console.error("Error creating profile directly:", directProfileError);
-            throw new Error("Nie udało się utworzyć profilu użytkownika");
-          }
-
-          console.log("Profil użytkownika utworzony pomyślnie");
-        } catch (profileErr) {
-          console.error("Profile creation error:", profileErr);
-          throw new Error("Nie udało się utworzyć profilu użytkownika");
-        }
-
-        // Przywróć sesję administratora
-        await supabase.auth.setSession(adminSession);
-        console.log("Sesja administratora przywrócona");
-
-        return newUserData;
-      } catch (error) {
-        // W przypadku błędu, zawsze przywróć sesję administratora
-        try {
-          await supabase.auth.setSession(adminSession);
-          console.log("Sesja administratora przywrócona po błędzie");
-        } catch (restoreError) {
-          console.error("Nie udało się przywrócić sesji administratora:", restoreError);
-        }
-        throw error;
+      if (profileError) {
+        console.error("Error creating profile:", profileError);
+        throw new Error("Nie udało się utworzyć profilu użytkownika");
       }
+
+      console.log("Profil użytkownika utworzony pomyślnie");
+      return newUserData;
     },
     onSuccess: () => {
       toast({
@@ -264,17 +220,18 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     onError: (error: any) => {
       console.error('Error creating user:', error);
       let errorMessage = 'Nie udało się utworzyć użytkownika';
-      
-      if (error.message?.includes('User already registered')) {
+
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('user already registered')) {
         errorMessage = 'Użytkownik z tym adresem email już istnieje';
-      } else if (error.message?.includes('invalid email')) {
+      } else if (msg.includes('invalid email')) {
         errorMessage = 'Nieprawidłowy adres email';
-      } else if (error.message?.includes('weak password')) {
-        errorMessage = 'Hasło jest zbyt słabe';
+      } else if (msg.includes('at least 6') || msg.includes('weak password')) {
+        errorMessage = 'Hasło jest zbyt słabe (min. 6 znaków)';
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: 'Błąd',
         description: errorMessage,
@@ -283,9 +240,82 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     },
   });
 
+  // Mutacja do aktualizacji istniejącego użytkownika (bez zmiany hasła)
+  const updateUserMutation = useMutation({
+    mutationFn: async (userData: UserFormData) => {
+      if (!editingUser) throw new Error('Brak użytkownika do edycji');
+
+      // Opcjonalne utworzenie nowej lokalizacji
+      let selectedLocationId: string | null = userData.location_id === 'no-location' ? null : (userData.location_id || null);
+
+      if (isCreatingNewLocation && userData.new_location_name?.trim()) {
+        console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
+        const { data: locationData, error: locationError } = await supabase
+          .from('locations')
+          .insert({ name: userData.new_location_name.trim() })
+          .select('id')
+          .maybeSingle();
+
+        if (locationError) {
+          console.error("Error creating location:", locationError);
+          throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
+        }
+        if (locationData) {
+          selectedLocationId = locationData.id;
+          console.log("Lokalizacja utworzona:", selectedLocationId);
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          login: userData.login,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          position: userData.position,
+          name: `${userData.first_name} ${userData.last_name}`,
+          email: userData.email,
+          phone: userData.phone,
+          role: userData.role,
+          location_id: selectedLocationId,
+        })
+        .eq('id', editingUser.id);
+
+      if (updateError) {
+        console.error('Error updating user:', updateError);
+        throw new Error('Nie udało się zaktualizować użytkownika: ' + updateError.message);
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Sukces',
+        description: 'Użytkownik został zaktualizowany',
+      });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      form.reset();
+      setIsCreatingNewLocation(false);
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      console.error('Error updating user:', error);
+      toast({
+        title: 'Błąd',
+        description: error?.message || 'Nie udało się zaktualizować użytkownika',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const isSubmitting = createUserMutation.isPending || updateUserMutation.isPending;
+
+
   const onSubmit = (data: UserFormData) => {
     console.log("Dane formularza:", data);
-    createUserMutation.mutate(data);
+    if (editingUser) {
+      updateUserMutation.mutate(data);
+    } else {
+      createUserMutation.mutate(data);
+    }
   };
 
   const handleClose = () => {
@@ -505,15 +535,15 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                 type="button" 
                 variant="outline" 
                 onClick={handleClose}
-                disabled={createUserMutation.isPending}
+                disabled={isSubmitting}
               >
                 Anuluj
               </Button>
               <Button 
                 type="submit" 
-                disabled={createUserMutation.isPending}
+                disabled={isSubmitting}
               >
-                {createUserMutation.isPending 
+                {isSubmitting 
                   ? (editingUser ? 'Aktualizacja...' : 'Tworzenie...') 
                   : (editingUser ? 'Zaktualizuj użytkownika' : 'Utwórz użytkownika')}
               </Button>
