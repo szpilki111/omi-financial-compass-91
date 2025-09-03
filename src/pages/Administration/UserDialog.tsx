@@ -518,7 +518,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                             <SelectValue placeholder="Wybierz placówkę" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-[200px] overflow-y-auto">
                           <SelectItem value="no-location">Brak przypisania</SelectItem>
                           {locations?.map((location) => (
                             <SelectItem key={location.id} value={location.id}>
