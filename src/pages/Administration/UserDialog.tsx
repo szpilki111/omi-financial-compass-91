@@ -161,50 +161,36 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         }
       }
 
-      // Dla administratorów i prowincjałów - użyj admin API aby nie wpłynąć na obecną sesję
-      const { data: newUserData, error: signUpError } = await supabase.auth.admin.createUser({
-        email: userData.email,
-        password: userData.password || 'TempPassword123!',
-        user_metadata: {
-          full_name: `${userData.first_name} ${userData.last_name}`,
-          role: userData.role,
+      // Wywołaj edge function (działa na kluczu serwisowym, nie zrywa sesji)
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user-admin', {
+        body: {
+          email: userData.email,
+          password: userData.password || '',
+          profile: {
+            login: userData.login,
+            first_name: userData.first_name,
+            last_name: userData.last_name,
+            position: userData.position,
+            name: `${userData.first_name} ${userData.last_name}`,
+            email: userData.email,
+            phone: userData.phone,
+            role: userData.role,
+            location_id: selectedLocationId,
+          },
         },
-        email_confirm: true
       });
 
-      if (signUpError) {
-        console.error("Admin create user error:", signUpError);
-        throw new Error(signUpError.message);
+      if (fnError) {
+        console.error("create-user-admin error:", fnError);
+        throw new Error(fnError.message || 'Nie udało się utworzyć użytkownika');
       }
-      if (!newUserData.user) {
+      if (!fnData?.user_id) {
         throw new Error("Nie udało się utworzyć użytkownika");
       }
 
-      console.log("Nowy użytkownik utworzony przez admina:", newUserData.user.id);
+      console.log("Nowy użytkownik utworzony:", fnData.user_id);
 
-      // Utwórz profil użytkownika
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserData.user.id,
-          login: userData.login,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          position: userData.position,
-          name: `${userData.first_name} ${userData.last_name}`,
-          email: userData.email,
-          phone: userData.phone,
-          role: userData.role,
-          location_id: selectedLocationId,
-        });
-
-      if (profileError) {
-        console.error("Error creating profile:", profileError);
-        throw new Error("Nie udało się utworzyć profilu użytkownika");
-      }
-
-      console.log("Profil użytkownika utworzony pomyślnie");
-      return newUserData;
+      return fnData;
     },
     onSuccess: () => {
       console.log("Użytkownik utworzony pomyślnie, sprawdzam obecną sesję...");
