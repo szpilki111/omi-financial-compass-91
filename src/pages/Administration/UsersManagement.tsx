@@ -63,6 +63,10 @@ const getRoleLabel = (role: string) => {
     case 'admin': return 'Administrator';
     case 'prowincjal': return 'Prowincjał';
     case 'ekonom': return 'Ekonom';
+    case 'proboszcz': return 'Proboszcz';
+    case 'asystent': return 'Asystent';
+    case 'asystent_ekonoma_prowincjalnego': return 'Asystent Ekonoma Prowincjalnego';
+    case 'ekonom_prowincjalny': return 'Ekonom Prowincjalny';
     default: return role;
   }
 };

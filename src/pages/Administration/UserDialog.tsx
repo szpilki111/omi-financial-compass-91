@@ -39,7 +39,7 @@ const userSchema = z.object({
   email: z.string().email('Nieprawidłowy adres email'),
   phone: z.string().optional(),
   password: z.string().optional().or(z.literal('')),
-  role: z.enum(['ekonom', 'prowincjal', 'admin'], {
+  role: z.enum(['ekonom', 'prowincjal', 'admin', 'proboszcz', 'asystent', 'asystent_ekonoma_prowincjalnego', 'ekonom_prowincjalny'], {
     required_error: 'Wybierz rolę użytkownika',
   }),
   location_id: z.string().optional(),
@@ -465,6 +465,10 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                       <SelectItem value="ekonom">Ekonom</SelectItem>
                       <SelectItem value="prowincjal">Prowincjał</SelectItem>
                       <SelectItem value="admin">Administrator</SelectItem>
+                      <SelectItem value="proboszcz">Proboszcz</SelectItem>
+                      <SelectItem value="asystent">Asystent</SelectItem>
+                      <SelectItem value="asystent_ekonoma_prowincjalnego">Asystent Ekonoma Prowincjalnego</SelectItem>
+                      <SelectItem value="ekonom_prowincjalny">Ekonom Prowincjalny</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
