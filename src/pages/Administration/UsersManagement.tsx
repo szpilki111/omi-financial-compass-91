@@ -30,8 +30,13 @@ import UserDialog from './UserDialog';
 
 interface UserProfile {
   id: string;
-  name: string;
+  login: string;
+  first_name: string;
+  last_name: string;
+  position: string;
+  name: string; // kept for compatibility
   email: string;
+  phone: string | null;
   role: string;
   location_id: string | null;
   created_at: string;
@@ -64,6 +69,7 @@ const getRoleLabel = (role: string) => {
 
 const UsersManagement = () => {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -179,8 +185,11 @@ const deleteUserMutation = useMutation({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Login</TableHead>
                   <TableHead>Imię i nazwisko</TableHead>
+                  <TableHead>Stanowisko</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Telefon</TableHead>
                   <TableHead>Rola</TableHead>
                   <TableHead>Placówka</TableHead>
                   <TableHead>Data utworzenia</TableHead>
@@ -190,8 +199,11 @@ const deleteUserMutation = useMutation({
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell className="font-medium">{user.login}</TableCell>
+                    <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
+                    <TableCell>{user.position}</TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.phone || '-'}</TableCell>
                     <TableCell>
                       <Badge {...getRoleBadgeProps(user.role)}>
                         {getRoleLabel(user.role)}
@@ -204,9 +216,20 @@ const deleteUserMutation = useMutation({
                       {new Date(user.created_at).toLocaleDateString('pl-PL')}
                     </TableCell>
                     <TableCell className="text-right">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setIsUserDialogOpen(true);
+                          }}
+                        >
+                          Edytuj
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700"
@@ -219,7 +242,7 @@ const deleteUserMutation = useMutation({
                           <AlertDialogHeader>
                             <AlertDialogTitle>Usuń użytkownika</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Czy na pewno chcesz usunąć użytkownika <strong>{user.name}</strong>? 
+                              Czy na pewno chcesz usunąć użytkownika <strong>{user.first_name} {user.last_name}</strong>? 
                               Ta operacja jest nieodwracalna i usunie wszystkie dane związane z tym użytkownikiem.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
@@ -233,7 +256,8 @@ const deleteUserMutation = useMutation({
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
-                      </AlertDialog>
+                          </AlertDialog>
+                        </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -242,10 +266,16 @@ const deleteUserMutation = useMutation({
           )}
         </CardContent>
       </Card>
-
+      
       <UserDialog 
         open={isUserDialogOpen} 
-        onOpenChange={setIsUserDialogOpen} 
+        onOpenChange={(open) => {
+          setIsUserDialogOpen(open);
+          if (!open) {
+            setEditingUser(null);
+          }
+        }}
+        editingUser={editingUser}
       />
     </>
   );

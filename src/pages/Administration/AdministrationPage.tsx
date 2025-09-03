@@ -44,7 +44,7 @@ const AdministrationPage = () => {
             <TabsTrigger value="locations">Placówki</TabsTrigger>
             <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
             <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
-            {user.role === 'admin' && (
+            {(user.role === 'admin' || user.role === 'prowincjal') && (
               <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             )}
           </TabsList>
@@ -61,7 +61,7 @@ const AdministrationPage = () => {
             <AccountsManagement />
           </TabsContent>
 
-          {user.role === 'admin' && (
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsContent value="users" className="space-y-4">
               <UsersManagement />
             </TabsContent>

@@ -7,10 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "13.0.4"
   }
   public: {
     Tables: {
@@ -207,6 +207,8 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          nip: string | null
+          regon: string | null
           updated_at: string
         }
         Insert: {
@@ -214,6 +216,8 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          nip?: string | null
+          regon?: string | null
           updated_at?: string
         }
         Update: {
@@ -221,6 +225,8 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          nip?: string | null
+          regon?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -276,27 +282,42 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          first_name: string | null
           id: string
+          last_name: string | null
           location_id: string | null
+          login: string | null
           name: string
+          phone: string | null
+          position: string | null
           role: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
+          first_name?: string | null
           id: string
+          last_name?: string | null
           location_id?: string | null
+          login?: string | null
           name: string
+          phone?: string | null
+          position?: string | null
           role: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
+          first_name?: string | null
           id?: string
+          last_name?: string | null
           location_id?: string | null
+          login?: string | null
           name?: string
+          phone?: string | null
+          position?: string | null
           role?: string
           updated_at?: string
         }
@@ -714,21 +735,21 @@ export type Database = {
     Functions: {
       change_user_password: {
         Args:
-          | { user_id: number; new_password: string }
-          | { user_id: string; new_password: string }
+          | { new_password: string; user_id: number }
+          | { new_password: string; user_id: string }
         Returns: boolean
       }
       check_report_editing_blocked: {
-        Args: { p_location_id: string; p_document_date: string }
+        Args: { p_document_date: string; p_location_id: string }
         Returns: boolean
       }
       create_user_admin: {
         Args: {
           user_email: string
-          user_password: string
-          user_name: string
-          user_role: string
           user_location_id?: string
+          user_name: string
+          user_password: string
+          user_role: string
         }
         Returns: string
       }
@@ -741,7 +762,7 @@ export type Database = {
         Returns: undefined
       }
       generate_document_number: {
-        Args: { p_location_id: string; p_year: number; p_month: number }
+        Args: { p_location_id: string; p_month: number; p_year: number }
         Returns: string
       }
       get_current_user_id: {
@@ -768,14 +789,14 @@ export type Database = {
       }
       insert_profile_admin: {
         Args:
-          | { user_id: number; profile_data: Json }
           | {
+              location_id?: string
+              user_email: string
               user_id: string
               user_name: string
               user_role: string
-              user_email: string
-              location_id?: string
             }
+          | { profile_data: Json; user_id: number }
         Returns: undefined
       }
       upsert_user_setting: {
