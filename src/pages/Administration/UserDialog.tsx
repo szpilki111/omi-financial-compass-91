@@ -207,6 +207,13 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
       return newUserData;
     },
     onSuccess: () => {
+      console.log("Użytkownik utworzony pomyślnie, sprawdzam obecną sesję...");
+      // Sprawdź czy obecna sesja nadal jest aktywna
+      supabase.auth.getUser().then(({ data: { user }, error }) => {
+        console.log("Obecny użytkownik po utworzeniu:", user);
+        console.log("Błąd sesji po utworzeniu:", error);
+      });
+      
       toast({
         title: 'Sukces',
         description: 'Użytkownik został utworzony pomyślnie',
