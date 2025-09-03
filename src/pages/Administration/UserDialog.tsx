@@ -161,27 +161,26 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         }
       }
 
-      // Utworzenie użytkownika w Auth
-      const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
+      // Dla administratorów i prowincjałów - użyj admin API aby nie wpłynąć na obecną sesję
+      const { data: newUserData, error: signUpError } = await supabase.auth.admin.createUser({
         email: userData.email,
-        password: userData.password || '',
-        options: {
-          data: {
-            full_name: `${userData.first_name} ${userData.last_name}`,
-            role: userData.role,
-          },
+        password: userData.password || 'TempPassword123!',
+        user_metadata: {
+          full_name: `${userData.first_name} ${userData.last_name}`,
+          role: userData.role,
         },
+        email_confirm: true
       });
 
       if (signUpError) {
-        console.error("Signup error:", signUpError);
+        console.error("Admin create user error:", signUpError);
         throw new Error(signUpError.message);
       }
       if (!newUserData.user) {
         throw new Error("Nie udało się utworzyć użytkownika");
       }
 
-      console.log("Nowy użytkownik utworzony:", newUserData.user.id);
+      console.log("Nowy użytkownik utworzony przez admina:", newUserData.user.id);
 
       // Utwórz profil użytkownika
       const { error: profileError } = await supabase
