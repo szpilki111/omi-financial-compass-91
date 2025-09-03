@@ -23,7 +23,7 @@ interface Location {
   name: string;
 }
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [loginField, setLoginField] = useState(''); // Changed from email to login
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,35 +84,116 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    
+    let userEmail = '';
+    let userId = '';
+    
     try {
       // Check for any existing session and sign out if found
-      const {
-        data: {
-          session
-        }
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
         await supabase.auth.signOut();
       }
-      console.log("Próba logowania dla:", email);
+
+      // First, find user by login to get email and check if blocked
+      console.log("Szukanie użytkownika po loginie:", loginField);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, blocked')
+        .eq('login', loginField)
+        .single();
+
+      if (profileError || !profile) {
+        console.log("Profile not found error:", profileError);
+        userId = '';
+        // Log failed login attempt without user_id
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: null,
+            success: false,
+            error_message: 'User not found',
+            ip: null,
+            user_agent: navigator.userAgent
+          }
+        });
+        setError("Nieprawidłowy login lub hasło. Spróbuj ponownie.");
+        return;
+      }
+
+      userEmail = profile.email;
+      userId = profile.id;
+
+      // Check if user is blocked
+      if (profile.blocked) {
+        console.log("User is blocked:", userId);
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: userId,
+            success: false,
+            error_message: 'User account is blocked',
+            ip: null,
+            user_agent: navigator.userAgent
+          }
+        });
+        setError("Konto zostało zablokowane. Skontaktuj się z administratorem.");
+        return;
+      }
+
+      console.log("Próba logowania dla email:", userEmail);
 
       // Add timeout to prevent indefinite loading
-      const success = await Promise.race([login(email, password), timeout(10000) // 10 second timeout
+      const success = await Promise.race([
+        login(userEmail, password), 
+        timeout(10000) // 10 second timeout
       ]);
+      
       if (success) {
+        // Log successful login
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: userId,
+            success: true,
+            error_message: null,
+            ip: null,
+            user_agent: navigator.userAgent
+          }
+        });
+        
         toast({
           title: "Logowanie pomyślne",
           description: "Zostałeś zalogowany do systemu."
         });
-        navigate(from, {
-          replace: true
-        });
+        navigate(from, { replace: true });
       } else {
-        setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
+        // Log failed login
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: userId,
+            success: false,
+            error_message: 'Invalid password',
+            ip: null,
+            user_agent: navigator.userAgent
+          }
+        });
+        setError("Nieprawidłowy login lub hasło. Spróbuj ponownie.");
       }
     } catch (err: any) {
       console.error("Login error:", err);
+      
+      // Log failed login if we have userId
+      if (userId) {
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: userId,
+            success: false,
+            error_message: err?.message || 'Login error',
+            ip: null,
+            user_agent: navigator.userAgent
+          }
+        });
+      }
+      
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
     } finally {
       setIsLoading(false);
@@ -164,7 +245,7 @@ const Login = () => {
         data,
         error: signUpError
       } = await supabase.auth.signUp({
-        email,
+        email: loginField, // using loginField which contains email during signup
         password,
         options: {
           data: {
@@ -234,7 +315,7 @@ const Login = () => {
           id: data.user.id,
           name: name,
           role: role,
-          email: email,
+          email: loginField, // using loginField which contains email during signup
           location_id: selectedLocationId
         });
         if (directProfileError) {
@@ -248,7 +329,7 @@ const Login = () => {
             user_id: data.user.id,
             user_name: name,
             user_role: role,
-            user_email: email,
+            user_email: loginField, // using loginField which contains email during signup
             location_id: selectedLocationId
           } as ProfileInsertParams);
           if (profileError) {
@@ -268,7 +349,7 @@ const Login = () => {
 
       // Try to login automatically with timeout protection
       try {
-        const success = await Promise.race([login(email, password), timeout(10000) // 10 second timeout
+        const success = await Promise.race([login(loginField, password), timeout(10000) // 10 second timeout
         ]);
         if (success) {
           toast({
@@ -298,7 +379,7 @@ const Login = () => {
       }
 
       // Clear form
-      setEmail('');
+      setLoginField('');
       setPassword('');
       setName('');
       setLocation('');
@@ -332,10 +413,18 @@ const Login = () => {
             </div>}
           
           <div>
-            <Label htmlFor="email" className="omi-form-label">
-              Adres email
+            <Label htmlFor="login" className="omi-form-label">
+              {isSigningUp ? 'Adres email' : 'Login'}
             </Label>
-            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="omi-form-input" required placeholder="Wprowadź adres email" />
+            <Input 
+              id="login" 
+              type={isSigningUp ? "email" : "text"} 
+              value={loginField} 
+              onChange={e => setLoginField(e.target.value)} 
+              className="omi-form-input" 
+              required 
+              placeholder={isSigningUp ? "Wprowadź adres email" : "Wprowadź login"} 
+            />
           </div>
 
           <div>
