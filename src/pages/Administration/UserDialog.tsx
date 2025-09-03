@@ -39,7 +39,7 @@ const userSchema = z.object({
   email: z.string().email('Nieprawidłowy adres email'),
   phone: z.string().optional(),
   password: z.string().optional().or(z.literal('')),
-  role: z.enum(['ekonom', 'prowincjal', 'admin'], {
+  role: z.enum(['ekonom', 'prowincjal', 'admin', 'proboszcz', 'asystent', 'asystent_ekonoma_prowincjalnego', 'ekonom_prowincjalny'], {
     required_error: 'Wybierz rolę użytkownika',
   }),
   location_id: z.string().optional(),
@@ -161,53 +161,45 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         }
       }
 
-      // Utworzenie użytkownika w Auth
-      const { data: newUserData, error: signUpError } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password || '',
-        options: {
-          data: {
-            full_name: `${userData.first_name} ${userData.last_name}`,
+      // Wywołaj edge function (działa na kluczu serwisowym, nie zrywa sesji)
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user-admin', {
+        body: {
+          email: userData.email,
+          password: userData.password || '',
+          profile: {
+            login: userData.login,
+            first_name: userData.first_name,
+            last_name: userData.last_name,
+            position: userData.position,
+            name: `${userData.first_name} ${userData.last_name}`,
+            email: userData.email,
+            phone: userData.phone,
             role: userData.role,
+            location_id: selectedLocationId,
           },
         },
       });
 
-      if (signUpError) {
-        console.error("Signup error:", signUpError);
-        throw new Error(signUpError.message);
+      if (fnError) {
+        console.error("create-user-admin error:", fnError);
+        throw new Error(fnError.message || 'Nie udało się utworzyć użytkownika');
       }
-      if (!newUserData.user) {
+      if (!fnData?.user_id) {
         throw new Error("Nie udało się utworzyć użytkownika");
       }
 
-      console.log("Nowy użytkownik utworzony:", newUserData.user.id);
+      console.log("Nowy użytkownik utworzony:", fnData.user_id);
 
-      // Utwórz profil użytkownika
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserData.user.id,
-          login: userData.login,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          position: userData.position,
-          name: `${userData.first_name} ${userData.last_name}`,
-          email: userData.email,
-          phone: userData.phone,
-          role: userData.role,
-          location_id: selectedLocationId,
-        });
-
-      if (profileError) {
-        console.error("Error creating profile:", profileError);
-        throw new Error("Nie udało się utworzyć profilu użytkownika");
-      }
-
-      console.log("Profil użytkownika utworzony pomyślnie");
-      return newUserData;
+      return fnData;
     },
     onSuccess: () => {
+      console.log("Użytkownik utworzony pomyślnie, sprawdzam obecną sesję...");
+      // Sprawdź czy obecna sesja nadal jest aktywna
+      supabase.auth.getUser().then(({ data: { user }, error }) => {
+        console.log("Obecny użytkownik po utworzeniu:", user);
+        console.log("Błąd sesji po utworzeniu:", error);
+      });
+      
       toast({
         title: 'Sukces',
         description: 'Użytkownik został utworzony pomyślnie',
@@ -465,6 +457,10 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                       <SelectItem value="ekonom">Ekonom</SelectItem>
                       <SelectItem value="prowincjal">Prowincjał</SelectItem>
                       <SelectItem value="admin">Administrator</SelectItem>
+                      <SelectItem value="proboszcz">Proboszcz</SelectItem>
+                      <SelectItem value="asystent">Asystent</SelectItem>
+                      <SelectItem value="asystent_ekonoma_prowincjalnego">Asystent Ekonoma Prowincjalnego</SelectItem>
+                      <SelectItem value="ekonom_prowincjalny">Ekonom Prowincjalny</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -514,7 +510,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                             <SelectValue placeholder="Wybierz placówkę" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-[200px] overflow-y-auto">
                           <SelectItem value="no-location">Brak przypisania</SelectItem>
                           {locations?.map((location) => (
                             <SelectItem key={location.id} value={location.id}>

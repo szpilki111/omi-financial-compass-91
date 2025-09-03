@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '../ui/Spinner';
 import { useToast } from '@/hooks/use-toast';
 
-type Role = 'ekonom' | 'prowincjal' | 'admin';
+type Role = 'ekonom' | 'prowincjal' | 'admin' | 'proboszcz' | 'asystent' | 'asystent_ekonoma_prowincjalnego' | 'ekonom_prowincjalny';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
