@@ -755,10 +755,10 @@ const DocumentDialog = ({
                           />
                         </TableHead>
                         <TableHead>Opis</TableHead>
-                        <TableHead>Konto Wn</TableHead>
-                        <TableHead className="text-right">Winien</TableHead>
+                        <TableHead className="text-right">Kwota Winien</TableHead>
+                        <TableHead>Konto Winien</TableHead>
+                        <TableHead className="text-right">Kwota Ma</TableHead>
                         <TableHead>Konto Ma</TableHead>
-                        <TableHead className="text-right">Ma</TableHead>
                         <TableHead>Akcje</TableHead>
                       </TableRow>
                     </TableHeader>
