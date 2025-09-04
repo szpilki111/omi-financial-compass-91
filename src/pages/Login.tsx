@@ -84,13 +84,15 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    
     let userEmail = '';
     let userId = '';
-    
     try {
       // Check for any existing session and sign out if found
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (session) {
         console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
         await supabase.auth.signOut();
@@ -101,17 +103,16 @@ const Login = () => {
       userEmail = loginField;
 
       // Add timeout to prevent indefinite loading
-      const success = await Promise.race([
-        login(userEmail, password), 
-        timeout(10000) // 10 second timeout
+      const success = await Promise.race([login(userEmail, password), timeout(10000) // 10 second timeout
       ]);
-      
       if (success) {
         toast({
           title: "Logowanie pomyślne",
           description: "Zostałeś zalogowany do systemu."
         });
-        navigate(from, { replace: true });
+        navigate(from, {
+          replace: true
+        });
       } else {
         setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
       }
@@ -168,7 +169,8 @@ const Login = () => {
         data,
         error: signUpError
       } = await supabase.auth.signUp({
-        email: loginField, // using loginField which contains email during signup
+        email: loginField,
+        // using loginField which contains email during signup
         password,
         options: {
           data: {
@@ -238,7 +240,8 @@ const Login = () => {
           id: data.user.id,
           name: name,
           role: role,
-          email: loginField, // using loginField which contains email during signup
+          email: loginField,
+          // using loginField which contains email during signup
           location_id: selectedLocationId
         });
         if (directProfileError) {
@@ -252,7 +255,8 @@ const Login = () => {
             user_id: data.user.id,
             user_name: name,
             user_role: role,
-            user_email: loginField, // using loginField which contains email during signup
+            user_email: loginField,
+            // using loginField which contains email during signup
             location_id: selectedLocationId
           } as ProfileInsertParams);
           if (profileError) {
@@ -339,15 +343,7 @@ const Login = () => {
             <Label htmlFor="login" className="omi-form-label">
               Adres email
             </Label>
-            <Input 
-              id="login" 
-              type="email" 
-              value={loginField} 
-              onChange={e => setLoginField(e.target.value)} 
-              className="omi-form-input" 
-              required 
-              placeholder="Wprowadź adres email" 
-            />
+            <Input id="login" type="email" value={loginField} onChange={e => setLoginField(e.target.value)} className="omi-form-input" required placeholder="Wprowadź adres email" />
           </div>
 
           <div>
@@ -401,13 +397,7 @@ const Login = () => {
           </Button>
 
           <div className="text-center mt-4">
-            <button
-              type="button"
-              onClick={() => setIsSigningUp(!isSigningUp)}
-              className="text-sm text-omi-500 hover:text-omi-600"
-            >
-              {isSigningUp ? 'Masz już konto? Zaloguj się' : 'Nie masz konta? Zarejestruj się'}
-            </button>
+            
           </div>
         </form>
       </div>
