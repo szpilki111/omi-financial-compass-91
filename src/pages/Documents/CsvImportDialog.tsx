@@ -142,7 +142,7 @@ const parseAmount = (amountStr: string): number => {
   console.log('Cleaned amount:', cleanAmount); // Debugowanie
   const parsed = parseFloat(cleanAmount) || 0;
   console.log('Parsed amount:', parsed); // Debugowanie
-  return parsed * 100; // Przelicz na grosze
+  return parsed * 1000; // Przelicz na grosze
 };
 
   const handleImport = async () => {
