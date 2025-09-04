@@ -364,7 +364,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
               </div>
               <p className="text-xs text-gray-500">
                 Obsługiwane formaty: .csv<br />
-                Format przykładowy: Opis,"Kwota",Numer-konta,"Kwota2",Kod
+                Format przykładowy: Opis,"Kwota winien",konto winien,"Kwota ma",konto ma
               </p>
             </div>
 
@@ -389,10 +389,10 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-2 text-xs font-medium text-left text-gray-500">Opis</th>
-                        <th className="px-4 py-2 text-xs font-medium text-right text-gray-500">Kwota</th>
-                        <th className="px-4 py-2 text-xs font-medium text-left text-gray-500">Numer konta</th>
-                        <th className="px-4 py-2 text-xs font-medium text-right text-gray-500">Kwota 2</th>
-                        <th className="px-4 py-2 text-xs font-medium text-left text-gray-500">Kod</th>
+                        <th className="px-4 py-2 text-xs font-medium text-right text-gray-500">Kwota winien</th>
+                        <th className="px-4 py-2 text-xs font-medium text-left text-gray-500">Konto winien</th>
+                        <th className="px-4 py-2 text-xs font-medium text-right text-gray-500">Kwota ma</th>
+                        <th className="px-4 py-2 text-xs font-medium text-left text-gray-500">Konto ma</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
