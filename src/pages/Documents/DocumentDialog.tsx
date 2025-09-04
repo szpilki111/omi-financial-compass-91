@@ -1031,15 +1031,6 @@ const EditableTransactionRow: React.FC<{
         />
       </TableCell>
       <TableCell>
-        <AccountCombobox 
-          value={formData.debit_account_id} 
-          onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
-          locationId={userProfile?.location_id}
-          side="debit"
-          disabled={isEditingBlocked}
-        />
-      </TableCell>
-      <TableCell>
         <div className="flex items-center space-x-2">
           <Input 
             type="number" 
@@ -1056,10 +1047,10 @@ const EditableTransactionRow: React.FC<{
       </TableCell>
       <TableCell>
         <AccountCombobox 
-          value={formData.credit_account_id} 
-          onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
+          value={formData.debit_account_id} 
+          onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
           locationId={userProfile?.location_id}
-          side="credit"
+          side="debit"
           disabled={isEditingBlocked}
         />
       </TableCell>
@@ -1077,6 +1068,15 @@ const EditableTransactionRow: React.FC<{
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
+      </TableCell>
+      <TableCell>
+        <AccountCombobox 
+          value={formData.credit_account_id} 
+          onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
+          locationId={userProfile?.location_id}
+          side="credit"
+          disabled={isEditingBlocked}
+        />
       </TableCell>
       <TableCell>
         <div className="flex gap-2">
