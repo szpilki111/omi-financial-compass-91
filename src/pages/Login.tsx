@@ -96,51 +96,9 @@ const Login = () => {
         await supabase.auth.signOut();
       }
 
-      // First, find user by login to get email and check if blocked
-      console.log("Szukanie użytkownika po loginie:", loginField);
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email, blocked')
-        .eq('login', loginField)
-        .single();
-
-      if (profileError || !profile) {
-        console.log("Profile not found error:", profileError);
-        userId = '';
-        // Log failed login attempt without user_id
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: null,
-            success: false,
-            error_message: 'User not found',
-            ip: null,
-            user_agent: navigator.userAgent
-          }
-        });
-        setError("Nieprawidłowy login lub hasło. Spróbuj ponownie.");
-        return;
-      }
-
-      userEmail = profile.email;
-      userId = profile.id;
-
-      // Check if user is blocked
-      if (profile.blocked) {
-        console.log("User is blocked:", userId);
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: userId,
-            success: false,
-            error_message: 'User account is blocked',
-            ip: null,
-            user_agent: navigator.userAgent
-          }
-        });
-        setError("Konto zostało zablokowane. Skontaktuj się z administratorem.");
-        return;
-      }
-
-      console.log("Próba logowania dla email:", userEmail);
+      // Use loginField directly as email for login
+      console.log("Próba logowania dla email:", loginField);
+      userEmail = loginField;
 
       // Add timeout to prevent indefinite loading
       const success = await Promise.race([
@@ -149,51 +107,16 @@ const Login = () => {
       ]);
       
       if (success) {
-        // Log successful login
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: userId,
-            success: true,
-            error_message: null,
-            ip: null,
-            user_agent: navigator.userAgent
-          }
-        });
-        
         toast({
           title: "Logowanie pomyślne",
           description: "Zostałeś zalogowany do systemu."
         });
         navigate(from, { replace: true });
       } else {
-        // Log failed login
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: userId,
-            success: false,
-            error_message: 'Invalid password',
-            ip: null,
-            user_agent: navigator.userAgent
-          }
-        });
-        setError("Nieprawidłowy login lub hasło. Spróbuj ponownie.");
+        setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
       }
     } catch (err: any) {
       console.error("Login error:", err);
-      
-      // Log failed login if we have userId
-      if (userId) {
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: userId,
-            success: false,
-            error_message: err?.message || 'Login error',
-            ip: null,
-            user_agent: navigator.userAgent
-          }
-        });
-      }
-      
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
     } finally {
       setIsLoading(false);
@@ -414,16 +337,16 @@ const Login = () => {
           
           <div>
             <Label htmlFor="login" className="omi-form-label">
-              {isSigningUp ? 'Adres email' : 'Login'}
+              Adres email
             </Label>
             <Input 
               id="login" 
-              type={isSigningUp ? "email" : "text"} 
+              type="email" 
               value={loginField} 
               onChange={e => setLoginField(e.target.value)} 
               className="omi-form-input" 
               required 
-              placeholder={isSigningUp ? "Wprowadź adres email" : "Wprowadź login"} 
+              placeholder="Wprowadź adres email" 
             />
           </div>
 
@@ -477,12 +400,14 @@ const Login = () => {
             {isLoading ? <Spinner size="sm" /> : isSigningUp ? 'Zarejestruj się' : 'Zaloguj się'}
           </Button>
 
-          <div className="text-center mt-4 text-xs text-omi-gray-500">
-            
-            
-            
-            
-            
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => setIsSigningUp(!isSigningUp)}
+              className="text-sm text-omi-500 hover:text-omi-600"
+            >
+              {isSigningUp ? 'Masz już konto? Zaloguj się' : 'Nie masz konta? Zarejestruj się'}
+            </button>
           </div>
         </form>
       </div>
