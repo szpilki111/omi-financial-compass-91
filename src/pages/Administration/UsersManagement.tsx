@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +27,6 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import UserDialog from './UserDialog';
-import { useAuth } from '@/context/AuthContext';
 
 interface UserProfile {
   id: string;
@@ -42,12 +40,9 @@ interface UserProfile {
   role: string;
   location_id: string | null;
   created_at: string;
-  blocked: boolean;
   location?: {
     name: string;
   };
-  last_successful_login?: string | null;
-  last_failed_login?: string | null;
 }
 
 const getRoleBadgeProps = (role: string) => {
@@ -81,13 +76,11 @@ const UsersManagement = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      // Get users with their login events
-      const { data: profiles, error: profilesError } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select(`
           *,
@@ -95,40 +88,8 @@ const UsersManagement = () => {
         `)
         .order('created_at', { ascending: false });
       
-      if (profilesError) throw profilesError;
-
-      // Get latest login events for each user
-      const usersWithLoginEvents = await Promise.all(
-        profiles.map(async (profile) => {
-          // Get last successful login
-          const { data: successfulLogin } = await supabase
-            .from('user_login_events')
-            .select('created_at')
-            .eq('user_id', profile.id)
-            .eq('success', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          // Get last failed login
-          const { data: failedLogin } = await supabase
-            .from('user_login_events')
-            .select('created_at')
-            .eq('user_id', profile.id)
-            .eq('success', false)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          return {
-            ...profile,
-            last_successful_login: successfulLogin?.created_at || null,
-            last_failed_login: failedLogin?.created_at || null,
-          };
-        })
-      );
-
-      return usersWithLoginEvents as UserProfile[];
+      if (error) throw error;
+      return data as UserProfile[];
     }
   });
 
@@ -197,39 +158,8 @@ const deleteUserMutation = useMutation({
   },
 });
 
-// Mutation to toggle user blocked status
-const toggleUserBlockedMutation = useMutation({
-  mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ blocked })
-      .eq('id', userId);
-    
-    if (error) throw error;
-  },
-  onSuccess: () => {
-    toast({
-      title: 'Sukces',
-      description: 'Status blokady użytkownika został zaktualizowany',
-    });
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-  },
-  onError: (error: any) => {
-    console.error('Error toggling user blocked status:', error);
-    toast({
-      title: 'Błąd',
-      description: 'Nie udało się zaktualizować statusu blokady',
-      variant: 'destructive',
-    });
-  },
-});
-
   const handleDeleteUser = (userId: string) => {
     deleteUserMutation.mutate(userId);
-  };
-
-  const handleToggleBlocked = (userId: string, currentBlocked: boolean) => {
-    toggleUserBlockedMutation.mutate({ userId, blocked: !currentBlocked });
   };
 
   if (isLoading) {
@@ -266,13 +196,6 @@ const toggleUserBlockedMutation = useMutation({
                   <TableHead>Telefon</TableHead>
                   <TableHead>Rola</TableHead>
                   <TableHead>Placówka</TableHead>
-                  {user?.role === 'prowincjal' && (
-                    <>
-                      <TableHead>Ostatnie udane</TableHead>
-                      <TableHead>Ostatnie nieudane</TableHead>
-                      <TableHead>Zablokowany</TableHead>
-                    </>
-                  )}
                   <TableHead>Data utworzenia</TableHead>
                   <TableHead className="text-right">Akcje</TableHead>
                 </TableRow>
@@ -293,35 +216,6 @@ const toggleUserBlockedMutation = useMutation({
                     <TableCell>
                       {user.location?.name || '-'}
                     </TableCell>
-                    {user?.role === 'prowincjal' && (
-                      <>
-                        <TableCell>
-                          {user.last_successful_login ? (
-                            <span className="text-green-600 text-sm">
-                              {new Date(user.last_successful_login).toLocaleString('pl-PL')}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {user.last_failed_login ? (
-                            <span className="text-red-600 text-sm">
-                              {new Date(user.last_failed_login).toLocaleString('pl-PL')}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={user.blocked}
-                            onCheckedChange={() => handleToggleBlocked(user.id, user.blocked)}
-                            disabled={toggleUserBlockedMutation.isPending}
-                          />
-                        </TableCell>
-                      </>
-                    )}
                     <TableCell>
                       {new Date(user.created_at).toLocaleDateString('pl-PL')}
                     </TableCell>
