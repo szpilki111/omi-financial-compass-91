@@ -133,16 +133,17 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
     setMappings(prev => ({ ...prev, [name]: value }));
   };
 
-  const parseAmount = (amountStr: string): number => {
-    if (!amountStr) return 0;
-    
-    // Usuń wszystkie spacje i zamień przecinki na kropki
-    const cleanAmount = amountStr
-      .replace(/\s/g, '')
-      .replace(',', '.');
-    
-    return parseFloat(cleanAmount) || 0;
-  };
+const parseAmount = (amountStr: string): number => {
+  if (!amountStr) return 0;
+  console.log('Raw amount:', amountStr); // Debugowanie
+  const cleanAmount = amountStr
+    .replace(/[\s\xa0]/g, '') // Usuwa spacje i niełamliwe spacje
+    .replace(',', '.');
+  console.log('Cleaned amount:', cleanAmount); // Debugowanie
+  const parsed = parseFloat(cleanAmount) || 0;
+  console.log('Parsed amount:', parsed); // Debugowanie
+  return parsed * 100; // Przelicz na grosze
+};
 
   const handleImport = async () => {
     if (!file || !user?.location || !documentDate) {
