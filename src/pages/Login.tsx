@@ -23,7 +23,7 @@ interface Location {
   name: string;
 }
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [loginField, setLoginField] = useState(''); // Changed from email to login
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +84,8 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    let userEmail = '';
+    let userId = '';
     try {
       // Check for any existing session and sign out if found
       const {
@@ -95,10 +97,13 @@ const Login = () => {
         console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
         await supabase.auth.signOut();
       }
-      console.log("Próba logowania dla:", email);
+
+      // Use loginField directly as email for login
+      console.log("Próba logowania dla email:", loginField);
+      userEmail = loginField;
 
       // Add timeout to prevent indefinite loading
-      const success = await Promise.race([login(email, password), timeout(10000) // 10 second timeout
+      const success = await Promise.race([login(userEmail, password), timeout(10000) // 10 second timeout
       ]);
       if (success) {
         toast({
@@ -164,7 +169,8 @@ const Login = () => {
         data,
         error: signUpError
       } = await supabase.auth.signUp({
-        email,
+        email: loginField,
+        // using loginField which contains email during signup
         password,
         options: {
           data: {
@@ -234,7 +240,8 @@ const Login = () => {
           id: data.user.id,
           name: name,
           role: role,
-          email: email,
+          email: loginField,
+          // using loginField which contains email during signup
           location_id: selectedLocationId
         });
         if (directProfileError) {
@@ -248,7 +255,8 @@ const Login = () => {
             user_id: data.user.id,
             user_name: name,
             user_role: role,
-            user_email: email,
+            user_email: loginField,
+            // using loginField which contains email during signup
             location_id: selectedLocationId
           } as ProfileInsertParams);
           if (profileError) {
@@ -268,7 +276,7 @@ const Login = () => {
 
       // Try to login automatically with timeout protection
       try {
-        const success = await Promise.race([login(email, password), timeout(10000) // 10 second timeout
+        const success = await Promise.race([login(loginField, password), timeout(10000) // 10 second timeout
         ]);
         if (success) {
           toast({
@@ -298,7 +306,7 @@ const Login = () => {
       }
 
       // Clear form
-      setEmail('');
+      setLoginField('');
       setPassword('');
       setName('');
       setLocation('');
@@ -332,10 +340,10 @@ const Login = () => {
             </div>}
           
           <div>
-            <Label htmlFor="email" className="omi-form-label">
+            <Label htmlFor="login" className="omi-form-label">
               Adres email
             </Label>
-            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="omi-form-input" required placeholder="Wprowadź adres email" />
+            <Input id="login" type="email" value={loginField} onChange={e => setLoginField(e.target.value)} className="omi-form-input" required placeholder="Wprowadź adres email" />
           </div>
 
           <div>
@@ -388,11 +396,7 @@ const Login = () => {
             {isLoading ? <Spinner size="sm" /> : isSigningUp ? 'Zarejestruj się' : 'Zaloguj się'}
           </Button>
 
-          <div className="text-center mt-4 text-xs text-omi-gray-500">
-            
-            
-            
-            
+          <div className="text-center mt-4">
             
           </div>
         </form>

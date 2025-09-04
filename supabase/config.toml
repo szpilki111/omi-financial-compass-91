@@ -3,3 +3,9 @@ project_id = "vzalrnwnpzbpzvcrjitt"
 
 [functions.send-report-notification]
 verify_jwt = false
+
+[functions.log-login-event]
+verify_jwt = false
+
+[functions.create-user-admin]
+verify_jwt = true

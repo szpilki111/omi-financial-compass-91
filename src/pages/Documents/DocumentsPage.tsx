@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
 import Mt940ImportDialog from './Mt940ImportDialog';
+import CsvImportDialog from './CsvImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -40,6 +41,7 @@ const DocumentsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
 
   // Fetch documents with related data
@@ -202,6 +204,15 @@ const DocumentsPage = () => {
     });
   };
 
+  const handleCsvImportComplete = (count: number) => {
+    refetch();
+    setIsCsvImportOpen(false);
+    toast({
+      title: "Sukces",
+      description: `Zaimportowano ${count} dokumentów z pliku CSV`,
+    });
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -229,6 +240,10 @@ const DocumentsPage = () => {
             <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Import MT940
+            </Button>
+            <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Import CSV
             </Button>
             <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -282,6 +297,12 @@ const DocumentsPage = () => {
         open={isMt940ImportOpen}
         onClose={() => setIsMt940ImportOpen(false)}
         onImportComplete={handleMt940ImportComplete}
+      />
+
+      <CsvImportDialog
+        open={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        onImportComplete={handleCsvImportComplete}
       />
     </MainLayout>
   );

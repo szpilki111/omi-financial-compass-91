@@ -191,8 +191,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setIsLoading(false);
       return false;
-    } finally {
-      window.location.reload();
     }
   };
 
