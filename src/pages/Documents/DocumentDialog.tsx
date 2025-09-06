@@ -883,6 +883,7 @@ const DocumentDialog = ({
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                           onDelete={() => removeParallelTransaction(index)}
+                          onAddBalancing={addParallelTransaction}
                           currency={selectedCurrency}
                           isEditingBlocked={isEditingBlocked}
                           isSelected={selectedParallelTransactions.includes(index)}
@@ -955,11 +956,12 @@ const EditableTransactionRow: React.FC<{
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
+  onAddBalancing?: (transaction: Transaction) => Promise<void>;
   currency: string;
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+}> = ({ transaction, onUpdate, onDelete, onAddBalancing, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -968,6 +970,61 @@ const EditableTransactionRow: React.FC<{
     debit_amount: transaction.debit_amount || 0,
     credit_amount: transaction.credit_amount || 0,
   });
+
+  const [debitTouched, setDebitTouched] = useState(false);
+  const [creditTouched, setCreditTouched] = useState(false);
+
+  // Handle losing focus from debit amount field
+  const handleDebitAmountBlur = () => {
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Check if we need to create balancing transaction (when credit is larger)
+    const canCreateBalancing = formData.description.trim() && 
+                              formData.credit_account_id && 
+                              difference > 0.01 && 
+                              formData.debit_amount < formData.credit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
+      createBalancingTransaction('debit');
+    }
+  };
+
+  // Handle losing focus from credit amount field
+  const handleCreditAmountBlur = () => {
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Check if we need to create balancing transaction (when debit is larger)
+    const canCreateBalancing = formData.description.trim() && 
+                              formData.debit_account_id && 
+                              difference > 0.01 && 
+                              formData.credit_amount < formData.debit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
+      createBalancingTransaction('credit');
+    }
+  };
+
+  // Create balancing transaction when one side is smaller
+  const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
+    if (!onAddBalancing) return;
+    
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Create the balancing transaction
+    const balancingTransaction = {
+      description: formData.description,
+      debit_account_id: smallerSide === 'debit' ? '' : formData.debit_account_id,
+      credit_account_id: smallerSide === 'credit' ? '' : formData.credit_account_id,
+      debit_amount: smallerSide === 'debit' ? difference : 0,
+      credit_amount: smallerSide === 'credit' ? difference : 0,
+      amount: difference,
+      settlement_type: 'Bank',
+      currency: currency,
+    };
+
+    // Add the balancing transaction
+    onAddBalancing(balancingTransaction);
+  };
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -1037,7 +1094,12 @@ const EditableTransactionRow: React.FC<{
             step="0.01" 
             min="0" 
             value={formData.debit_amount || ''} 
-            onChange={e => setFormData(prev => ({ ...prev, debit_amount: parseFloat(e.target.value) || 0 }))} 
+            onChange={e => {
+              const value = parseFloat(e.target.value) || 0;
+              setFormData(prev => ({ ...prev, debit_amount: value }));
+              setDebitTouched(true);
+            }}
+            onBlur={handleDebitAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
@@ -1061,7 +1123,12 @@ const EditableTransactionRow: React.FC<{
             step="0.01" 
             min="0" 
             value={formData.credit_amount || ''} 
-            onChange={e => setFormData(prev => ({ ...prev, credit_amount: parseFloat(e.target.value) || 0 }))} 
+            onChange={e => {
+              const value = parseFloat(e.target.value) || 0;
+              setFormData(prev => ({ ...prev, credit_amount: value }));
+              setCreditTouched(true);
+            }}
+            onBlur={handleCreditAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
