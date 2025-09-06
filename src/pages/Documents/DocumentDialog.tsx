@@ -973,9 +973,39 @@ const EditableTransactionRow: React.FC<{
 
   const [debitTouched, setDebitTouched] = useState(false);
   const [creditTouched, setCreditTouched] = useState(false);
+  const [autoFillDisabled, setAutoFillDisabled] = useState(false);
+
+  // Auto-populate logic for debit amount changes (before blur)
+  const handleDebitAmountChange = (value: number) => {
+    setFormData(prev => {
+      const newData = { ...prev, debit_amount: value };
+      
+      // Auto-populate credit amount if credit hasn't been manually touched and auto-fill not disabled
+      if (!creditTouched && !autoFillDisabled && value > 0) {
+        newData.credit_amount = value;
+      }
+      
+      return newData;
+    });
+  };
+
+  // Auto-populate logic for credit amount changes (before blur)
+  const handleCreditAmountChange = (value: number) => {
+    setFormData(prev => {
+      const newData = { ...prev, credit_amount: value };
+      
+      // Auto-populate debit amount if debit hasn't been manually touched and auto-fill not disabled
+      if (!debitTouched && !autoFillDisabled && value > 0) {
+        newData.debit_amount = value;
+      }
+      
+      return newData;
+    });
+  };
 
   // Handle losing focus from debit amount field
   const handleDebitAmountBlur = () => {
+    setAutoFillDisabled(true); // Disable auto-fill after first blur
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     
     // Check if we need to create balancing transaction (when credit is larger)
@@ -991,6 +1021,7 @@ const EditableTransactionRow: React.FC<{
 
   // Handle losing focus from credit amount field
   const handleCreditAmountBlur = () => {
+    setAutoFillDisabled(true); // Disable auto-fill after first blur
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     
     // Check if we need to create balancing transaction (when debit is larger)
@@ -1096,9 +1127,10 @@ const EditableTransactionRow: React.FC<{
             value={formData.debit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setFormData(prev => ({ ...prev, debit_amount: value }));
               setDebitTouched(true);
+              handleDebitAmountChange(value);
             }}
+            onFocus={() => setDebitTouched(true)}
             onBlur={handleDebitAmountBlur}
             placeholder="0.00" 
             className="text-right" 
@@ -1125,9 +1157,10 @@ const EditableTransactionRow: React.FC<{
             value={formData.credit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setFormData(prev => ({ ...prev, credit_amount: value }));
               setCreditTouched(true);
+              handleCreditAmountChange(value);
             }}
+            onFocus={() => setCreditTouched(true)}
             onBlur={handleCreditAmountBlur}
             placeholder="0.00" 
             className="text-right" 
