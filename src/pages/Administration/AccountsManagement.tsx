@@ -181,112 +181,140 @@ const AccountsManagement = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const processFileContent = (content: string, encoding: string) => {
+      console.log(`Próbuję odczytać plik w kodowaniu: ${encoding}`);
+      console.log('Pierwsze 200 znaków:', content.substring(0, 200));
+      
+      // Sprawdź czy są problemy z kodowaniem
+      const hasEncodingIssues = content.includes('�') || content.includes('Ã') || content.includes('Å');
+      console.log('Problemy z kodowaniem:', hasEncodingIssues);
+      
+      let processedContent = content;
+      
+      // Jeśli to Windows-1250, napraw polskie znaki
+      if (encoding === 'windows-1250' || hasEncodingIssues) {
+        processedContent = content
+          // Mapowanie z Windows-1250/ISO-8859-2
+          .replace(/¹/g, 'ą')
+          .replace(/ê/g, 'ę') 
+          .replace(/³/g, 'ł')
+          .replace(/ñ/g, 'ń')
+          .replace(/¿/g, 'ż')
+          .replace(/¶/g, 'ś')
+          .replace(/Ÿ/g, 'ź')
+          .replace(/ó/g, 'ó')
+          // Mapowanie z UTF-8 błędnie interpretowanego jako Windows-1250
+          .replace(/Ä…/g, 'ą')
+          .replace(/Ä™/g, 'ę')
+          .replace(/Å‚/g, 'ł')
+          .replace(/Å„/g, 'ń')
+          .replace(/Å¼/g, 'ż')
+          .replace(/Å›/g, 'ś')
+          .replace(/Åº/g, 'ź')
+          .replace(/Ã³/g, 'ó')
+          // Dodatkowe mapowania
+          .replace(/â€ž/g, '„')
+          .replace(/â€œ/g, '"')
+          .replace(/â€/g, '–');
+        
+        console.log('Po naprawie znaków:', processedContent.substring(0, 200));
+      }
+      
+      const lines = processedContent.split(/\r?\n/).filter(line => line.trim());
+      const accounts: { number: string; name: string }[] = [];
+      const usedNumbers = new Set<string>();
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
+        const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
+        if (match) {
+          const number = match[1].trim();
+          const name = match[2].trim();
+          
+          console.log(`Parsed: ${number} -> ${name}`);
+          
+          if (number && name && !usedNumbers.has(number)) {
+            accounts.push({ number, name });
+            usedNumbers.add(number);
+          }
+        } else {
+          console.log('Nie można sparsować linii:', trimmedLine);
+        }
+      }
+      
+      console.log(`Znaleziono ${accounts.length} kont`);
+      
+      if (accounts.length === 0) {
+        toast({
+          title: "Błąd",
+          description: "Nie znaleziono poprawnych kont w pliku. Sprawdź format: 'numer','nazwa'",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      setIsImporting(true);
+      importAccountsMutation.mutate(accounts);
+      return true;
+    };
+
+    // Pierwsza próba: UTF-8
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        // Handle different line endings and split properly
-        const lines = content.split(/\r?\n/).filter(line => line.trim());
         
-        const accounts: { number: string; name: string }[] = [];
-        const usedNumbers = new Set<string>();
+        // Sprawdź czy UTF-8 dało dobre rezultaty
+        if (!content.includes('�') && !content.includes('Ã')) {
+          if (processFileContent(content, 'UTF-8')) return;
+        }
         
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-          
-          // More flexible parsing for format: 'number','name'
-          const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
-          if (match) {
-            const number = match[1].trim();
-            const name = match[2].trim();
-            
-            // Sprawdź unikalność numeru konta i czy oba pola nie są puste
-            if (number && name && !usedNumbers.has(number)) {
-              accounts.push({ number, name });
-              usedNumbers.add(number);
+        // Jeśli UTF-8 nie zadziałało, spróbuj Windows-1250
+        console.log('UTF-8 nie zadziałało, próbuję Windows-1250...');
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = (e2) => {
+          try {
+            const fallbackContent = e2.target?.result as string;
+            if (!processFileContent(fallbackContent, 'windows-1250')) {
+              // Ostatnia próba: ISO-8859-2
+              console.log('Windows-1250 nie zadziałało, próbuję ISO-8859-2...');
+              const iso88592Reader = new FileReader();
+              iso88592Reader.onload = (e3) => {
+                try {
+                  const isoContent = e3.target?.result as string;
+                  processFileContent(isoContent, 'ISO-8859-2');
+                } catch (error) {
+                  console.error('Błąd ISO-8859-2:', error);
+                  toast({
+                    title: "Błąd",
+                    description: "Nie udało się odczytać pliku w żadnym kodowaniu",
+                    variant: "destructive",
+                  });
+                }
+              };
+              iso88592Reader.readAsText(file, 'ISO-8859-2');
             }
-          } else {
-            console.log('Nie można sparsować linii:', trimmedLine);
+          } catch (error) {
+            console.error('Błąd Windows-1250:', error);
+            toast({
+              title: "Błąd",
+              description: "Nie udało się odczytać pliku",
+              variant: "destructive",
+            });
           }
-        }
-        
-        if (accounts.length === 0) {
-          toast({
-            title: "Błąd",
-            description: "Nie znaleziono poprawnych kont w pliku. Sprawdź format: 'numer','nazwa'",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        setIsImporting(true);
-        importAccountsMutation.mutate(accounts);
+        };
+        fallbackReader.readAsText(file, 'windows-1250');
         
       } catch (error) {
+        console.error('Błąd UTF-8:', error);
         toast({
           title: "Błąd",
           description: "Nie udało się odczytać pliku",
           variant: "destructive",
         });
       }
-    };
-    
-    // Try reading as UTF-8 first, then fallback to Windows-1250 for Polish characters
-    reader.onerror = () => {
-      const fallbackReader = new FileReader();
-      fallbackReader.onload = (e) => {
-        try {
-          let content = e.target?.result as string;
-          
-          // Convert from Windows-1250 to UTF-8 if needed
-          if (content.includes('�')) {
-            // Try to recover Polish characters
-            content = content
-              .replace(/Ä…/g, 'ą')
-              .replace(/Ä™/g, 'ę')
-              .replace(/Ä™/g, 'ę')
-              .replace(/Å‚/g, 'ł')
-              .replace(/Å„/g, 'ń')
-              .replace(/Ã³/g, 'ó')
-              .replace(/Å›/g, 'ś')
-              .replace(/Å¼/g, 'ź')
-              .replace(/Å¼/g, 'ż');
-          }
-          
-          const lines = content.split(/\r?\n/).filter(line => line.trim());
-          const accounts: { number: string; name: string }[] = [];
-          const usedNumbers = new Set<string>();
-          
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-            
-            const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
-            if (match) {
-              const number = match[1].trim();
-              const name = match[2].trim();
-              
-              if (number && name && !usedNumbers.has(number)) {
-                accounts.push({ number, name });
-                usedNumbers.add(number);
-              }
-            }
-          }
-          
-          if (accounts.length > 0) {
-            setIsImporting(true);
-            importAccountsMutation.mutate(accounts);
-          }
-        } catch (error) {
-          toast({
-            title: "Błąd",
-            description: "Nie udało się odczytać pliku z polskimi znakami",
-            variant: "destructive",
-          });
-        }
-      };
-      fallbackReader.readAsText(file, 'windows-1250');
     };
     
     reader.readAsText(file, 'UTF-8');
