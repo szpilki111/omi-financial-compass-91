@@ -138,9 +138,6 @@ const DocumentDialog = ({
   }, [isOpen, document, transactions.length, showInlineForm]);
 
   const checkLastTransactionComplete = () => {
-    const allTransactions = [...transactions, ...parallelTransactions];
-    const lastTransaction = allTransactions[allTransactions.length - 1];
-    
     // Check if inline form has unsaved data
     if (hasInlineFormData) {
       toast({
@@ -160,21 +157,27 @@ const DocumentDialog = ({
       });
       return false;
     }
-    
-    if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
-      const isIncomplete = !lastTransaction.debit_account_id || 
-                          !lastTransaction.credit_account_id || 
-                          (lastTransaction.debit_amount === 0 && lastTransaction.credit_amount === 0);
+
+    // Check for incomplete existing transactions
+    const transactionsToCheck = [...transactions, ...parallelTransactions];
+    const incompleteTransactions = transactionsToCheck.filter(transaction => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
+      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
       
-      if (isIncomplete) {
-        toast({
-          title: "Błąd walidacji",
-          description: "Ostatnia operacja zawiera opis ale nie jest kompletnie wypełniona. Uzupełnij wszystkie pola lub usuń operację przed zamknięciem.",
-          variant: "destructive"
-        });
-        return false;
-      }
+      // Transaction is incomplete if it has description or amount but missing other required fields
+      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+    });
+
+    if (incompleteTransactions.length > 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje przed zamknięciem.`,
+        variant: "destructive"
+      });
+      return false;
     }
+    
     return true;
   };
 
@@ -375,6 +378,25 @@ const DocumentDialog = ({
       toast({
         title: "Błąd walidacji",
         description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check for incomplete existing transactions (have some data but missing required fields)
+    const incompleteTransactions = allTransactions.filter(transaction => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
+      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
+      
+      // Transaction is incomplete if it has description or amount but missing other required fields
+      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+    });
+
+    if (incompleteTransactions.length > 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
         variant: "destructive"
       });
       return;
