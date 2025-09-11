@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Edit, Save, X } from 'lucide-react';
+import { Edit, Save, X, Upload, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Account {
@@ -34,6 +34,7 @@ const AccountsManagement = () => {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -79,6 +80,48 @@ const AccountsManagement = () => {
     onError: (error: Error) => {
       toast({
         title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Import accounts from CSV
+  const importAccountsMutation = useMutation({
+    mutationFn: async (accounts: { number: string; name: string }[]) => {
+      // Najpierw usuń wszystkie obecne konta
+      const { error: deleteError } = await supabase
+        .from('accounts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (using impossible condition to delete all)
+
+      if (deleteError) throw deleteError;
+
+      // Następnie dodaj nowe konta
+      const accountsToInsert = accounts.map(account => ({
+        number: account.number,
+        name: account.name,
+        type: 'Aktywny' // Domyślny typ
+      }));
+
+      const { error: insertError } = await supabase
+        .from('accounts')
+        .insert(accountsToInsert);
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setIsImporting(false);
+      toast({
+        title: "Sukces",
+        description: "Konta zostały pomyślnie zaimportowane.",
+      });
+    },
+    onError: (error: Error) => {
+      setIsImporting(false);
+      toast({
+        title: "Błąd importu",
         description: error.message,
         variant: "destructive",
       });
@@ -134,6 +177,59 @@ const AccountsManagement = () => {
     }
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        const accounts: { number: string; name: string }[] = [];
+        const usedNumbers = new Set<string>();
+        
+        for (const line of lines) {
+          // Parse format: 'number','name'
+          const match = line.match(/^'([^']+)','([^']+)'$/);
+          if (match) {
+            const number = match[1].trim();
+            const name = match[2].trim();
+            
+            // Sprawdź unikalność numeru konta
+            if (!usedNumbers.has(number)) {
+              accounts.push({ number, name });
+              usedNumbers.add(number);
+            }
+          }
+        }
+        
+        if (accounts.length === 0) {
+          toast({
+            title: "Błąd",
+            description: "Nie znaleziono poprawnych kont w pliku. Sprawdź format: 'numer','nazwa'",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setIsImporting(true);
+        importAccountsMutation.mutate(accounts);
+        
+      } catch (error) {
+        toast({
+          title: "Błąd",
+          description: "Nie udało się odczytać pliku",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    reader.readAsText(file);
+    event.target.value = ''; // Reset input
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -151,14 +247,46 @@ const AccountsManagement = () => {
           <CardTitle>Zarządzanie kontami</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between">
             <Input
               placeholder="Wyszukaj konto po numerze lub nazwie..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-md"
             />
+            
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="csv-upload"
+                disabled={isImporting}
+              />
+              <label htmlFor="csv-upload">
+                <Button
+                  variant="outline"
+                  disabled={isImporting}
+                  className="cursor-pointer"
+                  asChild
+                >
+                  <span className="flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    {isImporting ? 'Importowanie...' : 'Importuj CSV'}
+                  </span>
+                </Button>
+              </label>
+            </div>
           </div>
+          
+          {isImporting && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Uwaga:</strong> Trwa zastępowanie wszystkich obecnych kont nowymi z pliku CSV...
+              </p>
+            </div>
+          )}
 
           {!accounts || accounts.length === 0 ? (
             <p className="text-center text-gray-500">
