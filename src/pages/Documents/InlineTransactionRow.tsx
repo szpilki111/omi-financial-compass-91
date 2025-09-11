@@ -13,12 +13,14 @@ interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
   isEditingBlocked?: boolean;
   currency?: string;
+  onHasDataChange?: (hasData: boolean) => void;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   onSave,
   isEditingBlocked = false,
   currency = 'PLN',
+  onHasDataChange,
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -35,6 +37,18 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   const [creditTouched, setCreditTouched] = useState(false);
   const [debitTouched, setDebitTouched] = useState(false);
+
+  // Check if there's any data entered
+  const hasAnyData = formData.description.trim() !== '' || 
+                     formData.debit_amount > 0 || 
+                     formData.credit_amount > 0 || 
+                     formData.debit_account_id !== '' || 
+                     formData.credit_account_id !== '';
+
+  // Notify parent about data changes
+  useEffect(() => {
+    onHasDataChange?.(hasAnyData);
+  }, [hasAnyData, onHasDataChange]);
 
   // Auto-focus on the first field when component mounts
   useEffect(() => {

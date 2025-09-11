@@ -56,6 +56,8 @@ const DocumentDialog = ({
   const [showParallelAccounting, setShowParallelAccounting] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const [selectedParallelTransactions, setSelectedParallelTransactions] = useState<number[]>([]);
+  const [hasInlineFormData, setHasInlineFormData] = useState(false);
+  const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -138,6 +140,26 @@ const DocumentDialog = ({
   const checkLastTransactionComplete = () => {
     const allTransactions = [...transactions, ...parallelTransactions];
     const lastTransaction = allTransactions[allTransactions.length - 1];
+    
+    // Check if inline form has unsaved data
+    if (hasInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Check if parallel inline form has unsaved data  
+    if (hasParallelInlineFormData) {
+      toast({
+        title: "Błąd walidacji", 
+        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
+        variant: "destructive"
+      });
+      return false;
+    }
     
     if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
       const isIncomplete = !lastTransaction.debit_account_id || 
@@ -334,6 +356,25 @@ const DocumentDialog = ({
       toast({
         title: "Błąd walidacji",
         description: "Dokument musi zawierać co najmniej jedną operację",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if inline forms have unsaved data
+    if (hasInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (hasParallelInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
         variant: "destructive"
       });
       return;
@@ -825,6 +866,7 @@ const DocumentDialog = ({
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
+                        onHasDataChange={setHasInlineFormData}
                       />
                     )}
                   </TableBody>
@@ -940,6 +982,7 @@ const DocumentDialog = ({
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           currency={selectedCurrency}
+                          onHasDataChange={setHasParallelInlineFormData}
                         />
                       )}
                     </TableBody>
