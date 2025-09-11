@@ -232,7 +232,7 @@ const AccountsManagement = () => {
       }
     };
     
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
     event.target.value = ''; // Reset input
   };
 
