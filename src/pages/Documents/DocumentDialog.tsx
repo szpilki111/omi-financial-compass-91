@@ -1008,9 +1008,9 @@ const EditableTransactionRow: React.FC<{
     setAutoFillDisabled(true); // Disable auto-fill after first blur
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     
-    // Check if we need to create balancing transaction (when credit is larger)
+    // Check if we need to create balancing transaction (when debit is smaller than credit)
     const canCreateBalancing = formData.description.trim() && 
-                              formData.credit_account_id && 
+                              formData.debit_account_id && 
                               difference > 0.01 && 
                               formData.debit_amount < formData.credit_amount;
     
