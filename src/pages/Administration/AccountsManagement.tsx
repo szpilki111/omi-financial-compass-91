@@ -185,23 +185,29 @@ const AccountsManagement = () => {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        const lines = content.split('\n').filter(line => line.trim());
+        // Handle different line endings and split properly
+        const lines = content.split(/\r?\n/).filter(line => line.trim());
         
         const accounts: { number: string; name: string }[] = [];
         const usedNumbers = new Set<string>();
         
         for (const line of lines) {
-          // Parse format: 'number','name'
-          const match = line.match(/^'([^']+)','([^']+)'$/);
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          // More flexible parsing for format: 'number','name'
+          const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
           if (match) {
             const number = match[1].trim();
             const name = match[2].trim();
             
-            // Sprawdź unikalność numeru konta
-            if (!usedNumbers.has(number)) {
+            // Sprawdź unikalność numeru konta i czy oba pola nie są puste
+            if (number && name && !usedNumbers.has(number)) {
               accounts.push({ number, name });
               usedNumbers.add(number);
             }
+          } else {
+            console.log('Nie można sparsować linii:', trimmedLine);
           }
         }
         
