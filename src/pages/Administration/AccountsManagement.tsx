@@ -232,6 +232,63 @@ const AccountsManagement = () => {
       }
     };
     
+    // Try reading as UTF-8 first, then fallback to Windows-1250 for Polish characters
+    reader.onerror = () => {
+      const fallbackReader = new FileReader();
+      fallbackReader.onload = (e) => {
+        try {
+          let content = e.target?.result as string;
+          
+          // Convert from Windows-1250 to UTF-8 if needed
+          if (content.includes('�')) {
+            // Try to recover Polish characters
+            content = content
+              .replace(/Ä…/g, 'ą')
+              .replace(/Ä™/g, 'ę')
+              .replace(/Ä™/g, 'ę')
+              .replace(/Å‚/g, 'ł')
+              .replace(/Å„/g, 'ń')
+              .replace(/Ã³/g, 'ó')
+              .replace(/Å›/g, 'ś')
+              .replace(/Å¼/g, 'ź')
+              .replace(/Å¼/g, 'ż');
+          }
+          
+          const lines = content.split(/\r?\n/).filter(line => line.trim());
+          const accounts: { number: string; name: string }[] = [];
+          const usedNumbers = new Set<string>();
+          
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+            
+            const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
+            if (match) {
+              const number = match[1].trim();
+              const name = match[2].trim();
+              
+              if (number && name && !usedNumbers.has(number)) {
+                accounts.push({ number, name });
+                usedNumbers.add(number);
+              }
+            }
+          }
+          
+          if (accounts.length > 0) {
+            setIsImporting(true);
+            importAccountsMutation.mutate(accounts);
+          }
+        } catch (error) {
+          toast({
+            title: "Błąd",
+            description: "Nie udało się odczytać pliku z polskimi znakami",
+            variant: "destructive",
+          });
+        }
+      };
+      fallbackReader.readAsText(file, 'windows-1250');
+    };
+    
     reader.readAsText(file, 'UTF-8');
     event.target.value = ''; // Reset input
   };
