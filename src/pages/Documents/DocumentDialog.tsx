@@ -135,9 +135,33 @@ const DocumentDialog = ({
     }
   }, [isOpen, document, transactions.length, showInlineForm]);
 
+  const checkLastTransactionComplete = () => {
+    const allTransactions = [...transactions, ...parallelTransactions];
+    const lastTransaction = allTransactions[allTransactions.length - 1];
+    
+    if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
+      const isIncomplete = !lastTransaction.debit_account_id || 
+                          !lastTransaction.credit_account_id || 
+                          (lastTransaction.debit_amount === 0 && lastTransaction.credit_amount === 0);
+      
+      if (isIncomplete) {
+        toast({
+          title: "Błąd walidacji",
+          description: "Ostatnia operacja zawiera opis ale nie jest kompletnie wypełniona. Uzupełnij wszystkie pola lub usuń operację przed zamknięciem.",
+          variant: "destructive"
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleDialogOpenChange = (open: boolean) => {
     if (!open) {
       if (hasUnsavedChanges) {
+        if (!checkLastTransactionComplete()) {
+          return; // Block closing if last transaction is incomplete
+        }
         setShowConfirmClose(true);
       } else {
         onClose();
@@ -147,6 +171,9 @@ const DocumentDialog = ({
 
   const handleCloseDialog = () => {
     if (hasUnsavedChanges) {
+      if (!checkLastTransactionComplete()) {
+        return; // Block closing if last transaction is incomplete
+      }
       setShowConfirmClose(true);
     } else {
       onClose();
@@ -310,6 +337,24 @@ const DocumentDialog = ({
         variant: "destructive"
       });
       return;
+    }
+
+    // Check if last transaction has unsaved description
+    const lastTransaction = allTransactions[allTransactions.length - 1];
+    if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
+      // Check if this transaction is incomplete (no accounts selected or amounts are 0)
+      const isIncomplete = !lastTransaction.debit_account_id || 
+                          !lastTransaction.credit_account_id || 
+                          (lastTransaction.debit_amount === 0 && lastTransaction.credit_amount === 0);
+      
+      if (isIncomplete) {
+        toast({
+          title: "Błąd walidacji",
+          description: "Ostatnia operacja zawiera opis ale nie jest kompletnie wypełniona. Uzupełnij wszystkie pola lub usuń operację.",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     const totalDebit = allTransactions.reduce((sum, t) => {
