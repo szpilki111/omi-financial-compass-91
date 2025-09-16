@@ -206,6 +206,7 @@ export type Database = {
           address: string | null
           created_at: string
           id: string
+          location_identifier: string | null
           name: string
           nip: string | null
           regon: string | null
@@ -215,6 +216,7 @@ export type Database = {
           address?: string | null
           created_at?: string
           id?: string
+          location_identifier?: string | null
           name: string
           nip?: string | null
           regon?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           address?: string | null
           created_at?: string
           id?: string
+          location_identifier?: string | null
           name?: string
           nip?: string | null
           regon?: string | null
