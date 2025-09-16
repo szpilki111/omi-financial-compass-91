@@ -226,15 +226,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         console.log('Restricted prefixes for category:', locationCategory, restrictedPrefixes);
         
         allAccountsData = allAccountsData.filter(account => {
-          // Extract account prefix (everything before the last hyphen-identifier)
+          // Extract account prefix (only first part before first hyphen)
           const parts = account.number.split('-');
-          if (parts.length >= 2) {
-            const accountPrefix = parts.slice(0, -1).join('-');
-            const isRestricted = restrictedPrefixes.includes(accountPrefix);
-            console.log(`Account ${account.number}, prefix: ${accountPrefix}, restricted: ${isRestricted}`);
-            return !isRestricted;
-          }
-          return true;
+          const accountPrefix = parts[0];
+          const isRestricted = restrictedPrefixes.includes(accountPrefix);
+          console.log(`Account ${account.number}, prefix: ${accountPrefix}, restricted: ${isRestricted}`);
+          return !isRestricted;
         });
         
         console.log('Accounts after applying restrictions:', allAccountsData);

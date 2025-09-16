@@ -40,7 +40,8 @@ const AccountRestrictionsManagement = () => {
       const { data, error } = await supabase
         .from('accounts')
         .select('id, number, name, type')
-        .order('number');
+        .order('number')
+        .limit(1000); // Increase limit to get all accounts
 
       if (error) throw error;
       return data as Account[];
