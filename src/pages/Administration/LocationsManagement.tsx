@@ -21,6 +21,7 @@ interface Location {
   id: string;
   name: string;
   address: string | null;
+  location_identifier: string | null;
   nip: string | null;
   regon: string | null;
   created_at: string;
@@ -197,6 +198,7 @@ const LocationsManagement = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nazwa</TableHead>
+                  <TableHead>Identyfikator</TableHead>
                   <TableHead>NIP</TableHead>
                   <TableHead>REGON</TableHead>
                   <TableHead>Skrót</TableHead>
@@ -210,6 +212,13 @@ const LocationsManagement = () => {
                 {locations.map((location) => (
                   <TableRow key={location.id}>
                     <TableCell className="font-medium">{location.name}</TableCell>
+                    <TableCell>
+                      {location.location_identifier ? (
+                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded font-mono">
+                          {location.location_identifier}
+                        </span>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>{location.nip || '-'}</TableCell>
                     <TableCell>{location.regon || '-'}</TableCell>
                     <TableCell>

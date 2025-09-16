@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Edit, Save, X } from 'lucide-react';
+import { Edit, Save, X, Upload, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Account {
@@ -34,6 +34,7 @@ const AccountsManagement = () => {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -79,6 +80,48 @@ const AccountsManagement = () => {
     onError: (error: Error) => {
       toast({
         title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Import accounts from CSV
+  const importAccountsMutation = useMutation({
+    mutationFn: async (accounts: { number: string; name: string }[]) => {
+      // Najpierw usuń wszystkie obecne konta
+      const { error: deleteError } = await supabase
+        .from('accounts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (using impossible condition to delete all)
+
+      if (deleteError) throw deleteError;
+
+      // Następnie dodaj nowe konta
+      const accountsToInsert = accounts.map(account => ({
+        number: account.number,
+        name: account.name,
+        type: 'Aktywny' // Domyślny typ
+      }));
+
+      const { error: insertError } = await supabase
+        .from('accounts')
+        .insert(accountsToInsert);
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setIsImporting(false);
+      toast({
+        title: "Sukces",
+        description: "Konta zostały pomyślnie zaimportowane.",
+      });
+    },
+    onError: (error: Error) => {
+      setIsImporting(false);
+      toast({
+        title: "Błąd importu",
         description: error.message,
         variant: "destructive",
       });
@@ -134,6 +177,150 @@ const AccountsManagement = () => {
     }
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const processFileContent = (content: string, encoding: string) => {
+      console.log(`Próbuję odczytać plik w kodowaniu: ${encoding}`);
+      console.log('Pierwsze 200 znaków:', content.substring(0, 200));
+      
+      // Sprawdź czy są problemy z kodowaniem
+      const hasEncodingIssues = content.includes('�') || content.includes('Ã') || content.includes('Å');
+      console.log('Problemy z kodowaniem:', hasEncodingIssues);
+      
+      let processedContent = content;
+      
+      // Jeśli to Windows-1250, napraw polskie znaki
+      if (encoding === 'windows-1250' || hasEncodingIssues) {
+        processedContent = content
+          // Mapowanie z Windows-1250/ISO-8859-2
+          .replace(/¹/g, 'ą')
+          .replace(/ê/g, 'ę') 
+          .replace(/³/g, 'ł')
+          .replace(/ñ/g, 'ń')
+          .replace(/¿/g, 'ż')
+          .replace(/¶/g, 'ś')
+          .replace(/Ÿ/g, 'ź')
+          .replace(/ó/g, 'ó')
+          // Mapowanie z UTF-8 błędnie interpretowanego jako Windows-1250
+          .replace(/Ä…/g, 'ą')
+          .replace(/Ä™/g, 'ę')
+          .replace(/Å‚/g, 'ł')
+          .replace(/Å„/g, 'ń')
+          .replace(/Å¼/g, 'ż')
+          .replace(/Å›/g, 'ś')
+          .replace(/Åº/g, 'ź')
+          .replace(/Ã³/g, 'ó')
+          // Dodatkowe mapowania
+          .replace(/â€ž/g, '„')
+          .replace(/â€œ/g, '"')
+          .replace(/â€/g, '–');
+        
+        console.log('Po naprawie znaków:', processedContent.substring(0, 200));
+      }
+      
+      const lines = processedContent.split(/\r?\n/).filter(line => line.trim());
+      const accounts: { number: string; name: string }[] = [];
+      const usedNumbers = new Set<string>();
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
+        const match = trimmedLine.match(/^'([^']*?)','([^']*?)'$/);
+        if (match) {
+          const number = match[1].trim();
+          const name = match[2].trim();
+          
+          console.log(`Parsed: ${number} -> ${name}`);
+          
+          if (number && name && !usedNumbers.has(number)) {
+            accounts.push({ number, name });
+            usedNumbers.add(number);
+          }
+        } else {
+          console.log('Nie można sparsować linii:', trimmedLine);
+        }
+      }
+      
+      console.log(`Znaleziono ${accounts.length} kont`);
+      
+      if (accounts.length === 0) {
+        toast({
+          title: "Błąd",
+          description: "Nie znaleziono poprawnych kont w pliku. Sprawdź format: 'numer','nazwa'",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      setIsImporting(true);
+      importAccountsMutation.mutate(accounts);
+      return true;
+    };
+
+    // Pierwsza próba: UTF-8
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        
+        // Sprawdź czy UTF-8 dało dobre rezultaty
+        if (!content.includes('�') && !content.includes('Ã')) {
+          if (processFileContent(content, 'UTF-8')) return;
+        }
+        
+        // Jeśli UTF-8 nie zadziałało, spróbuj Windows-1250
+        console.log('UTF-8 nie zadziałało, próbuję Windows-1250...');
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = (e2) => {
+          try {
+            const fallbackContent = e2.target?.result as string;
+            if (!processFileContent(fallbackContent, 'windows-1250')) {
+              // Ostatnia próba: ISO-8859-2
+              console.log('Windows-1250 nie zadziałało, próbuję ISO-8859-2...');
+              const iso88592Reader = new FileReader();
+              iso88592Reader.onload = (e3) => {
+                try {
+                  const isoContent = e3.target?.result as string;
+                  processFileContent(isoContent, 'ISO-8859-2');
+                } catch (error) {
+                  console.error('Błąd ISO-8859-2:', error);
+                  toast({
+                    title: "Błąd",
+                    description: "Nie udało się odczytać pliku w żadnym kodowaniu",
+                    variant: "destructive",
+                  });
+                }
+              };
+              iso88592Reader.readAsText(file, 'ISO-8859-2');
+            }
+          } catch (error) {
+            console.error('Błąd Windows-1250:', error);
+            toast({
+              title: "Błąd",
+              description: "Nie udało się odczytać pliku",
+              variant: "destructive",
+            });
+          }
+        };
+        fallbackReader.readAsText(file, 'windows-1250');
+        
+      } catch (error) {
+        console.error('Błąd UTF-8:', error);
+        toast({
+          title: "Błąd",
+          description: "Nie udało się odczytać pliku",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    reader.readAsText(file, 'UTF-8');
+    event.target.value = ''; // Reset input
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -151,14 +338,46 @@ const AccountsManagement = () => {
           <CardTitle>Zarządzanie kontami</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between">
             <Input
               placeholder="Wyszukaj konto po numerze lub nazwie..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-md"
             />
+            
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="csv-upload"
+                disabled={isImporting}
+              />
+              <label htmlFor="csv-upload">
+                <Button
+                  variant="outline"
+                  disabled={isImporting}
+                  className="cursor-pointer"
+                  asChild
+                >
+                  <span className="flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    {isImporting ? 'Importowanie...' : 'Importuj CSV'}
+                  </span>
+                </Button>
+              </label>
+            </div>
           </div>
+          
+          {isImporting && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Uwaga:</strong> Trwa zastępowanie wszystkich obecnych kont nowymi z pliku CSV...
+              </p>
+            </div>
+          )}
 
           {!accounts || accounts.length === 0 ? (
             <p className="text-center text-gray-500">

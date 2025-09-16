@@ -8,6 +8,7 @@ import LocationsManagement from './LocationsManagement';
 import LocationAccountsManagement from './LocationAccountsManagement';
 import UsersManagement from './UsersManagement';
 import AccountsManagement from './AccountsManagement';
+import AccountRestrictionsManagement from './AccountRestrictionsManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -40,10 +41,11 @@ const AdministrationPage = () => {
         </div>
 
         <Tabs defaultValue="locations" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="locations">Placówki</TabsTrigger>
             <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
             <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
+            <TabsTrigger value="account-restrictions">Ograniczenia kont</TabsTrigger>
             {(user.role === 'admin' || user.role === 'prowincjal') && (
               <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             )}
@@ -59,6 +61,10 @@ const AdministrationPage = () => {
 
           <TabsContent value="manage-accounts" className="space-y-4">
             <AccountsManagement />
+          </TabsContent>
+
+          <TabsContent value="account-restrictions" className="space-y-4">
+            <AccountRestrictionsManagement />
           </TabsContent>
 
           {(user.role === 'admin' || user.role === 'prowincjal') && (

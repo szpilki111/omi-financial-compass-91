@@ -45,6 +45,7 @@ interface LocationFormData {
   name: string;
   address: string;
   house_abbreviation: string;
+  location_identifier: string;
   nip: string;
   regon: string;
 }
@@ -81,6 +82,7 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
       name: '',
       address: '',
       house_abbreviation: '',
+      location_identifier: '',
       nip: '',
       regon: '',
     },
@@ -93,6 +95,7 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
         name: location?.name || '',
         address: location?.address || '',
         house_abbreviation: locationSetting?.house_abbreviation || '',
+        location_identifier: (location as any)?.location_identifier || '',
         nip: location?.nip || '',
         regon: location?.regon || '',
       });
@@ -108,6 +111,7 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
           .update({
             name: data.name,
             address: data.address || null,
+            location_identifier: data.location_identifier || null,
             nip: data.nip || null,
             regon: data.regon || null,
           })
@@ -154,6 +158,7 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
           .insert({
             name: data.name,
             address: data.address || null,
+            location_identifier: data.location_identifier || null,
             nip: data.nip || null,
             regon: data.regon || null,
           })
@@ -316,6 +321,32 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
                   <FormMessage />
                   <p className="text-sm text-gray-500">
                     Skrót używany do identyfikacji placówki (max. 10 znaków)
+                  </p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="location_identifier"
+              rules={{ 
+                pattern: { 
+                  value: /^[0-9]+(-[0-9]+)?$/, 
+                  message: 'Identyfikator może składać się tylko z cyfr i myślników (np. "3" lub "3-13")' 
+                }
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Identyfikator placówki (opcjonalny)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="np. 3-13, 5-6, 7"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-sm text-gray-500">
+                    Identyfikator używany do automatycznego przypisywania kont (np. konto "210-3-13" będzie widoczne dla placówki z identyfikatorem "3-13")
                   </p>
                 </FormItem>
               )}

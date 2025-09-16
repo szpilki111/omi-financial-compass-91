@@ -114,6 +114,42 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     const fetchAccounts = async () => {
       setLoading(true);
 
+      // Get the location identifier first
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', locationId)
+        .single();
+
+      if (locationError) {
+        console.error('Error fetching location data:', locationError);
+        setAccounts([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get location category from identifier
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+      console.log('Location category:', locationCategory);
+
+      // Get account restrictions for this category
+      let restrictions: any[] = [];
+      if (locationCategory) {
+        const { data: restrictionsData, error: restrictionsError } = await supabase
+          .from('account_category_restrictions')
+          .select('*')
+          .eq('category_prefix', locationCategory)
+          .eq('is_restricted', true);
+
+        if (restrictionsError) {
+          console.error('Error fetching restrictions:', restrictionsError);
+        } else {
+          restrictions = restrictionsData || [];
+          console.log('Restrictions for category:', locationCategory, restrictions);
+        }
+      }
+
+      // Get manually assigned accounts for this location
       const { data: locationAccountData, error: locationAccountError } = await supabase
         .from('location_accounts')
         .select('account_id')
@@ -126,43 +162,93 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         return;
       }
 
-      const accountIds = locationAccountData.map(la => la.account_id);
-      if (accountIds.length === 0) {
-        setAccounts([]);
-        setLoading(false);
-        return;
+      let accountIds = locationAccountData.map(la => la.account_id);
+      let allAccountsData: any[] = [];
+
+      // Get manually assigned accounts
+      if (accountIds.length > 0) {
+        let query = supabase
+          .from('accounts')
+          .select('id, number, name, type')
+          .in('id', accountIds)
+          .order('number', { ascending: true });
+
+        // Jeśli jest searchTerm, dodaj filtrowanie
+        if (searchTerm.trim()) {
+          query = query.or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
+        }
+
+        const { data: manualAccounts, error } = await query;
+        if (!error && manualAccounts) {
+          allAccountsData = [...manualAccounts];
+        }
       }
 
-      // Buduj query - jeśli jest searchTerm, filtruj po nim, jeśli nie, pokaż wszystkie
-      let query = supabase
-        .from('accounts')
-        .select('id, number, name, type')
-        .in('id', accountIds)
-        .order('number', { ascending: true });
-
-      // Jeśli jest searchTerm, dodaj filtrowanie
-      if (searchTerm.trim()) {
-        query = query.or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
-      }
-
-      // Limit wyników
-      query = query.limit(50);
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching accounts:', error);
-        setAccounts([]);
-      } else {
-        // KLUCZOWA POPRAWKA: Filtruj konta na podstawie restrykcji stron
-        let filteredAccounts = data || [];
+      // If location has an identifier, also include accounts that match the identifier pattern
+      if (locationData?.location_identifier) {
+        const identifier = locationData.location_identifier;
         
-        filteredAccounts = filteredAccounts.filter(account => 
-          isAccountAllowedForSide(account.number, side)
-        );
-        
-        setAccounts(filteredAccounts);
+        // Get all accounts that end with the location identifier
+        let autoQuery = supabase
+          .from('accounts')
+          .select('id, number, name, type')
+          .order('number', { ascending: true });
+
+        // Add search filtering if there's a search term
+        if (searchTerm.trim()) {
+          autoQuery = autoQuery.or(`number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
+        }
+
+        const { data: allAccounts, error: allAccountsError } = await autoQuery;
+
+        if (!allAccountsError && allAccounts) {
+          const matchingAccounts = allAccounts.filter(account => {
+            // Check if account number ends with the location identifier
+            // Format: "functional_number-identifier" where identifier can be "X" or "X-Y"
+            const accountParts = account.number.split('-');
+            if (accountParts.length < 2) return false;
+            
+            // Get the suffix (everything after the first dash)
+            const suffix = accountParts.slice(1).join('-');
+            return suffix === identifier;
+          });
+
+          // Merge with existing accounts, avoiding duplicates
+          const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
+          const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
+          allAccountsData = [...allAccountsData, ...newAccounts];
+        }
       }
+
+      // Apply category restrictions - remove accounts that are restricted for this category
+      if (locationCategory && restrictions.length > 0) {
+        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
+        console.log('Restricted prefixes for category:', locationCategory, restrictedPrefixes);
+        
+        allAccountsData = allAccountsData.filter(account => {
+          // Extract account prefix (only first part before first hyphen)
+          const parts = account.number.split('-');
+          const accountPrefix = parts[0];
+          const isRestricted = restrictedPrefixes.includes(accountPrefix);
+          console.log(`Account ${account.number}, prefix: ${accountPrefix}, restricted: ${isRestricted}`);
+          return !isRestricted;
+        });
+        
+        console.log('Accounts after applying restrictions:', allAccountsData);
+      }
+
+      // Apply side filtering and sort
+      let filteredAccounts = allAccountsData.filter(account => 
+        isAccountAllowedForSide(account.number, side)
+      );
+
+      // Sort by account number
+      filteredAccounts.sort((a, b) => a.number.localeCompare(b.number));
+
+      // Limit results
+      filteredAccounts = filteredAccounts.slice(0, 50);
+      
+      setAccounts(filteredAccounts);
       setLoading(false);
     };
 

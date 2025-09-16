@@ -95,7 +95,8 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     return sum + (creditAmount || 0);
   }, 0);
 
-  const totalSum = debitSum + creditSum;
+  // In double-entry bookkeeping, debits should equal credits, so we show the difference as balance
+  const balance = Math.abs(debitSum - creditSum);
 
   return (
     <div className="overflow-x-auto">
@@ -192,7 +193,11 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
               {formatAmount(creditSum, documentCurrency)}
             </TableCell>
             <TableCell colSpan={3} className="text-left font-bold text-lg">
-              Suma całkowita: {formatAmount(totalSum, documentCurrency)}
+              {debitSum === creditSum ? (
+                <span className="text-green-600">Bilans się zgadza ✓</span>
+              ) : (
+                <span className="text-red-600">Różnica: {formatAmount(balance, documentCurrency)}</span>
+              )}
             </TableCell>
           </TableRow>
         </TableFooter>

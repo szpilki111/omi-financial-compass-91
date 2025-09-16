@@ -56,6 +56,8 @@ const DocumentDialog = ({
   const [showParallelAccounting, setShowParallelAccounting] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const [selectedParallelTransactions, setSelectedParallelTransactions] = useState<number[]>([]);
+  const [hasInlineFormData, setHasInlineFormData] = useState(false);
+  const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -135,9 +137,56 @@ const DocumentDialog = ({
     }
   }, [isOpen, document, transactions.length, showInlineForm]);
 
+  const checkLastTransactionComplete = () => {
+    // Check if inline form has unsaved data
+    if (hasInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Check if parallel inline form has unsaved data  
+    if (hasParallelInlineFormData) {
+      toast({
+        title: "Błąd walidacji", 
+        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Check for incomplete existing transactions
+    const transactionsToCheck = [...transactions, ...parallelTransactions];
+    const incompleteTransactions = transactionsToCheck.filter(transaction => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
+      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
+      
+      // Transaction is incomplete if it has description or amount but missing other required fields
+      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+    });
+
+    if (incompleteTransactions.length > 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje przed zamknięciem.`,
+        variant: "destructive"
+      });
+      return false;
+    }
+    
+    return true;
+  };
+
   const handleDialogOpenChange = (open: boolean) => {
     if (!open) {
       if (hasUnsavedChanges) {
+        if (!checkLastTransactionComplete()) {
+          return; // Block closing if last transaction is incomplete
+        }
         setShowConfirmClose(true);
       } else {
         onClose();
@@ -147,6 +196,9 @@ const DocumentDialog = ({
 
   const handleCloseDialog = () => {
     if (hasUnsavedChanges) {
+      if (!checkLastTransactionComplete()) {
+        return; // Block closing if last transaction is incomplete
+      }
       setShowConfirmClose(true);
     } else {
       onClose();
@@ -310,6 +362,62 @@ const DocumentDialog = ({
         variant: "destructive"
       });
       return;
+    }
+
+    // Check if inline forms have unsaved data
+    if (hasInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (hasParallelInlineFormData) {
+      toast({
+        title: "Błąd walidacji",
+        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check for incomplete existing transactions (have some data but missing required fields)
+    const incompleteTransactions = allTransactions.filter(transaction => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
+      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
+      
+      // Transaction is incomplete if it has description or amount but missing other required fields
+      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+    });
+
+    if (incompleteTransactions.length > 0) {
+      toast({
+        title: "Błąd walidacji",
+        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if last transaction has unsaved description
+    const lastTransaction = allTransactions[allTransactions.length - 1];
+    if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
+      // Check if this transaction is incomplete (no accounts selected or amounts are 0)
+      const isIncomplete = !lastTransaction.debit_account_id || 
+                          !lastTransaction.credit_account_id || 
+                          (lastTransaction.debit_amount === 0 && lastTransaction.credit_amount === 0);
+      
+      if (isIncomplete) {
+        toast({
+          title: "Błąd walidacji",
+          description: "Ostatnia operacja zawiera opis ale nie jest kompletnie wypełniona. Uzupełnij wszystkie pola lub usuń operację.",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     const totalDebit = allTransactions.reduce((sum, t) => {
@@ -780,6 +888,7 @@ const DocumentDialog = ({
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
+                        onHasDataChange={setHasInlineFormData}
                       />
                     )}
                   </TableBody>
@@ -883,6 +992,7 @@ const DocumentDialog = ({
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                           onDelete={() => removeParallelTransaction(index)}
+                          onAddBalancing={addParallelTransaction}
                           currency={selectedCurrency}
                           isEditingBlocked={isEditingBlocked}
                           isSelected={selectedParallelTransactions.includes(index)}
@@ -894,6 +1004,7 @@ const DocumentDialog = ({
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           currency={selectedCurrency}
+                          onHasDataChange={setHasParallelInlineFormData}
                         />
                       )}
                     </TableBody>
@@ -955,11 +1066,12 @@ const EditableTransactionRow: React.FC<{
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
+  onAddBalancing?: (transaction: Transaction) => Promise<void>;
   currency: string;
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+}> = ({ transaction, onUpdate, onDelete, onAddBalancing, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -968,6 +1080,92 @@ const EditableTransactionRow: React.FC<{
     debit_amount: transaction.debit_amount || 0,
     credit_amount: transaction.credit_amount || 0,
   });
+
+  const [debitTouched, setDebitTouched] = useState(false);
+  const [creditTouched, setCreditTouched] = useState(false);
+  const [autoFillDisabled, setAutoFillDisabled] = useState(false);
+
+  // Auto-populate logic for debit amount changes (before blur)
+  const handleDebitAmountChange = (value: number) => {
+    setFormData(prev => {
+      const newData = { ...prev, debit_amount: value };
+      
+      // Auto-populate credit amount if credit hasn't been manually touched and auto-fill not disabled
+      if (!creditTouched && !autoFillDisabled && value > 0) {
+        newData.credit_amount = value;
+      }
+      
+      return newData;
+    });
+  };
+
+  // Auto-populate logic for credit amount changes (before blur)
+  const handleCreditAmountChange = (value: number) => {
+    setFormData(prev => {
+      const newData = { ...prev, credit_amount: value };
+      
+      // Auto-populate debit amount if debit hasn't been manually touched and auto-fill not disabled
+      if (!debitTouched && !autoFillDisabled && value > 0) {
+        newData.debit_amount = value;
+      }
+      
+      return newData;
+    });
+  };
+
+  // Handle losing focus from debit amount field
+  const handleDebitAmountBlur = () => {
+    setAutoFillDisabled(true); // Disable auto-fill after first blur
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Check if we need to create balancing transaction (when debit is smaller than credit)
+    const canCreateBalancing = formData.description.trim() && 
+                              formData.debit_account_id && 
+                              difference > 0.01 && 
+                              formData.debit_amount < formData.credit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
+      createBalancingTransaction('debit');
+    }
+  };
+
+  // Handle losing focus from credit amount field
+  const handleCreditAmountBlur = () => {
+    setAutoFillDisabled(true); // Disable auto-fill after first blur
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Check if we need to create balancing transaction (when debit is larger)
+    const canCreateBalancing = formData.description.trim() && 
+                              formData.debit_account_id && 
+                              difference > 0.01 && 
+                              formData.credit_amount < formData.debit_amount;
+    
+    if (canCreateBalancing && !isEditingBlocked) {
+      createBalancingTransaction('credit');
+    }
+  };
+
+  // Create balancing transaction when one side is smaller
+  const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
+    if (!onAddBalancing) return;
+    
+    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    
+    // Create the balancing transaction
+    const balancingTransaction = {
+      description: formData.description,
+      debit_account_id: smallerSide === 'debit' ? '' : formData.debit_account_id,
+      credit_account_id: smallerSide === 'credit' ? '' : formData.credit_account_id,
+      debit_amount: smallerSide === 'debit' ? difference : 0,
+      credit_amount: smallerSide === 'credit' ? difference : 0,
+      amount: difference,
+      settlement_type: 'Bank',
+      currency: currency,
+    };
+
+    // Add the balancing transaction
+    onAddBalancing(balancingTransaction);
+  };
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -1037,7 +1235,13 @@ const EditableTransactionRow: React.FC<{
             step="0.01" 
             min="0" 
             value={formData.debit_amount || ''} 
-            onChange={e => setFormData(prev => ({ ...prev, debit_amount: parseFloat(e.target.value) || 0 }))} 
+            onChange={e => {
+              const value = parseFloat(e.target.value) || 0;
+              setDebitTouched(true);
+              handleDebitAmountChange(value);
+            }}
+            onFocus={() => setDebitTouched(true)}
+            onBlur={handleDebitAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
@@ -1061,7 +1265,13 @@ const EditableTransactionRow: React.FC<{
             step="0.01" 
             min="0" 
             value={formData.credit_amount || ''} 
-            onChange={e => setFormData(prev => ({ ...prev, credit_amount: parseFloat(e.target.value) || 0 }))} 
+            onChange={e => {
+              const value = parseFloat(e.target.value) || 0;
+              setCreditTouched(true);
+              handleCreditAmountChange(value);
+            }}
+            onFocus={() => setCreditTouched(true)}
+            onBlur={handleCreditAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
