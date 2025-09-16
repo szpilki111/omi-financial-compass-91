@@ -53,6 +53,7 @@ interface LocationAccount {
   account_id: string;
   locations: Location;
   accounts: Account;
+  isAutoAssigned?: boolean;
 }
 
 const LocationAccountsManagement = () => {
@@ -195,6 +196,44 @@ const LocationAccountsManagement = () => {
     }
   });
 
+  // Fetch accounts automatically assigned by location identifier
+  const { data: autoAssignedAccounts } = useQuery({
+    queryKey: ['auto-assigned-accounts', selectedLocationId],
+    queryFn: async () => {
+      if (!selectedLocationId) return [];
+
+      // Get the selected location's identifier
+      const selectedLocation = locations?.find(loc => loc.id === selectedLocationId);
+      if (!selectedLocation?.location_identifier) return [];
+
+      console.log('Pobieranie kont dla identyfikatora:', selectedLocation.location_identifier);
+
+      // Fetch all accounts that end with the location identifier
+      const { data: accounts, error } = await supabase
+        .from('accounts')
+        .select('id, number, name, type')
+        .like('number', `%-${selectedLocation.location_identifier}`)
+        .order('number');
+
+      if (error) {
+        console.error('Błąd podczas pobierania kont dla identyfikatora:', error);
+        throw error;
+      }
+
+      console.log('Znalezione konta dla identyfikatora:', accounts);
+
+      return accounts?.map(account => ({
+        id: `auto-${account.id}`, // Prefix to distinguish from manual assignments
+        location_id: selectedLocationId,
+        account_id: account.id,
+        locations: selectedLocation,
+        accounts: account,
+        isAutoAssigned: true
+      })) || [];
+    },
+    enabled: !!selectedLocationId && !!locations
+  });
+
   // Add location-account assignment
   const addMutation = useMutation({
     mutationFn: async ({ locationId, accountId }: { locationId: string; accountId: string }) => {
@@ -323,8 +362,14 @@ const LocationAccountsManagement = () => {
     !selectedLocationId || assignment.location_id === selectedLocationId
   ) || [];
 
-  // Group filtered assignments by location
-  const groupedAssignments = filteredAssignments.reduce((acc, assignment) => {
+  // Combine manual assignments with auto-assigned accounts
+  const allAssignments = [
+    ...filteredAssignments,
+    ...(autoAssignedAccounts || [])
+  ];
+
+  // Group all assignments by location
+  const groupedAssignments = allAssignments.reduce((acc, assignment) => {
     const locationName = assignment.locations.name;
     if (!acc[locationName]) {
       acc[locationName] = [];
@@ -499,19 +544,31 @@ const LocationAccountsManagement = () => {
                         <TableRow key={assignment.id}>
                           <TableCell className="font-medium">
                             {assignment.accounts.number}
+                            {assignment.isAutoAssigned && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                Auto
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>{assignment.accounts.name}</TableCell>
                           <TableCell>{assignment.accounts.type}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(assignment.id)}
-                              disabled={deleteMutation.isPending}
-                              title="Usuń przypisanie"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!assignment.isAutoAssigned && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(assignment.id)}
+                                disabled={deleteMutation.isPending}
+                                title="Usuń przypisanie"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {assignment.isAutoAssigned && (
+                              <span className="text-xs text-gray-500">
+                                Przypisane automatycznie
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
