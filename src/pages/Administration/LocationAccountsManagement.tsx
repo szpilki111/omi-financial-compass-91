@@ -62,6 +62,7 @@ const LocationAccountsManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [accountSelectOpen, setAccountSelectOpen] = useState(false);
+  const [locationSelectOpen, setLocationSelectOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -333,6 +334,7 @@ const LocationAccountsManagement = () => {
   }, {} as Record<string, LocationAccount[]>);
 
   const selectedAccount = accounts.find(account => account.id === selectedAccountId);
+  const selectedLocation = locations?.find(location => location.id === selectedLocationId);
 
   if (isLoading) {
     return (
@@ -354,18 +356,48 @@ const LocationAccountsManagement = () => {
           <div className="flex gap-4 items-end mb-6">
             <div className="flex-1">
               <label className="text-sm font-medium">Placówka</label>
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Wybierz placówkę" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations?.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={locationSelectOpen} onOpenChange={setLocationSelectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={locationSelectOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedLocation ? selectedLocation.name : "Wybierz placówkę..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-white border shadow-lg z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                  <Command>
+                    <CommandInput placeholder="Wpisz nazwę placówki..." />
+                    <CommandList className="max-h-60 overflow-y-auto">
+                      <CommandEmpty>Nie znaleziono placówki.</CommandEmpty>
+                      <CommandGroup>
+                        {locations?.map((location) => (
+                          <CommandItem
+                            key={location.id}
+                            value={location.name}
+                            onSelect={() => {
+                              setSelectedLocationId(location.id);
+                              setLocationSelectOpen(false);
+                            }}
+                            className="cursor-pointer hover:bg-gray-100"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedLocation?.id === location.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {location.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex-1">
               <label className="text-sm font-medium">
