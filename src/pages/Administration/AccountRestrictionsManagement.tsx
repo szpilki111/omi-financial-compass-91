@@ -47,16 +47,12 @@ const AccountRestrictionsManagement = () => {
     }
   });
 
-  // Get unique account number prefixes (without identifiers)
+  // Get unique account number prefixes (only first part before first hyphen)
   const uniqueAccountPrefixes = accounts ? [...new Set(
     accounts.map(account => {
-      // Extract the prefix before the last hyphen-number combination
+      // Extract only the first part before the first hyphen
       const parts = account.number.split('-');
-      if (parts.length >= 2) {
-        // Remove the last part (identifier) to get the base account number
-        return parts.slice(0, -1).join('-');
-      }
-      return account.number;
+      return parts[0];
     })
   )].sort() : [];
 
