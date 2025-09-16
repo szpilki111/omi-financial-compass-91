@@ -128,6 +128,27 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         return;
       }
 
+      // Get location category from identifier
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+      console.log('Location category:', locationCategory);
+
+      // Get account restrictions for this category
+      let restrictions: any[] = [];
+      if (locationCategory) {
+        const { data: restrictionsData, error: restrictionsError } = await supabase
+          .from('account_category_restrictions')
+          .select('*')
+          .eq('category_prefix', locationCategory)
+          .eq('is_restricted', true);
+
+        if (restrictionsError) {
+          console.error('Error fetching restrictions:', restrictionsError);
+        } else {
+          restrictions = restrictionsData || [];
+          console.log('Restrictions for category:', locationCategory, restrictions);
+        }
+      }
+
       // Get manually assigned accounts for this location
       const { data: locationAccountData, error: locationAccountError } = await supabase
         .from('location_accounts')
@@ -197,6 +218,26 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
           allAccountsData = [...allAccountsData, ...newAccounts];
         }
+      }
+
+      // Apply category restrictions - remove accounts that are restricted for this category
+      if (locationCategory && restrictions.length > 0) {
+        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
+        console.log('Restricted prefixes for category:', locationCategory, restrictedPrefixes);
+        
+        allAccountsData = allAccountsData.filter(account => {
+          // Extract account prefix (everything before the last hyphen-identifier)
+          const parts = account.number.split('-');
+          if (parts.length >= 2) {
+            const accountPrefix = parts.slice(0, -1).join('-');
+            const isRestricted = restrictedPrefixes.includes(accountPrefix);
+            console.log(`Account ${account.number}, prefix: ${accountPrefix}, restricted: ${isRestricted}`);
+            return !isRestricted;
+          }
+          return true;
+        });
+        
+        console.log('Accounts after applying restrictions:', allAccountsData);
       }
 
       // Apply side filtering and sort

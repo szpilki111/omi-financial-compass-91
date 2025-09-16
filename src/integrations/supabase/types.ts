@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_category_restrictions: {
+        Row: {
+          account_number_prefix: string
+          category_prefix: string
+          created_at: string
+          id: string
+          is_restricted: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_number_prefix: string
+          category_prefix: string
+          created_at?: string
+          id?: string
+          is_restricted?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_number_prefix?: string
+          category_prefix?: string
+          created_at?: string
+          id?: string
+          is_restricted?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       account_section_mappings: {
         Row: {
           account_prefix: string
