@@ -47,15 +47,18 @@ const AccountRestrictionsManagement = () => {
     }
   });
 
-  // Predefined account prefixes that should appear in restrictions
-  const uniqueAccountPrefixes = [
-    '011', '012', '013', '015', '020', '030', '040', '050', '071', '072', '080', '081',
-    '100', '101', '102', '103', '104', '105', '106', '107', '108', '110', '111', '112', '113', '117',
-    '200', '201', '202', '204', '205', '208', '210', '211', '212', '213', '215', '217', '222', '223', '224', '230', '280',
-    '401', '402', '403', '404', '405', '406', '407', '408', '410', '411', '412', '413', '414', '420', '421', '422', '423', '424', '430', '431', '435', '439', '440', '441', '442', '443', '444', '445', '446', '447', '448', '449', '450', '451', '452', '453', '454', '455', '456', '457', '458', '459', '461', '462', '463',
-    '701', '702', '703', '704', '705', '706', '710', '711', '712', '713', '714', '715', '716', '717', '718', '719', '720', '724', '725', '727', '728', '730',
-    '800', '801', '802', '803', '804', '805', '806', '807', '810', '820', '842', '860'
-  ];
+  // Get unique account number prefixes (without identifiers)
+  const uniqueAccountPrefixes = accounts ? [...new Set(
+    accounts.map(account => {
+      // Extract the prefix before the last hyphen-number combination
+      const parts = account.number.split('-');
+      if (parts.length >= 2) {
+        // Remove the last part (identifier) to get the base account number
+        return parts.slice(0, -1).join('-');
+      }
+      return account.number;
+    })
+  )].sort() : [];
 
   // Fetch existing restrictions
   const { data: restrictions, isLoading: restrictionsLoading } = useQuery({
