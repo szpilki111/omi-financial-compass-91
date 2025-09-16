@@ -41,7 +41,7 @@ const AccountRestrictionsManagement = () => {
         .from('accounts')
         .select('id, number, name, type')
         .order('number')
-        .limit(1000); // Increase limit to get all accounts
+        .limit(7000); // Increase limit to get all accounts
 
       if (error) throw error;
       return data as Account[];
