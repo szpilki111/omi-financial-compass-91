@@ -150,6 +150,9 @@ const AccountRestrictionsManagement = () => {
                       <span className="text-xs text-muted-foreground">({prefix}-*)</span>
                     </TableHead>
                   ))}
+                  <TableHead className="text-center min-w-[150px]">
+                    Analityka obowiązkowa
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -158,18 +161,25 @@ const AccountRestrictionsManagement = () => {
                     <TableCell className="font-medium">
                       {accountPrefix}
                     </TableCell>
-                    {Object.keys(LOCATION_CATEGORIES).map((categoryPrefix) => (
-                      <TableCell key={categoryPrefix} className="text-center">
-                        <Checkbox
-                          checked={isRestricted(accountPrefix, categoryPrefix)}
-                          onCheckedChange={(checked) => 
-                            handleRestrictionChange(accountPrefix, categoryPrefix, !!checked)
-                          }
-                          disabled={updateRestrictionMutation.isPending}
-                        />
-                      </TableCell>
-                    ))}
-                  </TableRow>
+                     {Object.keys(LOCATION_CATEGORIES).map((categoryPrefix) => (
+                       <TableCell key={categoryPrefix} className="text-center">
+                         <Checkbox
+                           checked={isRestricted(accountPrefix, categoryPrefix)}
+                           onCheckedChange={(checked) => 
+                             handleRestrictionChange(accountPrefix, categoryPrefix, !!checked)
+                           }
+                           disabled={updateRestrictionMutation.isPending}
+                         />
+                       </TableCell>
+                     ))}
+                     <TableCell className="text-center">
+                       <Checkbox
+                         checked={false}
+                         onCheckedChange={() => {}}
+                         disabled={true}
+                       />
+                     </TableCell>
+                   </TableRow>
                 ))}
               </TableBody>
             </Table>
