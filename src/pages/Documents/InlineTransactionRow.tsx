@@ -236,16 +236,16 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     resetForm();
   };
 
-  // Helper function to reset form - preserve account selections for convenience
+  // Helper function to reset form - clear all fields for fresh operation
   const resetForm = () => {
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
       description: '',
+      debit_account_id: '',
+      credit_account_id: '',
       debit_amount: 0,
       credit_amount: 0,
-      // Keep debit_account_id and credit_account_id to preserve account selections
-      // settlement_type also preserved
-    }));
+      settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+    });
     setCreditTouched(false);
     setDebitTouched(false);
   };
@@ -327,14 +327,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
       onSave(transaction);
 
-      // Reset form state for next transaction - preserve account selections
-      setFormData(prev => ({
-        ...prev,
+      // Reset form state for next transaction - clear all fields
+      setFormData({
         description: '',
+        debit_account_id: '',
+        credit_account_id: '',
         debit_amount: 0,
         credit_amount: 0,
-        // Keep debit_account_id and credit_account_id preserved
-      }));
+        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      });
       setCreditTouched(false);
       setDebitTouched(false);
     } else {
@@ -370,14 +371,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       // Save the balancing transaction
       onSave(balancingTransaction);
 
-      // Reset form for next operation - preserve account selections
-      setFormData(prev => ({
-        ...prev,
+      // Reset form for next operation - clear all fields
+      setFormData({
         description: '',
+        debit_account_id: '',
+        credit_account_id: '',
         debit_amount: 0,
         credit_amount: 0,
-        // Keep debit_account_id and credit_account_id preserved
-      }));
+        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
+      });
       setCreditTouched(false);
       setDebitTouched(false);
     }
