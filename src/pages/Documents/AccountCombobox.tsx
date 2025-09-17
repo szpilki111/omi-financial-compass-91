@@ -74,7 +74,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, accounts, locationId, side, onChange]);
+  }, [value, locationId]);
 
   // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
   const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
@@ -93,7 +93,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   useEffect(() => {
     if (!open) {
-        setAccounts([]);
+        // Don't clear accounts immediately to allow display name to persist
         return;
     }
     
