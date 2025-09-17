@@ -9,3 +9,9 @@ verify_jwt = false
 
 [functions.create-user-admin]
 verify_jwt = true
+
+[functions.export-database]
+verify_jwt = true
+
+[functions.import-database]
+verify_jwt = true
