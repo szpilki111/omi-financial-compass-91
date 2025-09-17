@@ -49,8 +49,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   useEffect(() => {
     if (value && locationId) {
-      // Always fetch the account from database to ensure we have the correct display name
-      // Don't rely on the accounts list as it may be empty when popover is closed
+      const selectedInList = accounts.find(acc => acc.id === value);
+      if (selectedInList) {
+        setDisplayedAccountName(selectedInList.number);
+        return;
+      }
+
       const fetchInitialAccount = async () => {
         // We use an inner join to ensure the account is valid for the location
         const { data } = await supabase
