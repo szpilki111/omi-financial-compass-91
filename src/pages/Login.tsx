@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { CreateAdminButton } from '@/components/CreateAdminButton';
+
 import { Separator } from '@/components/ui/separator';
 
 // Ograniczamy role do ekonoma
@@ -412,17 +412,6 @@ const Login = () => {
           </div>
         </form>
 
-        {!isSigningUp && (
-          <>
-            <Separator className="my-6" />
-            <div className="text-center">
-              <p className="text-sm text-omi-gray-600 mb-4">
-                Nie masz konta administratora?
-              </p>
-              <CreateAdminButton />
-            </div>
-          </>
-        )}
       </div>
     </div>;
 };
