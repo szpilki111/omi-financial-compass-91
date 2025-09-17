@@ -236,16 +236,16 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     resetForm();
   };
 
-  // Helper function to reset form
+  // Helper function to reset form - preserve account selections for convenience
   const resetForm = () => {
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       description: '',
-      debit_account_id: '',
-      credit_account_id: '',
       debit_amount: 0,
       credit_amount: 0,
-      settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
-    });
+      // Keep debit_account_id and credit_account_id to preserve account selections
+      // settlement_type also preserved
+    }));
     setCreditTouched(false);
     setDebitTouched(false);
   };
@@ -327,15 +327,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
       onSave(transaction);
 
-      // Reset form state for next transaction
-      setFormData({
+      // Reset form state for next transaction - preserve account selections
+      setFormData(prev => ({
+        ...prev,
         description: '',
-        debit_account_id: '',
-        credit_account_id: '',
         debit_amount: 0,
         credit_amount: 0,
-        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
-      });
+        // Keep debit_account_id and credit_account_id preserved
+      }));
       setCreditTouched(false);
       setDebitTouched(false);
     } else {
@@ -371,15 +370,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       // Save the balancing transaction
       onSave(balancingTransaction);
 
-      // Reset form for next operation
-      setFormData({
+      // Reset form for next operation - preserve account selections
+      setFormData(prev => ({
+        ...prev,
         description: '',
-        debit_account_id: '',
-        credit_account_id: '',
         debit_amount: 0,
         credit_amount: 0,
-        settlement_type: 'Bank' as 'Gotówka' | 'Bank' | 'Rozrachunek',
-      });
+        // Keep debit_account_id and credit_account_id preserved
+      }));
       setCreditTouched(false);
       setDebitTouched(false);
     }
