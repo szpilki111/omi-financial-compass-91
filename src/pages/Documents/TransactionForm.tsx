@@ -367,8 +367,26 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
         duration: 2000,
       });
       
-      // Reset form for next operation
-      resetForm();
+      // Reset only description and amounts, but keep account selections for convenience
+      setFormData(prev => ({
+        ...prev,
+        description: '',
+      }));
+      
+      setDebitFields(prev => prev.map(field => ({ 
+        ...field, 
+        amount: 0, 
+        description: '' 
+      })));
+      
+      setCreditFields(prev => prev.map(field => ({ 
+        ...field, 
+        amount: 0, 
+        description: '' 
+      })));
+      
+      setErrors({});
+      setIsAutoSaving(false);
       
       // Wywołaj callback żeby otworzyć nowe okno
       if (onAutoSaveComplete) {

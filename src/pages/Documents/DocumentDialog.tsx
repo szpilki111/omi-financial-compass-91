@@ -526,10 +526,6 @@ const DocumentDialog = ({
       currency
     };
     setTransactions(prev => [...prev, transactionWithCurrency]);
-    setShowInlineForm(false);
-    setTimeout(() => {
-      setShowInlineForm(true);
-    }, 100);
   };
 
   const addParallelTransaction = async (transaction: Transaction) => {
@@ -539,10 +535,6 @@ const DocumentDialog = ({
       currency
     };
     setParallelTransactions(prev => [...prev, transactionWithCurrency]);
-    setShowParallelInlineForm(false);
-    setTimeout(() => {
-      setShowParallelInlineForm(true);
-    }, 100);
   };
 
   const removeTransaction = (index: number) => {

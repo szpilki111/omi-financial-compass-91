@@ -236,7 +236,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     resetForm();
   };
 
-  // Helper function to reset form
+  // Helper function to reset form - clear all fields for fresh operation
   const resetForm = () => {
     setFormData({
       description: '',
@@ -248,6 +248,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     });
     setCreditTouched(false);
     setDebitTouched(false);
+    
+    // Auto-focus on description field for next transaction
+    setTimeout(() => {
+      if (descriptionRef.current && !isEditingBlocked) {
+        descriptionRef.current.focus();
+      }
+    }, 100);
   };
 
   // Auto-populate logic for debit amount changes
@@ -327,7 +334,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
       onSave(transaction);
 
-      // Reset form state for next transaction
+      // Reset form state for next transaction - clear all fields
       setFormData({
         description: '',
         debit_account_id: '',
@@ -338,6 +345,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       });
       setCreditTouched(false);
       setDebitTouched(false);
+      
+      // Auto-focus on description field for next transaction
+      setTimeout(() => {
+        if (descriptionRef.current && !isEditingBlocked) {
+          descriptionRef.current.focus();
+        }
+      }, 100);
     } else {
       // Amounts different - save original transaction and create balancing transaction
       const transaction: Transaction = {
@@ -371,7 +385,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       // Save the balancing transaction
       onSave(balancingTransaction);
 
-      // Reset form for next operation
+      // Reset form for next operation - clear all fields
       setFormData({
         description: '',
         debit_account_id: '',
@@ -382,6 +396,13 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       });
       setCreditTouched(false);
       setDebitTouched(false);
+      
+      // Auto-focus on description field for next transaction
+      setTimeout(() => {
+        if (descriptionRef.current && !isEditingBlocked) {
+          descriptionRef.current.focus();
+        }
+      }, 100);
     }
   };
 

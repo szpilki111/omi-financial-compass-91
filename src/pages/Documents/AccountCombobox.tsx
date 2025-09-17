@@ -51,38 +51,59 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     if (value && locationId) {
       const selectedInList = accounts.find(acc => acc.id === value);
       if (selectedInList) {
-        setDisplayedAccountName(`${selectedInList.number} - ${selectedInList.name}`);
+        setDisplayedAccountName(selectedInList.number);
         return;
       }
 
       const fetchInitialAccount = async () => {
-        // We use an inner join to ensure the account is valid for the location
-        const { data } = await supabase
+        // First try to fetch with location restriction if we have location_accounts
+        const { data: locationAccountData } = await supabase
           .from('accounts')
           .select('id, number, name, location_accounts!inner(location_id)')
           .eq('id', value)
           .eq('location_accounts.location_id', locationId)
           .maybeSingle();
 
-        if (data) {
-          // KLUCZOWA POPRAWKA: Sprawdź czy konto jest dozwolone dla tej strony
-          const isAccountAllowed = isAccountAllowedForSide(data.number, side);
-          if (isAccountAllowed) {
-            setDisplayedAccountName(`${data.number} - ${data.name}`);
-          } else {
-            // Konto nie jest dozwolone dla tej strony - wyczyść wybór
-            setDisplayedAccountName('');
-            onChange(''); // Wyczyść wybrane konto
-          }
+        if (locationAccountData) {
+          setDisplayedAccountName(locationAccountData.number);
+          return;
+        }
+
+        // If no location-specific account found, try to fetch the account directly
+        // This handles cases where location_accounts table is empty (no restrictions)
+        const { data: accountData } = await supabase
+          .from('accounts')
+          .select('id, number, name')
+          .eq('id', value)
+          .maybeSingle();
+
+        if (accountData) {
+          setDisplayedAccountName(accountData.number);
         } else {
           setDisplayedAccountName('');
         }
       };
       fetchInitialAccount();
+    } else if (value) {
+      // If value exists but no locationId, try to fetch the account anyway
+      const fetchAccount = async () => {
+        const { data } = await supabase
+          .from('accounts')
+          .select('id, number, name')
+          .eq('id', value)
+          .maybeSingle();
+
+        if (data) {
+          setDisplayedAccountName(data.number);
+        } else {
+          setDisplayedAccountName('');
+        }
+      };
+      fetchAccount();
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, accounts, locationId, side, onChange]);
+  }, [value, locationId]);
 
   // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
   const isAccountAllowedForSide = (accountNumber: string, side?: 'debit' | 'credit') => {
@@ -101,7 +122,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   useEffect(() => {
     if (!open) {
-        setAccounts([]);
+        // Don't clear accounts immediately to allow display name to persist
         return;
     }
     

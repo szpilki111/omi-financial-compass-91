@@ -832,6 +832,10 @@ export type Database = {
         Args: { user_id_to_delete: string }
         Returns: undefined
       }
+      exec_sql: {
+        Args: { sql: string }
+        Returns: undefined
+      }
       generate_document_number: {
         Args: { p_location_id: string; p_month: number; p_year: number }
         Returns: string

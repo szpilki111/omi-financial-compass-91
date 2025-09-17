@@ -9,6 +9,7 @@ import LocationAccountsManagement from './LocationAccountsManagement';
 import UsersManagement from './UsersManagement';
 import AccountsManagement from './AccountsManagement';
 import AccountRestrictionsManagement from './AccountRestrictionsManagement';
+import DatabaseManagement from './DatabaseManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -41,13 +42,16 @@ const AdministrationPage = () => {
         </div>
 
         <Tabs defaultValue="locations" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="locations">Placówki</TabsTrigger>
             <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
             <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
             <TabsTrigger value="account-restrictions">Ograniczenia kont</TabsTrigger>
             {(user.role === 'admin' || user.role === 'prowincjal') && (
               <TabsTrigger value="users">Użytkownicy</TabsTrigger>
+            )}
+            {user.role === 'admin' && (
+              <TabsTrigger value="database">Baza danych</TabsTrigger>
             )}
           </TabsList>
 
@@ -70,6 +74,12 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsContent value="users" className="space-y-4">
               <UsersManagement />
+            </TabsContent>
+          )}
+
+          {user.role === 'admin' && (
+            <TabsContent value="database" className="space-y-4">
+              <DatabaseManagement />
             </TabsContent>
           )}
         </Tabs>
