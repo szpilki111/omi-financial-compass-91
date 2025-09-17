@@ -33,17 +33,31 @@ interface AccountRestriction {
 const AccountRestrictionsManagement = () => {
   const queryClient = useQueryClient();
 
-  // Fetch all accounts
+  // Fetch all accounts with pagination to ensure we get all 5000+ accounts
   const { data: accounts, isLoading: accountsLoading } = useQuery({
     queryKey: ['accounts-for-restrictions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, number, name, type')
-        .order('number'); // Get all accounts without limit
+      let allAccounts: Account[] = [];
+      let page = 0;
+      const pageSize = 1000;
 
-      if (error) throw error;
-      return data as Account[];
+      while (true) {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('id, number, name, type')
+          .order('number')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allAccounts = [...allAccounts, ...data];
+        if (data.length < pageSize) break; // Last page
+        page++;
+      }
+
+      console.log('Total accounts fetched:', allAccounts.length);
+      return allAccounts as Account[];
     }
   });
 
