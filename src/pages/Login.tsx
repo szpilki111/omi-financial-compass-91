@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { CreateAdminButton } from '@/components/CreateAdminButton';
+import { Separator } from '@/components/ui/separator';
 
 // Ograniczamy role do ekonoma
 type Role = 'ekonom';
@@ -397,9 +399,30 @@ const Login = () => {
           </Button>
 
           <div className="text-center mt-4">
-            
+            <p className="text-sm text-omi-gray-600">
+              {isSigningUp ? "Masz już konto? " : "Nie masz konta? "}
+              <button
+                type="button"
+                onClick={() => setIsSigningUp(!isSigningUp)}
+                className="text-omi-500 hover:text-omi-600 font-medium"
+              >
+                {isSigningUp ? "Zaloguj się" : "Zarejestruj się"}
+              </button>
+            </p>
           </div>
         </form>
+
+        {!isSigningUp && (
+          <>
+            <Separator className="my-6" />
+            <div className="text-center">
+              <p className="text-sm text-omi-gray-600 mb-4">
+                Nie masz konta administratora?
+              </p>
+              <CreateAdminButton />
+            </div>
+          </>
+        )}
       </div>
     </div>;
 };
