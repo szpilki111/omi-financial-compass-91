@@ -73,29 +73,23 @@ Deno.serve(async (req) => {
     let importedTables = 0;
     let importedRecords = 0;
 
-    // Clear existing data using TRUNCATE CASCADE for each table
-    console.log('Clearing existing data using TRUNCATE CASCADE...');
+    // Clear existing data - use simple DELETE instead of TRUNCATE
+    console.log('Clearing existing data using DELETE...');
     for (const tableName of importOrder.slice().reverse()) {
       try {
-        console.log(`Truncating table: ${tableName}`);
-        const { error } = await supabase.rpc('exec_sql', {
-          sql: `TRUNCATE TABLE ${tableName} CASCADE;`
-        });
+        console.log(`Clearing table: ${tableName}`);
+        const { error } = await supabase
+          .from(tableName)
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
         
         if (error) {
-          console.error(`Error truncating ${tableName}:`, error);
-          // Try regular delete as fallback
-          const { error: deleteError } = await supabase
-            .from(tableName)
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000');
-          
-          if (deleteError) {
-            console.error(`Error deleting from ${tableName}:`, deleteError);
-          }
+          console.error(`Error clearing ${tableName}:`, error);
+          // Continue with other tables even if one fails
         }
-      } catch (truncateError) {
-        console.error(`Failed to truncate table ${tableName}:`, truncateError);
+      } catch (clearError) {
+        console.error(`Failed to clear table ${tableName}:`, clearError);
+        // Continue with other tables even if one fails
       }
     }
 
