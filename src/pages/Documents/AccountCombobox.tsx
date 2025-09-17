@@ -65,15 +65,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           .maybeSingle();
 
         if (data) {
-          // KLUCZOWA POPRAWKA: Sprawdź czy konto jest dozwolone dla tej strony
-          const isAccountAllowed = isAccountAllowedForSide(data.number, side);
-          if (isAccountAllowed) {
-            setDisplayedAccountName(`${data.number} - ${data.name}`);
-          } else {
-            // Konto nie jest dozwolone dla tej strony - wyczyść wybór
-            setDisplayedAccountName('');
-            onChange(''); // Wyczyść wybrane konto
-          }
+          setDisplayedAccountName(`${data.number} - ${data.name}`);
         } else {
           setDisplayedAccountName('');
         }
