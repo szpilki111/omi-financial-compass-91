@@ -51,7 +51,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     if (value && locationId) {
       const selectedInList = accounts.find(acc => acc.id === value);
       if (selectedInList) {
-        setDisplayedAccountName(`${selectedInList.number} - ${selectedInList.name}`);
+        setDisplayedAccountName(selectedInList.number);
         return;
       }
 
@@ -65,12 +65,28 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           .maybeSingle();
 
         if (data) {
-          setDisplayedAccountName(`${data.number} - ${data.name}`);
+          setDisplayedAccountName(data.number);
         } else {
           setDisplayedAccountName('');
         }
       };
       fetchInitialAccount();
+    } else if (value) {
+      // If value exists but no locationId, try to fetch the account anyway
+      const fetchAccount = async () => {
+        const { data } = await supabase
+          .from('accounts')
+          .select('id, number, name')
+          .eq('id', value)
+          .maybeSingle();
+
+        if (data) {
+          setDisplayedAccountName(data.number);
+        } else {
+          setDisplayedAccountName('');
+        }
+      };
+      fetchAccount();
     } else {
       setDisplayedAccountName('');
     }
