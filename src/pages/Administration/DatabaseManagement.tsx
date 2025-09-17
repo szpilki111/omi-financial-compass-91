@@ -70,7 +70,32 @@ const DatabaseManagement = () => {
     setIsImporting(true);
     try {
       const fileContent = await selectedFile.text();
-      const backupData = JSON.parse(fileContent);
+      let backupData;
+      
+      try {
+        backupData = JSON.parse(fileContent);
+      } catch (parseError) {
+        throw new Error('Nieprawidłowy format pliku JSON. Plik może być uszkodzony.');
+      }
+
+      // Validate backup data structure
+      if (!backupData || typeof backupData !== 'object') {
+        throw new Error('Nieprawidłowy format danych kopii zapasowej.');
+      }
+      
+      if (!backupData.tables || !Array.isArray(backupData.tables)) {
+        throw new Error('Plik kopii zapasowej nie zawiera poprawnych danych tabel.');
+      }
+
+      if (backupData.tables.length === 0) {
+        throw new Error('Plik kopii zapasowej jest pusty - brak danych do przywrócenia.');
+      }
+
+      console.log('Backup validation successful:', {
+        timestamp: backupData.timestamp,
+        tablesCount: backupData.tables.length,
+        totalRecords: backupData.metadata?.totalRecords || 'unknown'
+      });
 
       const { data, error } = await supabase.functions.invoke('import-database', {
         body: { backupData }

@@ -49,22 +49,22 @@ Deno.serve(async (req) => {
 
     console.log('Starting database export...');
 
-    // List of tables to export
+    // List of tables to export in dependency order
     const tablesToExport = [
-      'profiles',
-      'locations', 
-      'location_settings',
+      'locations',
+      'location_settings', 
       'accounts',
       'location_accounts',
-      'documents',
-      'transactions',
-      'reports',
-      'report_details',
-      'report_entries',
+      'profiles', // profiles reference locations
+      'user_settings', 
+      'documents', // documents reference locations and users
+      'transactions', // transactions reference documents and accounts
+      'reports', // reports reference locations and users
+      'report_details', // report_details reference reports
       'report_sections',
+      'report_entries', // report_entries reference reports
       'account_section_mappings',
       'account_category_restrictions',
-      'user_settings',
       'notifications'
     ];
 

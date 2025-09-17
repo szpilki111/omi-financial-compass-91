@@ -45,7 +45,12 @@ Deno.serve(async (req) => {
     const { backupData } = await req.json();
 
     if (!backupData || !backupData.tables) {
-      throw new Error('Invalid backup data format');
+      throw new Error('Invalid backup data format. Expected object with "tables" property.');
+    }
+
+    // Validate backup data structure
+    if (!Array.isArray(backupData.tables)) {
+      throw new Error('Invalid backup data: tables must be an array');
     }
 
     console.log('Starting database import...');
@@ -117,14 +122,27 @@ Deno.serve(async (req) => {
           const batch = batches[batchIndex];
           console.log(`Importing batch ${batchIndex + 1}/${batches.length} for ${tableName}`);
           
+          // Use insert for better reliability, with conflict resolution
           const { error } = await supabase
             .from(tableName)
-            .upsert(batch, { onConflict: 'id' });
+            .upsert(batch, { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            });
 
           if (error) {
             console.error(`Error importing batch ${batchIndex + 1} to ${tableName}:`, error);
             console.error('Failed batch data sample:', JSON.stringify(batch.slice(0, 2), null, 2));
-            throw new Error(`Failed to import batch ${batchIndex + 1} to ${tableName}: ${error.message}`);
+            
+            // Try regular insert as fallback
+            const { error: insertError } = await supabase
+              .from(tableName)
+              .insert(batch);
+              
+            if (insertError) {
+              console.error(`Fallback insert also failed for ${tableName}:`, insertError);
+              throw new Error(`Failed to import batch ${batchIndex + 1} to ${tableName}: ${error.message}`);
+            }
           }
         }
 
