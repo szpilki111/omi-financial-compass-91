@@ -75,6 +75,19 @@ const LocationsManagement = () => {
   // Mutacja do usuwania placówki
   const deleteMutation = useMutation({
     mutationFn: async (locationId: string) => {
+      // Sprawdź czy istnieją powiązani użytkownicy
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('location_id', locationId)
+        .limit(1);
+
+      if (profilesError) throw profilesError;
+
+      if (profiles && profiles.length > 0) {
+        throw new Error('Nie można usunąć placówki - istnieją przypisani użytkownicy');
+      }
+
       // Sprawdź czy istnieją powiązane transakcje
       const { data: transactions, error: transactionsError } = await supabase
         .from('transactions')
