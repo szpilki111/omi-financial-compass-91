@@ -56,16 +56,29 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       }
 
       const fetchInitialAccount = async () => {
-        // We use an inner join to ensure the account is valid for the location
-        const { data } = await supabase
+        // First try to fetch with location restriction if we have location_accounts
+        const { data: locationAccountData } = await supabase
           .from('accounts')
           .select('id, number, name, location_accounts!inner(location_id)')
           .eq('id', value)
           .eq('location_accounts.location_id', locationId)
           .maybeSingle();
 
-        if (data) {
-          setDisplayedAccountName(data.number);
+        if (locationAccountData) {
+          setDisplayedAccountName(locationAccountData.number);
+          return;
+        }
+
+        // If no location-specific account found, try to fetch the account directly
+        // This handles cases where location_accounts table is empty (no restrictions)
+        const { data: accountData } = await supabase
+          .from('accounts')
+          .select('id, number, name')
+          .eq('id', value)
+          .maybeSingle();
+
+        if (accountData) {
+          setDisplayedAccountName(accountData.number);
         } else {
           setDisplayedAccountName('');
         }
