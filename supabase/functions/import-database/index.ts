@@ -51,20 +51,30 @@ Deno.serve(async (req) => {
     console.log('Starting database import...');
     console.log(`Backup from: ${backupData.timestamp}, Tables: ${backupData.metadata?.totalTables || 'unknown'}`);
 
+    // Disable foreign key constraints temporarily
+    console.log('Disabling foreign key constraints...');
+    const { error: disableFKError } = await supabase.rpc('exec_sql', {
+      sql: 'SET session_replication_role = replica;'
+    });
+    
+    if (disableFKError) {
+      console.warn('Could not disable foreign key constraints:', disableFKError);
+    }
+
     // Order of tables for import (considering dependencies)
     const importOrder = [
       'locations',
       'location_settings', 
-      'accounts', // accounts must come first - location_accounts references accounts
-      'location_accounts', // location_accounts references accounts
-      'profiles', // profiles reference locations
+      'accounts',
+      'location_accounts',
+      'profiles',
       'user_settings',
-      'documents', // documents reference locations and users
-      'transactions', // transactions reference documents and accounts
-      'reports', // reports reference locations and users
-      'report_details', // report_details reference reports
+      'documents',
+      'transactions',
+      'reports',
+      'report_details',
       'report_sections',
-      'report_entries', // report_entries reference reports
+      'report_entries',
       'account_section_mappings',
       'account_category_restrictions',
       'notifications'
@@ -73,9 +83,9 @@ Deno.serve(async (req) => {
     let importedTables = 0;
     let importedRecords = 0;
 
-    // Clear existing data in reverse order (to handle dependencies)
-    const clearOrder = [...importOrder].reverse();
-    for (const tableName of clearOrder) {
+    // Clear existing data (order doesn't matter with FK constraints disabled)
+    console.log('Clearing existing data...');
+    for (const tableName of importOrder) {
       try {
         console.log(`Clearing table: ${tableName}`);
         const { error } = await supabase
@@ -85,9 +95,11 @@ Deno.serve(async (req) => {
         
         if (error) {
           console.error(`Error clearing ${tableName}:`, error);
+          // Continue with other tables even if one fails
         }
       } catch (clearError) {
         console.error(`Failed to clear table ${tableName}:`, clearError);
+        // Continue with other tables even if one fails
       }
     }
 
@@ -111,14 +123,18 @@ Deno.serve(async (req) => {
           batches.push(tableData.data.slice(i, i + batchSize));
         }
 
-        for (const batch of batches) {
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          const batch = batches[batchIndex];
+          console.log(`Importing batch ${batchIndex + 1}/${batches.length} for ${tableName}`);
+          
           const { error } = await supabase
             .from(tableName)
             .insert(batch);
 
           if (error) {
-            console.error(`Error importing batch to ${tableName}:`, error);
-            throw error;
+            console.error(`Error importing batch ${batchIndex + 1} to ${tableName}:`, error);
+            console.error('Failed batch data sample:', JSON.stringify(batch.slice(0, 2), null, 2));
+            throw new Error(`Failed to import batch ${batchIndex + 1} to ${tableName}: ${error.message}`);
           }
         }
 
@@ -130,6 +146,16 @@ Deno.serve(async (req) => {
         console.error(`Failed to import table ${tableName}:`, tableError);
         throw new Error(`Failed to import table ${tableName}: ${tableError.message}`);
       }
+    }
+
+    // Re-enable foreign key constraints
+    console.log('Re-enabling foreign key constraints...');
+    const { error: enableFKError } = await supabase.rpc('exec_sql', {
+      sql: 'SET session_replication_role = DEFAULT;'
+    });
+    
+    if (enableFKError) {
+      console.error('Could not re-enable foreign key constraints:', enableFKError);
     }
 
     console.log(`Database import completed. Tables: ${importedTables}, Records: ${importedRecords}`);
@@ -151,9 +177,21 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Import database error:', error);
+    
+    // Try to re-enable foreign key constraints even if import failed
+    try {
+      console.log('Re-enabling foreign key constraints after error...');
+      await supabase.rpc('exec_sql', {
+        sql: 'SET session_replication_role = DEFAULT;'
+      });
+    } catch (fkError) {
+      console.error('Could not re-enable foreign key constraints after error:', fkError);
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Failed to import database' 
+        error: error.message || 'Failed to import database',
+        details: 'Check the function logs for more information about the specific failure.'
       }),
       {
         status: 500,
