@@ -55,8 +55,8 @@ Deno.serve(async (req) => {
     const importOrder = [
       'locations',
       'location_settings', 
-      'location_accounts',
-      'accounts', // accounts must come after location_accounts
+      'accounts', // accounts must come first - location_accounts references accounts
+      'location_accounts', // location_accounts references accounts
       'profiles', // profiles reference locations
       'user_settings',
       'documents', // documents reference locations and users
