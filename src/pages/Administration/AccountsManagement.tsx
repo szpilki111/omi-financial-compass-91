@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Edit, Save, X, Upload, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 interface Account {
   id: string;
@@ -34,21 +35,39 @@ const AccountsManagement = () => {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Debounce search query to prevent losing focus
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
+  // Check if user can import accounts (exclude prowincjał role)
+  const canImportAccounts = useMemo(() => {
+    return user?.role !== 'prowincjal';
+  }, [user?.role]);
 
   // Fetch accounts
   const { data: accounts, isLoading } = useQuery({
-    queryKey: ['accounts', searchQuery],
+    queryKey: ['accounts', debouncedSearchQuery],
     queryFn: async () => {
       let query = supabase
         .from('accounts')
         .select('*')
         .order('number');
       
-      if (searchQuery.trim()) {
-        query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+      if (debouncedSearchQuery.trim()) {
+        query = query.or(`number.ilike.%${debouncedSearchQuery}%,name.ilike.%${debouncedSearchQuery}%`);
       }
       
       const { data, error } = await query;
@@ -346,29 +365,31 @@ const AccountsManagement = () => {
               className="max-w-md"
             />
             
-            <div className="flex gap-2">
-              <input
-                type="file"
-                accept=".csv,.txt"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="csv-upload"
-                disabled={isImporting}
-              />
-              <label htmlFor="csv-upload">
-                <Button
-                  variant="outline"
+            {canImportAccounts && (
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="csv-upload"
                   disabled={isImporting}
-                  className="cursor-pointer"
-                  asChild
-                >
-                  <span className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    {isImporting ? 'Importowanie...' : 'Importuj CSV'}
-                  </span>
-                </Button>
-              </label>
-            </div>
+                />
+                <label htmlFor="csv-upload">
+                  <Button
+                    variant="outline"
+                    disabled={isImporting}
+                    className="cursor-pointer"
+                    asChild
+                  >
+                    <span className="flex items-center gap-2">
+                      <Upload className="h-4 w-4" />
+                      {isImporting ? 'Importowanie...' : 'Importuj CSV'}
+                    </span>
+                  </Button>
+                </label>
+              </div>
+            )}
           </div>
           
           {isImporting && (
@@ -381,7 +402,7 @@ const AccountsManagement = () => {
 
           {!accounts || accounts.length === 0 ? (
             <p className="text-center text-gray-500">
-              {searchQuery ? 'Nie znaleziono kont pasujących do wyszukiwanego zapytania.' : 'Brak kont do wyświetlenia.'}
+              {debouncedSearchQuery ? 'Nie znaleziono kont pasujących do wyszukiwanego zapytania.' : 'Brak kont do wyświetlenia.'}
             </p>
           ) : (
             <div className="overflow-x-auto">
