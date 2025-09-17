@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const AccountsManagement = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search query to prevent losing focus
   useEffect(() => {
@@ -76,6 +77,16 @@ const AccountsManagement = () => {
       return data;
     }
   });
+
+  // Preserve focus after query updates
+  useEffect(() => {
+    if (searchInputRef.current && document.activeElement !== searchInputRef.current) {
+      // Only refocus if the user was typing (searchQuery is not empty)
+      if (searchQuery && !isImporting && !editingAccountId) {
+        searchInputRef.current.focus();
+      }
+    }
+  }, [accounts, searchQuery, isImporting, editingAccountId]);
 
   // Update account mutation
   const updateAccountMutation = useMutation({
@@ -359,6 +370,7 @@ const AccountsManagement = () => {
         <CardContent>
           <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between">
             <Input
+              ref={searchInputRef}
               placeholder="Wyszukaj konto po numerze lub nazwie..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
