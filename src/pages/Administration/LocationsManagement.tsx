@@ -78,14 +78,16 @@ const LocationsManagement = () => {
       // Sprawdź czy istnieją powiązani użytkownicy
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('location_id', locationId)
-        .limit(1);
+        .select('id, name')
+        .eq('location_id', locationId);
 
-      if (profilesError) throw profilesError;
+      if (profilesError) {
+        console.error('Error checking profiles:', profilesError);
+        throw new Error('Błąd podczas sprawdzania przypisanych użytkowników');
+      }
 
       if (profiles && profiles.length > 0) {
-        throw new Error('Nie można usunąć placówki - istnieją przypisani użytkownicy');
+        throw new Error(`Nie można usunąć placówki - istnieją przypisani użytkownicy (${profiles.length})`);
       }
 
       // Sprawdź czy istnieją powiązane transakcje
@@ -136,9 +138,10 @@ const LocationsManagement = () => {
       });
     },
     onError: (error: Error) => {
+      console.error('Delete mutation error:', error);
       toast({
         title: "Błąd",
-        description: error.message,
+        description: error.message || "Wystąpił błąd podczas usuwania placówki",
         variant: "destructive",
       });
     }
@@ -161,6 +164,7 @@ const LocationsManagement = () => {
 
   const handleDelete = (location: Location) => {
     if (confirm(`Czy na pewno chcesz usunąć placówkę "${location.name}"?`)) {
+      console.log('Attempting to delete location:', location.id);
       deleteMutation.mutate(location.id);
     }
   };
