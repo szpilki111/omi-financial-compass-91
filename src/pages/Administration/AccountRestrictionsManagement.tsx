@@ -168,9 +168,8 @@ const AccountRestrictionsManagement = () => {
                     </TableHead>
                   ))}
                   <TableHead className="text-center min-w-[150px]">
-                    Analityka obowiązkowa
+                    Czy konto analityczne?
                     <br />
-                    <span className="text-xs text-muted-foreground">(wymaga podkont analitycznych)</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
