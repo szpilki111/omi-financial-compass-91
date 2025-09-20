@@ -67,7 +67,7 @@ const AccountsManagement = () => {
     queryFn: async () => {
       let query = supabase
         .from('accounts')
-        .select('*')
+        .select('id, number, name, type, analytical')
         .order('number');
       
       if (debouncedSearchQuery.trim()) {
