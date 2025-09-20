@@ -32,6 +32,38 @@ export const AccountsSettingsTab: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
+  // Pobierz restrykcje kont dla tej lokalizacji
+  const { data: accountRestrictions } = useQuery({
+    queryKey: ['account-restrictions', user?.location],
+    queryFn: async () => {
+      if (!user?.location) return [];
+
+      // Get the location identifier first
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', user.location)
+        .single();
+
+      if (locationError) return [];
+
+      // Get location category from identifier
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+
+      if (!locationCategory) return [];
+
+      // Get account restrictions for this category
+      const { data: restrictionsData, error: restrictionsError } = await supabase
+        .from('account_category_restrictions')
+        .select('*')
+        .eq('category_prefix', locationCategory);
+
+      if (restrictionsError) return [];
+      return restrictionsData || [];
+    },
+    enabled: !!user?.location
+  });
+
   // Pobierz konta dostępne dla użytkownika
   const { data: availableAccounts, isLoading: accountsLoading } = useQuery({
     queryKey: ['available-accounts', user?.location],
@@ -218,6 +250,20 @@ export const AccountsSettingsTab: React.FC = () => {
     return analyticalAccounts?.filter(aa => aa.parent_account_id === accountId) || [];
   };
 
+  // Check if account should be analytical based on restrictions
+  const isAccountAnalyticalRequired = (accountNumber: string): boolean => {
+    if (!accountRestrictions) return false;
+    
+    // Extract account prefix (first part before first hyphen)
+    const parts = accountNumber.split('-');
+    const accountPrefix = parts[0];
+    
+    // Check if this prefix is marked as analytical_required
+    return accountRestrictions.some(restriction => 
+      restriction.account_number_prefix === accountPrefix && restriction.analytical_required
+    );
+  };
+
   const handleAddAnalytical = (account: Account) => {
     setSelectedAccount(account);
     setDialogOpen(true);
@@ -264,7 +310,8 @@ export const AccountsSettingsTab: React.FC = () => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
               const hasAnalytical = accountAnalytical.length > 0;
-              const canExpand = account.analytical && (hasAnalytical || canManageAnalytical);
+              const isAnalyticalRequired = isAccountAnalyticalRequired(account.number);
+              const canExpand = isAnalyticalRequired && (hasAnalytical || canManageAnalytical);
 
               return (
                 <div key={account.id} className="border rounded-lg p-3">
@@ -281,14 +328,14 @@ export const AccountsSettingsTab: React.FC = () => {
                       <span className="font-medium">{account.number}</span>
                       <span className="text-muted-foreground">-</span>
                       <span>{account.name}</span>
-                      {account.analytical && (
+                      {isAnalyticalRequired && (
                         <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
                           Analityczne
                         </span>
                       )}
                     </div>
 
-                    {account.analytical && canManageAnalytical && (
+                    {isAnalyticalRequired && canManageAnalytical && (
                       <Button
                         variant="outline"
                         size="sm"
