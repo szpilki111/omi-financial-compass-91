@@ -38,27 +38,118 @@ export const AccountsSettingsTab: React.FC = () => {
     queryFn: async () => {
       if (!user?.location) return [];
 
-      let query = supabase
-        .from('accounts')
-        .select('*')
-        .order('number');
-
-      // Dla ekonomów - tylko konta przypisane do ich lokalizacji
-      if (user.role === 'ekonom') {
-        const { data: locationAccounts } = await supabase
-          .from('location_accounts')
-          .select('account_id')
-          .eq('location_id', user.location);
-
-        const accountIds = locationAccounts?.map(la => la.account_id) || [];
-        if (accountIds.length === 0) return [];
-        
-        query = query.in('id', accountIds);
+      // For admin/prowincjal - show all accounts
+      if (user.role === 'admin' || user.role === 'prowincjal') {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('*')
+          .order('number');
+        if (error) throw error;
+        return data || [];
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      // For ekonom - use same logic as AccountCombobox
+      // Get the location identifier first
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', user.location)
+        .single();
+
+      if (locationError) {
+        console.error('Error fetching location data:', locationError);
+        return [];
+      }
+
+      // Get location category from identifier
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+
+      // Get account restrictions for this category
+      let restrictions: any[] = [];
+      if (locationCategory) {
+        const { data: restrictionsData, error: restrictionsError } = await supabase
+          .from('account_category_restrictions')
+          .select('*')
+          .eq('category_prefix', locationCategory)
+          .eq('is_restricted', true);
+
+        if (!restrictionsError) {
+          restrictions = restrictionsData || [];
+        }
+      }
+
+      // Get manually assigned accounts for this location
+      const { data: locationAccountData, error: locationAccountError } = await supabase
+        .from('location_accounts')
+        .select('account_id')
+        .eq('location_id', user.location);
+      
+      if (locationAccountError) {
+        console.error('Error fetching location accounts:', locationAccountError);
+        return [];
+      }
+
+      let accountIds = locationAccountData?.map(la => la.account_id) || [];
+      let allAccountsData: any[] = [];
+
+      // Get manually assigned accounts
+      if (accountIds.length > 0) {
+        const { data: manualAccounts, error } = await supabase
+          .from('accounts')
+          .select('*')
+          .in('id', accountIds)
+          .order('number');
+
+        if (!error && manualAccounts) {
+          allAccountsData = [...manualAccounts];
+        }
+      }
+
+      // If location has an identifier, also include accounts that match the identifier pattern
+      if (locationData?.location_identifier) {
+        const identifier = locationData.location_identifier;
+        
+        // Get all accounts that end with the location identifier
+        const { data: allAccounts, error: allAccountsError } = await supabase
+          .from('accounts')
+          .select('*')
+          .order('number');
+
+        if (!allAccountsError && allAccounts) {
+          const matchingAccounts = allAccounts.filter(account => {
+            // Check if account number ends with the location identifier
+            const accountParts = account.number.split('-');
+            if (accountParts.length < 2) return false;
+            
+            // Get the suffix (everything after the first dash)
+            const suffix = accountParts.slice(1).join('-');
+            return suffix === identifier;
+          });
+
+          // Merge with existing accounts, avoiding duplicates
+          const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
+          const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
+          allAccountsData = [...allAccountsData, ...newAccounts];
+        }
+      }
+
+      // Apply category restrictions - remove accounts that are restricted for this category
+      if (locationCategory && restrictions.length > 0) {
+        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
+        
+        allAccountsData = allAccountsData.filter(account => {
+          // Extract account prefix (only first part before first hyphen)
+          const parts = account.number.split('-');
+          const accountPrefix = parts[0];
+          const isRestricted = restrictedPrefixes.includes(accountPrefix);
+          return !isRestricted;
+        });
+      }
+
+      // Sort by account number
+      allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
+
+      return allAccountsData;
     },
     enabled: !!user?.location
   });
