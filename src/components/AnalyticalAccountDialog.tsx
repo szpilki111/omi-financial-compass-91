@@ -15,6 +15,7 @@ interface AnalyticalAccountDialogProps {
     id: string;
     number: string;
     name: string;
+    type: string;
   };
   nextSuffix: string;
 }
@@ -46,7 +47,8 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
     setIsLoading(true);
 
     try {
-      const { error } = await supabase
+      // First, create the entry in analytical_accounts table
+      const { error: analyticalError } = await supabase
         .from('analytical_accounts')
         .insert({
           parent_account_id: parentAccount.id,
@@ -56,7 +58,20 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
           created_by: user.id
         });
 
-      if (error) throw error;
+      if (analyticalError) throw analyticalError;
+
+      // Then, create the actual account in the accounts table
+      const fullAccountNumber = `${parentAccount.number}-${nextSuffix}`;
+      const { error: accountError } = await supabase
+        .from('accounts')
+        .insert({
+          number: fullAccountNumber,
+          name: name.trim(),
+          type: parentAccount.type,
+          analytical: false // This is a sub-account, not a parent analytical account
+        });
+
+      if (accountError) throw accountError;
 
       toast.success('Konto analityczne zostało utworzone');
       setName('');

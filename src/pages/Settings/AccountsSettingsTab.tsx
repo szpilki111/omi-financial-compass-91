@@ -49,7 +49,6 @@ export const AccountsSettingsTab: React.FC = () => {
 
       // Get location category from identifier
       const locationCategory = locationData?.location_identifier?.split('-')[0];
-      console.log('Location category for restrictions:', locationCategory);
 
       // Get ALL account restrictions, not just for this category
       // The restrictions define globally which accounts should be analytical
@@ -57,8 +56,6 @@ export const AccountsSettingsTab: React.FC = () => {
         .from('account_category_restrictions')
         .select('*')
         .eq('analytical_required', true);
-
-      console.log('Account restrictions found:', restrictionsData);
 
       if (restrictionsError) return [];
       return restrictionsData || [];
@@ -209,6 +206,29 @@ export const AccountsSettingsTab: React.FC = () => {
   // Mutacja do usuwania kont analitycznych
   const deleteMutation = useMutation({
     mutationFn: async (accountId: string) => {
+      // First get the analytical account details to find the corresponding account in accounts table
+      const { data: analyticalAccount, error: fetchError } = await supabase
+        .from('analytical_accounts')
+        .select('*, accounts!analytical_accounts_parent_account_id_fkey(number)')
+        .eq('id', accountId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      if (analyticalAccount) {
+        const parentAccountNumber = analyticalAccount.accounts.number;
+        const fullAccountNumber = `${parentAccountNumber}-${analyticalAccount.number_suffix}`;
+        
+        // Delete from accounts table first
+        const { error: accountDeleteError } = await supabase
+          .from('accounts')
+          .delete()
+          .eq('number', fullAccountNumber);
+        
+        if (accountDeleteError) throw accountDeleteError;
+      }
+
+      // Then delete from analytical_accounts table
       const { error } = await supabase
         .from('analytical_accounts')
         .delete()
@@ -218,6 +238,7 @@ export const AccountsSettingsTab: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['analytical-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['available-accounts'] });
       toast.success('Konto analityczne zostało usunięte');
     },
     onError: (error) => {
@@ -260,16 +281,10 @@ export const AccountsSettingsTab: React.FC = () => {
     const parts = accountNumber.split('-');
     const accountPrefix = parts[0];
     
-    console.log('Checking account:', accountNumber, 'prefix:', accountPrefix);
-    console.log('Available restrictions:', accountRestrictions);
-    
     // Check if this prefix is marked as analytical_required
-    const isRequired = accountRestrictions.some(restriction => 
+    return accountRestrictions.some(restriction => 
       restriction.account_number_prefix === accountPrefix && restriction.analytical_required
     );
-    
-    console.log('Account', accountNumber, 'analytical required:', isRequired);
-    return isRequired;
   };
 
   const handleAddAnalytical = (account: Account) => {
@@ -279,6 +294,7 @@ export const AccountsSettingsTab: React.FC = () => {
 
   const handleDialogSave = () => {
     queryClient.invalidateQueries({ queryKey: ['analytical-accounts'] });
+    queryClient.invalidateQueries({ queryKey: ['available-accounts'] });
   };
 
   const handleDeleteAnalytical = (analyticalAccountId: string) => {
