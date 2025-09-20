@@ -132,10 +132,18 @@ const AccountRestrictionsManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle>Zarządzanie ograniczeniami dostępu do kont</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii.
-            Kategorie są określane na podstawie pierwszej części identyfikatora placówki.
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii.
+              Kategorie są określane na podstawie pierwszej części identyfikatora placówki.
+            </p>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Uwaga:</strong> To są ograniczenia dostępu do kont. 
+                Aby zarządzać właściwościami kont (np. oznaczać jako analityczne), przejdź do zakładki <strong>"Zarządzanie kontami"</strong>.
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -152,6 +160,8 @@ const AccountRestrictionsManagement = () => {
                   ))}
                   <TableHead className="text-center min-w-[150px]">
                     Analityka obowiązkowa
+                    <br />
+                    <span className="text-xs text-muted-foreground">(tylko w zarządzaniu kontami)</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -173,12 +183,12 @@ const AccountRestrictionsManagement = () => {
                        </TableCell>
                      ))}
                      <TableCell className="text-center">
-                       <Checkbox
-                         checked={false}
-                         onCheckedChange={() => {}}
-                         disabled={true}
-                       />
-                     </TableCell>
+                        <div className="flex items-center justify-center">
+                          <span className="text-xs text-muted-foreground">
+                            N/A
+                          </span>
+                        </div>
+                      </TableCell>
                    </TableRow>
                 ))}
               </TableBody>
