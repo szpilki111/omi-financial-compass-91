@@ -49,14 +49,16 @@ export const AccountsSettingsTab: React.FC = () => {
 
       // Get location category from identifier
       const locationCategory = locationData?.location_identifier?.split('-')[0];
+      console.log('Location category for restrictions:', locationCategory);
 
-      if (!locationCategory) return [];
-
-      // Get account restrictions for this category
+      // Get ALL account restrictions, not just for this category
+      // The restrictions define globally which accounts should be analytical
       const { data: restrictionsData, error: restrictionsError } = await supabase
         .from('account_category_restrictions')
         .select('*')
-        .eq('category_prefix', locationCategory);
+        .eq('analytical_required', true);
+
+      console.log('Account restrictions found:', restrictionsData);
 
       if (restrictionsError) return [];
       return restrictionsData || [];
@@ -258,10 +260,16 @@ export const AccountsSettingsTab: React.FC = () => {
     const parts = accountNumber.split('-');
     const accountPrefix = parts[0];
     
+    console.log('Checking account:', accountNumber, 'prefix:', accountPrefix);
+    console.log('Available restrictions:', accountRestrictions);
+    
     // Check if this prefix is marked as analytical_required
-    return accountRestrictions.some(restriction => 
+    const isRequired = accountRestrictions.some(restriction => 
       restriction.account_number_prefix === accountPrefix && restriction.analytical_required
     );
+    
+    console.log('Account', accountNumber, 'analytical required:', isRequired);
+    return isRequired;
   };
 
   const handleAddAnalytical = (account: Account) => {
