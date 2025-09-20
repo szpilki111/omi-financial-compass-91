@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AccountsSettingsTab } from './AccountsSettingsTab';
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -124,38 +126,51 @@ const SettingsPage = () => {
           <p className="text-gray-600">Personalizuj wygląd i zachowanie aplikacji</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Wygląd aplikacji</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="windows98-style" className="text-base">
-                  Styl Windows 98
-                </Label>
-                <div className="text-sm text-gray-500">
-                  Zmień wygląd aplikacji na styl retro Windows 98
+        <Tabs defaultValue="appearance" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="appearance">Wygląd</TabsTrigger>
+            <TabsTrigger value="accounts">Konta</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="appearance">
+            <Card>
+              <CardHeader>
+                <CardTitle>Wygląd aplikacji</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="windows98-style" className="text-base">
+                      Styl Windows 98
+                    </Label>
+                    <div className="text-sm text-gray-500">
+                      Zmień wygląd aplikacji na styl retro Windows 98
+                    </div>
+                  </div>
+                  <Switch
+                    id="windows98-style"
+                    checked={settings?.windows98_style || false}
+                    onCheckedChange={handleStyleToggle}
+                    disabled={updateSettingsMutation.isPending}
+                  />
                 </div>
-              </div>
-              <Switch
-                id="windows98-style"
-                checked={settings?.windows98_style || false}
-                onCheckedChange={handleStyleToggle}
-                disabled={updateSettingsMutation.isPending}
-              />
-            </div>
-            
-            <Separator />
-            
-            <div className="text-sm text-gray-500">
-              <p>
-                Styl Windows 98 zmieni kolory i wygląd interfejsu na bardziej retro.
-                Zmiana zostanie zastosowana po odświeżeniu strony.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+                
+                <Separator />
+                
+                <div className="text-sm text-gray-500">
+                  <p>
+                    Styl Windows 98 zmieni kolory i wygląd interfejsu na bardziej retro.
+                    Zmiana zostanie zastosowana po odświeżeniu strony.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="accounts">
+            <AccountsSettingsTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );
