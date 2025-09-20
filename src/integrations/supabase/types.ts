@@ -17,6 +17,7 @@ export type Database = {
       account_category_restrictions: {
         Row: {
           account_number_prefix: string
+          analytical_required: boolean
           category_prefix: string
           created_at: string
           id: string
@@ -25,6 +26,7 @@ export type Database = {
         }
         Insert: {
           account_number_prefix: string
+          analytical_required?: boolean
           category_prefix: string
           created_at?: string
           id?: string
@@ -33,6 +35,7 @@ export type Database = {
         }
         Update: {
           account_number_prefix?: string
+          analytical_required?: boolean
           category_prefix?: string
           created_at?: string
           id?: string

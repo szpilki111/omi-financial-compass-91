@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Edit, Save, X, Upload, Trash2 } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
@@ -23,7 +22,6 @@ interface Account {
   number: string;
   name: string;
   type: string;
-  analytical: boolean;
 }
 
 interface EditingAccount {
@@ -31,7 +29,6 @@ interface EditingAccount {
   number: string;
   name: string;
   type: string;
-  analytical: boolean;
 }
 
 const AccountsManagement = () => {
@@ -67,7 +64,7 @@ const AccountsManagement = () => {
     queryFn: async () => {
       let query = supabase
         .from('accounts')
-        .select('id, number, name, type, analytical')
+        .select('id, number, name, type')
         .order('number');
       
       if (debouncedSearchQuery.trim()) {
@@ -167,8 +164,7 @@ const AccountsManagement = () => {
       id: account.id,
       number: account.number,
       name: account.name,
-      type: account.type,
-      analytical: account.analytical
+      type: account.type
     });
   };
 
@@ -428,7 +424,6 @@ const AccountsManagement = () => {
                     <TableHead>Numer konta</TableHead>
                     <TableHead>Nazwa konta</TableHead>
                     <TableHead>Typ</TableHead>
-                    <TableHead>Analityczne</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -476,26 +471,6 @@ const AccountsManagement = () => {
                           />
                         ) : (
                           account.type
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingAccountId === account.id ? (
-                          <Switch
-                            checked={editingAccount?.analytical || false}
-                            onCheckedChange={(checked) => updateEditingAccount('analytical', checked)}
-                          />
-                        ) : (
-                          <Switch
-                            checked={account.analytical}
-                            onCheckedChange={(checked) => {
-                              // Update analytical status immediately
-                              updateAccountMutation.mutate({
-                                accountId: account.id,
-                                updatedAccount: { analytical: checked }
-                              });
-                            }}
-                            disabled={updateAccountMutation.isPending}
-                          />
                         )}
                       </TableCell>
                       <TableCell className="text-right">
