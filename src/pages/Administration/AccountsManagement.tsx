@@ -494,6 +494,7 @@ const AccountsManagement = () => {
                                 updatedAccount: { analytical: checked }
                               });
                             }}
+                            disabled={updateAccountMutation.isPending}
                           />
                         )}
                       </TableCell>
