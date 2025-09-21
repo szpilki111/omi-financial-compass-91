@@ -224,14 +224,16 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
         if (!allAccountsError && allAccounts) {
           const matchingAccounts = allAccounts.filter(account => {
-            // Check if account number ends with the location identifier
+            // Check if account number starts with the location identifier after the first dash
             // Format: "functional_number-identifier" where identifier can be "X" or "X-Y"
+            // Also match accounts with additional suffixes like "100-5-3-1" when identifier is "5-3"
             const accountParts = account.number.split('-');
             if (accountParts.length < 2) return false;
             
             // Get the suffix (everything after the first dash)
             const suffix = accountParts.slice(1).join('-');
-            return suffix === identifier;
+            // Match exact identifier or identifier with additional parts
+            return suffix === identifier || suffix.startsWith(identifier + '-');
           });
 
           // Merge with existing accounts, avoiding duplicates

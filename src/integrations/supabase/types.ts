@@ -17,6 +17,7 @@ export type Database = {
       account_category_restrictions: {
         Row: {
           account_number_prefix: string
+          analytical_required: boolean
           category_prefix: string
           created_at: string
           id: string
@@ -25,6 +26,7 @@ export type Database = {
         }
         Insert: {
           account_number_prefix: string
+          analytical_required?: boolean
           category_prefix: string
           created_at?: string
           id?: string
@@ -33,6 +35,7 @@ export type Database = {
         }
         Update: {
           account_number_prefix?: string
+          analytical_required?: boolean
           category_prefix?: string
           created_at?: string
           id?: string
@@ -78,6 +81,7 @@ export type Database = {
       }
       accounts: {
         Row: {
+          analytical: boolean
           created_at: string
           id: string
           name: string
@@ -86,6 +90,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analytical?: boolean
           created_at?: string
           id?: string
           name: string
@@ -94,6 +99,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analytical?: boolean
           created_at?: string
           id?: string
           name?: string
@@ -102,6 +108,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      analytical_accounts: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          location_id: string
+          name: string
+          number_suffix: string
+          parent_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          location_id: string
+          name: string
+          number_suffix: string
+          parent_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          location_id?: string
+          name?: string
+          number_suffix?: string
+          parent_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytical_accounts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytical_accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       documents: {
         Row: {

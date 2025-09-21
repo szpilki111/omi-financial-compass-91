@@ -28,6 +28,7 @@ interface AccountRestriction {
   account_number_prefix: string;
   category_prefix: string;
   is_restricted: boolean;
+  analytical_required: boolean;
 }
 
 const AccountRestrictionsManagement = () => {
@@ -85,17 +86,19 @@ const AccountRestrictionsManagement = () => {
 
   // Update restriction mutation
   const updateRestrictionMutation = useMutation({
-    mutationFn: async ({ accountPrefix, categoryPrefix, isRestricted }: {
+    mutationFn: async ({ accountPrefix, categoryPrefix, isRestricted, analyticalRequired }: {
       accountPrefix: string;
       categoryPrefix: string;
-      isRestricted: boolean;
+      isRestricted?: boolean;
+      analyticalRequired?: boolean;
     }) => {
       const { error } = await supabase
         .from('account_category_restrictions')
         .upsert({
           account_number_prefix: accountPrefix,
           category_prefix: categoryPrefix,
-          is_restricted: isRestricted
+          ...(isRestricted !== undefined && { is_restricted: isRestricted }),
+          ...(analyticalRequired !== undefined && { analytical_required: analyticalRequired })
         }, {
           onConflict: 'account_number_prefix,category_prefix'
         });
@@ -116,11 +119,22 @@ const AccountRestrictionsManagement = () => {
     updateRestrictionMutation.mutate({ accountPrefix, categoryPrefix, isRestricted });
   };
 
+  const handleAnalyticalChange = (accountPrefix: string, analyticalRequired: boolean) => {
+    updateRestrictionMutation.mutate({ accountPrefix, categoryPrefix: 'analytical', analyticalRequired });
+  };
+
   const isRestricted = (accountPrefix: string, categoryPrefix: string): boolean => {
     const restriction = restrictions?.find(r => 
       r.account_number_prefix === accountPrefix && r.category_prefix === categoryPrefix
     );
     return restriction?.is_restricted || false;
+  };
+
+  const isAnalyticalRequired = (accountPrefix: string): boolean => {
+    const restriction = restrictions?.find(r => 
+      r.account_number_prefix === accountPrefix && r.category_prefix === 'analytical'
+    );
+    return restriction?.analytical_required || false;
   };
 
   if (accountsLoading || restrictionsLoading) {
@@ -132,10 +146,13 @@ const AccountRestrictionsManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle>Zarządzanie ograniczeniami dostępu do kont</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii.
-            Kategorie są określane na podstawie pierwszej części identyfikatora placówki.
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii.
+              Kategorie są określane na podstawie pierwszej części identyfikatora placówki.
+              W kolumnie "Analityka obowiązkowa" można oznaczyć które konta wymagają obowiązkowego tworzenia podkont analitycznych.
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -151,7 +168,8 @@ const AccountRestrictionsManagement = () => {
                     </TableHead>
                   ))}
                   <TableHead className="text-center min-w-[150px]">
-                    Analityka obowiązkowa
+                    Czy konto analityczne?
+                    <br />
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -173,12 +191,14 @@ const AccountRestrictionsManagement = () => {
                        </TableCell>
                      ))}
                      <TableCell className="text-center">
-                       <Checkbox
-                         checked={false}
-                         onCheckedChange={() => {}}
-                         disabled={true}
-                       />
-                     </TableCell>
+                        <Checkbox
+                          checked={isAnalyticalRequired(accountPrefix)}
+                          onCheckedChange={(checked) => 
+                            handleAnalyticalChange(accountPrefix, !!checked)
+                          }
+                          disabled={updateRestrictionMutation.isPending}
+                        />
+                      </TableCell>
                    </TableRow>
                 ))}
               </TableBody>
