@@ -148,13 +148,15 @@ export const AccountsSettingsTab: React.FC = () => {
 
         if (!allAccountsError && allAccounts) {
           const matchingAccounts = allAccounts.filter(account => {
-            // Check if account number ends with the location identifier
+            // Check if account number starts with the location identifier after the first dash
+            // Also match accounts with additional suffixes like "100-5-3-1" when identifier is "5-3"
             const accountParts = account.number.split('-');
             if (accountParts.length < 2) return false;
             
             // Get the suffix (everything after the first dash)
             const suffix = accountParts.slice(1).join('-');
-            return suffix === identifier;
+            // Match exact identifier or identifier with additional parts
+            return suffix === identifier || suffix.startsWith(identifier + '-');
           });
 
           // Merge with existing accounts, avoiding duplicates
