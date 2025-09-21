@@ -119,34 +119,54 @@ const AccountsManagement = () => {
   // Import accounts from CSV
   const importAccountsMutation = useMutation({
     mutationFn: async (accounts: { number: string; name: string }[]) => {
-      // Najpierw usuń wszystkie obecne konta
-      const { error: deleteError } = await supabase
+      // Pobierz istniejące konta z bazy danych
+      const { data: existingAccounts, error: fetchError } = await supabase
         .from('accounts')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (using impossible condition to delete all)
+        .select('number');
 
-      if (deleteError) throw deleteError;
+      if (fetchError) throw fetchError;
 
-      // Następnie dodaj nowe konta
-      const accountsToInsert = accounts.map(account => ({
-        number: account.number,
-        name: account.name,
-        type: 'Aktywny' // Domyślny typ
-      }));
+      const existingNumbers = new Set(existingAccounts?.map(acc => acc.number) || []);
+
+      // Filtruj konta - dodaj tylko te, które nie istnieją w bazie
+      const accountsToInsert = accounts
+        .filter(account => !existingNumbers.has(account.number))
+        .map(account => ({
+          number: account.number,
+          name: account.name,
+          type: 'Aktywny' // Domyślny typ
+        }));
+
+      if (accountsToInsert.length === 0) {
+        throw new Error('Wszystkie konta z pliku już istnieją w systemie.');
+      }
 
       const { error: insertError } = await supabase
         .from('accounts')
         .insert(accountsToInsert);
 
       if (insertError) throw insertError;
+
+      return {
+        imported: accountsToInsert.length,
+        skipped: accounts.length - accountsToInsert.length
+      };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       setIsImporting(false);
-      toast({
-        title: "Sukces",
-        description: "Konta zostały pomyślnie zaimportowane.",
-      });
+      
+      if (result.skipped > 0) {
+        toast({
+          title: "Import zakończony",
+          description: `Zaimportowano ${result.imported} nowych kont. Pominięto ${result.skipped} kont, które już istnieją.`,
+        });
+      } else {
+        toast({
+          title: "Sukces",
+          description: `Zaimportowano ${result.imported} nowych kont.`,
+        });
+      }
     },
     onError: (error: Error) => {
       setIsImporting(false);
