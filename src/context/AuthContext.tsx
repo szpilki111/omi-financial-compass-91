@@ -217,23 +217,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .gte('last_attempt', fifteenMinutesAgo)
           .maybeSingle();
 
-        const failureCount = recentFailures?.attempt_count || 0;
-        console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
+      const failureCount = recentFailures?.attempt_count || 0;
+      console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
 
-        if (failureCount >= 5 && userId) {
-          console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
-          await supabase.functions.invoke('block-user', {
-            body: { user_id: userId }
-          });
-          
-          toast({
-            title: "Konto zablokowane",
-            description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return false;
-        }
+      if (failureCount >= 5 && userId) {
+        console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
+        
+        // Bezpośrednio oznacz użytkownika jako zablokowanego w tabeli profiles
+        await supabase
+          .from('profiles')
+          .update({ blocked: true })
+          .eq('id', userId);
+        
+        toast({
+          title: "Konto zablokowane",
+          description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return false;
+      }
         
         // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
         let errorMessage = error.message;
