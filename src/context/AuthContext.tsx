@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (failedLogin) {
           // Email już istnieje - zwiększ licznik
           
-            console.log('zwiekszam licznik')
+            console.log('zwiekszam licznik auth')
           await supabase
             .from('failed_logins')
             .update({ 
@@ -210,6 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log(`Zwiększono licznik błędnych logowań dla ${email} do ${failedLogin.attempt_count + 1}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
+            console.log('zwiekszam licznik else')
           await supabase
             .from('failed_logins')
             .insert({ 
