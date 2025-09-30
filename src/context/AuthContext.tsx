@@ -188,66 +188,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Login error from Supabase:', error);
         
-        // Zapisz nieudane logowanie TYLKO jeśli znaleźliśmy użytkownika
-        if (userId) {
-          console.log('Zapisywanie nieudanej próby logowania dla userId:', userId);
-          
-          // Użyj edge function z service role key, aby ominąć RLS
-          try {
-            await supabase.functions.invoke('log-login-event', {
-              body: {
-                user_id: userId,
-                success: false,
-                error_message: error.message,
-              }
-            });
-            console.log('Nieudana próba logowania zapisana');
-          } catch (logError) {
-            console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
-          }
+        // Zapisz nieudane logowanie ZAWSZE (nawet dla nieistniejących użytkowników)
+        console.log('Zapisywanie nieudanej próby logowania dla email:', email, 'userId:', userId);
+        
+        // Użyj edge function z service role key, aby ominąć RLS
+        try {
+          await supabase.functions.invoke('log-login-event', {
+            body: {
+              user_id: userId || null,
+              email: email,
+              success: false,
+              error_message: error.message,
+            }
+          });
+          console.log('Nieudana próba logowania zapisana');
+        } catch (logError) {
+          console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
+        }
 
-          // Poczekaj chwilę, aby event został zapisany
-          await new Promise(resolve => setTimeout(resolve, 500));
+        // Poczekaj chwilę, aby event został zapisany
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-          // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
-          const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-          
-          // Użyj edge function do sprawdzenia, bo RLS może blokować dostęp
-          try {
-            const { data: countData } = await supabase.functions.invoke('check-failed-logins', {
-              body: {
-                user_id: userId,
-                since: fifteenMinutesAgo
-              }
-            });
+        // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        
+        // Użyj edge function do sprawdzenia - sprawdź po user_id LUB email
+        try {
+          const { data: countData } = await supabase.functions.invoke('check-failed-logins', {
+            body: {
+              user_id: userId || null,
+              email: email,
+              since: fifteenMinutesAgo
+            }
+          });
 
-            const failureCount = countData?.count || 0;
-            console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
+          const failureCount = countData?.count || 0;
+          console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
 
-            // Zablokuj konto po 5 nieudanych próbach
-            if (failureCount >= 5) {
-              console.log('⛔ BLOKOWANIE KONTA - przekroczono limit 5 nieudanych prób');
-              
-              // Użyj edge function do zablokowania konta
+          // Zablokuj konto po 5 nieudanych próbach (tylko jeśli użytkownik istnieje)
+          if (failureCount >= 5) {
+            console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
+            
+            // Użyj edge function do zablokowania konta (tylko jeśli user_id istnieje)
+            if (userId) {
               await supabase.functions.invoke('block-user', {
                 body: {
                   user_id: userId
                 }
               });
-              
-              toast({
-                title: "Konto zablokowane",
-                description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
-                variant: "destructive",
-              });
-              setIsLoading(false);
-              return false;
             }
-          } catch (countError) {
-            console.error('Błąd podczas sprawdzania historii logowań:', countError);
+            
+            toast({
+              title: userId ? "Konto zablokowane" : "Zbyt wiele nieudanych prób",
+              description: userId 
+                ? "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem."
+                : "Zbyt wiele nieudanych prób logowania z tego adresu email. Spróbuj ponownie później.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return false;
           }
-        } else {
-          console.log('Nie znaleziono użytkownika o emailu:', email);
+        } catch (countError) {
+          console.error('Błąd podczas sprawdzania historii logowań:', countError);
         }
         
         // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
@@ -272,6 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.functions.invoke('log-login-event', {
             body: {
               user_id: data.user.id,
+              email: email,
               success: true,
             }
           });

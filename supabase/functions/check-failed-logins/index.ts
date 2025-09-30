@@ -17,24 +17,32 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, since } = await req.json();
+    const { user_id, email, since } = await req.json();
 
-    if (!user_id || !since) {
+    if ((!user_id && !email) || !since) {
       return new Response(
-        JSON.stringify({ error: 'Missing user_id or since parameter' }),
+        JSON.stringify({ error: 'Missing user_id/email or since parameter' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Checking failed logins for user:', user_id, 'since:', since);
+    console.log('Checking failed logins for:', { user_id, email, since });
 
-    // Count failed login attempts
-    const { data, error, count } = await supabase
+    // Count failed login attempts by user_id OR email
+    let query = supabase
       .from('user_login_events')
       .select('id', { count: 'exact', head: false })
-      .eq('user_id', user_id)
       .eq('success', false)
       .gte('created_at', since);
+
+    // Filter by user_id if available, otherwise by email
+    if (user_id) {
+      query = query.eq('user_id', user_id);
+    } else if (email) {
+      query = query.eq('email', email);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
       console.error('Error counting failed logins:', error);

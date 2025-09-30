@@ -17,7 +17,8 @@ import { CheckCircle2, XCircle, Search } from 'lucide-react';
 
 interface LoginEvent {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  email: string;
   success: boolean;
   error_message: string | null;
   ip: string | null;
@@ -46,19 +47,24 @@ const LoginEventsManagement = () => {
       
       if (eventsError) throw eventsError;
 
-      // Pobierz profile użytkowników
-      const userIds = [...new Set(events.map(e => e.user_id))];
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, name, email, role')
-        .in('id', userIds);
+      // Pobierz profile użytkowników (tylko dla tych z user_id)
+      const userIds = [...new Set(events.filter(e => e.user_id).map(e => e.user_id!))];
+      let profiles = [];
       
-      if (profilesError) throw profilesError;
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, name, email, role')
+          .in('id', userIds);
+        
+        if (profilesError) throw profilesError;
+        profiles = profilesData || [];
+      }
 
       // Połącz dane
       const eventsWithProfiles = events.map(event => ({
         ...event,
-        profile: profiles.find(p => p.id === event.user_id)
+        profile: event.user_id ? profiles.find(p => p.id === event.user_id) : undefined
       }));
 
       return eventsWithProfiles as LoginEvent[];
@@ -81,6 +87,7 @@ const LoginEventsManagement = () => {
     const matchesSearch = 
       event.profile?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.profile?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.ip?.includes(searchTerm);
     
     const matchesStatus = 
@@ -155,8 +162,8 @@ const LoginEventsManagement = () => {
                         second: '2-digit'
                       })}
                     </TableCell>
-                    <TableCell>{event.profile?.name || 'Nieznany'}</TableCell>
-                    <TableCell className="text-sm">{event.profile?.email || '-'}</TableCell>
+                    <TableCell>{event.profile?.name || 'Nieznany użytkownik'}</TableCell>
+                    <TableCell className="text-sm">{event.email || event.profile?.email || '-'}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
                         {event.profile?.role || '-'}

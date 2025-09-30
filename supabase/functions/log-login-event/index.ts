@@ -17,11 +17,11 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, success, error_message } = await req.json();
+    const { user_id, email, success, error_message } = await req.json();
 
-    if (!user_id) {
+    if (!email) {
       return new Response(
-        JSON.stringify({ error: 'Missing user_id' }),
+        JSON.stringify({ error: 'Missing email' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -30,13 +30,14 @@ Deno.serve(async (req) => {
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
     const user_agent = req.headers.get('user-agent') || null;
 
-    console.log('Logging login event:', { user_id, success, error_message, ip, user_agent });
+    console.log('Logging login event:', { user_id, email, success, error_message, ip, user_agent });
 
     // Insert login event
     const { error: insertError } = await supabase
       .from('user_login_events')
       .insert({
-        user_id,
+        user_id: user_id || null,
+        email,
         success: success || false,
         error_message: error_message || null,
         ip,
