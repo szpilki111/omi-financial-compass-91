@@ -145,8 +145,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Login function using Supabase auth
   const login = async (email: string, password: string): Promise<boolean> => {
-    let userId: string | null = null;
-    
     try {
       setIsLoading(true);
       console.log('Attempting login for:', email);
@@ -158,16 +156,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('email', email)
         .maybeSingle();
 
-      userId = profileData?.id || null;
+      const userId = profileData?.id || null;
 
       if (profileData?.blocked) {
-        await supabase.functions.invoke('log-login-event', {
-          body: {
-            user_id: profileData.id,
-            success: false,
-            error_message: 'Konto zablokowane',
-          }
-        });
+        if (userId) {
+          await supabase.functions.invoke('log-login-event', {
+            body: {
+              user_id: userId,
+              success: false,
+              error_message: 'Konto zablokowane',
+            }
+          });
+        }
         
         toast({
           title: "Konto zablokowane",
@@ -188,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Login error from Supabase:', error);
         
-        // Zapisz nieudane logowanie
+        // Zapisz nieudane logowanie TYLKO jeśli znaleźliśmy użytkownika
         if (userId) {
           await supabase.functions.invoke('log-login-event', {
             body: {
@@ -207,8 +207,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('success', false)
             .gte('created_at', fifteenMinutesAgo);
 
+          console.log(`Nieudane próby w ostatnich 15 min: ${recentFailures?.length || 0}`);
+
           // Zablokuj konto po 5 nieudanych próbach
           if (recentFailures && recentFailures.length >= 5) {
+            console.log('BLOKOWANIE KONTA - przekroczono limit nieudanych prób');
             await supabase
               .from('profiles')
               .update({ blocked: true })
@@ -216,7 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             toast({
               title: "Konto zablokowane",
-              description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z administratorem.",
+              description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
               variant: "destructive",
             });
             setIsLoading(false);
@@ -248,7 +251,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
         
-        // Profil zostanie załadowany przez onAuthStateChange
         console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
         return true;
       }
@@ -257,21 +259,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     } catch (error: any) {
       console.error('Unexpected login error:', error);
-      
-      // Zapisz błąd logowania jeśli znamy userId
-      if (userId) {
-        try {
-          await supabase.functions.invoke('log-login-event', {
-            body: {
-              user_id: userId,
-              success: false,
-              error_message: error.message || 'Nieoczekiwany błąd',
-            }
-          });
-        } catch (logError) {
-          console.error('Error logging login event:', logError);
-        }
-      }
       
       toast({
         title: "Błąd logowania",

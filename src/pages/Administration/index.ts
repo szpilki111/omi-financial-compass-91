@@ -5,3 +5,4 @@ export { default as LocationAccountsManagement } from './LocationAccountsManagem
 export { default as UsersManagement } from './UsersManagement';
 export { default as AccountsManagement } from './AccountsManagement';
 export { default as ErrorReportsManagement } from './ErrorReportsManagement';
+export { default as LoginEventsManagement } from './LoginEventsManagement';
