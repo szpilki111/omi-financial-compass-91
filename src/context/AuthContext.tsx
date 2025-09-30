@@ -192,58 +192,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userId) {
           console.log('Zapisywanie nieudanej próby logowania dla userId:', userId);
           
-          // Zapisz bezpośrednio do bazy zamiast przez edge function
-          const { error: logError } = await supabase
-            .from('user_login_events')
-            .insert({
-              user_id: userId,
-              success: false,
-              error_message: error.message,
-              ip: null,
-              user_agent: navigator.userAgent
+          // Użyj edge function z service role key, aby ominąć RLS
+          try {
+            await supabase.functions.invoke('log-login-event', {
+              body: {
+                user_id: userId,
+                success: false,
+                error_message: error.message,
+              }
             });
-          
-          if (logError) {
-            console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
-          } else {
             console.log('Nieudana próba logowania zapisana');
+          } catch (logError) {
+            console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
           }
+
+          // Poczekaj chwilę, aby event został zapisany
+          await new Promise(resolve => setTimeout(resolve, 500));
 
           // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
           const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-          const { data: recentFailures, error: countError } = await supabase
-            .from('user_login_events')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('success', false)
-            .gte('created_at', fifteenMinutesAgo);
-
-          if (countError) {
-            console.error('Błąd podczas pobierania historii logowań:', countError);
-          }
-
-          const failureCount = recentFailures?.length || 0;
-          console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
-
-          // Zablokuj konto po 5 nieudanych próbach
-          if (failureCount >= 5) {
-            console.log('⛔ BLOKOWANIE KONTA - przekroczono limit 5 nieudanych prób');
-            const { error: blockError } = await supabase
-              .from('profiles')
-              .update({ blocked: true })
-              .eq('id', userId);
-            
-            if (blockError) {
-              console.error('Błąd podczas blokowania konta:', blockError);
-            }
-            
-            toast({
-              title: "Konto zablokowane",
-              description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
-              variant: "destructive",
+          
+          // Użyj edge function do sprawdzenia, bo RLS może blokować dostęp
+          try {
+            const { data: countData } = await supabase.functions.invoke('check-failed-logins', {
+              body: {
+                user_id: userId,
+                since: fifteenMinutesAgo
+              }
             });
-            setIsLoading(false);
-            return false;
+
+            const failureCount = countData?.count || 0;
+            console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
+
+            // Zablokuj konto po 5 nieudanych próbach
+            if (failureCount >= 5) {
+              console.log('⛔ BLOKOWANIE KONTA - przekroczono limit 5 nieudanych prób');
+              
+              // Użyj edge function do zablokowania konta
+              await supabase.functions.invoke('block-user', {
+                body: {
+                  user_id: userId
+                }
+              });
+              
+              toast({
+                title: "Konto zablokowane",
+                description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
+                variant: "destructive",
+              });
+              setIsLoading(false);
+              return false;
+            }
+          } catch (countError) {
+            console.error('Błąd podczas sprawdzania historii logowań:', countError);
           }
         } else {
           console.log('Nie znaleziono użytkownika o emailu:', email);
@@ -265,19 +266,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        // Zapisz udane logowanie bezpośrednio do bazy
+        // Zapisz udane logowanie używając edge function
         console.log('Zapisywanie udanego logowania dla userId:', data.user.id);
-        const { error: logError } = await supabase
-          .from('user_login_events')
-          .insert({
-            user_id: data.user.id,
-            success: true,
-            error_message: null,
-            ip: null,
-            user_agent: navigator.userAgent
+        try {
+          await supabase.functions.invoke('log-login-event', {
+            body: {
+              user_id: data.user.id,
+              success: true,
+            }
           });
-        
-        if (logError) {
+        } catch (logError) {
           console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
         }
         
