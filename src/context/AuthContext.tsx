@@ -208,10 +208,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('⛔ AUTH: BLOKOWANIE UŻYTKOWNIKA - przekroczono 5 prób!');
             const blockResult = await supabase
               .from('profiles')
-              .update({ 
-                blocked: true
-              })
-              .eq('email', email);
+              .update({ blocked: true })
+              .eq('email', normalizedEmail);
+            
+            console.log('Wynik blokowania:', {
+              error: blockResult.error,
+              count: blockResult.count,
+              status: blockResult.status,
+              data: blockResult.data
+            });
+            
+            if (blockResult.error) {
+              console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
+              throw new Error('Nie udało się zablokować konta');
+            } else if (blockResult.count === 0) {
+              console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
+            } else {
+              console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
+            }
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
           }
@@ -247,10 +261,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
         
         // Bezpośrednio oznacz użytkownika jako zablokowanego w tabeli profiles
-        await supabase
+        const blockResult = await supabase
           .from('profiles')
           .update({ blocked: true })
-          .eq('id', userId);
+          .eq('email', normalizedEmail);
+        
+        console.log('Wynik blokowania:', {
+          error: blockResult.error,
+          count: blockResult.count,
+          status: blockResult.status,
+          data: blockResult.data
+        });
+        
+        if (blockResult.error) {
+          console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
+          throw new Error('Nie udało się zablokować konta');
+        } else if (blockResult.count === 0) {
+          console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
+        } else {
+          console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
+        }
         
         toast({
           title: "Konto zablokowane",
