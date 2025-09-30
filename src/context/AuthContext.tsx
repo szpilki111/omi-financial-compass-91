@@ -161,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (profileData?.blocked) {
         toast({
           title: "Konto zablokowane",
-          description: "Przekroczyłeś limit logowań. Poproś prowincjała o odblokowanie.",
+          description: "Twoje konto zostało zablokowane. Skontaktuj się z administratorem.",
           variant: "destructive",
         });
         setIsLoading(false);
@@ -223,23 +223,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (failureCount >= 5 && userId) {
           console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
-          
-          // Bezpośrednio ustaw blocked=true w profilu
-          await supabase
-            .from('profiles')
-            .update({ blocked: true })
-            .eq('id', userId);
-          
-          // Dodatkowo wywołaj edge function jako backup
           await supabase.functions.invoke('block-user', {
             body: { user_id: userId }
           });
           
-        toast({
-          title: "Konto zablokowane",
-          description: "Przekroczyłeś limit logowań. Poproś prowincjała o odblokowanie.",
-          variant: "destructive",
-        });
+          toast({
+            title: "Konto zablokowane",
+            description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
+            variant: "destructive",
+          });
           setIsLoading(false);
           return false;
         }
@@ -271,7 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.auth.signOut();
           toast({
             title: "Konto zablokowane",
-            description: "Przekroczyłeś limit logowań. Poproś prowincjała o odblokowanie.",
+            description: "Twoje konto zostało zablokowane. Skontaktuj się z prowincjałem.",
             variant: "destructive",
           });
           setIsLoading(false);
