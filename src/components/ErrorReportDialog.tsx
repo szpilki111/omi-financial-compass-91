@@ -50,14 +50,15 @@ export const ErrorReportDialog = ({
       if (!user) throw new Error("Not authenticated");
 
       const userId = user.id;
-      const timestamp = Date.now();
+      const now = new Date();
+      const dateTimeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
       let screenshotUrl = null;
       const additionalFileUrls: string[] = [];
 
       // Upload auto screenshot if exists
       if (autoScreenshot) {
         const blob = await (await fetch(autoScreenshot)).blob();
-        const screenshotPath = `${userId}/${timestamp}_auto_screenshot.png`;
+        const screenshotPath = `${userId}/${dateTimeString}_auto_screenshot.png`;
         
         const { error: uploadError } = await supabase.storage
           .from("error-reports")
@@ -72,7 +73,7 @@ export const ErrorReportDialog = ({
       // Upload additional files
       for (let i = 0; i < additionalFiles.length; i++) {
         const file = additionalFiles[i];
-        const filePath = `${userId}/${timestamp}_${i}_${file.name}`;
+        const filePath = `${userId}/${dateTimeString}_${file.name}`;
         
         const { error: uploadError } = await supabase.storage
           .from("error-reports")
