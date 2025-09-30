@@ -200,6 +200,13 @@ const deleteUserMutation = useMutation({
 // Mutation to toggle user blocked status
 const toggleUserBlockedMutation = useMutation({
   mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
+    // Pobierz email użytkownika
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
     const { error } = await supabase
       .from('profiles')
       .update({ blocked })
@@ -208,12 +215,18 @@ const toggleUserBlockedMutation = useMutation({
     if (error) throw error;
     
     // Jeśli odblokowujemy użytkownika, wyczyść historię nieudanych logowań
-    if (!blocked) {
+    if (!blocked && userProfile) {
       await supabase
         .from('user_login_events')
         .delete()
         .eq('user_id', userId)
         .eq('success', false);
+      
+      // Wyczyść także tabelę failed_logins
+      await supabase
+        .from('failed_logins')
+        .delete()
+        .eq('email', userProfile.email);
     }
   },
   onSuccess: (_, variables) => {
