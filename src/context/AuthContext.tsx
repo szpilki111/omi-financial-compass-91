@@ -194,16 +194,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             })
             .eq('email', email);
           
-          const { data: failedLoginsNumber } = await supabase
+          const { data: failedLoginsData } = await supabase
             .from('failed_logins')
             .select('attempt_count')
             .eq('email', email)
+            .maybeSingle();
 
-          if (failedLoginsNumber > 4) {
+          if (failedLoginsData && failedLoginsData.attempt_count > 4) {
             await supabase
               .from('profiles')
               .update({ 
-                blocked: 'TRUE'
+                blocked: true
               })
               .eq('email', email);
           }
