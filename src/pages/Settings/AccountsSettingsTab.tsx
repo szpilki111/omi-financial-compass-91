@@ -208,10 +208,10 @@ export const AccountsSettingsTab: React.FC = () => {
   // Mutacja do usuwania kont analitycznych
   const deleteMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      // First get the analytical account details to find the corresponding account in accounts table
+      // First get the analytical account details
       const { data: analyticalAccount, error: fetchError } = await supabase
         .from('analytical_accounts')
-        .select('*, accounts!analytical_accounts_parent_account_id_fkey(number)')
+        .select('parent_account_id, number_suffix')
         .eq('id', accountId)
         .single();
 
@@ -220,33 +220,50 @@ export const AccountsSettingsTab: React.FC = () => {
         throw fetchError;
       }
 
-      if (analyticalAccount) {
-        const parentAccountNumber = analyticalAccount.accounts.number;
-        const fullAccountNumber = `${parentAccountNumber}-${analyticalAccount.number_suffix}`;
-        
-        console.log('Deleting account with number:', fullAccountNumber);
-        
-        // Delete from accounts table first
-        const { error: accountDeleteError } = await supabase
-          .from('accounts')
-          .delete()
-          .eq('number', fullAccountNumber);
-        
-        if (accountDeleteError) {
-          console.error('Error deleting from accounts table:', accountDeleteError);
-          throw accountDeleteError;
-        }
+      if (!analyticalAccount) {
+        throw new Error('Analytical account not found');
+      }
+
+      // Get parent account number
+      const { data: parentAccount, error: parentError } = await supabase
+        .from('accounts')
+        .select('number')
+        .eq('id', analyticalAccount.parent_account_id)
+        .single();
+
+      if (parentError) {
+        console.error('Error fetching parent account:', parentError);
+        throw parentError;
+      }
+
+      if (!parentAccount) {
+        throw new Error('Parent account not found');
+      }
+
+      const fullAccountNumber = `${parentAccount.number}-${analyticalAccount.number_suffix}`;
+      
+      console.log('Deleting analytical account with number:', fullAccountNumber);
+      
+      // Delete from accounts table first (the main account record)
+      const { error: accountDeleteError } = await supabase
+        .from('accounts')
+        .delete()
+        .eq('number', fullAccountNumber);
+      
+      if (accountDeleteError) {
+        console.error('Error deleting from accounts table:', accountDeleteError);
+        throw accountDeleteError;
       }
 
       // Then delete from analytical_accounts table
-      const { error } = await supabase
+      const { error: analyticalDeleteError } = await supabase
         .from('analytical_accounts')
         .delete()
         .eq('id', accountId);
       
-      if (error) {
-        console.error('Error deleting from analytical_accounts table:', error);
-        throw error;
+      if (analyticalDeleteError) {
+        console.error('Error deleting from analytical_accounts table:', analyticalDeleteError);
+        throw analyticalDeleteError;
       }
     },
     onSuccess: () => {
