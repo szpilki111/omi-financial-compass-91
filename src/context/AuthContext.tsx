@@ -208,29 +208,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('⛔ AUTH: BLOKOWANIE UŻYTKOWNIKA - przekroczono 5 prób!');
             const blockResult = await supabase
               .from('profiles')
-              .update({ blocked: true })
+              .update({ 
+                blocked: true
+              })
               .eq('email', normalizedEmail);
-            
-            console.log('Wynik blokowania:', {
-              error: blockResult.error,
-              count: blockResult.count,
-              status: blockResult.status,
-              data: blockResult.data
-            });
-            
-            if (blockResult.error) {
-              console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
-              throw new Error('Nie udało się zablokować konta');
-            } else if (blockResult.count === 0) {
-              console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
-            } else {
-              console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
-            }
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
           }
           
-          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${email} do ${newCount}`);
+          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${normalizedEmail} do ${newCount}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
             console.log('zwiekszam licznik else')
@@ -261,26 +247,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
         
         // Bezpośrednio oznacz użytkownika jako zablokowanego w tabeli profiles
-        const blockResult = await supabase
+        await supabase
           .from('profiles')
           .update({ blocked: true })
-          .eq('email', normalizedEmail);
-        
-        console.log('Wynik blokowania:', {
-          error: blockResult.error,
-          count: blockResult.count,
-          status: blockResult.status,
-          data: blockResult.data
-        });
-        
-        if (blockResult.error) {
-          console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
-          throw new Error('Nie udało się zablokować konta');
-        } else if (blockResult.count === 0) {
-          console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
-        } else {
-          console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
-        }
+          .eq('id', userId);
         
         toast({
           title: "Konto zablokowane",
@@ -342,7 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .update({ 
                 blocked: true
               })
-              .eq('email', email);
+              .eq('email', normalizedEmail);
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
             
@@ -354,7 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               variant: "destructive",
             });
             
-            console.log(`Zablokowano logowanie dla ${email} - ${failedLogin.attempt_count} błędnych prób`);
+            console.log(`Zablokowano logowanie dla ${normalizedEmail} - ${failedLogin.attempt_count} błędnych prób`);
             setIsLoading(false);
             return false;
           } else {
