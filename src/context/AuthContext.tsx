@@ -211,12 +211,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .update({ 
                 blocked: true
               })
-              .eq('email', normalizedEmail);
+              .eq('email', email);
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
           }
           
-          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${normalizedEmail} do ${newCount}`);
+          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${email} do ${newCount}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
             console.log('zwiekszam licznik else')
@@ -312,7 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .update({ 
                 blocked: true
               })
-              .eq('email', normalizedEmail);
+              .eq('email', email);
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
             
@@ -324,7 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               variant: "destructive",
             });
             
-            console.log(`Zablokowano logowanie dla ${normalizedEmail} - ${failedLogin.attempt_count} błędnych prób`);
+            console.log(`Zablokowano logowanie dla ${email} - ${failedLogin.attempt_count} błędnych prób`);
             setIsLoading(false);
             return false;
           } else {
