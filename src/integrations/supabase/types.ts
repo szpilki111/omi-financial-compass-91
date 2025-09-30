@@ -259,6 +259,30 @@ export type Database = {
         }
         Relationships: []
       }
+      failed_logins: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          email: string
+          id: string
+          last_attempt: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          email: string
+          id?: string
+          last_attempt?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          email?: string
+          id?: string
+          last_attempt?: string
+        }
+        Relationships: []
+      }
       location_accounts: {
         Row: {
           account_id: string
