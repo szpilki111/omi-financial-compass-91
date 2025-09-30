@@ -146,7 +146,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      console.log('Attempting login for:', email);
+      console.log('🔵 AUTH: ======= ROZPOCZĘCIE LOGOWANIA =======');
+      console.log('🔵 AUTH: Email:', email);
       
       // Sprawdź najpierw czy użytkownik istnieje i czy nie jest zablokowany
       const { data: profileData } = await supabase
@@ -172,10 +173,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       });
 
-      console.log('Login response:', { data, error });
+      console.log('🔵 AUTH: Odpowiedź od Supabase:', { data, error });
 
       if (error) {
-        console.error('Login error from Supabase:', error);
+        console.error('🔴 AUTH: BŁĄD LOGOWANIA od Supabase:', error);
+        console.log('🔴 AUTH: Sprawdzam failed_logins dla:', email);
         
         // Sprawdź czy email jest już w tabeli failed_logins
         const { data: failedLogin } = await supabase
@@ -186,28 +188,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (failedLogin) {
           // Email już istnieje - zwiększ licznik
+          console.log('🔴 AUTH: Znaleziono istniejący wpis failed_logins');
+          console.log('🔴 AUTH: Obecny licznik:', failedLogin.attempt_count);
           
-            console.log('zwiekszam licznik auth')
+          const newCount = failedLogin.attempt_count + 1;
+          console.log('🔴 AUTH: Nowy licznik będzie:', newCount);
+          
           await supabase
             .from('failed_logins')
             .update({ 
-              attempt_count: failedLogin.attempt_count + 1,
+              attempt_count: newCount,
               last_attempt: new Date().toISOString()
             })
             .eq('email', email);
           
+          console.log(`🔴 AUTH: Zaktualizowano licznik dla ${email} na ${newCount}`);
 
-          if (failedLogin.attempt_count > 4) {
-            console.log('blokuje profil')
-            await supabase
+          if (newCount >= 5) {
+            console.log('⛔ AUTH: BLOKOWANIE UŻYTKOWNIKA - przekroczono 5 prób!');
+            const blockResult = await supabase
               .from('profiles')
               .update({ 
                 blocked: true
               })
               .eq('email', email);
+            
+            console.log('⛔ AUTH: Wynik blokowania:', blockResult);
           }
           
-          console.log(`Zwiększono licznik błędnych logowań dla ${email} do ${failedLogin.attempt_count + 1}`);
+          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${email} do ${newCount}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
             console.log('zwiekszam licznik else')
