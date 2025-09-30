@@ -193,8 +193,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               last_attempt: new Date().toISOString()
             })
             .eq('email', email);
+          
 
           if (failedLogin.attempt_count > 4) {
+            console.log('blokuje profil')
             await supabase
               .from('profiles')
               .update({ 
