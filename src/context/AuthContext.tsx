@@ -144,158 +144,158 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Login function using Supabase auth
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      console.log('Attempting login for:', email);
-      
-      // Sprawdź najpierw czy użytkownik istnieje i czy nie jest zablokowany
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, blocked')
-        .eq('email', email)
-        .maybeSingle();
+const login = async (email: string, password: string): Promise<boolean> => {
+  try {
+    setIsLoading(true);
+    console.log('Attempting login for:', email);
+    
+    // Sprawdź najpierw czy użytkownik istnieje i czy nie jest zablokowany
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id, blocked')
+      .eq('email', email)
+      .maybeSingle();
 
-      const userId = profileData?.id || null;
+    const userId = profileData?.id || null;
 
-      if (profileData?.blocked) {
-        toast({
-          title: "Konto zablokowane",
-          description: "Twoje konto zostało zablokowane. Skontaktuj się z administratorem.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return false;
-      }
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      console.log('Login response:', { data, error });
-
-      if (error) {
-        console.error('Login error from Supabase:', error);
-        
-        // Sprawdź czy email jest już w tabeli failed_logins
-        const { data: failedLogin } = await supabase
-          .from('failed_logins')
-          .select('*')
-          .eq('email', email)
-          .maybeSingle();
-
-        if (failedLogin) {
-          // Email już istnieje - zwiększ licznik
-          await supabase
-            .from('failed_logins')
-            .update({ 
-              attempt_count: failedLogin.attempt_count + 1,
-              last_attempt: new Date().toISOString()
-            })
-            .eq('email', email);
-          
-          console.log(`Zwiększono licznik błędnych logowań dla ${email} do ${failedLogin.attempt_count + 1}`);
-        } else {
-          // Email nie istnieje - dodaj nowy wpis
-          await supabase
-            .from('failed_logins')
-            .insert({ 
-              email,
-              attempt_count: 1,
-              last_attempt: new Date().toISOString()
-            });
-          
-          console.log(`Dodano nowy wpis błędnego logowania dla ${email}`);
-        }
-
-        // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
-        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-        const { data: recentFailures } = await supabase
-          .from('failed_logins')
-          .select('attempt_count')
-          .eq('email', email)
-          .gte('last_attempt', fifteenMinutesAgo)
-          .maybeSingle();
-
-        const failureCount = recentFailures?.attempt_count || 0;
-        console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
-
-        if (failureCount >= 5 && userId) {
-          console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
-          await supabase.functions.invoke('block-user', {
-            body: { user_id: userId }
-          });
-          
-          toast({
-            title: "Konto zablokowane",
-            description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return false;
-        }
-        
-        // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
-        let errorMessage = error.message;
-        if (error.message === "Invalid login credentials") {
-          errorMessage = "Nieprawidłowy email lub hasło";
-        }
-        
-        toast({
-          title: "Błąd logowania",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return false;
-      }
-
-      if (data?.user) {
-        // Sprawdź ponownie czy konto nie zostało zablokowane po autoryzacji
-        const { data: finalCheck } = await supabase
-          .from('profiles')
-          .select('blocked')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        
-        if (finalCheck?.blocked) {
-          await supabase.auth.signOut();
-          toast({
-            title: "Konto zablokowane",
-            description: "Twoje konto zostało zablokowane. Skontaktuj się z prowincjałem.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return false;
-        }
-
-        // Usuń wpis z failed_logins po pomyślnym logowaniu
-        await supabase
-          .from('failed_logins')
-          .delete()
-          .eq('email', email);
-        
-        console.log(`Usunięto wpis błędnych logowań dla ${email} po udanym logowaniu`);
-        
-        console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
-        return true;
-      }
-
-      setIsLoading(false);
-      return false;
-    } catch (error: any) {
-      console.error('Unexpected login error:', error);
-      
+    if (profileData?.blocked) {
       toast({
-        title: "Błąd logowania",
-        description: "Wystąpił nieoczekiwany problem podczas logowania",
+        title: "Konto zablokowane",
+        description: "Twoje konto zostało zablokowane. Skontaktuj się z administratorem.",
         variant: "destructive",
       });
       setIsLoading(false);
       return false;
     }
-  };
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    console.log('Login response:', { data, error });
+
+    if (error) {
+      console.error('Login error from Supabase:', error);
+      
+      // Update or insert failed login attempt
+      const { data: failedLogin } = await supabase
+        .from('failed_logins')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (failedLogin) {
+        await supabase
+          .from('failed_logins')
+          .update({ 
+            attempt_count: failedLogin.attempt_count + 1,
+            last_attempt: new Date().toISOString()
+          })
+          .eq('email', email);
+        
+        console.log(`Zwiększono licznik błędnych logowań dla ${email} do ${failedLogin.attempt_count + 1}`);
+      } else {
+        await supabase
+          .from('failed_logins')
+          .insert({ 
+            email,
+            attempt_count: 1,
+            last_attempt: new Date().toISOString()
+          });
+        
+        console.log(`Dodano nowy wpis błędnego logowania dla ${email}`);
+      }
+
+      // Check recent failed attempts within 15 minutes
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data: recentFailures } = await supabase
+        .from('failed_logins')
+        .select('attempt_count')
+        .eq('email', email)
+        .gte('last_attempt', fifteenMinutesAgo)
+        .maybeSingle();
+
+      const failureCount = recentFailures?.attempt_count || 0;
+      console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
+
+      if (failureCount >= 5 && userId) {
+        console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
+        await supabase.functions.invoke('block-user', {
+          body: { user_id: userId }
+        });
+        
+        toast({
+          title: "Konto zablokowane",
+          description: "Przekroczyłeś limit logowań. Poproś prowincjała o odblokowanie.",
+          variant: "destructive",
+        });
+      }
+      
+      let errorMessage = error.message;
+      if (error.message === "Invalid login credentials") {
+        errorMessage = "Nieprawidłowy email lub hasło";
+      }
+      
+      toast({
+        title: "Błąd logowania",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return false;
+    }
+
+    if (data?.user) {
+      // Sprawdź ponownie czy konto nie zostało zablokowane po autoryzacji
+      const { data: finalCheck } = await supabase
+        .from('profiles')
+        .select('blocked')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      
+      if (finalCheck?.blocked) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Konto zablokowane",
+          description: "Przekroczyłeś limit logowań. Poproś prowincjała o odblokowanie.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return false;
+      }
+
+      // Usuń wpis z failed_logins po udanym logowaniu
+      await supabase
+        .from('failed_logins')
+        .delete()
+        .eq('email', email);
+      
+      console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
+      setUser({
+        id: data.user.id,
+        name: data.user.user_metadata?.name || '',
+        email: data.user.email || '',
+        role: (data.user.user_metadata?.role || 'ekonom') as Role,
+        location: data.user.user_metadata?.location_id || '',
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    setIsLoading(false);
+    return false;
+  } catch (error: any) {
+    console.error('Unexpected login error:', error);
+    toast({
+      title: "Błąd logowania",
+      description: "Wystąpił nieoczekiwany problem podczas logowania",
+      variant: "destructive",
+    });
+    setIsLoading(false);
+    return false;
+  }
+};
 
 const logout = async () => {
     try {
