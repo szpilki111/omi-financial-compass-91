@@ -60,13 +60,7 @@ const ErrorReportsManagement = () => {
     queryFn: async () => {
       let query = supabase
         .from("error_reports")
-        .select(`
-          *,
-          profiles!error_reports_user_id_fkey (
-            name,
-            email
-          )
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (statusFilter !== "all") {
@@ -77,10 +71,29 @@ const ErrorReportsManagement = () => {
         query = query.eq("priority", priorityFilter);
       }
 
-      const { data, error } = await query;
+      const { data: reportsData, error } = await query;
 
       if (error) throw error;
-      return data as any;
+
+      // Fetch user profiles separately
+      if (reportsData && reportsData.length > 0) {
+        const userIds = [...new Set(reportsData.map((r: any) => r.user_id))];
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, name, email")
+          .in("id", userIds);
+
+        // Map profiles to reports
+        return reportsData.map((report: any) => ({
+          ...report,
+          profiles: profilesData?.find((p) => p.id === report.user_id) || {
+            name: "Unknown",
+            email: "unknown@example.com",
+          },
+        }));
+      }
+
+      return [];
     },
   });
 
