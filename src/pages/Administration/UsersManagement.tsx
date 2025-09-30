@@ -83,7 +83,7 @@ const UsersManagement = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, refetch } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
       // Get users with their login events
@@ -108,7 +108,7 @@ const UsersManagement = () => {
             .eq('success', true)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           // Get last failed login
           const { data: failedLogin } = await supabase
@@ -118,7 +118,7 @@ const UsersManagement = () => {
             .eq('success', false)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           return {
             ...profile,
@@ -229,14 +229,14 @@ const toggleUserBlockedMutation = useMutation({
         .eq('email', userProfile.email);
     }
   },
-  onSuccess: (_, variables) => {
+  onSuccess: async (_, variables) => {
     toast({
       title: 'Sukces',
       description: variables.blocked 
         ? 'Użytkownik został zablokowany' 
         : 'Użytkownik został odblokowany i historia nieudanych logowań została wyczyszczona',
     });
-    queryClient.invalidateQueries({ queryKey: ['users'] });
+    await queryClient.invalidateQueries({ queryKey: ['users'] });
   },
   onError: (error: any) => {
     console.error('Error toggling user blocked status:', error);
