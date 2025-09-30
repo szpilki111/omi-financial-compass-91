@@ -208,6 +208,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           console.log(`Dodano nowy wpis błędnego logowania dla ${email}`);
         }
+
+        // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        const { data: recentFailures } = await supabase
+          .from('failed_logins')
+          .select('attempt_count')
+          .eq('email', email)
+          .gte('last_attempt', fifteenMinutesAgo)
+          .maybeSingle();
+
+        const failureCount = recentFailures?.attempt_count || 0;
+        console.log(`Liczba nieudanych prób w ostatnich 15 min: ${failureCount}`);
+
+        if (failureCount >= 5 && userId) {
+          console.log('⛔ BLOKOWANIE - przekroczono limit 5 nieudanych prób');
+          await supabase.functions.invoke('block-user', {
+            body: { user_id: userId }
+          });
+          
+          toast({
+            title: "Konto zablokowane",
+            description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z prowincjałem.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return false;
+        }
         
         // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
         let errorMessage = error.message;
@@ -225,6 +252,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
+        // Sprawdź ponownie czy konto nie zostało zablokowane po autoryzacji
+        const { data: finalCheck } = await supabase
+          .from('profiles')
+          .select('blocked')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        
+        if (finalCheck?.blocked) {
+          await supabase.auth.signOut();
+          toast({
+            title: "Konto zablokowane",
+            description: "Twoje konto zostało zablokowane po zbyt wielu nieudanych próbach logowania. Skontaktuj się z prowincjałem.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return false;
+        }
+
         // Sprawdź czy email jest w tabeli failed_logins
         const { data: failedLogin } = await supabase
           .from('failed_logins')
