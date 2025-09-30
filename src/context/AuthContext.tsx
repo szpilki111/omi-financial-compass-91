@@ -193,14 +193,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               last_attempt: new Date().toISOString()
             })
             .eq('email', email);
-          
-          const { data: failedLoginsData } = await supabase
-            .from('failed_logins')
-            .select('attempt_count')
-            .eq('email', email)
-            .maybeSingle();
 
-          if (failedLoginsData && failedLoginsData.attempt_count > 4) {
+          if (failedLogin.attempt_count > 4) {
             await supabase
               .from('profiles')
               .update({ 
