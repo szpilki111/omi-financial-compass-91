@@ -268,6 +268,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
+        // KRYTYCZNE: Sprawdź ponownie czy konto nie zostało zablokowane
+        // (może być race condition - konto zablokowane między sprawdzeniem a logowaniem)
+        const { data: finalCheck } = await supabase
+          .from('profiles')
+          .select('blocked')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        
+        if (finalCheck?.blocked) {
+          // Konto zostało zablokowane - wyloguj natychmiast
+          await supabase.auth.signOut();
+          
+          // Loguj próbę logowania na zablokowane konto
+          try {
+            await supabase.functions.invoke('log-login-event', {
+              body: {
+                user_id: data.user.id,
+                email: email,
+                success: false,
+                error_message: 'Próba logowania na zablokowane konto (wykryte po auth)',
+              }
+            });
+          } catch (logError) {
+            console.error('Błąd podczas zapisywania próby logowania na zablokowane konto:', logError);
+          }
+          
+          toast({
+            title: "Konto zablokowane",
+            description: "Twoje konto zostało zablokowane po zbyt wielu nieudanych próbach logowania. Skontaktuj się z prowincjałem.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return false;
+        }
+        
         // Zapisz udane logowanie używając edge function
         console.log('Zapisywanie udanego logowania dla userId:', data.user.id);
         try {
