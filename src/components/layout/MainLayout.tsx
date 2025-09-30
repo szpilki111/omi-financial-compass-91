@@ -2,12 +2,16 @@
 import React from 'react';
 import Header from './Header';
 import { Toaster } from '@/components/ui/toaster';
+import { ErrorReportButton } from '@/components/ErrorReportButton';
+import { useAuth } from '@/context/AuthContext';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 const MainLayout = ({ children }: MainLayoutProps) => {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-omi-gray-100">
       <Header />
@@ -15,6 +19,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         {children}
       </main>
       <Toaster />
+      {user && <ErrorReportButton />}
     </div>
   );
 };

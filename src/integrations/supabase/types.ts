@@ -208,6 +208,57 @@ export type Database = {
           },
         ]
       }
+      error_reports: {
+        Row: {
+          additional_files: string[] | null
+          admin_response: string | null
+          assigned_to: string | null
+          browser_info: Json | null
+          created_at: string
+          description: string
+          id: string
+          page_url: string
+          priority: Database["public"]["Enums"]["error_report_priority"]
+          screenshot_url: string | null
+          status: Database["public"]["Enums"]["error_report_status"]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          additional_files?: string[] | null
+          admin_response?: string | null
+          assigned_to?: string | null
+          browser_info?: Json | null
+          created_at?: string
+          description: string
+          id?: string
+          page_url: string
+          priority?: Database["public"]["Enums"]["error_report_priority"]
+          screenshot_url?: string | null
+          status?: Database["public"]["Enums"]["error_report_status"]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          additional_files?: string[] | null
+          admin_response?: string | null
+          assigned_to?: string | null
+          browser_info?: Json | null
+          created_at?: string
+          description?: string
+          id?: string
+          page_url?: string
+          priority?: Database["public"]["Enums"]["error_report_priority"]
+          screenshot_url?: string | null
+          status?: Database["public"]["Enums"]["error_report_status"]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       location_accounts: {
         Row: {
           account_id: string
@@ -934,6 +985,8 @@ export type Database = {
       }
     }
     Enums: {
+      error_report_priority: "low" | "medium" | "high" | "critical"
+      error_report_status: "new" | "in_progress" | "resolved" | "closed"
       report_type:
         | "standard"
         | "zos"
@@ -1070,6 +1123,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      error_report_priority: ["low", "medium", "high", "critical"],
+      error_report_status: ["new", "in_progress", "resolved", "closed"],
       report_type: [
         "standard",
         "zos",
