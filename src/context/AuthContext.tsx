@@ -305,6 +305,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (failedLogin) {
           if (failedLogin.attempt_count >= 5) {
             // Za dużo błędnych prób - wyloguj natychmiast
+
+            console.log('⛔ AUTH: BLOKOWANIE UŻYTKOWNIKA - przekroczono 5 prób!');
+            const blockResult = await supabase
+              .from('profiles')
+              .update({ 
+                blocked: true
+              })
+              .eq('email', email);
+            
+            console.log('⛔ AUTH: Wynik blokowania:', blockResult);
+            
             await supabase.auth.signOut();
             
             toast({
