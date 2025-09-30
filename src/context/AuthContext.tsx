@@ -206,8 +206,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Błąd podczas zapisywania zdarzenia logowania:', logError);
         }
 
-        // Poczekaj chwilę, aby event został zapisany
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Poczekaj dłużej, aby event został zapisany i block-user mógł się wykonać
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
         const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
