@@ -194,6 +194,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             })
             .eq('email', email);
           
+          const { data: failedLoginsNumber } = await supabase
+            .from('failed_logins')
+            .select('attempt_count')
+            .eq('email', email)
+
+          if (failedLoginsNumber > 4) {
+            await supabase
+              .from('profiles')
+              .update({ 
+                blocked: 'TRUE'
+              })
+              .eq('email', email);
+          }
+          
           console.log(`Zwiększono licznik błędnych logowań dla ${email} do ${failedLogin.attempt_count + 1}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
