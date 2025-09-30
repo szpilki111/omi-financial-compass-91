@@ -65,11 +65,8 @@ export const ErrorReportDialog = ({
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from("error-reports")
-          .getPublicUrl(screenshotPath);
-        
-        screenshotUrl = publicUrl;
+        // Store just the path, we'll generate signed URL when viewing
+        screenshotUrl = screenshotPath;
       }
 
       // Upload additional files
@@ -83,11 +80,8 @@ export const ErrorReportDialog = ({
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from("error-reports")
-          .getPublicUrl(filePath);
-        
-        additionalFileUrls.push(publicUrl);
+        // Store just the path, we'll generate signed URL when viewing
+        additionalFileUrls.push(filePath);
       }
 
       // Create error report

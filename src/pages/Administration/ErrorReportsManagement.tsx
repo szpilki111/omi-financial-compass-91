@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +54,8 @@ const ErrorReportsManagement = () => {
   const [adminResponse, setAdminResponse] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "new" | "in_progress" | "resolved" | "closed">("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+  const [fileUrls, setFileUrls] = useState<string[]>([]);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
@@ -136,10 +138,35 @@ const ErrorReportsManagement = () => {
     },
   });
 
-  const handleViewDetails = (report: ErrorReport) => {
+  const handleViewDetails = async (report: ErrorReport) => {
     setSelectedReport(report);
     setNewStatus(report.status);
     setAdminResponse(report.admin_response || "");
+    
+    // Generate signed URLs for screenshot and files
+    if (report.screenshot_url) {
+      const { data } = await supabase.storage
+        .from("error-reports")
+        .createSignedUrl(report.screenshot_url, 3600); // 1 hour expiry
+      setScreenshotUrl(data?.signedUrl || null);
+    } else {
+      setScreenshotUrl(null);
+    }
+
+    if (report.additional_files && report.additional_files.length > 0) {
+      const urls = await Promise.all(
+        report.additional_files.map(async (path) => {
+          const { data } = await supabase.storage
+            .from("error-reports")
+            .createSignedUrl(path, 3600);
+          return data?.signedUrl || "";
+        })
+      );
+      setFileUrls(urls.filter(url => url !== ""));
+    } else {
+      setFileUrls([]);
+    }
+    
     setDetailsOpen(true);
   };
 
@@ -314,22 +341,22 @@ const ErrorReportsManagement = () => {
                 </a>
               </div>
 
-              {selectedReport.screenshot_url && (
+              {screenshotUrl && (
                 <div>
                   <Label>Screenshot</Label>
                   <img
-                    src={selectedReport.screenshot_url}
+                    src={screenshotUrl}
                     alt="Screenshot"
                     className="mt-2 border rounded-lg max-w-full"
                   />
                 </div>
               )}
 
-              {selectedReport.additional_files && selectedReport.additional_files.length > 0 && (
+              {fileUrls.length > 0 && (
                 <div>
                   <Label>Dodatkowe pliki</Label>
                   <div className="space-y-2 mt-2">
-                    {selectedReport.additional_files.map((url, index) => (
+                    {fileUrls.map((url, index) => (
                       <a
                         key={index}
                         href={url}
