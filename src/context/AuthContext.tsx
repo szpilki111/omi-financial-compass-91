@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (failedLogin) {
           // Email już istnieje - zwiększ licznik
           
-          console.log('zwiekszam licznik auth')
+            console.log('zwiekszam licznik auth')
           // await supabase
           //   .from('failed_logins')
           //   .update({ 
