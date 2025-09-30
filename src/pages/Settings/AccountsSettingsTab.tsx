@@ -215,11 +215,16 @@ export const AccountsSettingsTab: React.FC = () => {
         .eq('id', accountId)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching analytical account:', fetchError);
+        throw fetchError;
+      }
 
       if (analyticalAccount) {
         const parentAccountNumber = analyticalAccount.accounts.number;
         const fullAccountNumber = `${parentAccountNumber}-${analyticalAccount.number_suffix}`;
+        
+        console.log('Deleting account with number:', fullAccountNumber);
         
         // Delete from accounts table first
         const { error: accountDeleteError } = await supabase
@@ -227,7 +232,10 @@ export const AccountsSettingsTab: React.FC = () => {
           .delete()
           .eq('number', fullAccountNumber);
         
-        if (accountDeleteError) throw accountDeleteError;
+        if (accountDeleteError) {
+          console.error('Error deleting from accounts table:', accountDeleteError);
+          throw accountDeleteError;
+        }
       }
 
       // Then delete from analytical_accounts table
@@ -236,12 +244,17 @@ export const AccountsSettingsTab: React.FC = () => {
         .delete()
         .eq('id', accountId);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting from analytical_accounts table:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
+      // Invalidate all related queries with proper query keys
       queryClient.invalidateQueries({ queryKey: ['analytical-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['available-accounts'] });
-      toast.success('Konto analityczne zostało usunięte');
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Konto analityczne zostało trwale usunięte');
     },
     onError: (error) => {
       console.error('Error deleting analytical account:', error);
