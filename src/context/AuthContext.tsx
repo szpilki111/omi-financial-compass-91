@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
@@ -263,20 +262,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.auth.signOut();
           toast({
             title: "Konto zablokowane",
-            description: "Twoje konto zostało zablokowane. Skontaktuj się z prowincjałem.",
+            description: "Twoje konto zostało zablokowane po zbyt wielu nieudanych próbach logowania. Skontaktuj się z prowincjałem.",
             variant: "destructive",
           });
           setIsLoading(false);
           return false;
         }
 
-        // Usuń wpis z failed_logins po pomyślnym logowaniu
-        await supabase
+        // Sprawdź czy email jest w tabeli failed_logins
+        const { data: failedLogin } = await supabase
           .from('failed_logins')
-          .delete()
-          .eq('email', email);
-        
-        console.log(`Usunięto wpis błędnych logowań dla ${email} po udanym logowaniu`);
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (failedLogin) {
+          if (failedLogin.attempt_count >= 5) {
+            // Za dużo błędnych prób - wyloguj natychmiast
+            await supabase.auth.signOut();
+            
+            toast({
+              title: "Zbyt wiele błędnych logowań",
+              description: "Twoje konto zostało tymczasowo zablokowane z powodu zbyt wielu nieudanych prób logowania. Skontaktuj się z administratorem.",
+              variant: "destructive",
+            });
+            
+            console.log(`Zablokowano logowanie dla ${email} - ${failedLogin.attempt_count} błędnych prób`);
+            setIsLoading(false);
+            return false;
+          } else {
+            // Mniej niż 5 prób - usuń wpis i pozwól zalogować
+            await supabase
+              .from('failed_logins')
+              .delete()
+              .eq('email', email);
+            
+            console.log(`Usunięto wpis błędnych logowań dla ${email} po udanym logowaniu`);
+          }
+        }
         
         console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
         return true;
