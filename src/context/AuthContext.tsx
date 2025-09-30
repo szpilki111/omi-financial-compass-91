@@ -145,9 +145,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Login function using Supabase auth
   const login = async (email: string, password: string): Promise<boolean> => {
+    let userId: string | null = null;
+    
     try {
       setIsLoading(true);
       console.log('Attempting login for:', email);
+      
+      // Sprawdź najpierw czy użytkownik istnieje i czy nie jest zablokowany
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, blocked')
+        .eq('email', email)
+        .maybeSingle();
+
+      userId = profileData?.id || null;
+
+      if (profileData?.blocked) {
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: profileData.id,
+            success: false,
+            error_message: 'Konto zablokowane',
+          }
+        });
+        
+        toast({
+          title: "Konto zablokowane",
+          description: "Twoje konto zostało zablokowane. Skontaktuj się z administratorem.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return false;
+      }
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -158,6 +187,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error from Supabase:', error);
+        
+        // Zapisz nieudane logowanie
+        if (userId) {
+          await supabase.functions.invoke('log-login-event', {
+            body: {
+              user_id: userId,
+              success: false,
+              error_message: error.message,
+            }
+          });
+
+          // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
+          const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+          const { data: recentFailures } = await supabase
+            .from('user_login_events')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('success', false)
+            .gte('created_at', fifteenMinutesAgo);
+
+          // Zablokuj konto po 5 nieudanych próbach
+          if (recentFailures && recentFailures.length >= 5) {
+            await supabase
+              .from('profiles')
+              .update({ blocked: true })
+              .eq('id', userId);
+            
+            toast({
+              title: "Konto zablokowane",
+              description: "Zbyt wiele nieudanych prób logowania. Konto zostało zablokowane. Skontaktuj się z administratorem.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return false;
+          }
+        }
         
         // Mapowanie błędów Supabase na bardziej przyjazne komunikaty
         let errorMessage = error.message;
@@ -175,6 +240,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
+        // Zapisz udane logowanie
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: data.user.id,
+            success: true,
+          }
+        });
+        
         // Profil zostanie załadowany przez onAuthStateChange
         console.log("Zalogowano pomyślnie, użytkownik:", data.user.id);
         return true;
@@ -184,6 +257,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     } catch (error: any) {
       console.error('Unexpected login error:', error);
+      
+      // Zapisz błąd logowania jeśli znamy userId
+      if (userId) {
+        try {
+          await supabase.functions.invoke('log-login-event', {
+            body: {
+              user_id: userId,
+              success: false,
+              error_message: error.message || 'Nieoczekiwany błąd',
+            }
+          });
+        } catch (logError) {
+          console.error('Error logging login event:', logError);
+        }
+      }
+      
       toast({
         title: "Błąd logowania",
         description: "Wystąpił nieoczekiwany problem podczas logowania",

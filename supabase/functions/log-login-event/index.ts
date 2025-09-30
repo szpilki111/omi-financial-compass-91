@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, success, error_message, ip, user_agent } = await req.json();
+    const { user_id, success, error_message } = await req.json();
 
     if (!user_id) {
       return new Response(
@@ -26,7 +26,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Logging login event:', { user_id, success, error_message });
+    // Pobierz IP i user agent z nagłówków
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
+    const user_agent = req.headers.get('user-agent') || null;
+
+    console.log('Logging login event:', { user_id, success, error_message, ip, user_agent });
 
     // Insert login event
     const { error: insertError } = await supabase
@@ -35,8 +39,8 @@ Deno.serve(async (req) => {
         user_id,
         success: success || false,
         error_message: error_message || null,
-        ip: ip || null,
-        user_agent: user_agent || null
+        ip,
+        user_agent
       });
 
     if (insertError) {

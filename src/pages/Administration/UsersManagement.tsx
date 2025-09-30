@@ -206,11 +206,22 @@ const toggleUserBlockedMutation = useMutation({
       .eq('id', userId);
     
     if (error) throw error;
+    
+    // Jeśli odblokowujemy użytkownika, wyczyść historię nieudanych logowań
+    if (!blocked) {
+      await supabase
+        .from('user_login_events')
+        .delete()
+        .eq('user_id', userId)
+        .eq('success', false);
+    }
   },
-  onSuccess: () => {
+  onSuccess: (_, variables) => {
     toast({
       title: 'Sukces',
-      description: 'Status blokady użytkownika został zaktualizowany',
+      description: variables.blocked 
+        ? 'Użytkownik został zablokowany' 
+        : 'Użytkownik został odblokowany i historia nieudanych logowań została wyczyszczona',
     });
     queryClient.invalidateQueries({ queryKey: ['users'] });
   },
@@ -228,9 +239,11 @@ const toggleUserBlockedMutation = useMutation({
     deleteUserMutation.mutate(userId);
   };
 
-  const handleToggleBlocked = (userId: string, currentBlocked: boolean) => {
-    toggleUserBlockedMutation.mutate({ userId, blocked: !currentBlocked });
+  const handleToggleBlocked = (userId: string, blocked: boolean) => {
+    toggleUserBlockedMutation.mutate({ userId, blocked });
   };
+  
+  const userRole = user?.role;
 
   if (isLoading) {
     return (
@@ -266,11 +279,11 @@ const toggleUserBlockedMutation = useMutation({
                   <TableHead>Telefon</TableHead>
                   <TableHead>Rola</TableHead>
                   <TableHead>Placówka</TableHead>
-                  {user?.role === 'prowincjal' && (
+                  {(userRole === 'prowincjal' || userRole === 'admin') && (
                     <>
                       <TableHead>Ostatnie udane</TableHead>
                       <TableHead>Ostatnie nieudane</TableHead>
-                      <TableHead>Zablokowany</TableHead>
+                      <TableHead>Status</TableHead>
                     </>
                   )}
                   <TableHead>Data utworzenia</TableHead>
@@ -293,7 +306,7 @@ const toggleUserBlockedMutation = useMutation({
                     <TableCell>
                       {user.location?.name || '-'}
                     </TableCell>
-                    {user?.role === 'prowincjal' && (
+                    {(userRole === 'prowincjal' || userRole === 'admin') && (
                       <>
                         <TableCell>
                           {user.last_successful_login ? (
@@ -314,11 +327,28 @@ const toggleUserBlockedMutation = useMutation({
                           )}
                         </TableCell>
                         <TableCell>
-                          <Switch
-                            checked={user.blocked}
-                            onCheckedChange={() => handleToggleBlocked(user.id, user.blocked)}
-                            disabled={toggleUserBlockedMutation.isPending}
-                          />
+                          <div className="flex items-center gap-2">
+                            {user.blocked ? (
+                              <Badge variant="destructive" className="text-xs">
+                                Zablokowane
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Aktywne
+                              </Badge>
+                            )}
+                            {(userRole === 'prowincjal' || userRole === 'admin') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleBlocked(user.id, !user.blocked)}
+                                disabled={toggleUserBlockedMutation.isPending}
+                                className="h-7 text-xs"
+                              >
+                                {user.blocked ? 'Odblokuj' : 'Zablokuj'}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </>
                     )}
