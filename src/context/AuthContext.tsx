@@ -209,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const blockResult = await supabase
               .from('profiles')
               .update({ blocked: true })
-              .eq('email', normalizedEmail);
+              .eq('email', email);
             
             console.log('Wynik blokowania:', {
               error: blockResult.error,
@@ -222,9 +222,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
               throw new Error('Nie udało się zablokować konta');
             } else if (blockResult.count === 0) {
-              console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
+              console.warn('Nie znaleziono profilu dla email:', email);
             } else {
-              console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
+              console.log('Pomyślnie zablokowano profil dla email:', email);
             }
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
@@ -264,7 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const blockResult = await supabase
           .from('profiles')
           .update({ blocked: true })
-          .eq('email', normalizedEmail);
+          .eq('email', email);
         
         console.log('Wynik blokowania:', {
           error: blockResult.error,
@@ -277,9 +277,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
           throw new Error('Nie udało się zablokować konta');
         } else if (blockResult.count === 0) {
-          console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
+          console.warn('Nie znaleziono profilu dla email:', email);
         } else {
-          console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
+          console.log('Pomyślnie zablokowano profil dla email:', email);
         }
         
         toast({

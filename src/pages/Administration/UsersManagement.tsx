@@ -108,7 +108,7 @@ const UsersManagement = () => {
             .eq('success', true)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           // Get last failed login
           const { data: failedLogin } = await supabase
@@ -118,7 +118,7 @@ const UsersManagement = () => {
             .eq('success', false)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           return {
             ...profile,
