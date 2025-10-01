@@ -624,7 +624,7 @@ const DocumentDialog = ({
       }
 
       // Create transaction with the same empty field as original
-      // Fill the side with smaller total sum
+      // Fill the side with smaller total sum with the balancing amount
       const newTransaction: Transaction = {
         ...transaction,
         id: undefined,
@@ -645,6 +645,44 @@ const DocumentDialog = ({
       toast({
         title: "Kwota wyrównana",
         description: `Utworzono operację wyrównującą: ${balanceAmount.toFixed(2)} ${form.getValues('currency')}`,
+      });
+    } else {
+      // Normal split: both fields have values
+      const isDebitSmaller = debitAmount < creditAmount;
+      const difference = Math.abs(debitAmount - creditAmount);
+
+      if (difference === 0) {
+        toast({
+          title: "Błąd",
+          description: "Kwoty są równe, nie ma czego rozdzielać",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create new transaction:
+      // - Field with LARGER amount should be EMPTY (undefined)
+      // - Field with SMALLER amount should have the difference (larger - smaller)
+      const newTransaction: Transaction = {
+        ...transaction,
+        id: undefined,
+        description: transaction.description,
+        debit_amount: isDebitSmaller ? difference : undefined,
+        credit_amount: isDebitSmaller ? undefined : difference,
+        amount: difference,
+        debit_account_id: '',
+        credit_account_id: '',
+      };
+
+      if (isParallel) {
+        setParallelTransactions(prev => [...prev, newTransaction]);
+      } else {
+        setTransactions(prev => [...prev, newTransaction]);
+      }
+
+      toast({
+        title: "Kwota rozdzielona",
+        description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues('currency')}`,
       });
     }
   };
