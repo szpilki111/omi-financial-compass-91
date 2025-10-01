@@ -100,7 +100,10 @@ const UsersManagement = () => {
       // Get latest login events for each user
       const usersWithLoginEvents = await Promise.all(
         profiles.map(async (profile) => {
-          // Get last successful login
+          // Normalize email for consistent queries
+          const normalizedEmail = profile.email?.toLowerCase().trim();
+
+          // Get last successful login (using user_id)
           const { data: successfulLogin } = await supabase
             .from('user_login_events')
             .select('created_at')
@@ -110,11 +113,11 @@ const UsersManagement = () => {
             .limit(1)
             .maybeSingle();
 
-          // Get last failed login
+          // Get last failed login (using email because failed logins have user_id = null)
           const { data: failedLogin } = await supabase
             .from('user_login_events')
             .select('created_at')
-            .eq('user_id', profile.id)
+            .eq('email', normalizedEmail)
             .eq('success', false)
             .order('created_at', { ascending: false })
             .limit(1)
