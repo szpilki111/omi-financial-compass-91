@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -569,6 +569,75 @@ const DocumentDialog = ({
     );
   };
 
+  const handleCopyTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: undefined,
+      isCloned: true,
+      clonedType: transaction.credit_account_id ? 'credit' : 'debit'
+    };
+    if (isParallel) {
+      setParallelTransactions(prev => [...prev, newTransaction]);
+    } else {
+      setTransactions(prev => [...prev, newTransaction]);
+    }
+    toast({
+      title: "Transakcja skopiowana",
+      description: "Transakcja została dodana do listy",
+    });
+  };
+
+  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    // Calculate total document amount (sum of all debits or credits, they should be equal)
+    const allTransactions = [...transactions, ...parallelTransactions];
+    const documentTotal = allTransactions.reduce((sum, t) => {
+      return sum + Math.max(t.debit_amount || 0, t.credit_amount || 0);
+    }, 0);
+
+    // Determine which amount is smaller in the current transaction
+    const debitAmount = transaction.debit_amount || 0;
+    const creditAmount = transaction.credit_amount || 0;
+    const isDebitSmaller = debitAmount < creditAmount;
+    
+    // Calculate the difference to fill up to document total
+    const currentTransactionAmount = Math.max(debitAmount, creditAmount);
+    const remainingAmount = documentTotal - currentTransactionAmount;
+
+    if (remainingAmount <= 0) {
+      toast({
+        title: "Błąd",
+        description: "Brak kwoty do uzupełnienia - operacja już równa lub przekracza sumę dokumentu",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Create new transaction with balanced amount
+    // If debit is smaller, we fill the debit side (copy debit account, clear credit)
+    // If credit is smaller, we fill the credit side (copy credit account, clear debit)
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: undefined,
+      description: transaction.description,
+      debit_amount: isDebitSmaller ? remainingAmount : debitAmount,
+      credit_amount: isDebitSmaller ? creditAmount : remainingAmount,
+      amount: remainingAmount,
+      debit_account_id: isDebitSmaller ? transaction.debit_account_id : '',
+      credit_account_id: isDebitSmaller ? '' : transaction.credit_account_id,
+    };
+
+    if (isParallel) {
+      setParallelTransactions(prev => [...prev, newTransaction]);
+    } else {
+      setTransactions(prev => [...prev, newTransaction]);
+    }
+
+    toast({
+      title: "Kwota rozdzielona",
+      description: `Utworzono operację z wyrównaną kwotą: ${remainingAmount.toFixed(2)} ${form.getValues('currency')}`,
+    });
+  };
+
   const handleSelectAll = (checked: boolean) => {
     setSelectedTransactions(checked ? transactions.map((_, index) => index) : []);
   };
@@ -869,6 +938,8 @@ const DocumentDialog = ({
                         transaction={transaction}
                         onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                         onDelete={() => removeTransaction(index)}
+                        onCopy={() => handleCopyTransaction(transaction, false)}
+                        onSplit={() => handleSplitTransaction(transaction, false)}
                         currency={selectedCurrency}
                         isEditingBlocked={isEditingBlocked}
                         isSelected={selectedTransactions.includes(index)}
@@ -984,6 +1055,8 @@ const DocumentDialog = ({
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                           onDelete={() => removeParallelTransaction(index)}
+                          onCopy={() => handleCopyTransaction(transaction, true)}
+                          onSplit={() => handleSplitTransaction(transaction, true)}
                           onAddBalancing={addParallelTransaction}
                           currency={selectedCurrency}
                           isEditingBlocked={isEditingBlocked}
@@ -1059,11 +1132,13 @@ const EditableTransactionRow: React.FC<{
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
   onAddBalancing?: (transaction: Transaction) => Promise<void>;
+  onCopy?: () => void;
+  onSplit?: () => void;
   currency: string;
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, onAddBalancing, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+}> = ({ transaction, onUpdate, onDelete, onAddBalancing, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1281,13 +1356,38 @@ const EditableTransactionRow: React.FC<{
         />
       </TableCell>
       <TableCell>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
+          {onCopy && (
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="icon" 
+              onClick={onCopy}
+              title="Kopiuj"
+              disabled={isEditingBlocked}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+          {onSplit && (
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="icon" 
+              onClick={onSplit}
+              title="Rozdziel kwotę"
+              disabled={isEditingBlocked}
+            >
+              <Split className="h-4 w-4" />
+            </Button>
+          )}
           <Button 
             type="button" 
             variant="ghost" 
-            size="sm" 
+            size="icon" 
             onClick={onDelete} 
             className="text-red-600 hover:text-red-700"
+            title="Usuń"
             disabled={isEditingBlocked}
           >
             <Trash2 className="h-4 w-4" />
