@@ -616,8 +616,8 @@ const DocumentDialog = ({
         debit_amount: isDebitSideSmaller ? balanceAmount : undefined,
         credit_amount: isDebitSideSmaller ? undefined : balanceAmount,
         amount: balanceAmount,
-        debit_account_id: '',
-        credit_account_id: '',
+        debit_account_id: transaction.debit_account_id || '',
+        credit_account_id: transaction.credit_account_id || '',
       };
 
       if (isParallel) {
@@ -654,8 +654,8 @@ const DocumentDialog = ({
         debit_amount: isDebitSmaller ? difference : undefined,
         credit_amount: isDebitSmaller ? undefined : difference,
         amount: difference,
-        debit_account_id: '',
-        credit_account_id: '',
+        debit_account_id: transaction.debit_account_id || '',
+        credit_account_id: transaction.credit_account_id || '',
       };
 
       if (isParallel) {
