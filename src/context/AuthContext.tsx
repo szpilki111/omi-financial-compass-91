@@ -146,14 +146,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
+      // Normalizacja emaila
+      const normalizedEmail = email.trim().toLowerCase();
       console.log('🔵 AUTH: ======= ROZPOCZĘCIE LOGOWANIA =======');
-      console.log('🔵 AUTH: Email:', email);
+      console.log('🔵 AUTH: Email:', normalizedEmail);
       
       // Sprawdź najpierw czy użytkownik istnieje i czy nie jest zablokowany
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id, blocked')
-        .eq('email', email)
+        .eq('email', normalizedEmail)
         .maybeSingle();
 
       const userId = profileData?.id || null;
@@ -169,7 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password
       });
 
@@ -177,13 +179,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('🔴 AUTH: BŁĄD LOGOWANIA od Supabase:', error);
-        console.log('🔴 AUTH: Sprawdzam failed_logins dla:', email);
+        console.log('🔴 AUTH: Sprawdzam failed_logins dla:', normalizedEmail);
         
         // Sprawdź czy email jest już w tabeli failed_logins
         const { data: failedLogin } = await supabase
           .from('failed_logins')
           .select('*')
-          .eq('email', email)
+          .eq('email', normalizedEmail)
           .maybeSingle();
 
         if (failedLogin) {
@@ -200,16 +202,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               attempt_count: newCount,
               last_attempt: new Date().toISOString()
             })
-            .eq('email', email);
+            .eq('email', normalizedEmail);
           
-          console.log(`🔴 AUTH: Zaktualizowano licznik dla ${email} na ${newCount}`);
+          console.log(`🔴 AUTH: Zaktualizowano licznik dla ${normalizedEmail} na ${newCount}`);
 
           if (newCount >= 5) {
             console.log('⛔ AUTH: BLOKOWANIE UŻYTKOWNIKA - przekroczono 5 prób!');
             const blockResult = await supabase
               .from('profiles')
               .update({ blocked: true })
-              .eq('email', email);
+              .eq('email', normalizedEmail);
             
             console.log('Wynik blokowania:', {
               error: blockResult.error,
@@ -222,27 +224,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
               throw new Error('Nie udało się zablokować konta');
             } else if (blockResult.count === 0) {
-              console.warn('Nie znaleziono profilu dla email:', email);
+              console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
             } else {
-              console.log('Pomyślnie zablokowano profil dla email:', email);
+              console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
             }
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
           }
           
-          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${email} do ${newCount}`);
+          console.log(`✅ AUTH: Zwiększono licznik błędnych logowań dla ${normalizedEmail} do ${newCount}`);
         } else {
           // Email nie istnieje - dodaj nowy wpis
             console.log('zwiekszam licznik else')
           await supabase
             .from('failed_logins')
             .insert({ 
-              email,
+              email: normalizedEmail,
               attempt_count: 1,
               last_attempt: new Date().toISOString()
             });
           
-          console.log(`Dodano nowy wpis błędnego logowania dla ${email}`);
+          console.log(`Dodano nowy wpis błędnego logowania dla ${normalizedEmail}`);
         }
 
         // Sprawdź liczbę nieudanych prób z ostatnich 15 minut
@@ -250,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: recentFailures } = await supabase
           .from('failed_logins')
           .select('attempt_count')
-          .eq('email', email)
+          .eq('email', normalizedEmail)
           .gte('last_attempt', fifteenMinutesAgo)
           .maybeSingle();
 
@@ -264,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const blockResult = await supabase
           .from('profiles')
           .update({ blocked: true })
-          .eq('email', email);
+          .eq('email', normalizedEmail);
         
         console.log('Wynik blokowania:', {
           error: blockResult.error,
@@ -277,9 +279,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Błąd podczas aktualizacji pola blocked:', blockResult.error);
           throw new Error('Nie udało się zablokować konta');
         } else if (blockResult.count === 0) {
-          console.warn('Nie znaleziono profilu dla email:', email);
+          console.warn('Nie znaleziono profilu dla email:', normalizedEmail);
         } else {
-          console.log('Pomyślnie zablokowano profil dla email:', email);
+          console.log('Pomyślnie zablokowano profil dla email:', normalizedEmail);
         }
         
         toast({
@@ -329,7 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: failedLogin } = await supabase
           .from('failed_logins')
           .select('*')
-          .eq('email', email)
+          .eq('email', normalizedEmail)
           .maybeSingle();
 
         if (failedLogin) {
@@ -342,7 +344,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .update({ 
                 blocked: true
               })
-              .eq('email', email);
+              .eq('email', normalizedEmail);
             
             console.log('⛔ AUTH: Wynik blokowania:', blockResult);
             
@@ -354,7 +356,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               variant: "destructive",
             });
             
-            console.log(`Zablokowano logowanie dla ${email} - ${failedLogin.attempt_count} błędnych prób`);
+            console.log(`Zablokowano logowanie dla ${normalizedEmail} - ${failedLogin.attempt_count} błędnych prób`);
             setIsLoading(false);
             return false;
           } else {
@@ -362,9 +364,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await supabase
               .from('failed_logins')
               .delete()
-              .eq('email', email);
+              .eq('email', normalizedEmail);
             
-            console.log(`Usunięto wpis błędnych logowań dla ${email} po udanym logowaniu`);
+            console.log(`Usunięto wpis błędnych logowań dla ${normalizedEmail} po udanym logowaniu`);
           }
         }
         
