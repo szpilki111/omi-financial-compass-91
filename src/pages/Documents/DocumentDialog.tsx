@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -420,22 +420,6 @@ const DocumentDialog = ({
       }
     }
 
-    const totalDebit = allTransactions.reduce((sum, t) => {
-      const debitAmount = t.debit_amount !== undefined ? t.debit_amount : 0;
-      return sum + debitAmount;
-    }, 0);
-    const totalCredit = allTransactions.reduce((sum, t) => {
-      const creditAmount = t.credit_amount !== undefined ? t.credit_amount : 0;
-      return sum + creditAmount;
-    }, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      toast({
-        title: "Błąd walidacji",
-        description: "Suma kwot Winien i Ma musi być równa",
-        variant: "destructive"
-      });
-      return;
-    }
     setIsLoading(true);
     try {
       let documentId = document?.id;
@@ -1106,7 +1090,6 @@ const DocumentDialog = ({
                           onDelete={() => removeParallelTransaction(index)}
                           onCopy={() => handleCopyTransaction(transaction, true)}
                           onSplit={() => handleSplitTransaction(transaction, true)}
-                          onAddBalancing={addParallelTransaction}
                           currency={selectedCurrency}
                           isEditingBlocked={isEditingBlocked}
                           isSelected={selectedParallelTransactions.includes(index)}
@@ -1180,14 +1163,13 @@ const EditableTransactionRow: React.FC<{
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
-  onAddBalancing?: (transaction: Transaction) => Promise<void>;
   onCopy?: () => void;
   onSplit?: () => void;
   currency: string;
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, onAddBalancing, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1195,107 +1177,6 @@ const EditableTransactionRow: React.FC<{
     credit_account_id: transaction.credit_account_id || '',
     debit_amount: transaction.debit_amount || 0,
     credit_amount: transaction.credit_amount || 0,
-  });
-
-  const [debitTouched, setDebitTouched] = useState(false);
-  const [creditTouched, setCreditTouched] = useState(false);
-  const [autoFillDisabled, setAutoFillDisabled] = useState(false);
-
-  // Auto-populate logic for debit amount changes (before blur)
-  const handleDebitAmountChange = (value: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, debit_amount: value };
-      
-      // Auto-populate credit amount if credit hasn't been manually touched and auto-fill not disabled
-      if (!creditTouched && !autoFillDisabled && value > 0) {
-        newData.credit_amount = value;
-      }
-      
-      return newData;
-    });
-  };
-
-  // Auto-populate logic for credit amount changes (before blur)
-  const handleCreditAmountChange = (value: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, credit_amount: value };
-      
-      // Auto-populate debit amount if debit hasn't been manually touched and auto-fill not disabled
-      if (!debitTouched && !autoFillDisabled && value > 0) {
-        newData.debit_amount = value;
-      }
-      
-      return newData;
-    });
-  };
-
-  // Handle losing focus from debit amount field
-  const handleDebitAmountBlur = () => {
-    setAutoFillDisabled(true); // Disable auto-fill after first blur
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Check if we need to create balancing transaction (when debit is smaller than credit)
-    const canCreateBalancing = formData.description.trim() && 
-                              formData.debit_account_id && 
-                              difference > 0.01 && 
-                              formData.debit_amount < formData.credit_amount;
-    
-    if (canCreateBalancing && !isEditingBlocked) {
-      createBalancingTransaction('debit');
-    }
-  };
-
-  // Handle losing focus from credit amount field
-  const handleCreditAmountBlur = () => {
-    setAutoFillDisabled(true); // Disable auto-fill after first blur
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Check if we need to create balancing transaction (when debit is larger)
-    const canCreateBalancing = formData.description.trim() && 
-                              formData.debit_account_id && 
-                              difference > 0.01 && 
-                              formData.credit_amount < formData.debit_amount;
-    
-    if (canCreateBalancing && !isEditingBlocked) {
-      createBalancingTransaction('credit');
-    }
-  };
-
-  // Create balancing transaction when one side is smaller
-  const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
-    if (!onAddBalancing) return;
-    
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Create the balancing transaction
-    const balancingTransaction = {
-      description: formData.description,
-      debit_account_id: smallerSide === 'debit' ? '' : formData.debit_account_id,
-      credit_account_id: smallerSide === 'credit' ? '' : formData.credit_account_id,
-      debit_amount: smallerSide === 'debit' ? difference : 0,
-      credit_amount: smallerSide === 'credit' ? difference : 0,
-      amount: difference,
-      settlement_type: 'Bank',
-      currency: currency,
-    };
-
-    // Add the balancing transaction
-    onAddBalancing(balancingTransaction);
-  };
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('location_id')
-        .eq('id', user?.id)
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
   });
 
   useEffect(() => {
@@ -1311,6 +1192,21 @@ const EditableTransactionRow: React.FC<{
     };
     onUpdate(updatedTransaction);
   }, [formData, currency]);
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   const getCurrencySymbol = (currency: string = 'PLN') => {
     const currencySymbols: { [key: string]: string } = {
@@ -1353,11 +1249,8 @@ const EditableTransactionRow: React.FC<{
             value={formData.debit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setDebitTouched(true);
-              handleDebitAmountChange(value);
+              setFormData(prev => ({ ...prev, debit_amount: value }));
             }}
-            onFocus={() => setDebitTouched(true)}
-            onBlur={handleDebitAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
@@ -1383,11 +1276,8 @@ const EditableTransactionRow: React.FC<{
             value={formData.credit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setCreditTouched(true);
-              handleCreditAmountChange(value);
+              setFormData(prev => ({ ...prev, credit_amount: value }));
             }}
-            onFocus={() => setCreditTouched(true)}
-            onBlur={handleCreditAmountBlur}
             placeholder="0.00" 
             className="text-right" 
             disabled={isEditingBlocked}
