@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -420,22 +420,6 @@ const DocumentDialog = ({
       }
     }
 
-    const totalDebit = allTransactions.reduce((sum, t) => {
-      const debitAmount = t.debit_amount !== undefined ? t.debit_amount : 0;
-      return sum + debitAmount;
-    }, 0);
-    const totalCredit = allTransactions.reduce((sum, t) => {
-      const creditAmount = t.credit_amount !== undefined ? t.credit_amount : 0;
-      return sum + creditAmount;
-    }, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      toast({
-        title: "Błąd walidacji",
-        description: "Suma kwot Winien i Ma musi być równa",
-        variant: "destructive"
-      });
-      return;
-    }
     setIsLoading(true);
     try {
       let documentId = document?.id;
@@ -567,6 +551,124 @@ const DocumentDialog = ({
         ? [...prev, index]
         : prev.filter(i => i !== index)
     );
+  };
+
+  const handleCopyTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: undefined,
+      isCloned: true,
+      clonedType: transaction.credit_account_id ? 'credit' : 'debit'
+    };
+    if (isParallel) {
+      setParallelTransactions(prev => [...prev, newTransaction]);
+    } else {
+      setTransactions(prev => [...prev, newTransaction]);
+    }
+    toast({
+      title: "Transakcja skopiowana",
+      description: "Transakcja została dodana do listy",
+    });
+  };
+
+  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    const debitAmount = transaction.debit_amount || 0;
+    const creditAmount = transaction.credit_amount || 0;
+    
+    if (debitAmount === 0 && creditAmount === 0) {
+      toast({
+        title: "Błąd",
+        description: "Brak kwot do rozdzielenia",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if this is already a split transaction (one field is empty)
+    const isAlreadySplit = (debitAmount === 0 && creditAmount > 0) || (creditAmount === 0 && debitAmount > 0);
+
+    if (isAlreadySplit) {
+      // If already split, calculate total debit and credit sums from all transactions
+      const allTransactions = [...transactions, ...parallelTransactions];
+      
+      const totalDebit = allTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
+      const totalCredit = allTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
+
+      // Determine which side has smaller sum
+      const isDebitSideSmaller = totalDebit < totalCredit;
+      const balanceAmount = Math.abs(totalDebit - totalCredit);
+
+      if (balanceAmount === 0) {
+        toast({
+          title: "Błąd",
+          description: "Sumy Wn i Ma są już wyrównane",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create transaction with the same empty field as original
+      // Fill the side with smaller total sum with the balancing amount
+      const newTransaction: Transaction = {
+        ...transaction,
+        id: undefined,
+        description: transaction.description,
+        debit_amount: isDebitSideSmaller ? balanceAmount : undefined,
+        credit_amount: isDebitSideSmaller ? undefined : balanceAmount,
+        amount: balanceAmount,
+        debit_account_id: transaction.debit_account_id || '',
+        credit_account_id: transaction.credit_account_id || '',
+      };
+
+      if (isParallel) {
+        setParallelTransactions(prev => [...prev, newTransaction]);
+      } else {
+        setTransactions(prev => [...prev, newTransaction]);
+      }
+
+      toast({
+        title: "Kwota wyrównana",
+        description: `Utworzono operację wyrównującą: ${balanceAmount.toFixed(2)} ${form.getValues('currency')}`,
+      });
+    } else {
+      // Normal split: both fields have values
+      const isDebitSmaller = debitAmount < creditAmount;
+      const difference = Math.abs(debitAmount - creditAmount);
+
+      if (difference === 0) {
+        toast({
+          title: "Błąd",
+          description: "Kwoty są równe, nie ma czego rozdzielać",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create new transaction:
+      // - Field with LARGER amount should be EMPTY (undefined)
+      // - Field with SMALLER amount should have the difference (larger - smaller)
+      const newTransaction: Transaction = {
+        ...transaction,
+        id: undefined,
+        description: transaction.description,
+        debit_amount: isDebitSmaller ? difference : undefined,
+        credit_amount: isDebitSmaller ? undefined : difference,
+        amount: difference,
+        debit_account_id: transaction.debit_account_id || '',
+        credit_account_id: transaction.credit_account_id || '',
+      };
+
+      if (isParallel) {
+        setParallelTransactions(prev => [...prev, newTransaction]);
+      } else {
+        setTransactions(prev => [...prev, newTransaction]);
+      }
+
+      toast({
+        title: "Kwota rozdzielona",
+        description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues('currency')}`,
+      });
+    }
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -869,6 +971,8 @@ const DocumentDialog = ({
                         transaction={transaction}
                         onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                         onDelete={() => removeTransaction(index)}
+                        onCopy={() => handleCopyTransaction(transaction, false)}
+                        onSplit={() => handleSplitTransaction(transaction, false)}
                         currency={selectedCurrency}
                         isEditingBlocked={isEditingBlocked}
                         isSelected={selectedTransactions.includes(index)}
@@ -984,7 +1088,8 @@ const DocumentDialog = ({
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                           onDelete={() => removeParallelTransaction(index)}
-                          onAddBalancing={addParallelTransaction}
+                          onCopy={() => handleCopyTransaction(transaction, true)}
+                          onSplit={() => handleSplitTransaction(transaction, true)}
                           currency={selectedCurrency}
                           isEditingBlocked={isEditingBlocked}
                           isSelected={selectedParallelTransactions.includes(index)}
@@ -1058,12 +1163,13 @@ const EditableTransactionRow: React.FC<{
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
-  onAddBalancing?: (transaction: Transaction) => Promise<void>;
+  onCopy?: () => void;
+  onSplit?: () => void;
   currency: string;
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, onAddBalancing, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1073,91 +1179,26 @@ const EditableTransactionRow: React.FC<{
     credit_amount: transaction.credit_amount || 0,
   });
 
-  const [debitTouched, setDebitTouched] = useState(false);
-  const [creditTouched, setCreditTouched] = useState(false);
-  const [autoFillDisabled, setAutoFillDisabled] = useState(false);
+  // Determine if this is a split transaction with one side empty
+  const isDebitEmpty = !formData.debit_amount || formData.debit_amount === 0;
+  const isCreditEmpty = !formData.credit_amount || formData.credit_amount === 0;
+  const isSplitTransaction = (isDebitEmpty && !isCreditEmpty) || (isCreditEmpty && !isDebitEmpty);
+  const isDebitReadOnly = isSplitTransaction && isDebitEmpty;
+  const isCreditReadOnly = isSplitTransaction && isCreditEmpty;
 
-  // Auto-populate logic for debit amount changes (before blur)
-  const handleDebitAmountChange = (value: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, debit_amount: value };
-      
-      // Auto-populate credit amount if credit hasn't been manually touched and auto-fill not disabled
-      if (!creditTouched && !autoFillDisabled && value > 0) {
-        newData.credit_amount = value;
-      }
-      
-      return newData;
-    });
-  };
-
-  // Auto-populate logic for credit amount changes (before blur)
-  const handleCreditAmountChange = (value: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, credit_amount: value };
-      
-      // Auto-populate debit amount if debit hasn't been manually touched and auto-fill not disabled
-      if (!debitTouched && !autoFillDisabled && value > 0) {
-        newData.debit_amount = value;
-      }
-      
-      return newData;
-    });
-  };
-
-  // Handle losing focus from debit amount field
-  const handleDebitAmountBlur = () => {
-    setAutoFillDisabled(true); // Disable auto-fill after first blur
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Check if we need to create balancing transaction (when debit is smaller than credit)
-    const canCreateBalancing = formData.description.trim() && 
-                              formData.debit_account_id && 
-                              difference > 0.01 && 
-                              formData.debit_amount < formData.credit_amount;
-    
-    if (canCreateBalancing && !isEditingBlocked) {
-      createBalancingTransaction('debit');
-    }
-  };
-
-  // Handle losing focus from credit amount field
-  const handleCreditAmountBlur = () => {
-    setAutoFillDisabled(true); // Disable auto-fill after first blur
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Check if we need to create balancing transaction (when debit is larger)
-    const canCreateBalancing = formData.description.trim() && 
-                              formData.debit_account_id && 
-                              difference > 0.01 && 
-                              formData.credit_amount < formData.debit_amount;
-    
-    if (canCreateBalancing && !isEditingBlocked) {
-      createBalancingTransaction('credit');
-    }
-  };
-
-  // Create balancing transaction when one side is smaller
-  const createBalancingTransaction = (smallerSide: 'debit' | 'credit') => {
-    if (!onAddBalancing) return;
-    
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    
-    // Create the balancing transaction
-    const balancingTransaction = {
+  useEffect(() => {
+    const updatedTransaction: Transaction = {
+      ...transaction,
       description: formData.description,
-      debit_account_id: smallerSide === 'debit' ? '' : formData.debit_account_id,
-      credit_account_id: smallerSide === 'credit' ? '' : formData.credit_account_id,
-      debit_amount: smallerSide === 'debit' ? difference : 0,
-      credit_amount: smallerSide === 'credit' ? difference : 0,
-      amount: difference,
-      settlement_type: 'Bank',
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
       currency: currency,
     };
-
-    // Add the balancing transaction
-    onAddBalancing(balancingTransaction);
-  };
+    onUpdate(updatedTransaction);
+  }, [formData, currency]);
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -1173,20 +1214,6 @@ const EditableTransactionRow: React.FC<{
     },
     enabled: !!user?.id,
   });
-
-  useEffect(() => {
-    const updatedTransaction: Transaction = {
-      ...transaction,
-      description: formData.description,
-      debit_account_id: formData.debit_account_id,
-      credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
-      currency: currency,
-    };
-    onUpdate(updatedTransaction);
-  }, [formData, currency]);
 
   const getCurrencySymbol = (currency: string = 'PLN') => {
     const currencySymbols: { [key: string]: string } = {
@@ -1229,14 +1256,12 @@ const EditableTransactionRow: React.FC<{
             value={formData.debit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setDebitTouched(true);
-              handleDebitAmountChange(value);
+              setFormData(prev => ({ ...prev, debit_amount: value }));
             }}
-            onFocus={() => setDebitTouched(true)}
-            onBlur={handleDebitAmountBlur}
             placeholder="0.00" 
-            className="text-right" 
-            disabled={isEditingBlocked}
+            className={cn("text-right", isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            disabled={isEditingBlocked || isDebitReadOnly}
+            readOnly={isDebitReadOnly}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
@@ -1247,7 +1272,8 @@ const EditableTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="debit"
-          disabled={isEditingBlocked}
+          disabled={isEditingBlocked || isDebitReadOnly}
+          className={isDebitReadOnly ? "opacity-50" : ""}
         />
       </TableCell>
       <TableCell>
@@ -1259,14 +1285,12 @@ const EditableTransactionRow: React.FC<{
             value={formData.credit_amount || ''} 
             onChange={e => {
               const value = parseFloat(e.target.value) || 0;
-              setCreditTouched(true);
-              handleCreditAmountChange(value);
+              setFormData(prev => ({ ...prev, credit_amount: value }));
             }}
-            onFocus={() => setCreditTouched(true)}
-            onBlur={handleCreditAmountBlur}
             placeholder="0.00" 
-            className="text-right" 
-            disabled={isEditingBlocked}
+            className={cn("text-right", isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            disabled={isEditingBlocked || isCreditReadOnly}
+            readOnly={isCreditReadOnly}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
@@ -1277,17 +1301,43 @@ const EditableTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="credit"
-          disabled={isEditingBlocked}
+          disabled={isEditingBlocked || isCreditReadOnly}
+          className={isCreditReadOnly ? "opacity-50" : ""}
         />
       </TableCell>
       <TableCell>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
+          {onCopy && (
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="icon" 
+              onClick={onCopy}
+              title="Kopiuj"
+              disabled={isEditingBlocked}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+          {onSplit && (
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="icon" 
+              onClick={onSplit}
+              title="Rozdziel kwotę"
+              disabled={isEditingBlocked}
+            >
+              <Split className="h-4 w-4" />
+            </Button>
+          )}
           <Button 
             type="button" 
             variant="ghost" 
-            size="sm" 
+            size="icon" 
             onClick={onDelete} 
             className="text-red-600 hover:text-red-700"
+            title="Usuń"
             disabled={isEditingBlocked}
           >
             <Trash2 className="h-4 w-4" />

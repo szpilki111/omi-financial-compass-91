@@ -10,6 +10,8 @@ import UsersManagement from './UsersManagement';
 import AccountsManagement from './AccountsManagement';
 import AccountRestrictionsManagement from './AccountRestrictionsManagement';
 import DatabaseManagement from './DatabaseManagement';
+import ErrorReportsManagement from './ErrorReportsManagement';
+import LoginEventsManagement from './LoginEventsManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -41,19 +43,25 @@ const AdministrationPage = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="locations" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="locations">Placówki</TabsTrigger>
-            <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
-            <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
-            <TabsTrigger value="account-restrictions">Ograniczenia kont</TabsTrigger>
-            {(user.role === 'admin' || user.role === 'prowincjal') && (
-              <TabsTrigger value="users">Użytkownicy</TabsTrigger>
-            )}
-            {user.role === 'admin' && (
-              <TabsTrigger value="database">Baza danych</TabsTrigger>
-            )}
-          </TabsList>
+      <Tabs defaultValue="locations" className="w-full">
+        <TabsList className="grid w-full grid-cols-8">
+          <TabsTrigger value="locations">Placówki</TabsTrigger>
+          <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
+          <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
+          <TabsTrigger value="account-restrictions">Ograniczenia kont</TabsTrigger>
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="users">Użytkownicy</TabsTrigger>
+          )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="login-events">Logowania</TabsTrigger>
+          )}
+          {user.role === 'admin' && (
+            <TabsTrigger value="database">Baza danych</TabsTrigger>
+          )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="error-reports">Zgłoszenia błędów</TabsTrigger>
+          )}
+        </TabsList>
 
           <TabsContent value="locations" className="space-y-4">
             <LocationsManagement />
@@ -77,15 +85,27 @@ const AdministrationPage = () => {
             </TabsContent>
           )}
 
-          {user.role === 'admin' && (
-            <TabsContent value="database" className="space-y-4">
-              <DatabaseManagement />
-            </TabsContent>
-          )}
-        </Tabs>
-      </div>
-    </MainLayout>
-  );
+        {(user.role === 'admin' || user.role === 'prowincjal') && (
+          <TabsContent value="login-events" className="space-y-4">
+            <LoginEventsManagement />
+          </TabsContent>
+        )}
+
+        {user.role === 'admin' && (
+          <TabsContent value="database" className="space-y-4">
+            <DatabaseManagement />
+          </TabsContent>
+        )}
+
+        {(user.role === 'admin' || user.role === 'prowincjal') && (
+          <TabsContent value="error-reports" className="space-y-4">
+            <ErrorReportsManagement />
+          </TabsContent>
+        )}
+      </Tabs>
+    </div>
+  </MainLayout>
+);
 };
 
 export default AdministrationPage;

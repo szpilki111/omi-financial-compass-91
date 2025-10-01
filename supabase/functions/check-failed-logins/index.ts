@@ -17,43 +17,45 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, email, success, error_message } = await req.json();
+    const { user_id, email, since } = await req.json();
 
-    if (!email) {
+    if ((!user_id && !email) || !since) {
       return new Response(
-        JSON.stringify({ error: 'Missing email' }),
+        JSON.stringify({ error: 'Missing user_id/email or since parameter' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Pobierz IP i user agent z nagłówków
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
-    const user_agent = req.headers.get('user-agent') || null;
+    console.log('Checking failed logins for:', { user_id, email, since });
 
-    console.log('Logging login event:', { user_id, email, success, error_message, ip, user_agent });
-
-    // Insert login event
-    const { error: insertError } = await supabase
+    // Count failed login attempts by user_id OR email
+    let query = supabase
       .from('user_login_events')
-      .insert({
-        user_id: user_id || null,
-        email,
-        success: success || false,
-        error_message: error_message || null,
-        ip,
-        user_agent
-      });
+      .select('id', { count: 'exact', head: false })
+      .eq('success', false)
+      .gte('created_at', since);
 
-    if (insertError) {
-      console.error('Error inserting login event:', insertError);
+    // Filter by user_id if available, otherwise by email
+    if (user_id) {
+      query = query.eq('user_id', user_id);
+    } else if (email) {
+      query = query.eq('email', email);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error counting failed logins:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to log event' }),
+        JSON.stringify({ error: 'Failed to count login attempts' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('Failed login count:', count);
+
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ count: count || 0 }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

@@ -17,40 +17,32 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, email, success, error_message } = await req.json();
+    const { user_id } = await req.json();
 
-    if (!email) {
+    if (!user_id) {
       return new Response(
-        JSON.stringify({ error: 'Missing email' }),
+        JSON.stringify({ error: 'Missing user_id' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Pobierz IP i user agent z nagłówków
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
-    const user_agent = req.headers.get('user-agent') || null;
+    console.log('Blocking user:', user_id);
 
-    console.log('Logging login event:', { user_id, email, success, error_message, ip, user_agent });
+    // Block the user
+    const { error } = await supabase
+      .from('profiles')
+      .update({ blocked: true })
+      .eq('id', user_id);
 
-    // Insert login event
-    const { error: insertError } = await supabase
-      .from('user_login_events')
-      .insert({
-        user_id: user_id || null,
-        email,
-        success: success || false,
-        error_message: error_message || null,
-        ip,
-        user_agent
-      });
-
-    if (insertError) {
-      console.error('Error inserting login event:', insertError);
+    if (error) {
+      console.error('Error blocking user:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to log event' }),
+        JSON.stringify({ error: 'Failed to block user' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log('User blocked successfully');
 
     return new Response(
       JSON.stringify({ success: true }),

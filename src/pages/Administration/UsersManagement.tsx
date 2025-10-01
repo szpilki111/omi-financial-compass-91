@@ -100,7 +100,10 @@ const UsersManagement = () => {
       // Get latest login events for each user
       const usersWithLoginEvents = await Promise.all(
         profiles.map(async (profile) => {
-          // Get last successful login
+          // Normalize email for consistent queries
+          const normalizedEmail = profile.email?.toLowerCase().trim();
+
+          // Get last successful login (using user_id)
           const { data: successfulLogin } = await supabase
             .from('user_login_events')
             .select('created_at')
@@ -108,17 +111,17 @@ const UsersManagement = () => {
             .eq('success', true)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
-          // Get last failed login
+          // Get last failed login (using email because failed logins have user_id = null)
           const { data: failedLogin } = await supabase
             .from('user_login_events')
             .select('created_at')
-            .eq('user_id', profile.id)
+            .eq('email', normalizedEmail)
             .eq('success', false)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           return {
             ...profile,
@@ -200,17 +203,41 @@ const deleteUserMutation = useMutation({
 // Mutation to toggle user blocked status
 const toggleUserBlockedMutation = useMutation({
   mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
+    // Pobierz email użytkownika
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
     const { error } = await supabase
       .from('profiles')
       .update({ blocked })
       .eq('id', userId);
     
     if (error) throw error;
+    
+    // Jeśli odblokowujemy użytkownika, wyczyść historię nieudanych logowań
+    if (!blocked && userProfile) {
+      await supabase
+        .from('user_login_events')
+        .delete()
+        .eq('user_id', userId)
+        .eq('success', false);
+      
+      // Wyczyść także tabelę failed_logins
+      await supabase
+        .from('failed_logins')
+        .delete()
+        .eq('email', userProfile.email);
+    }
   },
-  onSuccess: () => {
+  onSuccess: (_, variables) => {
     toast({
       title: 'Sukces',
-      description: 'Status blokady użytkownika został zaktualizowany',
+      description: variables.blocked 
+        ? 'Użytkownik został zablokowany' 
+        : 'Użytkownik został odblokowany i historia nieudanych logowań została wyczyszczona',
     });
     queryClient.invalidateQueries({ queryKey: ['users'] });
   },
@@ -228,9 +255,11 @@ const toggleUserBlockedMutation = useMutation({
     deleteUserMutation.mutate(userId);
   };
 
-  const handleToggleBlocked = (userId: string, currentBlocked: boolean) => {
-    toggleUserBlockedMutation.mutate({ userId, blocked: !currentBlocked });
+  const handleToggleBlocked = (userId: string, blocked: boolean) => {
+    toggleUserBlockedMutation.mutate({ userId, blocked });
   };
+  
+  const userRole = user?.role;
 
   if (isLoading) {
     return (
@@ -266,11 +295,11 @@ const toggleUserBlockedMutation = useMutation({
                   <TableHead>Telefon</TableHead>
                   <TableHead>Rola</TableHead>
                   <TableHead>Placówka</TableHead>
-                  {user?.role === 'prowincjal' && (
+                  {(userRole === 'prowincjal' || userRole === 'admin') && (
                     <>
                       <TableHead>Ostatnie udane</TableHead>
                       <TableHead>Ostatnie nieudane</TableHead>
-                      <TableHead>Zablokowany</TableHead>
+                      <TableHead>Status</TableHead>
                     </>
                   )}
                   <TableHead>Data utworzenia</TableHead>
@@ -293,7 +322,7 @@ const toggleUserBlockedMutation = useMutation({
                     <TableCell>
                       {user.location?.name || '-'}
                     </TableCell>
-                    {user?.role === 'prowincjal' && (
+                    {(userRole === 'prowincjal' || userRole === 'admin') && (
                       <>
                         <TableCell>
                           {user.last_successful_login ? (
@@ -314,11 +343,28 @@ const toggleUserBlockedMutation = useMutation({
                           )}
                         </TableCell>
                         <TableCell>
-                          <Switch
-                            checked={user.blocked}
-                            onCheckedChange={() => handleToggleBlocked(user.id, user.blocked)}
-                            disabled={toggleUserBlockedMutation.isPending}
-                          />
+                          <div className="flex items-center gap-2">
+                            {user.blocked ? (
+                              <Badge variant="destructive" className="text-xs">
+                                Zablokowane
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Aktywne
+                              </Badge>
+                            )}
+                            {(userRole === 'prowincjal' || userRole === 'admin') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleBlocked(user.id, !user.blocked)}
+                                disabled={toggleUserBlockedMutation.isPending}
+                                className="h-7 text-xs"
+                              >
+                                {user.blocked ? 'Odblokuj' : 'Zablokuj'}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </>
                     )}
