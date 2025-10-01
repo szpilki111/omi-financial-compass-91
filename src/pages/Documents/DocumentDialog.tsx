@@ -604,33 +604,34 @@ const DocumentDialog = ({
     const isAlreadySplit = (debitAmount === 0 && creditAmount > 0) || (creditAmount === 0 && debitAmount > 0);
 
     if (isAlreadySplit) {
-      // If already split, balance to document total
+      // If already split, calculate total debit and credit sums from all transactions
       const allTransactions = [...transactions, ...parallelTransactions];
-      const documentTotal = allTransactions.reduce((sum, t) => {
-        return sum + Math.max(t.debit_amount || 0, t.credit_amount || 0);
-      }, 0);
+      
+      const totalDebit = allTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
+      const totalCredit = allTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
 
-      const currentAmount = Math.max(debitAmount, creditAmount);
-      const remainingAmount = documentTotal - currentAmount;
+      // Determine which side has smaller sum
+      const isDebitSideSmaller = totalDebit < totalCredit;
+      const balanceAmount = Math.abs(totalDebit - totalCredit);
 
-      if (remainingAmount <= 0) {
+      if (balanceAmount === 0) {
         toast({
           title: "Błąd",
-          description: "Brak kwoty do uzupełnienia - operacja już równa lub przekracza sumę dokumentu",
+          description: "Sumy Wn i Ma są już wyrównane",
           variant: "destructive"
         });
         return;
       }
 
-      // Create transaction to balance to document total
-      // Fill the empty field with the remaining amount
+      // Create transaction with the same empty field as original
+      // Fill the side with smaller total sum
       const newTransaction: Transaction = {
         ...transaction,
         id: undefined,
         description: transaction.description,
-        debit_amount: debitAmount > 0 ? debitAmount : remainingAmount,
-        credit_amount: creditAmount > 0 ? creditAmount : remainingAmount,
-        amount: remainingAmount,
+        debit_amount: isDebitSideSmaller ? balanceAmount : undefined,
+        credit_amount: isDebitSideSmaller ? undefined : balanceAmount,
+        amount: balanceAmount,
         debit_account_id: '',
         credit_account_id: '',
       };
@@ -643,45 +644,7 @@ const DocumentDialog = ({
 
       toast({
         title: "Kwota wyrównana",
-        description: `Utworzono operację wyrównującą do sumy dokumentu: ${remainingAmount.toFixed(2)} ${form.getValues('currency')}`,
-      });
-    } else {
-      // Normal split: both fields have values
-      const isDebitSmaller = debitAmount < creditAmount;
-      const difference = Math.abs(debitAmount - creditAmount);
-
-      if (difference === 0) {
-        toast({
-          title: "Błąd",
-          description: "Kwoty są równe, nie ma czego rozdzielać",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Create new transaction:
-      // - Field with LARGER amount should be EMPTY
-      // - Field with SMALLER amount should have the difference (larger - smaller)
-      const newTransaction: Transaction = {
-        ...transaction,
-        id: undefined,
-        description: transaction.description,
-        debit_amount: isDebitSmaller ? difference : undefined,
-        credit_amount: isDebitSmaller ? undefined : difference,
-        amount: difference,
-        debit_account_id: '',
-        credit_account_id: '',
-      };
-
-      if (isParallel) {
-        setParallelTransactions(prev => [...prev, newTransaction]);
-      } else {
-        setTransactions(prev => [...prev, newTransaction]);
-      }
-
-      toast({
-        title: "Kwota rozdzielona",
-        description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues('currency')}`,
+        description: `Utworzono operację wyrównującą: ${balanceAmount.toFixed(2)} ${form.getValues('currency')}`,
       });
     }
   };
