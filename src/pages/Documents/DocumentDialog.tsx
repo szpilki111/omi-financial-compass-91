@@ -1179,6 +1179,13 @@ const EditableTransactionRow: React.FC<{
     credit_amount: transaction.credit_amount || 0,
   });
 
+  // Determine if this is a split transaction with one side empty
+  const isDebitEmpty = !formData.debit_amount || formData.debit_amount === 0;
+  const isCreditEmpty = !formData.credit_amount || formData.credit_amount === 0;
+  const isSplitTransaction = (isDebitEmpty && !isCreditEmpty) || (isCreditEmpty && !isDebitEmpty);
+  const isDebitReadOnly = isSplitTransaction && isDebitEmpty;
+  const isCreditReadOnly = isSplitTransaction && isCreditEmpty;
+
   useEffect(() => {
     const updatedTransaction: Transaction = {
       ...transaction,
@@ -1252,8 +1259,9 @@ const EditableTransactionRow: React.FC<{
               setFormData(prev => ({ ...prev, debit_amount: value }));
             }}
             placeholder="0.00" 
-            className="text-right" 
-            disabled={isEditingBlocked}
+            className={cn("text-right", isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            disabled={isEditingBlocked || isDebitReadOnly}
+            readOnly={isDebitReadOnly}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
@@ -1264,7 +1272,8 @@ const EditableTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, debit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="debit"
-          disabled={isEditingBlocked}
+          disabled={isEditingBlocked || isDebitReadOnly}
+          className={isDebitReadOnly ? "opacity-50" : ""}
         />
       </TableCell>
       <TableCell>
@@ -1279,8 +1288,9 @@ const EditableTransactionRow: React.FC<{
               setFormData(prev => ({ ...prev, credit_amount: value }));
             }}
             placeholder="0.00" 
-            className="text-right" 
-            disabled={isEditingBlocked}
+            className={cn("text-right", isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            disabled={isEditingBlocked || isCreditReadOnly}
+            readOnly={isCreditReadOnly}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
         </div>
@@ -1291,7 +1301,8 @@ const EditableTransactionRow: React.FC<{
           onChange={accountId => setFormData(prev => ({ ...prev, credit_account_id: accountId }))}
           locationId={userProfile?.location_id}
           side="credit"
-          disabled={isEditingBlocked}
+          disabled={isEditingBlocked || isCreditReadOnly}
+          className={isCreditReadOnly ? "opacity-50" : ""}
         />
       </TableCell>
       <TableCell>
