@@ -176,24 +176,23 @@ const login = async (email: string, password: string): Promise<boolean> => {
 
     console.log('🔵 AUTH: Odpowiedź od Supabase:', { data, error });
 
-    // Pobierz informacje o IP i user agent (przykładowo, musisz je dostarczyć z frontendu lub backendu)
-    const userIp = 'unknown'; // Zastąp rzeczywistym IP, np. z nagłówka żądania
-    const userAgent = navigator.userAgent || 'unknown'; // Pobierz user agent z przeglądarki
-
     if (error) {
       console.error('🔴 AUTH: BŁĄD LOGOWANIA od Supabase:', error);
 
-      // Zapisz nieudaną próbę logowania do user_login_events
-      await supabase.from('user_login_events').insert({
-        user_id: null, // user_id jest null dla nieudanych logowań
-        email: normalizedEmail,
-        success: false,
-        created_at: new Date().toISOString(),
-        ip: userIp,
-        user_agent: userAgent,
-        error_message: error.message,
-      });
-      console.log(`🔴 AUTH: Zapisano nieudaną próbę logowania dla ${normalizedEmail}`);
+      // Zapisz nieudaną próbę logowania używając edge function
+      try {
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: userId,
+            email: normalizedEmail,
+            success: false,
+            error_message: error.message,
+          },
+        });
+        console.log(`🔴 AUTH: Zapisano nieudaną próbę logowania dla ${normalizedEmail}`);
+      } catch (logError) {
+        console.error('🔴 AUTH: Błąd podczas zapisywania logowania:', logError);
+      }
 
       // Sprawdź tabelę failed_logins
       const { data: failedLogin } = await supabase
@@ -297,17 +296,20 @@ const login = async (email: string, password: string): Promise<boolean> => {
     }
 
     if (data?.user) {
-      // Zapisz udaną próbę logowania do user_login_events
-      await supabase.from('user_login_events').insert({
-        user_id: data.user.id,
-        email: normalizedEmail,
-        success: true,
-        created_at: new Date().toISOString(),
-        ip: userIp,
-        user_agent: userAgent,
-        error_message: null,
-      });
-      console.log(`✅ AUTH: Zapisano udaną próbę logowania dla ${normalizedEmail}`);
+      // Zapisz udaną próbę logowania używając edge function
+      try {
+        await supabase.functions.invoke('log-login-event', {
+          body: {
+            user_id: data.user.id,
+            email: normalizedEmail,
+            success: true,
+            error_message: null,
+          },
+        });
+        console.log(`✅ AUTH: Zapisano udaną próbę logowania dla ${normalizedEmail}`);
+      } catch (logError) {
+        console.error('🔴 AUTH: Błąd podczas zapisywania logowania:', logError);
+      }
 
       // Sprawdź status blokady
       const { data: finalCheck } = await supabase
