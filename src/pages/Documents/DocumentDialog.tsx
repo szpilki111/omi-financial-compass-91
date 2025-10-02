@@ -630,6 +630,8 @@ const DocumentDialog = ({
       currency
     };
     setTransactions(prev => [...prev, transactionWithCurrency]);
+    // Clear validation errors when a new transaction is added
+    setValidationErrors([]);
   };
 
   const addParallelTransaction = async (transaction: Transaction) => {
@@ -639,22 +641,32 @@ const DocumentDialog = ({
       currency
     };
     setParallelTransactions(prev => [...prev, transactionWithCurrency]);
+    // Clear validation errors when a new transaction is added
+    setValidationErrors([]);
   };
 
   const removeTransaction = (index: number) => {
     setTransactions(prev => prev.filter((_, i) => i !== index));
+    // Clear validation errors when a transaction is removed
+    setValidationErrors([]);
   };
 
   const removeParallelTransaction = (index: number) => {
     setParallelTransactions(prev => prev.filter((_, i) => i !== index));
+    // Clear validation errors when a transaction is removed
+    setValidationErrors([]);
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+    // Clear validation errors when a transaction is updated
+    setValidationErrors(prev => prev.filter(e => !(e.type === 'incomplete_transaction' && e.transactionIndex === index && e.isParallel === false)));
   };
 
   const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
     setParallelTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+    // Clear validation errors when a transaction is updated
+    setValidationErrors(prev => prev.filter(e => !(e.type === 'incomplete_transaction' && e.transactionIndex === index && e.isParallel === true)));
   };
 
   const handleSelectTransaction = (index: number, checked: boolean) => {
