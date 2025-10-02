@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -8,12 +7,14 @@ import { Transaction } from './types';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { cn } from '@/lib/utils';
 
 interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
   isEditingBlocked?: boolean;
   currency?: string;
   onHasDataChange?: (hasData: boolean) => void;
+  hasValidationError?: boolean;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
@@ -21,6 +22,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   isEditingBlocked = false,
   currency = 'PLN',
   onHasDataChange,
+  hasValidationError = false,
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -409,7 +411,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   return (
     <TableRow 
       ref={rowRef}
-      className="bg-blue-50 border-2 border-blue-200" 
+      className={cn(
+        hasValidationError ? "bg-destructive/20 border-2 border-destructive" : "bg-blue-50 border-2 border-blue-200"
+      )}
       onBlur={handleRowBlur}
     >
       <TableCell>
@@ -421,7 +425,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="Opis operacji..."
-          className="min-h-[60px] resize-none"
+          className={cn(
+            "min-h-[60px] resize-none",
+            hasValidationError && "border-destructive focus-visible:ring-destructive"
+          )}
           disabled={isEditingBlocked}
         />
       </TableCell>
@@ -436,7 +443,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             onFocus={handleDebitFocus}
             onBlur={handleDebitAmountBlur}
             placeholder="0.00"
-            className="text-right"
+            className={cn(
+              "text-right",
+              hasValidationError && "border-destructive focus-visible:ring-destructive"
+            )}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
@@ -449,6 +459,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           locationId={userProfile?.location_id}
           side="debit"
           disabled={isEditingBlocked}
+          className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
       <TableCell>
@@ -462,7 +473,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             onFocus={handleCreditFocus}
             onBlur={handleCreditAmountBlur}
             placeholder="0.00"
-            className="text-right"
+            className={cn(
+              "text-right",
+              hasValidationError && "border-destructive focus-visible:ring-destructive"
+            )}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
@@ -475,6 +489,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           locationId={userProfile?.location_id}
           side="credit"
           disabled={isEditingBlocked}
+          className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
       <TableCell>

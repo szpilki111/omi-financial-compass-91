@@ -30,6 +30,19 @@ interface DocumentDialogProps {
   document?: any;
 }
 
+interface ValidationError {
+  type: 'inline_form' | 'parallel_inline_form' | 'incomplete_transaction' | 'no_operations';
+  transactionIndex?: number;
+  isParallel?: boolean;
+  missingFields?: {
+    description?: boolean;
+    debit_amount?: boolean;
+    credit_amount?: boolean;
+    debit_account_id?: boolean;
+    credit_account_id?: boolean;
+  };
+}
+
 interface DocumentFormData {
   document_number: string;
   document_name: string;
@@ -58,6 +71,7 @@ const DocumentDialog = ({
   const [selectedParallelTransactions, setSelectedParallelTransactions] = useState<number[]>([]);
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -138,46 +152,107 @@ const DocumentDialog = ({
   }, [isOpen, document, transactions.length, showInlineForm]);
 
   const checkLastTransactionComplete = () => {
+    const errors: ValidationError[] = [];
+    
     // Check if inline form has unsaved data
     if (hasInlineFormData) {
+      errors.push({ type: 'inline_form' });
       toast({
         title: "Błąd walidacji",
         description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return false;
     }
 
     // Check if parallel inline form has unsaved data  
     if (hasParallelInlineFormData) {
+      errors.push({ type: 'parallel_inline_form' });
       toast({
         title: "Błąd walidacji", 
         description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zamknięciem.",
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return false;
     }
 
     // Check for incomplete existing transactions
-    const transactionsToCheck = [...transactions, ...parallelTransactions];
-    const incompleteTransactions = transactionsToCheck.filter(transaction => {
+    transactions.forEach((transaction, index) => {
       const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
-      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
+      const hasDebitAmount = transaction.debit_amount > 0;
+      const hasCreditAmount = transaction.credit_amount > 0;
+      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
+      const hasDebitAccount = !!transaction.debit_account_id;
+      const hasCreditAccount = !!transaction.credit_account_id;
       
-      // Transaction is incomplete if it has description or amount but missing other required fields
-      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+      // Transaction is incomplete if it has any data but missing required fields
+      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+        const missingFields: ValidationError['missingFields'] = {};
+        
+        if (!hasDescription) missingFields.description = true;
+        if (!hasDebitAmount && !hasCreditAmount) {
+          missingFields.debit_amount = true;
+          missingFields.credit_amount = true;
+        }
+        if (!hasDebitAccount) missingFields.debit_account_id = true;
+        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        
+        if (Object.keys(missingFields).length > 0) {
+          errors.push({ 
+            type: 'incomplete_transaction', 
+            transactionIndex: index, 
+            isParallel: false,
+            missingFields 
+          });
+        }
+      }
     });
 
-    if (incompleteTransactions.length > 0) {
+    parallelTransactions.forEach((transaction, index) => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasDebitAmount = transaction.debit_amount > 0;
+      const hasCreditAmount = transaction.credit_amount > 0;
+      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
+      const hasDebitAccount = !!transaction.debit_account_id;
+      const hasCreditAccount = !!transaction.credit_account_id;
+      
+      // Transaction is incomplete if it has any data but missing required fields
+      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+        const missingFields: ValidationError['missingFields'] = {};
+        
+        if (!hasDescription) missingFields.description = true;
+        if (!hasDebitAmount && !hasCreditAmount) {
+          missingFields.debit_amount = true;
+          missingFields.credit_amount = true;
+        }
+        if (!hasDebitAccount) missingFields.debit_account_id = true;
+        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        
+        if (Object.keys(missingFields).length > 0) {
+          errors.push({ 
+            type: 'incomplete_transaction', 
+            transactionIndex: index, 
+            isParallel: true,
+            missingFields 
+          });
+        }
+      }
+    });
+
+    if (errors.length > 0) {
+      const incompleteCount = errors.filter(e => e.type === 'incomplete_transaction').length;
       toast({
         title: "Błąd walidacji",
-        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje przed zamknięciem.`,
+        description: `Istnieją ${incompleteCount} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje przed zamknięciem.`,
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return false;
     }
     
+    setValidationErrors([]);
     return true;
   };
 
@@ -354,71 +429,116 @@ const DocumentDialog = ({
     }
 
     const allTransactions = [...transactions, ...parallelTransactions];
+    const errors: ValidationError[] = [];
 
     if (allTransactions.length === 0) {
+      errors.push({ type: 'no_operations' });
       toast({
         title: "Błąd walidacji",
         description: "Dokument musi zawierać co najmniej jedną operację",
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return;
     }
 
     // Check if inline forms have unsaved data
     if (hasInlineFormData) {
+      errors.push({ type: 'inline_form' });
       toast({
         title: "Błąd walidacji",
         description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return;
     }
 
     if (hasParallelInlineFormData) {
+      errors.push({ type: 'parallel_inline_form' });
       toast({
         title: "Błąd walidacji",
         description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return;
     }
 
     // Check for incomplete existing transactions (have some data but missing required fields)
-    const incompleteTransactions = allTransactions.filter(transaction => {
+    transactions.forEach((transaction, index) => {
       const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasAmount = (transaction.debit_amount > 0 || transaction.credit_amount > 0);
-      const hasAccounts = transaction.debit_account_id && transaction.credit_account_id;
+      const hasDebitAmount = transaction.debit_amount > 0;
+      const hasCreditAmount = transaction.credit_amount > 0;
+      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
+      const hasDebitAccount = !!transaction.debit_account_id;
+      const hasCreditAccount = !!transaction.credit_account_id;
       
-      // Transaction is incomplete if it has description or amount but missing other required fields
-      return (hasDescription || hasAmount) && (!hasAccounts || (transaction.debit_amount === 0 && transaction.credit_amount === 0));
+      // Transaction is incomplete if it has any data but missing required fields
+      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+        const missingFields: ValidationError['missingFields'] = {};
+        
+        if (!hasDescription) missingFields.description = true;
+        if (!hasDebitAmount && !hasCreditAmount) {
+          missingFields.debit_amount = true;
+          missingFields.credit_amount = true;
+        }
+        if (!hasDebitAccount) missingFields.debit_account_id = true;
+        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        
+        if (Object.keys(missingFields).length > 0) {
+          errors.push({ 
+            type: 'incomplete_transaction', 
+            transactionIndex: index, 
+            isParallel: false,
+            missingFields 
+          });
+        }
+      }
     });
 
-    if (incompleteTransactions.length > 0) {
+    parallelTransactions.forEach((transaction, index) => {
+      const hasDescription = transaction.description && transaction.description.trim() !== '';
+      const hasDebitAmount = transaction.debit_amount > 0;
+      const hasCreditAmount = transaction.credit_amount > 0;
+      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
+      const hasDebitAccount = !!transaction.debit_account_id;
+      const hasCreditAccount = !!transaction.credit_account_id;
+      
+      // Transaction is incomplete if it has any data but missing required fields
+      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+        const missingFields: ValidationError['missingFields'] = {};
+        
+        if (!hasDescription) missingFields.description = true;
+        if (!hasDebitAmount && !hasCreditAmount) {
+          missingFields.debit_amount = true;
+          missingFields.credit_amount = true;
+        }
+        if (!hasDebitAccount) missingFields.debit_account_id = true;
+        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        
+        if (Object.keys(missingFields).length > 0) {
+          errors.push({ 
+            type: 'incomplete_transaction', 
+            transactionIndex: index, 
+            isParallel: true,
+            missingFields 
+          });
+        }
+      }
+    });
+
+    if (errors.length > 0) {
       toast({
         title: "Błąd walidacji",
-        description: `Istnieją ${incompleteTransactions.length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
+        description: `Istnieją ${errors.filter(e => e.type === 'incomplete_transaction').length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
         variant: "destructive"
       });
+      setValidationErrors(errors);
       return;
     }
 
-    // Check if last transaction has unsaved description
-    const lastTransaction = allTransactions[allTransactions.length - 1];
-    if (lastTransaction && lastTransaction.description && lastTransaction.description.trim() !== '') {
-      // Check if this transaction is incomplete (no accounts selected or amounts are 0)
-      const isIncomplete = !lastTransaction.debit_account_id || 
-                          !lastTransaction.credit_account_id || 
-                          (lastTransaction.debit_amount === 0 && lastTransaction.credit_amount === 0);
-      
-      if (isIncomplete) {
-        toast({
-          title: "Błąd walidacji",
-          description: "Ostatnia operacja zawiera opis ale nie jest kompletnie wypełniona. Uzupełnij wszystkie pola lub usuń operację.",
-          variant: "destructive"
-        });
-        return;
-      }
-    }
+    setValidationErrors([]);
 
     setIsLoading(true);
     try {
@@ -510,6 +630,8 @@ const DocumentDialog = ({
       currency
     };
     setTransactions(prev => [...prev, transactionWithCurrency]);
+    // Clear validation errors when a new transaction is added
+    setValidationErrors([]);
   };
 
   const addParallelTransaction = async (transaction: Transaction) => {
@@ -519,22 +641,32 @@ const DocumentDialog = ({
       currency
     };
     setParallelTransactions(prev => [...prev, transactionWithCurrency]);
+    // Clear validation errors when a new transaction is added
+    setValidationErrors([]);
   };
 
   const removeTransaction = (index: number) => {
     setTransactions(prev => prev.filter((_, i) => i !== index));
+    // Clear validation errors when a transaction is removed
+    setValidationErrors([]);
   };
 
   const removeParallelTransaction = (index: number) => {
     setParallelTransactions(prev => prev.filter((_, i) => i !== index));
+    // Clear validation errors when a transaction is removed
+    setValidationErrors([]);
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+    // Clear validation errors when a transaction is updated
+    setValidationErrors(prev => prev.filter(e => !(e.type === 'incomplete_transaction' && e.transactionIndex === index && e.isParallel === false)));
   };
 
   const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
     setParallelTransactions(prev => prev.map((t, i) => i === index ? updatedTransaction : t));
+    // Clear validation errors when a transaction is updated
+    setValidationErrors(prev => prev.filter(e => !(e.type === 'incomplete_transaction' && e.transactionIndex === index && e.isParallel === true)));
   };
 
   const handleSelectTransaction = (index: number, checked: boolean) => {
@@ -965,26 +1097,36 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableHeader>
                   <TableBody>
-                    {transactions.map((transaction, index) => (
-                      <EditableTransactionRow
-                        key={index}
-                        transaction={transaction}
-                        onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
-                        onDelete={() => removeTransaction(index)}
-                        onCopy={() => handleCopyTransaction(transaction, false)}
-                        onSplit={() => handleSplitTransaction(transaction, false)}
-                        currency={selectedCurrency}
-                        isEditingBlocked={isEditingBlocked}
-                        isSelected={selectedTransactions.includes(index)}
-                        onSelect={(checked) => handleSelectTransaction(index, checked)}
-                      />
-                    ))}
+                  {transactions.map((transaction, index) => {
+                      const errorInfo = validationErrors.find(
+                        e => e.type === 'incomplete_transaction' && 
+                        e.transactionIndex === index && 
+                        e.isParallel === false
+                      );
+                      return (
+                        <EditableTransactionRow
+                          key={index}
+                          transaction={transaction}
+                          onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
+                          onDelete={() => removeTransaction(index)}
+                          onCopy={() => handleCopyTransaction(transaction, false)}
+                          onSplit={() => handleSplitTransaction(transaction, false)}
+                          currency={selectedCurrency}
+                          isEditingBlocked={isEditingBlocked}
+                          isSelected={selectedTransactions.includes(index)}
+                          onSelect={(checked) => handleSelectTransaction(index, checked)}
+                          hasValidationError={!!errorInfo}
+                          missingFields={errorInfo?.missingFields}
+                        />
+                      );
+                    })}
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
                         onHasDataChange={setHasInlineFormData}
+                        hasValidationError={validationErrors.some(e => e.type === 'inline_form')}
                       />
                     )}
                   </TableBody>
@@ -1082,26 +1224,36 @@ const DocumentDialog = ({
                         </TableRow>
                       </TableHeader>
                     <TableBody>
-                      {parallelTransactions.map((transaction, index) => (
-                        <EditableTransactionRow
-                          key={index}
-                          transaction={transaction}
-                          onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
-                          onDelete={() => removeParallelTransaction(index)}
-                          onCopy={() => handleCopyTransaction(transaction, true)}
-                          onSplit={() => handleSplitTransaction(transaction, true)}
-                          currency={selectedCurrency}
-                          isEditingBlocked={isEditingBlocked}
-                          isSelected={selectedParallelTransactions.includes(index)}
-                          onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
-                        />
-                      ))}
+                    {parallelTransactions.map((transaction, index) => {
+                        const errorInfo = validationErrors.find(
+                          e => e.type === 'incomplete_transaction' && 
+                          e.transactionIndex === index && 
+                          e.isParallel === true
+                        );
+                        return (
+                          <EditableTransactionRow
+                            key={index}
+                            transaction={transaction}
+                            onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
+                            onDelete={() => removeParallelTransaction(index)}
+                            onCopy={() => handleCopyTransaction(transaction, true)}
+                            onSplit={() => handleSplitTransaction(transaction, true)}
+                            currency={selectedCurrency}
+                            isEditingBlocked={isEditingBlocked}
+                            isSelected={selectedParallelTransactions.includes(index)}
+                            onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
+                            hasValidationError={!!errorInfo}
+                            missingFields={errorInfo?.missingFields}
+                          />
+                        );
+                      })}
                       {showParallelInlineForm && (
                         <InlineTransactionRow
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           currency={selectedCurrency}
                           onHasDataChange={setHasParallelInlineFormData}
+                          hasValidationError={validationErrors.some(e => e.type === 'parallel_inline_form')}
                         />
                       )}
                     </TableBody>
@@ -1169,7 +1321,9 @@ const EditableTransactionRow: React.FC<{
   isEditingBlocked?: boolean;
   isSelected?: boolean;
   onSelect?: (checked: boolean) => void;
-}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect }) => {
+  hasValidationError?: boolean;
+  missingFields?: ValidationError['missingFields'];
+}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1230,7 +1384,11 @@ const EditableTransactionRow: React.FC<{
   };
 
   return (
-    <TableRow className={isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : "hover:bg-gray-50"}>
+    <TableRow className={cn(
+      hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
+      isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
+      "hover:bg-gray-50"
+    )}>
       <TableCell>
         <Checkbox
           checked={isSelected}
@@ -1243,7 +1401,10 @@ const EditableTransactionRow: React.FC<{
           value={formData.description} 
           onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
           placeholder="Opis operacji..." 
-          className="min-h-[60px] resize-none" 
+          className={cn(
+            "min-h-[60px] resize-none",
+            missingFields?.description && "border-destructive focus-visible:ring-destructive bg-destructive/5"
+          )}
           disabled={isEditingBlocked}
         />
       </TableCell>
@@ -1259,7 +1420,11 @@ const EditableTransactionRow: React.FC<{
               setFormData(prev => ({ ...prev, debit_amount: value }));
             }}
             placeholder="0.00" 
-            className={cn("text-right", isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            className={cn(
+              "text-right", 
+              isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
+              missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5"
+            )}
             disabled={isEditingBlocked || isDebitReadOnly}
             readOnly={isDebitReadOnly}
           />
@@ -1273,7 +1438,10 @@ const EditableTransactionRow: React.FC<{
           locationId={userProfile?.location_id}
           side="debit"
           disabled={isEditingBlocked || isDebitReadOnly}
-          className={isDebitReadOnly ? "opacity-50" : ""}
+          className={cn(
+            isDebitReadOnly && "opacity-50",
+            missingFields?.debit_account_id && "border-destructive bg-destructive/5"
+          )}
         />
       </TableCell>
       <TableCell>
@@ -1288,7 +1456,11 @@ const EditableTransactionRow: React.FC<{
               setFormData(prev => ({ ...prev, credit_amount: value }));
             }}
             placeholder="0.00" 
-            className={cn("text-right", isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed")}
+            className={cn(
+              "text-right", 
+              isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
+              missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5"
+            )}
             disabled={isEditingBlocked || isCreditReadOnly}
             readOnly={isCreditReadOnly}
           />
@@ -1302,7 +1474,10 @@ const EditableTransactionRow: React.FC<{
           locationId={userProfile?.location_id}
           side="credit"
           disabled={isEditingBlocked || isCreditReadOnly}
-          className={isCreditReadOnly ? "opacity-50" : ""}
+          className={cn(
+            isCreditReadOnly && "opacity-50",
+            missingFields?.credit_account_id && "border-destructive bg-destructive/5"
+          )}
         />
       </TableCell>
       <TableCell>
