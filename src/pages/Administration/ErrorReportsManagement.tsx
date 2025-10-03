@@ -121,13 +121,7 @@ const ErrorReportsManagement = () => {
     queryFn: async () => {
       let query = supabase
         .from("error_reports")
-        .select(`
-          *,
-          profiles (
-            name,
-            email
-          )
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (statusFilter !== "all") {
@@ -138,10 +132,26 @@ const ErrorReportsManagement = () => {
         query = query.eq("priority", priorityFilter);
       }
 
-      const { data, error } = await query;
-
+      const { data: errorReports, error } = await query;
       if (error) throw error;
-      return (data || []) as any as ErrorReport[];
+
+      // Fetch user profiles separately
+      if (errorReports && errorReports.length > 0) {
+        const userIds = [...new Set(errorReports.map(r => r.user_id))];
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, name, email")
+          .in("id", userIds);
+
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+        return errorReports.map(report => ({
+          ...report,
+          profiles: profilesMap.get(report.user_id) || null,
+        })) as ErrorReport[];
+      }
+
+      return [] as ErrorReport[];
     },
   });
 
@@ -150,20 +160,31 @@ const ErrorReportsManagement = () => {
     queryFn: async () => {
       if (!selectedReport?.id) return [];
       
-      const { data, error } = await supabase
+      const { data: responsesData, error } = await supabase
         .from("error_report_responses")
-        .select(`
-          *,
-          profiles (
-            name,
-            email
-          )
-        `)
+        .select("*")
         .eq("error_report_id", selectedReport.id)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return (data || []) as any as ErrorReportResponse[];
+
+      // Fetch user profiles separately
+      if (responsesData && responsesData.length > 0) {
+        const userIds = [...new Set(responsesData.map(r => r.user_id))];
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, name, email")
+          .in("id", userIds);
+
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+        return responsesData.map(response => ({
+          ...response,
+          profiles: profilesMap.get(response.user_id) || null,
+        })) as ErrorReportResponse[];
+      }
+
+      return [] as ErrorReportResponse[];
     },
     enabled: !!selectedReport?.id,
   });
