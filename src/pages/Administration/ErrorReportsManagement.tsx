@@ -356,7 +356,14 @@ const ErrorReportsManagement = () => {
       closed: "Zamknięte",
       needs_info: "Potrzebne informacje",
     };
-    return <Badge variant={variants[status]}>{labels[status]}</Badge>;
+    return (
+      <Badge 
+        variant={variants[status]} 
+        className={status === "resolved" ? "bg-green-600 text-white hover:bg-green-700" : ""}
+      >
+        {labels[status]}
+      </Badge>
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
