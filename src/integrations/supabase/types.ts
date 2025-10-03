@@ -1051,7 +1051,12 @@ export type Database = {
     }
     Enums: {
       error_report_priority: "low" | "medium" | "high" | "critical"
-      error_report_status: "new" | "in_progress" | "resolved" | "closed"
+      error_report_status:
+        | "new"
+        | "in_progress"
+        | "resolved"
+        | "closed"
+        | "needs_info"
       report_type:
         | "standard"
         | "zos"
@@ -1189,7 +1194,13 @@ export const Constants = {
   public: {
     Enums: {
       error_report_priority: ["low", "medium", "high", "critical"],
-      error_report_status: ["new", "in_progress", "resolved", "closed"],
+      error_report_status: [
+        "new",
+        "in_progress",
+        "resolved",
+        "closed",
+        "needs_info",
+      ],
       report_type: [
         "standard",
         "zos",

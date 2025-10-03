@@ -75,7 +75,7 @@ type ErrorReport = {
   browser_info: any;
   screenshot_url: string | null;
   additional_files: string[] | null;
-  status: "new" | "in_progress" | "resolved" | "closed";
+  status: "new" | "in_progress" | "resolved" | "closed" | "needs_info";
   priority: "low" | "medium" | "high" | "critical";
   admin_response: string | null;
   created_at: string;
@@ -108,7 +108,7 @@ const ErrorReportsManagement = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<string>("");
   const [adminResponse, setAdminResponse] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "new" | "in_progress" | "resolved" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "new" | "in_progress" | "resolved" | "closed" | "needs_info">("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
@@ -195,7 +195,7 @@ const ErrorReportsManagement = () => {
       status,
     }: {
       id: string;
-      status: "new" | "in_progress" | "resolved" | "closed";
+      status: "new" | "in_progress" | "resolved" | "closed" | "needs_info";
     }) => {
       const { error } = await supabase
         .from("error_reports")
@@ -347,12 +347,14 @@ const ErrorReportsManagement = () => {
       in_progress: "default",
       resolved: "secondary",
       closed: "outline",
+      needs_info: "default",
     };
     const labels: Record<string, string> = {
       new: "Nowe",
       in_progress: "W trakcie",
       resolved: "Rozwiązane",
       closed: "Zamknięte",
+      needs_info: "Potrzebne informacje",
     };
     return <Badge variant={variants[status]}>{labels[status]}</Badge>;
   };
@@ -390,6 +392,7 @@ const ErrorReportsManagement = () => {
               <SelectItem value="all">Wszystkie</SelectItem>
               <SelectItem value="new">Nowe</SelectItem>
               <SelectItem value="in_progress">W trakcie</SelectItem>
+              <SelectItem value="needs_info">Potrzebne informacje</SelectItem>
               <SelectItem value="resolved">Rozwiązane</SelectItem>
               <SelectItem value="closed">Zamknięte</SelectItem>
             </SelectContent>
@@ -477,7 +480,7 @@ const ErrorReportsManagement = () => {
                   <Label>Status</Label>
                   <Select 
                     value={newStatus} 
-                    onValueChange={(value: "new" | "in_progress" | "resolved" | "closed") => {
+                    onValueChange={(value: "new" | "in_progress" | "resolved" | "closed" | "needs_info") => {
                       setNewStatus(value);
                       updateMutation.mutate({
                         id: selectedReport.id,
@@ -491,6 +494,7 @@ const ErrorReportsManagement = () => {
                     <SelectContent>
                       <SelectItem value="new">Nowe</SelectItem>
                       <SelectItem value="in_progress">W trakcie</SelectItem>
+                      <SelectItem value="needs_info">Potrzebne informacje</SelectItem>
                       <SelectItem value="resolved">Rozwiązane</SelectItem>
                       <SelectItem value="closed">Zamknięte</SelectItem>
                     </SelectContent>
