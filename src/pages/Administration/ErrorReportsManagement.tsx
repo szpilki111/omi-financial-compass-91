@@ -246,9 +246,12 @@ const ErrorReportsManagement = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["error-report-responses"] });
+      queryClient.invalidateQueries({ queryKey: ["error-report-responses", selectedReport?.id] });
       setNewResponse("");
       setUploadedFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       toast({
         title: "Sukces",
         description: "Odpowiedź została dodana.",
