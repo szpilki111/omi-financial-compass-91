@@ -356,10 +356,18 @@ const ErrorReportsManagement = () => {
       closed: "Zamknięte",
       needs_info: "Potrzebne informacje",
     };
+    
+    let customClass = "";
+    if (status === "resolved") {
+      customClass = "bg-green-600 text-white hover:bg-green-700";
+    } else if (status === "needs_info") {
+      customClass = "bg-orange-600 text-white hover:bg-orange-700";
+    }
+    
     return (
       <Badge 
         variant={variants[status]} 
-        className={status === "resolved" ? "bg-green-600 text-white hover:bg-green-700" : ""}
+        className={customClass}
       >
         {labels[status]}
       </Badge>
