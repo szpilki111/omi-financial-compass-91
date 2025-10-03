@@ -615,13 +615,6 @@ const ErrorReportsManagement = () => {
                   {addResponseMutation.isPending ? "Wysyłanie..." : "Dodaj odpowiedź"}
                 </Button>
               </div>
-
-              <div>
-                <Label>Informacje o przeglądarce</Label>
-                <pre className="text-xs mt-1 bg-muted p-2 rounded overflow-x-auto">
-                  {JSON.stringify(selectedReport.browser_info, null, 2)}
-                </pre>
-              </div>
             </div>
           )}
         </DialogContent>
