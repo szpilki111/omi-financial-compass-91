@@ -208,6 +208,44 @@ export type Database = {
           },
         ]
       }
+      error_report_responses: {
+        Row: {
+          attachments: string[] | null
+          created_at: string
+          error_report_id: string
+          id: string
+          message: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attachments?: string[] | null
+          created_at?: string
+          error_report_id: string
+          id?: string
+          message: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attachments?: string[] | null
+          created_at?: string
+          error_report_id?: string
+          id?: string
+          message?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_report_responses_error_report_id_fkey"
+            columns: ["error_report_id"]
+            isOneToOne: false
+            referencedRelation: "error_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_reports: {
         Row: {
           additional_files: string[] | null

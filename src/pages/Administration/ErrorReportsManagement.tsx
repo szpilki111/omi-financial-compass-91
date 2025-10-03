@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,9 +22,50 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye, ExternalLink, Paperclip, X } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useEffect, useState as useComponentState } from "react";
+
+const ResponseAttachments = ({ paths }: { paths: string[] }) => {
+  const [urls, setUrls] = useComponentState<string[]>([]);
+
+  useEffect(() => {
+    const loadUrls = async () => {
+      const signedUrls = await Promise.all(
+        paths.map(async (path) => {
+          const { data } = await supabase.storage
+            .from("error-reports")
+            .createSignedUrl(path, 3600);
+          return data?.signedUrl || "";
+        })
+      );
+      setUrls(signedUrls.filter(url => url !== ""));
+    };
+    loadUrls();
+  }, [paths]);
+
+  if (urls.length === 0) return null;
+
+  return (
+    <div className="space-y-1 pt-2">
+      <Label className="text-xs">Załączniki:</Label>
+      {urls.map((url, idx) => (
+        <a
+          key={idx}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-primary hover:underline block"
+        >
+          Załącznik {idx + 1}
+        </a>
+      ))}
+    </div>
+  );
+};
 
 type ErrorReport = {
   id: string;
@@ -39,10 +80,25 @@ type ErrorReport = {
   admin_response: string | null;
   created_at: string;
   updated_at: string;
+  user_id: string;
   profiles: {
     name: string;
     email: string;
-  };
+  } | null;
+};
+
+type ErrorReportResponse = {
+  id: string;
+  error_report_id: string;
+  user_id: string;
+  message: string;
+  attachments: string[] | null;
+  created_at: string;
+  updated_at: string;
+  profiles: {
+    name: string;
+    email: string;
+  } | null;
 };
 
 const ErrorReportsManagement = () => {
@@ -56,13 +112,22 @@ const ErrorReportsManagement = () => {
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
+  const [newResponse, setNewResponse] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
     queryFn: async () => {
       let query = supabase
         .from("error_reports")
-        .select("*")
+        .select(`
+          *,
+          profiles (
+            name,
+            email
+          )
+        `)
         .order("created_at", { ascending: false });
 
       if (statusFilter !== "all") {
@@ -73,49 +138,47 @@ const ErrorReportsManagement = () => {
         query = query.eq("priority", priorityFilter);
       }
 
-      const { data: reportsData, error } = await query;
+      const { data, error } = await query;
 
       if (error) throw error;
-
-      // Fetch user profiles separately
-      if (reportsData && reportsData.length > 0) {
-        const userIds = [...new Set(reportsData.map((r: any) => r.user_id))];
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, name, email")
-          .in("id", userIds);
-
-        // Map profiles to reports
-        return reportsData.map((report: any) => ({
-          ...report,
-          profiles: profilesData?.find((p) => p.id === report.user_id) || {
-            name: "Unknown",
-            email: "unknown@example.com",
-          },
-        }));
-      }
-
-      return [];
+      return (data || []) as any as ErrorReport[];
     },
+  });
+
+  const { data: responses } = useQuery({
+    queryKey: ["error-report-responses", selectedReport?.id],
+    queryFn: async () => {
+      if (!selectedReport?.id) return [];
+      
+      const { data, error } = await supabase
+        .from("error_report_responses")
+        .select(`
+          *,
+          profiles (
+            name,
+            email
+          )
+        `)
+        .eq("error_report_id", selectedReport.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as any as ErrorReportResponse[];
+    },
+    enabled: !!selectedReport?.id,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({
       id,
       status,
-      response,
     }: {
       id: string;
-      status?: string;
-      response?: string;
+      status: "new" | "in_progress" | "resolved" | "closed";
     }) => {
-      const updates: any = {};
-      if (status) updates.status = status;
-      if (response !== undefined) updates.admin_response = response;
-
       const { error } = await supabase
         .from("error_reports")
-        .update(updates)
+        .update({ status, updated_at: new Date().toISOString() })
         .eq("id", id);
 
       if (error) throw error;
@@ -124,15 +187,57 @@ const ErrorReportsManagement = () => {
       queryClient.invalidateQueries({ queryKey: ["error-reports"] });
       toast({
         title: "Zaktualizowano",
-        description: "Zgłoszenie zostało zaktualizowane.",
+        description: "Status zgłoszenia został zaktualizowany.",
       });
-      setDetailsOpen(false);
     },
     onError: (error) => {
       console.error("Error updating report:", error);
       toast({
         title: "Błąd",
         description: "Nie udało się zaktualizować zgłoszenia.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addResponseMutation = useMutation({
+    mutationFn: async ({
+      errorReportId,
+      message,
+      attachments,
+    }: {
+      errorReportId: string;
+      message: string;
+      attachments: string[];
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase
+        .from("error_report_responses")
+        .insert({
+          error_report_id: errorReportId,
+          user_id: user.id,
+          message,
+          attachments: attachments.length > 0 ? attachments : null,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["error-report-responses"] });
+      setNewResponse("");
+      setUploadedFiles([]);
+      toast({
+        title: "Sukces",
+        description: "Odpowiedź została dodana.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error adding response:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się dodać odpowiedzi.",
         variant: "destructive",
       });
     },
@@ -170,14 +275,46 @@ const ErrorReportsManagement = () => {
     setDetailsOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (selectedReport) {
-      updateMutation.mutate({
-        id: selectedReport.id,
-        status: newStatus,
-        response: adminResponse,
-      });
+  const handleAddResponse = async () => {
+    if (!selectedReport || !newResponse.trim()) return;
+
+    const attachmentUrls: string[] = [];
+
+    // Upload files if any
+    for (const file of uploadedFiles) {
+      const filePath = `${selectedReport.id}/responses/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("error-reports")
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error("Error uploading file:", uploadError);
+        toast({
+          title: "Błąd",
+          description: `Nie udało się przesłać pliku: ${file.name}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      attachmentUrls.push(filePath);
     }
+
+    addResponseMutation.mutate({
+      errorReportId: selectedReport.id,
+      message: newResponse,
+      attachments: attachmentUrls,
+    });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setUploadedFiles(Array.from(e.target.files));
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const getStatusBadge = (status: string) => {
@@ -272,8 +409,8 @@ const ErrorReportsManagement = () => {
                 </TableCell>
                 <TableCell>
                   <div>
-                    <div className="font-medium">{report.profiles.name}</div>
-                    <div className="text-sm text-muted-foreground">{report.profiles.email}</div>
+                    <div className="font-medium">{report.profiles?.name || "Nieznany"}</div>
+                    <div className="text-sm text-muted-foreground">{report.profiles?.email || ""}</div>
                   </div>
                 </TableCell>
                 <TableCell className="max-w-xs truncate">{report.title}</TableCell>
@@ -307,16 +444,6 @@ const ErrorReportsManagement = () => {
 
           {selectedReport && (
             <div className="space-y-4">
-              <div>
-                <Label>Tytuł</Label>
-                <p className="text-sm mt-1">{selectedReport.title}</p>
-              </div>
-
-              <div>
-                <Label>Opis</Label>
-                <p className="text-sm mt-1 whitespace-pre-wrap">{selectedReport.description}</p>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Priorytet</Label>
@@ -324,7 +451,26 @@ const ErrorReportsManagement = () => {
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <div className="mt-1">{getStatusBadge(selectedReport.status)}</div>
+                  <Select 
+                    value={newStatus} 
+                    onValueChange={(value: "new" | "in_progress" | "resolved" | "closed") => {
+                      setNewStatus(value);
+                      updateMutation.mutate({
+                        id: selectedReport.id,
+                        status: value,
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">Nowe</SelectItem>
+                      <SelectItem value="in_progress">W trakcie</SelectItem>
+                      <SelectItem value="resolved">Rozwiązane</SelectItem>
+                      <SelectItem value="closed">Zamknięte</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -341,73 +487,116 @@ const ErrorReportsManagement = () => {
                 </a>
               </div>
 
-              {screenshotUrl && (
-                <div>
-                  <Label>Screenshot</Label>
-                  <img
-                    src={screenshotUrl}
-                    alt="Screenshot"
-                    className="mt-2 border rounded-lg max-w-full"
-                  />
-                </div>
-              )}
+              {/* Conversation Thread */}
+              <div className="space-y-2">
+                <Label>Konwersacja</Label>
+                <ScrollArea className="h-[400px] border rounded-md p-4">
+                  <div className="space-y-4">
+                    {/* Initial report */}
+                    <div className="space-y-2 pb-4 border-b">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="font-medium">{selectedReport.profiles?.name || "Nieznany użytkownik"}</span>
+                        <span>{format(new Date(selectedReport.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{selectedReport.description}</p>
+                      {screenshotUrl && (
+                        <img src={screenshotUrl} alt="Screenshot" className="max-w-full rounded border" />
+                      )}
+                      {fileUrls.length > 0 && (
+                        <div className="space-y-1 pt-2">
+                          <Label className="text-xs">Załączniki:</Label>
+                          {fileUrls.map((url, idx) => (
+                            <a
+                              key={idx}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline block"
+                            >
+                              Plik {idx + 1}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-              {fileUrls.length > 0 && (
-                <div>
-                  <Label>Dodatkowe pliki</Label>
-                  <div className="space-y-2 mt-2">
-                    {fileUrls.map((url, index) => (
-                      <a
-                        key={index}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-sm text-primary hover:underline"
-                      >
-                        Plik {index + 1}
-                      </a>
+                    {/* Responses */}
+                    {responses?.map((response) => (
+                      <div key={response.id} className="space-y-2 pt-4 pb-4 border-b last:border-b-0">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="font-medium">{response.profiles?.name || "Nieznany użytkownik"}</span>
+                          <span>{format(new Date(response.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}</span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{response.message}</p>
+                        {response.attachments && response.attachments.length > 0 && (
+                          <ResponseAttachments paths={response.attachments} />
+                        )}
+                      </div>
                     ))}
                   </div>
+                </ScrollArea>
+              </div>
+
+              {/* Add new response */}
+              <div className="space-y-2">
+                <Label>Dodaj odpowiedź</Label>
+                <Textarea
+                  value={newResponse}
+                  onChange={(e) => setNewResponse(e.target.value)}
+                  rows={3}
+                  placeholder="Wprowadź odpowiedź..."
+                />
+                
+                <div className="space-y-2">
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileChange}
+                    multiple
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4 mr-2" />
+                    Dodaj pliki
+                  </Button>
+
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-1">
+                      {uploadedFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm">
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFile(idx)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <Button 
+                  onClick={handleAddResponse} 
+                  disabled={addResponseMutation.isPending || !newResponse.trim()}
+                >
+                  {addResponseMutation.isPending ? "Wysyłanie..." : "Dodaj odpowiedź"}
+                </Button>
+              </div>
 
               <div>
                 <Label>Informacje o przeglądarce</Label>
                 <pre className="text-xs mt-1 bg-muted p-2 rounded overflow-x-auto">
                   {JSON.stringify(selectedReport.browser_info, null, 2)}
                 </pre>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Zmień status</Label>
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">Nowe</SelectItem>
-                    <SelectItem value="in_progress">W trakcie</SelectItem>
-                    <SelectItem value="resolved">Rozwiązane</SelectItem>
-                    <SelectItem value="closed">Zamknięte</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Odpowiedź administratora</Label>
-                <Textarea
-                  value={adminResponse}
-                  onChange={(e) => setAdminResponse(e.target.value)}
-                  placeholder="Opcjonalna odpowiedź do użytkownika..."
-                  rows={4}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDetailsOpen(false)}>
-                  Anuluj
-                </Button>
-                <Button onClick={handleUpdate}>Zapisz zmiany</Button>
               </div>
             </div>
           )}
