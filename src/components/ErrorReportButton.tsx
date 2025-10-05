@@ -53,7 +53,7 @@ export const ErrorReportButton = () => {
       <Button
         onClick={captureScreenshot}
         disabled={isCapturing}
-        className="fixed bottom-6 right-6 z-50 shadow-lg"
+        className="fixed bottom-6 right-6 z-50 shadow-lg mb-20"
         size="lg"
         title="Zgłoś błąd"
       >

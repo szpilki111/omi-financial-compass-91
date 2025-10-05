@@ -318,7 +318,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingUser ? 'Edytuj użytkownika' : 'Dodaj nowego użytkownika'}
@@ -326,7 +326,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
             <FormField
               control={form.control}
               name="login"

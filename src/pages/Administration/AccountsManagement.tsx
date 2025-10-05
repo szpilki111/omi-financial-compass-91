@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Edit, Save, X, Upload, Trash2 } from 'lucide-react';
+import { Edit, Save, X, Upload, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
@@ -37,6 +37,8 @@ const AccountsManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newAccount, setNewAccount] = useState({ number: '', name: '', type: 'Aktywny' });
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -87,6 +89,33 @@ const AccountsManagement = () => {
       }
     }
   }, [accounts, searchQuery, isImporting, editingAccountId]);
+
+  // Add account mutation
+  const addAccountMutation = useMutation({
+    mutationFn: async (account: { number: string; name: string; type: string }) => {
+      const { error } = await supabase
+        .from('accounts')
+        .insert([account]);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setIsAdding(false);
+      setNewAccount({ number: '', name: '', type: 'Aktywny' });
+      toast({
+        title: "Sukces",
+        description: "Konto zostało dodane.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
 
   // Update account mutation
   const updateAccountMutation = useMutation({
@@ -225,6 +254,28 @@ const AccountsManagement = () => {
         [field]: value,
       });
     }
+  };
+
+  const handleAddAccount = () => {
+    if (!newAccount.number.trim() || !newAccount.name.trim() || !newAccount.type.trim()) {
+      toast({
+        title: "Błąd",
+        description: "Wszystkie pola muszą być wypełnione.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addAccountMutation.mutate({
+      number: newAccount.number.trim(),
+      name: newAccount.name.trim(),
+      type: newAccount.type.trim(),
+    });
+  };
+
+  const handleCancelAdd = () => {
+    setIsAdding(false);
+    setNewAccount({ number: '', name: '', type: 'Aktywny' });
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -397,31 +448,43 @@ const AccountsManagement = () => {
               className="max-w-md"
             />
             
-            {canImportAccounts && (
-              <div className="flex gap-2">
-                <input
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="csv-upload"
-                  disabled={isImporting}
-                />
-                <label htmlFor="csv-upload">
-                  <Button
-                    variant="outline"
-                    disabled={isImporting}
-                    className="cursor-pointer"
-                    asChild
-                  >
-                    <span className="flex items-center gap-2">
-                      <Upload className="h-4 w-4" />
-                      {isImporting ? 'Importowanie...' : 'Importuj CSV'}
-                    </span>
-                  </Button>
-                </label>
-              </div>
-            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsAdding(true)}
+                disabled={isAdding}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Dodaj konto
+              </Button>
+              
+              {canImportAccounts && (
+                <>
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="csv-upload"
+                    disabled
+                  />
+                  <label htmlFor="csv-upload">
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="cursor-not-allowed opacity-50"
+                      asChild
+                    >
+                      <span className="flex items-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Importuj CSV
+                      </span>
+                    </Button>
+                  </label>
+                </>
+              )}
+            </div>
           </div>
           
           {isImporting && (
@@ -448,6 +511,65 @@ const AccountsManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {isAdding && (
+                    <TableRow className="bg-muted/50">
+                      <TableCell>
+                        <Input
+                          value={newAccount.number}
+                          onChange={(e) => setNewAccount({ ...newAccount, number: e.target.value })}
+                          placeholder="Numer konta"
+                          className="w-full"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={newAccount.name}
+                          onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                          placeholder="Nazwa konta"
+                          className="w-full"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddAccount();
+                            } else if (e.key === 'Escape') {
+                              handleCancelAdd();
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={newAccount.type}
+                          onChange={(e) => setNewAccount({ ...newAccount, type: e.target.value })}
+                          placeholder="Typ konta"
+                          className="w-full"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleAddAccount}
+                            disabled={addAccountMutation.isPending}
+                            className="flex items-center gap-1"
+                          >
+                            <Save className="h-3 w-3" />
+                            Zapisz
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelAdd}
+                            disabled={addAccountMutation.isPending}
+                            className="flex items-center gap-1"
+                          >
+                            <X className="h-3 w-3" />
+                            Anuluj
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {accounts.map((account) => (
                     <TableRow key={account.id}>
                       <TableCell className="font-medium">
