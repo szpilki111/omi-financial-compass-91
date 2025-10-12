@@ -37,6 +37,15 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
     onChange(newValue);
   };
 
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Format to 2 decimal places on blur
+    if (value > 0) {
+      const formattedValue = parseFloat(value.toFixed(2));
+      onChange(formattedValue);
+    }
+    onBlur?.(e);
+  };
+
   // Calculate converted amount
   const convertedAmount = currency !== baseCurrency ? value * exchangeRate : value;
   const showConversion = currency !== baseCurrency && value > 0 && exchangeRate > 0;
@@ -53,10 +62,10 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
             type="number"
             step="0.01"
             min="0"
-            value={value}
+            value={value === 0 ? '' : value}
             onChange={handleAmountChange}
             onFocus={onFocus}
-            onBlur={onBlur}
+            onBlur={handleBlur}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
