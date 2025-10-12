@@ -104,13 +104,22 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     // Only save if form is valid, amounts are equal, and editing is not blocked
     if (isFormValid && amountsEqual && !isEditingBlocked) {
       console.log("Row blur - saving equal amounts transaction");
+      
+      // Format amounts to .00 if they are integers
+      const debitAmount = Number.isInteger(formData.debit_amount) 
+        ? parseFloat(formData.debit_amount.toFixed(2)) 
+        : formData.debit_amount;
+      const creditAmount = Number.isInteger(formData.credit_amount) 
+        ? parseFloat(formData.credit_amount.toFixed(2)) 
+        : formData.credit_amount;
+      
       const transaction: Transaction = {
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formData.debit_amount,
-        credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        amount: Math.max(debitAmount, creditAmount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -198,14 +207,22 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const createBalancingTransaction = (smallerSide: "debit" | "credit") => {
     console.log("🔄 Creating balancing transaction for smaller side:", smallerSide);
 
+    // Format amounts to .00 if they are integers
+    const debitAmount = Number.isInteger(formData.debit_amount) 
+      ? parseFloat(formData.debit_amount.toFixed(2)) 
+      : formData.debit_amount;
+    const creditAmount = Number.isInteger(formData.credit_amount) 
+      ? parseFloat(formData.credit_amount.toFixed(2)) 
+      : formData.credit_amount;
+
     // Save the original transaction first
     const originalTransaction: Transaction = {
       description: formData.description,
       debit_account_id: formData.debit_account_id,
       credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      debit_amount: debitAmount,
+      credit_amount: creditAmount,
+      amount: Math.max(debitAmount, creditAmount),
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -213,16 +230,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("💾 Saving original transaction:", originalTransaction);
     onSave(originalTransaction);
 
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+    const difference = Math.abs(debitAmount - creditAmount);
+    const formattedDifference = Number.isInteger(difference) 
+      ? parseFloat(difference.toFixed(2)) 
+      : difference;
 
     // Create the balancing transaction
     const balancingTransaction: Transaction = {
       description: formData.description,
       debit_account_id: smallerSide === "debit" ? "" : formData.debit_account_id,
       credit_account_id: smallerSide === "credit" ? "" : formData.credit_account_id,
-      debit_amount: smallerSide === "debit" ? difference : 0,
-      credit_amount: smallerSide === "credit" ? difference : 0,
-      amount: difference,
+      debit_amount: smallerSide === "debit" ? formattedDifference : 0,
+      credit_amount: smallerSide === "credit" ? formattedDifference : 0,
+      amount: formattedDifference,
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -318,14 +338,22 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
     if (amountsAreEqual) {
+      // Format amounts to .00 if they are integers
+      const debitAmount = Number.isInteger(formData.debit_amount) 
+        ? parseFloat(formData.debit_amount.toFixed(2)) 
+        : formData.debit_amount;
+      const creditAmount = Number.isInteger(formData.credit_amount) 
+        ? parseFloat(formData.credit_amount.toFixed(2)) 
+        : formData.credit_amount;
+      
       // Amounts equal - save current transaction and reset form for fresh operation
       const transaction: Transaction = {
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formData.debit_amount,
-        credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        amount: Math.max(debitAmount, creditAmount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -351,31 +379,42 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         }
       }, 100);
     } else {
+      // Format amounts to .00 if they are integers
+      const debitAmount = Number.isInteger(formData.debit_amount) 
+        ? parseFloat(formData.debit_amount.toFixed(2)) 
+        : formData.debit_amount;
+      const creditAmount = Number.isInteger(formData.credit_amount) 
+        ? parseFloat(formData.credit_amount.toFixed(2)) 
+        : formData.credit_amount;
+      
       // Amounts different - save original transaction and create balancing transaction
       const transaction: Transaction = {
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formData.debit_amount,
-        credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        amount: Math.max(debitAmount, creditAmount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
 
       onSave(transaction);
 
-      const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-      const isDebitLarger = formData.debit_amount > formData.credit_amount;
+      const difference = Math.abs(debitAmount - creditAmount);
+      const formattedDifference = Number.isInteger(difference) 
+        ? parseFloat(difference.toFixed(2)) 
+        : difference;
+      const isDebitLarger = debitAmount > creditAmount;
 
       // Create the balancing transaction
       const balancingTransaction: Transaction = {
         description: formData.description, // Copy the same description
         debit_account_id: isDebitLarger ? "" : formData.credit_account_id, // Fill same side account
         credit_account_id: !isDebitLarger ? "" : formData.debit_account_id, // Fill same side account
-        debit_amount: isDebitLarger ? 0 : difference, // Fill the balancing amount
-        credit_amount: !isDebitLarger ? 0 : difference, // Fill the balancing amount
-        amount: difference,
+        debit_amount: isDebitLarger ? 0 : formattedDifference, // Fill the balancing amount
+        credit_amount: !isDebitLarger ? 0 : formattedDifference, // Fill the balancing amount
+        amount: formattedDifference,
         settlement_type: formData.settlement_type,
         currency: currency,
       };

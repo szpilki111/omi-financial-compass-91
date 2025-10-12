@@ -340,13 +340,25 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
       // Skip if both sides are null (shouldn't happen given maxTransactions logic)
       if (!debitField && !creditField) continue;
 
+      // Format amounts to .00 if they are integers
+      const debitAmount = debitField?.amount 
+        ? (Number.isInteger(debitField.amount) 
+          ? parseFloat(debitField.amount.toFixed(2)) 
+          : debitField.amount)
+        : 0;
+      const creditAmount = creditField?.amount 
+        ? (Number.isInteger(creditField.amount) 
+          ? parseFloat(creditField.amount.toFixed(2)) 
+          : creditField.amount)
+        : 0;
+
       const transaction: Transaction = {
         description: formData.description,
         debit_account_id: debitField?.accountId || null,
         credit_account_id: creditField?.accountId || null,
-        debit_amount: debitField?.amount || 0,
-        credit_amount: creditField?.amount || 0,
-        amount: Math.max(debitField?.amount || 0, creditField?.amount || 0),
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        amount: Math.max(debitAmount, creditAmount),
         settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
       };
 
