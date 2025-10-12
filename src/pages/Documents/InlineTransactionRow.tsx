@@ -90,11 +90,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   // Check if amounts are equal (with tolerance for floating point precision)
   const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
-  // Format amount to always have two decimal places for saving
-  const formatAmountForSave = (amount: number): number => {
-    return parseFloat(amount.toFixed(2));
-  };
-
   // Handle losing focus from the row - only save when amounts are equal
   const handleRowBlur = (event: React.FocusEvent) => {
     // Check if the new focus target is still within this row
@@ -113,9 +108,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formatAmountForSave(formData.debit_amount),
-        credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -131,6 +126,23 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("Form data:", formData);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+
+    // Sprawdź, czy formData.debit_amount ma część dziesiętną
+    const hasDecimalPart = formData.debit_amount % 1 !== 0;
+
+    if (hasDecimalPart) {
+      console.log("formData.debit_amount ma część dziesiętną:", formData.debit_amount);
+      // Przekształć na float z dwoma miejscami po przecinku
+      const formattedDebitAmount = parseFloat(formData.debit_amount.toFixed(2));
+      setFormData((prev) => ({
+        ...prev,
+        debit_amount: formattedDebitAmount,
+      }));
+      console.log("Przekształcono na float z dwoma miejscami:", formattedDebitAmount);
+    } else {
+      console.log("formData.debit_amount jest liczbą całkowitą:", formData.debit_amount);
+    }
+
     console.log("Amount comparison:", {
       debit_amount: formData.debit_amount,
       credit_amount: formData.credit_amount,
@@ -208,9 +220,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       description: formData.description,
       debit_account_id: formData.debit_account_id,
       credit_account_id: formData.credit_account_id,
-      debit_amount: formatAmountForSave(formData.debit_amount),
-      credit_amount: formatAmountForSave(formData.credit_amount),
-      amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -225,9 +237,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       description: formData.description,
       debit_account_id: smallerSide === "debit" ? "" : formData.debit_account_id,
       credit_account_id: smallerSide === "credit" ? "" : formData.credit_account_id,
-      debit_amount: smallerSide === "debit" ? formatAmountForSave(difference) : 0,
-      credit_amount: smallerSide === "credit" ? formatAmountForSave(difference) : 0,
-      amount: formatAmountForSave(difference),
+      debit_amount: smallerSide === "debit" ? difference : 0,
+      credit_amount: smallerSide === "credit" ? difference : 0,
+      amount: difference,
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -260,38 +272,32 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     }, 100);
   };
 
-  // Handle debit amount change
-  const handleDebitAmountChange = (value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      setFormData((prev) => {
-        const newData = { ...prev, debit_amount: value === "" ? 0 : parseFloat(value) || 0 };
+  // Auto-populate logic for debit amount changes
+  const handleDebitAmountChange = (value: number) => {
+    setFormData((prev) => {
+      const newData = { ...prev, debit_amount: value };
 
-        // Auto-populate credit amount if credit hasn't been manually touched and value > 0
-        if (!creditTouched && value !== "" && parseFloat(value) > 0) {
-          newData.credit_amount = parseFloat(value) || 0;
-        }
+      // Auto-populate credit amount if credit hasn't been manually touched and value > 0
+      if (!creditTouched && value > 0) {
+        newData.credit_amount = value;
+      }
 
-        return newData;
-      });
-    }
+      return newData;
+    });
   };
 
-  // Handle credit amount change
-  const handleCreditAmountChange = (value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      setFormData((prev) => {
-        const newData = { ...prev, credit_amount: value === "" ? 0 : parseFloat(value) || 0 };
+  // Auto-populate logic for credit amount changes
+  const handleCreditAmountChange = (value: number) => {
+    setFormData((prev) => {
+      const newData = { ...prev, credit_amount: value };
 
-        // Auto-populate debit amount if debit hasn't been manually touched and value > 0
-        if (!debitTouched && value !== "" && parseFloat(value) > 0) {
-          newData.debit_amount = parseFloat(value) || 0;
-        }
+      // Auto-populate debit amount if debit hasn't been manually touched and value > 0
+      if (!debitTouched && value > 0) {
+        newData.debit_amount = value;
+      }
 
-        return newData;
-      });
-    }
+      return newData;
+    });
   };
 
   const handleDebitFocus = () => {
@@ -334,9 +340,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formatAmountForSave(formData.debit_amount),
-        credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -367,9 +373,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         description: formData.description,
         debit_account_id: formData.debit_account_id,
         credit_account_id: formData.credit_account_id,
-        debit_amount: formatAmountForSave(formData.debit_amount),
-        credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(formData.debit_amount, formData.credit_amount),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -381,12 +387,12 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
       // Create the balancing transaction
       const balancingTransaction: Transaction = {
-        description: formData.description,
-        debit_account_id: isDebitLarger ? "" : formData.credit_account_id,
-        credit_account_id: !isDebitLarger ? "" : formData.debit_account_id,
-        debit_amount: isDebitLarger ? 0 : formatAmountForSave(difference),
-        credit_amount: !isDebitLarger ? 0 : formatAmountForSave(difference),
-        amount: formatAmountForSave(difference),
+        description: formData.description, // Copy the same description
+        debit_account_id: isDebitLarger ? "" : formData.credit_account_id, // Fill same side account
+        credit_account_id: !isDebitLarger ? "" : formData.debit_account_id, // Fill same side account
+        debit_amount: isDebitLarger ? 0 : difference, // Fill the balancing amount
+        credit_amount: !isDebitLarger ? 0 : difference, // Fill the balancing amount
+        amount: difference,
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -447,24 +453,33 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toString()}
-            onChange={(e) => handleDebitAmountChange(e.target.value)}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleDebitAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.debit_amount > 0 && !inputValue.includes(".") && !inputValue.includes(",")) {
+                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+              }
+              handleDebitAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow numbers, decimal point, comma, backspace, Tab, and navigation keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b]/.test(e.key) &&
                 e.key !== "Tab" &&
-                e.key !== "Enter" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete" &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
@@ -491,24 +506,33 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toString()}
-            onChange={(e) => handleCreditAmountChange(e.target.value)}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleCreditAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.credit_amount > 0 && !inputValue.includes(".") && !inputValue.includes(",")) {
+                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+              }
+              handleCreditAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow numbers, decimal point, comma, backspace, Tab, and navigation keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b]/.test(e.key) &&
                 e.key !== "Tab" &&
-                e.key !== "Enter" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete" &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
