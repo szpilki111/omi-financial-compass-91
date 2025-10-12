@@ -126,18 +126,8 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("Form data:", formData);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-
-    // Zawsze formatuj debit_amount na float z dwoma miejscami po przecinku
-    const formattedDebitAmount = parseFloat(formData.debit_amount.toFixed(2));
-    console.log("formData.debit_amount przed formatowaniem:", formData.debit_amount);
-    setFormData((prev) => ({
-      ...prev,
-      debit_amount: formattedDebitAmount,
-    }));
-    console.log("Przekształcono na float z dwoma miejscami:", formattedDebitAmount);
-
     console.log("Amount comparison:", {
-      debit_amount: formattedDebitAmount,
+      debit_amount: formData.debit_amount,
       credit_amount: formData.credit_amount,
       difference: difference,
       debitSmaller: formData.debit_amount < formData.credit_amount,
@@ -173,19 +163,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("Form data:", formData);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-
-    // Zawsze formatuj credit_amount na float z dwoma miejscami po przecinku
-    const formattedCreditAmount = parseFloat(formData.credit_amount.toFixed(2));
-    console.log("formData.credit_amount przed formatowaniem:", formData.credit_amount);
-    setFormData((prev) => ({
-      ...prev,
-      credit_amount: formattedCreditAmount,
-    }));
-    console.log("Przekształcono na float z dwoma miejscami:", formattedCreditAmount);
-
     console.log("Amount comparison:", {
       debit_amount: formData.debit_amount,
-      credit_amount: formattedCreditAmount,
+      credit_amount: formData.credit_amount,
       difference: difference,
       creditSmaller: formData.credit_amount < formData.debit_amount,
       significantDifference: difference > 0.01,
@@ -456,9 +436,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toString().replace('.', ',')}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
             onChange={(e) => {
-              const value = e.target.value.replace(',', '.');
+              const value = e.target.value;
               handleDebitAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleDebitFocus}
@@ -474,16 +454,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
                 e.key !== "Tab" &&
-                e.key !== "Backspace" &&
-                e.key !== "Delete" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                !/[\d.,]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
@@ -510,9 +489,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toString().replace('.', ',')}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
             onChange={(e) => {
-              const value = e.target.value.replace(',', '.');
+              const value = e.target.value;
               handleCreditAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleCreditFocus}
@@ -528,16 +507,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
                 e.key !== "Tab" &&
-                e.key !== "Backspace" &&
-                e.key !== "Delete" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                !/[\d.,]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
