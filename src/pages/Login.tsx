@@ -17,6 +17,9 @@ import {
   updateTrustedDeviceLastUsed 
 } from '@/utils/deviceFingerprint';
 
+// TYMCZASOWO WYŁĄCZONE - do włączenia po skonfigurowaniu domeny i emaili
+const ENABLE_TWO_FACTOR_AUTH = false;
+
 // Ograniczamy role do ekonoma
 type Role = 'ekonom';
 interface ProfileInsertParams {
@@ -113,6 +116,26 @@ const Login = () => {
       console.log("Próba logowania dla email:", loginField);
       const userEmail = loginField;
 
+      // TYMCZASOWO WYŁĄCZONE - standardowe logowanie bez 2FA
+      if (!ENABLE_TWO_FACTOR_AUTH) {
+        const success = await Promise.race([
+          login(userEmail, password),
+          timeout(10000)
+        ]);
+        
+        if (success) {
+          toast({
+            title: "Logowanie pomyślne",
+            description: "Zostałeś zalogowany do systemu."
+          });
+          navigate(from, { replace: true });
+        } else {
+          setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
+        }
+        return;
+      }
+
+      // KOD PONIŻEJ BĘDZIE UŻYWANY PO WŁĄCZENIU 2FA
       // Wygeneruj fingerprint urządzenia
       const fingerprint = await generateDeviceFingerprint();
       setDeviceFingerprint(fingerprint);
@@ -188,6 +211,7 @@ const Login = () => {
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
+    } finally {
       setIsLoading(false);
     }
   };
