@@ -156,24 +156,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
   };
 
   const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
-    const inputValue = e.target.value;
-    
-    // Format to two decimal places on blur if valid number
-    if (inputValue !== "" && !isNaN(parseFloat(inputValue))) {
-      const formattedValue = parseFloat(inputValue).toFixed(2);
-      const amount = parseFloat(formattedValue);
-      
-      if (type === 'debit') {
-        setDebitFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount } : field
-        ));
-      } else {
-        setCreditFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount } : field
-        ));
-      }
-    } else if (inputValue === '' || inputValue === undefined) {
-      // Jeśli pole jest puste po utracie fokusa, ustaw na 0
+    // Jeśli pole jest puste po utracie fokusa, ustaw na 0
+    if (e.target.value === '' || e.target.value === undefined) {
       if (type === 'debit') {
         setDebitFields(prev => prev.map(field => 
           field.id === fieldId ? { ...field, amount: 0 } : field
@@ -219,45 +203,35 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     }
   };
 
-  const handleDebitAmountChange = (fieldId: string, value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      const amount = value === "" ? 0 : parseFloat(value) || 0;
-      
-      setDebitFields(prev => prev.map(field => 
-        field.id === fieldId ? { ...field, amount } : field
-      ));
+  const handleDebitAmountChange = (fieldId: string, amount: number) => {
+    setDebitFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
 
-      // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy:
-      // 1. To jest pierwsze pole debit
-      // 2. Pierwsze pole debit ma fokus  
-      // 3. Drugie pole było zerem przed rozpoczęciem pisania
-      if (fieldId === '1' && isFirstDebitFieldFocused && wasSecondFieldZeroOnFirstFocus && value !== "" && parseFloat(value) > 0) {
-        setCreditFields(prev => prev.map((field, index) => 
-          index === 0 ? { ...field, amount } : field
-        ));
-      }
+    // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole debit
+    // 2. Pierwsze pole debit ma fokus  
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstDebitFieldFocused && wasSecondFieldZeroOnFirstFocus) {
+      setCreditFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
   };
 
-  const handleCreditAmountChange = (fieldId: string, value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      const amount = value === "" ? 0 : parseFloat(value) || 0;
-      
-      setCreditFields(prev => prev.map(field => 
-        field.id === fieldId ? { ...field, amount } : field
-      ));
+  const handleCreditAmountChange = (fieldId: string, amount: number) => {
+    setCreditFields(prev => prev.map(field => 
+      field.id === fieldId ? { ...field, amount } : field
+    ));
 
-      // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy:
-      // 1. To jest pierwsze pole credit
-      // 2. Pierwsze pole credit ma fokus
-      // 3. Drugie pole było zerem przed rozpoczęciem pisania
-      if (fieldId === '1' && isFirstCreditFieldFocused && wasSecondFieldZeroOnFirstFocus && value !== "" && parseFloat(value) > 0) {
-        setDebitFields(prev => prev.map((field, index) => 
-          index === 0 ? { ...field, amount } : field
-        ));
-      }
+    // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy:
+    // 1. To jest pierwsze pole credit
+    // 2. Pierwsze pole credit ma fokus
+    // 3. Drugie pole było zerem przed rozpoczęciem pisania
+    if (fieldId === '1' && isFirstCreditFieldFocused && wasSecondFieldZeroOnFirstFocus) {
+      setDebitFields(prev => prev.map((field, index) => 
+        index === 0 ? { ...field, amount } : field
+      ));
     }
   };
 
@@ -510,25 +484,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount.toString()}
-                        onChange={(e) => handleDebitAmountChange(field.id, e.target.value)}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleDebitAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
+                        onBlur={(e) => {
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            // Value is already a number, display formatting happens in value prop
+                            handleDebitAmountChange(field.id, field.amount);
+                          }
+                          handleAmountBlur(e, field.id, 'debit');
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow numbers, decimal point, backspace, Tab, and navigation keys
-                          if (
-                            !/[\d.,\b]/.test(e.key) &&
-                            e.key !== 'Tab' &&
-                            e.key !== 'Enter' &&
-                            e.key !== 'ArrowLeft' &&
-                            e.key !== 'ArrowRight' &&
-                            e.key !== 'Delete' &&
-                            !e.ctrlKey &&
-                            !e.metaKey
-                          ) {
+                          // Allow Tab, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}
@@ -577,25 +553,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount.toString()}
-                        onChange={(e) => handleCreditAmountChange(field.id, e.target.value)}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleCreditAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
+                        onBlur={(e) => {
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            // Value is already a number, display formatting happens in value prop
+                            handleCreditAmountChange(field.id, field.amount);
+                          }
+                          handleAmountBlur(e, field.id, 'credit');
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow numbers, decimal point, backspace, Tab, and navigation keys
-                          if (
-                            !/[\d.,\b]/.test(e.key) &&
-                            e.key !== 'Tab' &&
-                            e.key !== 'Enter' &&
-                            e.key !== 'ArrowLeft' &&
-                            e.key !== 'ArrowRight' &&
-                            e.key !== 'Delete' &&
-                            !e.ctrlKey &&
-                            !e.metaKey
-                          ) {
+                          // Allow Tab, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}

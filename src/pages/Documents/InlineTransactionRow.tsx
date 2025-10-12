@@ -121,21 +121,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   // Handle losing focus from debit amount field
-  const handleDebitAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    if (inputValue !== "" && !isNaN(parseFloat(inputValue))) {
-      // Format to two decimal places on blur
-      const formattedValue = parseFloat(inputValue).toFixed(2);
-      setFormData((prev) => ({
-        ...prev,
-        debit_amount: parseFloat(formattedValue),
-      }));
-    }
-    handleDebitAmountBlurLogic();
-  };
-
-  // Debit amount blur logic for balancing
-  const handleDebitAmountBlurLogic = () => {
+  const handleDebitAmountBlur = () => {
     console.log("=== Debit amount blur triggered ===");
     console.log("Form data:", formData);
 
@@ -172,21 +158,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   // Handle losing focus from credit amount field
-  const handleCreditAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    if (inputValue !== "" && !isNaN(parseFloat(inputValue))) {
-      // Format to two decimal places on blur
-      const formattedValue = parseFloat(inputValue).toFixed(2);
-      setFormData((prev) => ({
-        ...prev,
-        credit_amount: parseFloat(formattedValue),
-      }));
-    }
-    handleCreditAmountBlurLogic();
-  };
-
-  // Credit amount blur logic for balancing
-  const handleCreditAmountBlurLogic = () => {
+  const handleCreditAmountBlur = () => {
     console.log("=== Credit amount blur triggered ===");
     console.log("Form data:", formData);
 
@@ -284,37 +256,31 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   // Auto-populate logic for debit amount changes
-  const handleDebitAmountChange = (value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      setFormData((prev) => {
-        const newData = { ...prev, debit_amount: value === "" ? 0 : parseFloat(value) || 0 };
+  const handleDebitAmountChange = (value: number) => {
+    setFormData((prev) => {
+      const newData = { ...prev, debit_amount: value };
 
-        // Auto-populate credit amount if credit hasn't been manually touched and value > 0
-        if (!creditTouched && value !== "" && parseFloat(value) > 0) {
-          newData.credit_amount = parseFloat(value) || 0;
-        }
+      // Auto-populate credit amount if credit hasn't been manually touched and value > 0
+      if (!creditTouched && value > 0) {
+        newData.credit_amount = value;
+      }
 
-        return newData;
-      });
-    }
+      return newData;
+    });
   };
 
   // Auto-populate logic for credit amount changes
-  const handleCreditAmountChange = (value: string) => {
-    // Allow empty input or valid decimal numbers
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      setFormData((prev) => {
-        const newData = { ...prev, credit_amount: value === "" ? 0 : parseFloat(value) || 0 };
+  const handleCreditAmountChange = (value: number) => {
+    setFormData((prev) => {
+      const newData = { ...prev, credit_amount: value };
 
-        // Auto-populate debit amount if debit hasn't been manually touched and value > 0
-        if (!debitTouched && value !== "" && parseFloat(value) > 0) {
-          newData.debit_amount = parseFloat(value) || 0;
-        }
+      // Auto-populate debit amount if debit hasn't been manually touched and value > 0
+      if (!debitTouched && value > 0) {
+        newData.debit_amount = value;
+      }
 
-        return newData;
-      });
-    }
+      return newData;
+    });
   };
 
   const handleDebitFocus = () => {
@@ -470,24 +436,34 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toString()}
-            onChange={(e) => handleDebitAmountChange(e.target.value)}
+            value={formData.debit_amount === 0 ? "" : (Number.isInteger(formData.debit_amount) ? formData.debit_amount.toFixed(2) : formData.debit_amount)}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleDebitAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.debit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                // Value is already a number, display formatting happens in value prop
+                handleDebitAmountChange(formData.debit_amount);
+              }
+              handleDebitAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow numbers, decimal point, backspace, Tab, and navigation keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b]/.test(e.key) &&
                 e.key !== "Tab" &&
-                e.key !== "Enter" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete" &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
@@ -514,24 +490,34 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toString()}
-            onChange={(e) => handleCreditAmountChange(e.target.value)}
+            value={formData.credit_amount === 0 ? "" : (Number.isInteger(formData.credit_amount) ? formData.credit_amount.toFixed(2) : formData.credit_amount)}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleCreditAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.credit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                // Value is already a number, display formatting happens in value prop
+                handleCreditAmountChange(formData.credit_amount);
+              }
+              handleCreditAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow numbers, decimal point, backspace, Tab, and navigation keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b]/.test(e.key) &&
                 e.key !== "Tab" &&
-                e.key !== "Enter" &&
+                !/[\d.,\b\r]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete" &&
-                !e.ctrlKey &&
-                !e.metaKey
+                e.key !== "Delete"
               ) {
                 e.preventDefault();
               }
