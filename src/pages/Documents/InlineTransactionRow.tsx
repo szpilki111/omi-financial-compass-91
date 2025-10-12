@@ -440,15 +440,27 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       <TableCell>
         <div className="flex items-center space-x-2">
           <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.debit_amount || ''}
-            onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
+            type="text"
+            inputMode="decimal"
+            value={formData.debit_amount > 0 ? formData.debit_amount.toFixed(2) : ''}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleDebitAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              handleDebitAmountBlur();
+              // Format to 2 decimal places on blur
+              if (formData.debit_amount > 0) {
+                e.target.value = formData.debit_amount.toFixed(2);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+              // Allow only numbers, decimal point, and control keys
+              if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                 e.preventDefault();
               }
             }}
@@ -475,15 +487,27 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       <TableCell>
         <div className="flex items-center space-x-2">
           <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.credit_amount || ''}
-            onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
+            type="text"
+            inputMode="decimal"
+            value={formData.credit_amount > 0 ? formData.credit_amount.toFixed(2) : ''}
+            onChange={(e) => {
+              const value = e.target.value;
+              handleCreditAmountChange(parseFloat(value) || 0);
+            }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              handleCreditAmountBlur();
+              // Format to 2 decimal places on blur
+              if (formData.credit_amount > 0) {
+                e.target.value = formData.credit_amount.toFixed(2);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+              // Allow only numbers, decimal point, and control keys
+              if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                 e.preventDefault();
               }
             }}

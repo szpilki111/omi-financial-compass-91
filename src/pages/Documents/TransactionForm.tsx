@@ -482,15 +482,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={field.amount === 0 ? '' : field.amount}
-                        onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        type="text"
+                        inputMode="decimal"
+                        value={field.amount > 0 ? field.amount.toFixed(2) : ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleDebitAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
+                        onBlur={(e) => {
+                          handleAmountBlur(e, field.id, 'debit');
+                          // Format to 2 decimal places on blur
+                          if (field.amount > 0) {
+                            e.target.value = field.amount.toFixed(2);
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                          // Allow only numbers, decimal point, and control keys
+                          if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}
@@ -537,15 +549,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={field.amount === 0 ? '' : field.amount}
-                        onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        type="text"
+                        inputMode="decimal"
+                        value={field.amount > 0 ? field.amount.toFixed(2) : ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleCreditAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
+                        onBlur={(e) => {
+                          handleAmountBlur(e, field.id, 'credit');
+                          // Format to 2 decimal places on blur
+                          if (field.amount > 0) {
+                            e.target.value = field.amount.toFixed(2);
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                          // Allow only numbers, decimal point, and control keys
+                          if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}
