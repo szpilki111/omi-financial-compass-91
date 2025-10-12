@@ -67,7 +67,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     queryKey: ["userProfile"],
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("location_id").eq("id", user?.id).single();
-
       if (error) throw error;
       return data;
     },
@@ -92,16 +91,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   // Handle losing focus from the row - only save when amounts are equal
   const handleRowBlur = (event: React.FocusEvent) => {
-    // Check if the new focus target is still within this row
     const currentTarget = event.currentTarget;
     const relatedTarget = event.relatedTarget as Node;
+    if (currentTarget.contains(relatedTarget)) return;
 
-    if (currentTarget.contains(relatedTarget)) {
-      // Focus is still within the row, don't trigger processing
-      return;
-    }
-
-    // Only save if form is valid, amounts are equal, and editing is not blocked
     if (isFormValid && amountsEqual && !isEditingBlocked) {
       console.log("Row blur - saving equal amounts transaction");
       const transaction: Transaction = {
@@ -114,7 +107,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         settlement_type: formData.settlement_type,
         currency: currency,
       };
-
       onSave(transaction);
       resetForm();
     }
@@ -124,6 +116,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const handleDebitAmountBlur = () => {
     console.log("=== Debit amount blur triggered ===");
     console.log("Form data:", formData);
+
+    // Format to 2 decimal places on blur
+    if (formData.debit_amount > 0) {
+      handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+    }
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log("Amount comparison:", {
@@ -136,7 +133,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       creditAccountSelected: !!formData.credit_account_id,
     });
 
-    // Relaxed validation: check if we have basic form data + credit account (since debit is smaller)
     const canCreateBalancing =
       isBasicFormValid() &&
       formData.credit_account_id &&
@@ -162,6 +158,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("=== Credit amount blur triggered ===");
     console.log("Form data:", formData);
 
+    // Format to 2 decimal places on blur
+    if (formData.credit_amount > 0) {
+      handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+    }
+
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log("Amount comparison:", {
       debit_amount: formData.debit_amount,
@@ -173,7 +174,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       debitAccountSelected: !!formData.debit_account_id,
     });
 
-    // Relaxed validation: check if we have basic form data + debit account (since credit is smaller)
     const canCreateBalancing =
       isBasicFormValid() &&
       formData.debit_account_id &&
@@ -197,8 +197,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   // Create balancing transaction when one side is smaller
   const createBalancingTransaction = (smallerSide: "debit" | "credit") => {
     console.log("🔄 Creating balancing transaction for smaller side:", smallerSide);
-
-    // Save the original transaction first
     const originalTransaction: Transaction = {
       description: formData.description,
       debit_account_id: formData.debit_account_id,
@@ -209,13 +207,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       settlement_type: formData.settlement_type,
       currency: currency,
     };
-
     console.log("💾 Saving original transaction:", originalTransaction);
     onSave(originalTransaction);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-
-    // Create the balancing transaction
     const balancingTransaction: Transaction = {
       description: formData.description,
       debit_account_id: smallerSide === "debit" ? "" : formData.debit_account_id,
@@ -226,15 +221,12 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       settlement_type: formData.settlement_type,
       currency: currency,
     };
-
     console.log("💾 Saving balancing transaction:", balancingTransaction);
     onSave(balancingTransaction);
-
-    // Reset form for next operation
     resetForm();
   };
 
-  // Helper function to reset form - clear all fields for fresh operation
+  // Helper function to reset form
   const resetForm = () => {
     setFormData({
       description: "",
@@ -246,8 +238,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     });
     setCreditTouched(false);
     setDebitTouched(false);
-
-    // Auto-focus on description field for next transaction
     setTimeout(() => {
       if (descriptionRef.current && !isEditingBlocked) {
         descriptionRef.current.focus();
@@ -259,12 +249,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const handleDebitAmountChange = (value: number) => {
     setFormData((prev) => {
       const newData = { ...prev, debit_amount: value };
-
-      // Auto-populate credit amount if credit hasn't been manually touched and value > 0
       if (!creditTouched && value > 0) {
         newData.credit_amount = value;
       }
-
       return newData;
     });
   };
@@ -273,12 +260,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const handleCreditAmountChange = (value: number) => {
     setFormData((prev) => {
       const newData = { ...prev, credit_amount: value };
-
-      // Auto-populate debit amount if debit hasn't been manually touched and value > 0
       if (!debitTouched && value > 0) {
         newData.debit_amount = value;
       }
-
       return newData;
     });
   };
@@ -306,102 +290,38 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   };
 
   const handleSaveWithBalancing = () => {
-    if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) {
-      return;
-    }
+    if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) return;
+    if (formData.debit_amount <= 0 || formData.credit_amount <= 0) return;
 
-    if (formData.debit_amount <= 0 || formData.credit_amount <= 0) {
-      return;
-    }
-
-    // Check if amounts are equal
     const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
+    const transaction: Transaction = {
+      description: formData.description,
+      debit_account_id: formData.debit_account_id,
+      credit_account_id: formData.credit_account_id,
+      debit_amount: formData.debit_amount,
+      credit_amount: formData.credit_amount,
+      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      settlement_type: formData.settlement_type,
+      currency: currency,
+    };
+    onSave(transaction);
 
-    if (amountsAreEqual) {
-      // Amounts equal - save current transaction and reset form for fresh operation
-      const transaction: Transaction = {
-        description: formData.description,
-        debit_account_id: formData.debit_account_id,
-        credit_account_id: formData.credit_account_id,
-        debit_amount: formData.debit_amount,
-        credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
-        settlement_type: formData.settlement_type,
-        currency: currency,
-      };
-
-      onSave(transaction);
-
-      // Reset form state for next transaction - clear all fields
-      setFormData({
-        description: "",
-        debit_account_id: "",
-        credit_account_id: "",
-        debit_amount: 0,
-        credit_amount: 0,
-        settlement_type: "Bank" as "Gotówka" | "Bank" | "Rozrachunek",
-      });
-      setCreditTouched(false);
-      setDebitTouched(false);
-
-      // Auto-focus on description field for next transaction
-      setTimeout(() => {
-        if (descriptionRef.current && !isEditingBlocked) {
-          descriptionRef.current.focus();
-        }
-      }, 100);
-    } else {
-      // Amounts different - save original transaction and create balancing transaction
-      const transaction: Transaction = {
-        description: formData.description,
-        debit_account_id: formData.debit_account_id,
-        credit_account_id: formData.credit_account_id,
-        debit_amount: formData.debit_amount,
-        credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
-        settlement_type: formData.settlement_type,
-        currency: currency,
-      };
-
-      onSave(transaction);
-
+    if (!amountsAreEqual) {
       const difference = Math.abs(formData.debit_amount - formData.credit_amount);
       const isDebitLarger = formData.debit_amount > formData.credit_amount;
-
-      // Create the balancing transaction
       const balancingTransaction: Transaction = {
-        description: formData.description, // Copy the same description
-        debit_account_id: isDebitLarger ? "" : formData.credit_account_id, // Fill same side account
-        credit_account_id: !isDebitLarger ? "" : formData.debit_account_id, // Fill same side account
-        debit_amount: isDebitLarger ? 0 : difference, // Fill the balancing amount
-        credit_amount: !isDebitLarger ? 0 : difference, // Fill the balancing amount
+        description: formData.description,
+        debit_account_id: isDebitLarger ? "" : formData.credit_account_id,
+        credit_account_id: !isDebitLarger ? "" : formData.debit_account_id,
+        debit_amount: isDebitLarger ? 0 : difference,
+        credit_amount: !isDebitLarger ? 0 : difference,
         amount: difference,
         settlement_type: formData.settlement_type,
         currency: currency,
       };
-
-      // Save the balancing transaction
       onSave(balancingTransaction);
-
-      // Reset form for next operation - clear all fields
-      setFormData({
-        description: "",
-        debit_account_id: "",
-        credit_account_id: "",
-        debit_amount: 0,
-        credit_amount: 0,
-        settlement_type: "Bank" as "Gotówka" | "Bank" | "Rozrachunek",
-      });
-      setCreditTouched(false);
-      setDebitTouched(false);
-
-      // Auto-focus on description field for next transaction
-      setTimeout(() => {
-        if (descriptionRef.current && !isEditingBlocked) {
-          descriptionRef.current.focus();
-        }
-      }, 100);
     }
+    resetForm();
   };
 
   return (
@@ -412,16 +332,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       )}
       onBlur={handleRowBlur}
     >
-      <TableCell>{/* Pusta komórka dla checkboxa */}</TableCell>
+      <TableCell>{/* Empty cell for checkbox */}</TableCell>
       <TableCell>
         <Textarea
           ref={descriptionRef}
           value={formData.description}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-            }
+            if (e.key === "Enter") e.preventDefault();
           }}
           placeholder="Opis operacji..."
           className={cn(
@@ -434,38 +352,18 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       <TableCell>
         <div className="flex items-center space-x-2">
           <Input
-            type="text"
+            type="number"
+            step="0.01"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
             onChange={(e) => {
-              const value = e.target.value;
+              const value = e.target.value.replace(",", ".");
               handleDebitAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleDebitFocus}
-            onBlur={(e) => {
-              // Format to .00 only if value is integer and no decimal point was entered
-              const inputValue = e.target.value;
-              if (formData.debit_amount > 0 && !inputValue.includes(".") && !inputValue.includes(",")) {
-                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
-              }
-              handleDebitAmountBlur();
-            }}
+            onBlur={handleDebitAmountBlur}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-              }
-              // Allow Tab, numbers, decimal point, and control keys
-              if (
-                e.key !== "Tab" &&
-                !/[\d.,\b\r]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey &&
-                e.key !== "ArrowLeft" &&
-                e.key !== "ArrowRight" &&
-                e.key !== "Delete"
-              ) {
-                e.preventDefault();
-              }
+              if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
@@ -487,38 +385,18 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       <TableCell>
         <div className="flex items-center space-x-2">
           <Input
-            type="text"
+            type="number"
+            step="0.01"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
             onChange={(e) => {
-              const value = e.target.value;
+              const value = e.target.value.replace(",", ".");
               handleCreditAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleCreditFocus}
-            onBlur={(e) => {
-              // Format to .00 only if value is integer and no decimal point was entered
-              const inputValue = e.target.value;
-              if (formData.credit_amount > 0 && !inputValue.includes(".") && !inputValue.includes(",")) {
-                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
-              }
-              handleCreditAmountBlur();
-            }}
+            onBlur={handleCreditAmountBlur}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-              }
-              // Allow Tab, numbers, decimal point, and control keys
-              if (
-                e.key !== "Tab" &&
-                !/[\d.,\b\r]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey &&
-                e.key !== "ArrowLeft" &&
-                e.key !== "ArrowRight" &&
-                e.key !== "Delete"
-              ) {
-                e.preventDefault();
-              }
+              if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
