@@ -484,9 +484,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
                         onChange={(e) => {
-                          const value = e.target.value;
+                          const value = e.target.value.replace(',', '.');
                           handleDebitAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
@@ -553,9 +553,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
                         onChange={(e) => {
-                          const value = e.target.value;
+                          const value = e.target.value.replace(',', '.');
                           handleCreditAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}

@@ -456,9 +456,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toString().replace('.', ',')}
             onChange={(e) => {
-              const value = e.target.value;
+              const value = e.target.value.replace(',', '.');
               handleDebitAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleDebitFocus}
@@ -510,9 +510,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toString().replace('.', ',')}
             onChange={(e) => {
-              const value = e.target.value;
+              const value = e.target.value.replace(',', '.');
               handleCreditAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleCreditFocus}
