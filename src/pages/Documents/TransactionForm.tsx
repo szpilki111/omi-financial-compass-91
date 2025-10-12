@@ -503,8 +503,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow Tab, numbers, decimal point, and control keys
-                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
                             e.preventDefault();
                           }
                         }}
@@ -572,8 +572,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow Tab, numbers, decimal point, and control keys
-                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
                             e.preventDefault();
                           }
                         }}

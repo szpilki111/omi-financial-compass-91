@@ -474,15 +474,16 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow Tab, numbers, decimal point, and control keys
+              // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
               if (
                 e.key !== "Tab" &&
-                !/[\d.,\b\r]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey &&
+                e.key !== "Backspace" &&
+                e.key !== "Delete" &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete"
+                !/[\d.,]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey
               ) {
                 e.preventDefault();
               }
@@ -527,15 +528,16 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow Tab, numbers, decimal point, and control keys
+              // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
               if (
                 e.key !== "Tab" &&
-                !/[\d.,\b\r]/.test(e.key) &&
-                !e.ctrlKey &&
-                !e.metaKey &&
+                e.key !== "Backspace" &&
+                e.key !== "Delete" &&
                 e.key !== "ArrowLeft" &&
                 e.key !== "ArrowRight" &&
-                e.key !== "Delete"
+                !/[\d.,]/.test(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey
               ) {
                 e.preventDefault();
               }
