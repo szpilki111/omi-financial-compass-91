@@ -268,6 +268,11 @@ const TransactionEditDialog: React.FC<TransactionEditDialogProps> = ({
               id="description"
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                }
+              }}
               placeholder="Opis operacji finansowej"
               className={errors.description ? 'border-red-500' : ''}
             />

@@ -57,6 +57,11 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
             onChange={handleAmountChange}
             onFocus={onFocus}
             onBlur={onBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
             placeholder={placeholder}
             disabled={disabled}
             className="pr-12"

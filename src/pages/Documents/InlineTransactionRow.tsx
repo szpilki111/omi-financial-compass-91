@@ -424,6 +424,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           ref={descriptionRef}
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+            }
+          }}
           placeholder="Opis operacji..."
           className={cn(
             "min-h-[60px] resize-none",
@@ -442,6 +447,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             onChange={(e) => handleDebitAmountChange(parseFloat(e.target.value) || 0)}
             onFocus={handleDebitFocus}
             onBlur={handleDebitAmountBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
             placeholder="0.00"
             className={cn(
               "text-right",
@@ -472,6 +482,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
             onChange={(e) => handleCreditAmountChange(parseFloat(e.target.value) || 0)}
             onFocus={handleCreditFocus}
             onBlur={handleCreditAmountBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
             placeholder="0.00"
             className={cn(
               "text-right",

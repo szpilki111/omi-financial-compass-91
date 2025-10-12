@@ -455,6 +455,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
             placeholder="Opis operacji finansowej"
             className={errors.description ? 'border-red-500' : ''}
             disabled={isAutoSaving}
@@ -484,6 +489,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
                         onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                        }}
                         placeholder="0.00"
                       />
                     </div>
@@ -534,6 +544,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
                         onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                        }}
                         placeholder="0.00"
                       />
                     </div>
