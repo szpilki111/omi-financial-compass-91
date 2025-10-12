@@ -13,6 +13,7 @@ import Mt940ImportDialog from './Mt940ImportDialog';
 import CsvImportDialog from './CsvImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Document {
   id: string;
@@ -39,10 +40,28 @@ const DocumentsPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+
+  const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
+
+  // Fetch locations for filter (only for admin/prowincjal)
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: isAdminOrProvincial,
+  });
 
   // Fetch documents with related data
   const { data: documents, isLoading, refetch } = useQuery({
@@ -126,19 +145,30 @@ const DocumentsPage = () => {
     },
   });
 
-  // Filter documents based on search term
+  // Filter documents based on search term and location
   const filteredDocuments = useMemo(() => {
-    if (!documents || !searchTerm.trim()) {
-      return documents || [];
+    if (!documents) return [];
+
+    let filtered = documents;
+
+    // Filter by location (for admin/prowincjal)
+    if (isAdminOrProvincial && selectedLocationId !== 'all') {
+      filtered = filtered.filter(doc => doc.location_id === selectedLocationId);
     }
 
-    const search = searchTerm.toLowerCase();
-    return documents.filter(doc => 
-      doc.document_number.toLowerCase().includes(search) ||
-      doc.document_name.toLowerCase().includes(search) ||
-      format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search)
-    );
-  }, [documents, searchTerm]);
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(doc => 
+        doc.document_number.toLowerCase().includes(search) ||
+        doc.document_name.toLowerCase().includes(search) ||
+        doc.locations?.name?.toLowerCase().includes(search) ||
+        format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search)
+      );
+    }
+
+    return filtered;
+  }, [documents, searchTerm, selectedLocationId, isAdminOrProvincial]);
 
   const handleDocumentCreated = () => {
     refetch();
@@ -252,15 +282,34 @@ const DocumentsPage = () => {
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="             Szukaj po numerze, nazwie lub dacie..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-11"
-          />
+        {/* Filters */}
+        <div className="flex gap-4">
+          {isAdminOrProvincial && (
+            <div className="w-64">
+              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Wszystkie placówki" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Wszystkie placówki</SelectItem>
+                  {locations?.map(location => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Szukaj po numerze, nazwie, placówce lub dacie..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-11"
+            />
+          </div>
         </div>
 
         {/* Documents table */}
