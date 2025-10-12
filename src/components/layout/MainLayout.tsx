@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import Header from './Header';
 import { Toaster } from '@/components/ui/toaster';
 import { ErrorReportButton } from '@/components/ErrorReportButton';
@@ -11,22 +11,6 @@ interface MainLayoutProps {
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   const { user } = useAuth();
-
-  // Add warning before closing browser/tab for logged in users
-  useEffect(() => {
-    if (!user) return;
-    
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [user]);
 
   return (
     <div className="min-h-screen bg-omi-gray-100">
