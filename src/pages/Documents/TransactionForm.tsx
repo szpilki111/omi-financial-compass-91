@@ -484,7 +484,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
                         onChange={(e) => {
                           const value = e.target.value;
                           handleDebitAmountChange(field.id, parseFloat(value) || 0);
@@ -494,8 +494,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           // Format to .00 only if value is integer and no decimal point was entered
                           const inputValue = e.target.value;
                           if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                            const formatted = field.amount.toFixed(2);
-                            handleDebitAmountChange(field.id, parseFloat(formatted));
+                            // Value is already a number, display formatting happens in value prop
+                            handleDebitAmountChange(field.id, field.amount);
                           }
                           handleAmountBlur(e, field.id, 'debit');
                         }}
@@ -553,7 +553,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount}
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2) : field.amount)}
                         onChange={(e) => {
                           const value = e.target.value;
                           handleCreditAmountChange(field.id, parseFloat(value) || 0);
@@ -563,8 +563,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           // Format to .00 only if value is integer and no decimal point was entered
                           const inputValue = e.target.value;
                           if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                            const formatted = field.amount.toFixed(2);
-                            handleCreditAmountChange(field.id, parseFloat(formatted));
+                            // Value is already a number, display formatting happens in value prop
+                            handleCreditAmountChange(field.id, field.amount);
                           }
                           handleAmountBlur(e, field.id, 'credit');
                         }}

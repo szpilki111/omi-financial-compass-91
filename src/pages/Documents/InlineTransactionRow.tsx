@@ -436,7 +436,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
+            value={formData.debit_amount === 0 ? "" : (Number.isInteger(formData.debit_amount) ? formData.debit_amount.toFixed(2) : formData.debit_amount)}
             onChange={(e) => {
               const value = e.target.value;
               handleDebitAmountChange(parseFloat(value) || 0);
@@ -446,7 +446,8 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               // Format to .00 only if value is integer and no decimal point was entered
               const inputValue = e.target.value;
               if (formData.debit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+                // Value is already a number, display formatting happens in value prop
+                handleDebitAmountChange(formData.debit_amount);
               }
               handleDebitAmountBlur();
             }}
@@ -489,7 +490,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
+            value={formData.credit_amount === 0 ? "" : (Number.isInteger(formData.credit_amount) ? formData.credit_amount.toFixed(2) : formData.credit_amount)}
             onChange={(e) => {
               const value = e.target.value;
               handleCreditAmountChange(parseFloat(value) || 0);
@@ -499,7 +500,8 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               // Format to .00 only if value is integer and no decimal point was entered
               const inputValue = e.target.value;
               if (formData.credit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+                // Value is already a number, display formatting happens in value prop
+                handleCreditAmountChange(formData.credit_amount);
               }
               handleCreditAmountBlur();
             }}
