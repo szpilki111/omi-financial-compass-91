@@ -8,8 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-
 import { Separator } from '@/components/ui/separator';
+import TwoFactorVerification from '@/components/auth/TwoFactorVerification';
+import { 
+  generateDeviceFingerprint, 
+  isDeviceTrusted, 
+  addTrustedDevice,
+  updateTrustedDeviceLastUsed 
+} from '@/utils/deviceFingerprint';
 
 // Ograniczamy role do ekonoma
 type Role = 'ekonom';
@@ -35,6 +41,13 @@ const Login = () => {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [existingLocations, setExistingLocations] = useState<Location[]>([]);
   const [isCreatingNewLocation, setIsCreatingNewLocation] = useState(false);
+  
+  // Two-factor authentication states
+  const [showTwoFactorDialog, setShowTwoFactorDialog] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<string>('');
+  const [pendingEmail, setPendingEmail] = useState<string>('');
+  const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
+  
   const {
     login,
     isAuthenticated
@@ -82,19 +95,15 @@ const Login = () => {
 
   // Helper function for timeouts
   const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Żądanie przekroczyło limit czasu')), ms));
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    let userEmail = '';
-    let userId = '';
+    
     try {
       // Check for any existing session and sign out if found
-      const {
-        data: {
-          session
-        }
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
         await supabase.auth.signOut();
@@ -102,27 +111,119 @@ const Login = () => {
 
       // Use loginField directly as email for login
       console.log("Próba logowania dla email:", loginField);
-      userEmail = loginField;
+      const userEmail = loginField;
 
-      // Add timeout to prevent indefinite loading
-      const success = await Promise.race([login(userEmail, password), timeout(10000) // 10 second timeout
-      ]);
-      if (success) {
-        toast({
-          title: "Logowanie pomyślne",
-          description: "Zostałeś zalogowany do systemu."
-        });
-        navigate(from, {
-          replace: true
-        });
-      } else {
+      // Wygeneruj fingerprint urządzenia
+      const fingerprint = await generateDeviceFingerprint();
+      setDeviceFingerprint(fingerprint);
+
+      // Najpierw spróbuj zalogować, aby uzyskać userId
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: password,
+      });
+
+      if (authError) {
         setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!authData.user) {
+        setError("Wystąpił błąd podczas logowania.");
+        setIsLoading(false);
+        return;
+      }
+
+      const userId = authData.user.id;
+      
+      // Sprawdź czy urządzenie jest zaufane
+      const trusted = await isDeviceTrusted(userId, fingerprint, supabase);
+      
+      if (trusted) {
+        // Aktualizuj datę ostatniego użycia
+        await updateTrustedDeviceLastUsed(userId, fingerprint, supabase);
+        
+        // Kontynuuj standardowe logowanie przez context
+        await supabase.auth.signOut(); // Wyloguj tymczasowo
+        const success = await Promise.race([
+          login(userEmail, password),
+          timeout(10000)
+        ]);
+        
+        if (success) {
+          toast({
+            title: "Logowanie pomyślne",
+            description: "Zostałeś zalogowany do systemu."
+          });
+          navigate(from, { replace: true });
+        }
+      } else {
+        // Wyloguj tymczasowo i wyślij kod weryfikacyjny
+        await supabase.auth.signOut();
+        
+        // Wyślij kod weryfikacyjny
+        const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
+          body: {
+            user_id: userId,
+            email: userEmail,
+            device_fingerprint: fingerprint,
+            user_agent: navigator.userAgent,
+          },
+        });
+
+        if (sendError) {
+          console.error('Error sending verification code:', sendError);
+          setError('Nie udało się wysłać kodu weryfikacyjnego');
+          setIsLoading(false);
+          return;
+        }
+
+        // Pokaż dialog weryfikacji dwuetapowej
+        setPendingUserId(userId);
+        setPendingEmail(userEmail);
+        setShowTwoFactorDialog(true);
+        setIsLoading(false);
       }
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleTwoFactorVerified = async (trustDevice: boolean) => {
+    setShowTwoFactorDialog(false);
+    setIsLoading(true);
+
+    try {
+      // Jeśli użytkownik chce dodać urządzenie do zaufanych
+      if (trustDevice) {
+        await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
+      }
+
+      // Zaloguj użytkownika przez context
+      const success = await Promise.race([
+        login(pendingEmail, password),
+        timeout(10000)
+      ]);
+
+      if (success) {
+        toast({
+          title: "Weryfikacja zakończona pomyślnie",
+          description: "Zostałeś zalogowany do systemu."
+        });
+        navigate(from, { replace: true });
+      } else {
+        setError("Nie udało się zalogować po weryfikacji");
+      }
+    } catch (err: any) {
+      console.error("Error after 2FA:", err);
+      setError("Wystąpił błąd podczas logowania");
     } finally {
       setIsLoading(false);
+      setPendingUserId('');
+      setPendingEmail('');
     }
   };
   const handleSignUp = async (e: React.FormEvent) => {
@@ -320,7 +421,21 @@ const Login = () => {
       setIsLoading(false);
     }
   };
-  return <div className="min-h-screen flex items-center justify-center bg-omi-gray-100">
+  return <>
+    <TwoFactorVerification
+      isOpen={showTwoFactorDialog}
+      onClose={() => {
+        setShowTwoFactorDialog(false);
+        setPendingUserId('');
+        setPendingEmail('');
+      }}
+      onVerified={handleTwoFactorVerified}
+      userId={pendingUserId}
+      email={pendingEmail}
+      deviceFingerprint={deviceFingerprint}
+    />
+    
+    <div className="min-h-screen flex items-center justify-center bg-omi-gray-100">
       <div className="bg-white p-8 rounded-md shadow-md w-full max-w-md">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-omi-500">OMI Finanse</h1>
@@ -413,6 +528,7 @@ const Login = () => {
         </form>
 
       </div>
-    </div>;
+    </div>
+  </>;
 };
 export default Login;
