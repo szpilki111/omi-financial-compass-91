@@ -127,24 +127,17 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
 
-    // Sprawdź, czy formData.debit_amount ma część dziesiętną
-    const hasDecimalPart = formData.debit_amount % 1 !== 0;
-
-    if (hasDecimalPart) {
-      console.log("formData.debit_amount ma część dziesiętną:", formData.debit_amount);
-      // Przekształć na float z dwoma miejscami po przecinku
-      const formattedDebitAmount = parseFloat(formData.debit_amount.toFixed(2));
-      setFormData((prev) => ({
-        ...prev,
-        debit_amount: formattedDebitAmount,
-      }));
-      console.log("Przekształcono na float z dwoma miejscami:", formattedDebitAmount);
-    } else {
-      console.log("formData.debit_amount jest liczbą całkowitą:", formData.debit_amount);
-    }
+    // Zawsze formatuj debit_amount na float z dwoma miejscami po przecinku
+    const formattedDebitAmount = parseFloat(formData.debit_amount.toFixed(2));
+    console.log("formData.debit_amount przed formatowaniem:", formData.debit_amount);
+    setFormData((prev) => ({
+      ...prev,
+      debit_amount: formattedDebitAmount,
+    }));
+    console.log("Przekształcono na float z dwoma miejscami:", formattedDebitAmount);
 
     console.log("Amount comparison:", {
-      debit_amount: formData.debit_amount,
+      debit_amount: formattedDebitAmount,
       credit_amount: formData.credit_amount,
       difference: difference,
       debitSmaller: formData.debit_amount < formData.credit_amount,
@@ -180,9 +173,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     console.log("Form data:", formData);
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
+
+    // Zawsze formatuj credit_amount na float z dwoma miejscami po przecinku
+    const formattedCreditAmount = parseFloat(formData.credit_amount.toFixed(2));
+    console.log("formData.credit_amount przed formatowaniem:", formData.credit_amount);
+    setFormData((prev) => ({
+      ...prev,
+      credit_amount: formattedCreditAmount,
+    }));
+    console.log("Przekształcono na float z dwoma miejscami:", formattedCreditAmount);
+
     console.log("Amount comparison:", {
       debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
+      credit_amount: formattedCreditAmount,
       difference: difference,
       creditSmaller: formData.credit_amount < formData.debit_amount,
       significantDifference: difference > 0.01,
