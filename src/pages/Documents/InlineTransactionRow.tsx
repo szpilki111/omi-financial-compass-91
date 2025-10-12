@@ -90,12 +90,9 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   // Check if amounts are equal (with tolerance for floating point precision)
   const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
 
-  // Format amount to add ",00" if integer
+  // Format amount to always have two decimal places for saving
   const formatAmountForSave = (amount: number): number => {
-    if (amount > 0 && Number.isInteger(amount)) {
-      return parseFloat(amount.toFixed(2));
-    }
-    return amount;
+    return parseFloat(amount.toFixed(2));
   };
 
   // Handle losing focus from the row - only save when amounts are equal
@@ -118,7 +115,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_account_id: formData.credit_account_id,
         debit_amount: formatAmountForSave(formData.debit_amount),
         credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -213,7 +210,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       credit_account_id: formData.credit_account_id,
       debit_amount: formatAmountForSave(formData.debit_amount),
       credit_amount: formatAmountForSave(formData.credit_amount),
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -230,7 +227,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       credit_account_id: smallerSide === "credit" ? "" : formData.credit_account_id,
       debit_amount: smallerSide === "debit" ? formatAmountForSave(difference) : 0,
       credit_amount: smallerSide === "credit" ? formatAmountForSave(difference) : 0,
-      amount: difference,
+      amount: formatAmountForSave(difference),
       settlement_type: formData.settlement_type,
       currency: currency,
     };
@@ -339,7 +336,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_account_id: formData.credit_account_id,
         debit_amount: formatAmountForSave(formData.debit_amount),
         credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -372,7 +369,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_account_id: formData.credit_account_id,
         debit_amount: formatAmountForSave(formData.debit_amount),
         credit_amount: formatAmountForSave(formData.credit_amount),
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        amount: formatAmountForSave(Math.max(formData.debit_amount, formData.credit_amount)),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
@@ -389,7 +386,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         credit_account_id: !isDebitLarger ? "" : formData.debit_account_id,
         debit_amount: isDebitLarger ? 0 : formatAmountForSave(difference),
         credit_amount: !isDebitLarger ? 0 : formatAmountForSave(difference),
-        amount: difference,
+        amount: formatAmountForSave(difference),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
