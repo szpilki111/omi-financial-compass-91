@@ -484,18 +484,19 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount > 0 ? field.amount.toFixed(2) : ''}
+                        value={field.amount === 0 ? '' : field.amount}
                         onChange={(e) => {
                           const value = e.target.value;
                           handleDebitAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
                         onBlur={(e) => {
-                          handleAmountBlur(e, field.id, 'debit');
-                          // Format to 2 decimal places on blur
-                          if (field.amount > 0) {
-                            e.target.value = field.amount.toFixed(2);
+                          // Format to 2 decimal places only if no decimals entered
+                          const value = field.amount;
+                          if (value > 0 && Number.isInteger(value)) {
+                            handleDebitAmountChange(field.id, parseFloat(value.toFixed(2)));
                           }
+                          handleAmountBlur(e, field.id, 'debit');
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -551,18 +552,19 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount > 0 ? field.amount.toFixed(2) : ''}
+                        value={field.amount === 0 ? '' : field.amount}
                         onChange={(e) => {
                           const value = e.target.value;
                           handleCreditAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
                         onBlur={(e) => {
-                          handleAmountBlur(e, field.id, 'credit');
-                          // Format to 2 decimal places on blur
-                          if (field.amount > 0) {
-                            e.target.value = field.amount.toFixed(2);
+                          // Format to 2 decimal places only if no decimals entered
+                          const value = field.amount;
+                          if (value > 0 && Number.isInteger(value)) {
+                            handleCreditAmountChange(field.id, parseFloat(value.toFixed(2)));
                           }
+                          handleAmountBlur(e, field.id, 'credit');
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {

@@ -442,18 +442,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount > 0 ? formData.debit_amount.toFixed(2) : ''}
+            value={formData.debit_amount === 0 ? '' : formData.debit_amount}
             onChange={(e) => {
               const value = e.target.value;
               handleDebitAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleDebitFocus}
             onBlur={(e) => {
-              handleDebitAmountBlur();
-              // Format to 2 decimal places on blur
-              if (formData.debit_amount > 0) {
-                e.target.value = formData.debit_amount.toFixed(2);
+              // Format to 2 decimal places only if no decimals entered
+              const value = formData.debit_amount;
+              if (value > 0 && Number.isInteger(value)) {
+                handleDebitAmountChange(parseFloat(value.toFixed(2)));
               }
+              handleDebitAmountBlur();
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -489,18 +490,19 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount > 0 ? formData.credit_amount.toFixed(2) : ''}
+            value={formData.credit_amount === 0 ? '' : formData.credit_amount}
             onChange={(e) => {
               const value = e.target.value;
               handleCreditAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleCreditFocus}
             onBlur={(e) => {
-              handleCreditAmountBlur();
-              // Format to 2 decimal places on blur
-              if (formData.credit_amount > 0) {
-                e.target.value = formData.credit_amount.toFixed(2);
+              // Format to 2 decimal places only if no decimals entered
+              const value = formData.credit_amount;
+              if (value > 0 && Number.isInteger(value)) {
+                handleCreditAmountChange(parseFloat(value.toFixed(2)));
               }
+              handleCreditAmountBlur();
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
