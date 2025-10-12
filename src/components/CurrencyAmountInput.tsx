@@ -88,8 +88,8 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
               if (e.key === 'Enter') {
                 e.preventDefault();
               }
-              // Allow only numbers, decimal point, and control keys
-              if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+              // Allow Tab, numbers, decimal point, and control keys
+              if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                 e.preventDefault();
               }
             }}

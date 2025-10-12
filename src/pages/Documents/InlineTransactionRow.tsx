@@ -257,15 +257,12 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   // Auto-populate logic for debit amount changes
   const handleDebitAmountChange = (value: number) => {
-    // Formatuj wartość do 2 miejsc po przecinku, jeśli jest liczbą całkowitą
-    const formattedValue = isNaN(value) ? 0 : Number.isInteger(value) ? parseFloat(value.toFixed(2)) : value;
-
     setFormData((prev) => {
-      const newData = { ...prev, debit_amount: formattedValue };
+      const newData = { ...prev, debit_amount: value };
 
       // Auto-populate credit amount if credit hasn't been manually touched and value > 0
-      if (!creditTouched && formattedValue > 0) {
-        newData.credit_amount = formattedValue;
+      if (!creditTouched && value > 0) {
+        newData.credit_amount = value;
       }
 
       return newData;
@@ -274,15 +271,12 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
   // Auto-populate logic for credit amount changes
   const handleCreditAmountChange = (value: number) => {
-    // Formatuj wartość do 2 miejsc po przecinku, jeśli jest liczbą całkowitą
-    const formattedValue = isNaN(value) ? 0 : Number.isInteger(value) ? parseFloat(value.toFixed(2)) : value;
-
     setFormData((prev) => {
-      const newData = { ...prev, credit_amount: formattedValue };
+      const newData = { ...prev, credit_amount: value };
 
       // Auto-populate debit amount if debit hasn't been manually touched and value > 0
-      if (!debitTouched && formattedValue > 0) {
-        newData.debit_amount = formattedValue;
+      if (!debitTouched && value > 0) {
+        newData.debit_amount = value;
       }
 
       return newData;
@@ -448,14 +442,22 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               handleDebitAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.debit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+              }
+              handleDebitAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow only numbers, decimal point, and control keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b\t\r]/.test(e.key) &&
+                e.key !== "Tab" &&
+                !/[\d.,\b\r]/.test(e.key) &&
                 !e.ctrlKey &&
                 !e.metaKey &&
                 e.key !== "ArrowLeft" &&
@@ -493,14 +495,22 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
               handleCreditAmountChange(parseFloat(value) || 0);
             }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              // Format to .00 only if value is integer and no decimal point was entered
+              const inputValue = e.target.value;
+              if (formData.credit_amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+              }
+              handleCreditAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
               }
-              // Allow only numbers, decimal point, and control keys
+              // Allow Tab, numbers, decimal point, and control keys
               if (
-                !/[\d.,\b\t\r]/.test(e.key) &&
+                e.key !== "Tab" &&
+                !/[\d.,\b\r]/.test(e.key) &&
                 !e.ctrlKey &&
                 !e.metaKey &&
                 e.key !== "ArrowLeft" &&

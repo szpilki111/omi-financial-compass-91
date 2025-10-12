@@ -491,10 +491,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
                         onBlur={(e) => {
-                          // Format to 2 decimal places only if no decimals entered
-                          const value = field.amount;
-                          if (value > 0 && Number.isInteger(value)) {
-                            handleDebitAmountChange(field.id, parseFloat(value.toFixed(2)));
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            const formatted = field.amount.toFixed(2);
+                            handleDebitAmountChange(field.id, parseFloat(formatted));
                           }
                           handleAmountBlur(e, field.id, 'debit');
                         }}
@@ -502,8 +503,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow only numbers, decimal point, and control keys
-                          if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+                          // Allow Tab, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}
@@ -559,10 +560,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
                         onBlur={(e) => {
-                          // Format to 2 decimal places only if no decimals entered
-                          const value = field.amount;
-                          if (value > 0 && Number.isInteger(value)) {
-                            handleCreditAmountChange(field.id, parseFloat(value.toFixed(2)));
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            const formatted = field.amount.toFixed(2);
+                            handleCreditAmountChange(field.id, parseFloat(formatted));
                           }
                           handleAmountBlur(e, field.id, 'credit');
                         }}
@@ -570,8 +572,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           if (e.key === 'Enter') {
                             e.preventDefault();
                           }
-                          // Allow only numbers, decimal point, and control keys
-                          if (!/[\d.,\b\t\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+                          // Allow Tab, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
                             e.preventDefault();
                           }
                         }}
