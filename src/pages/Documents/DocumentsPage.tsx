@@ -290,7 +290,7 @@ const DocumentsPage = () => {
                 <SelectTrigger>
                   <SelectValue placeholder="Wszystkie placówki" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="all">Wszystkie placówki</SelectItem>
                   {locations?.map(location => (
                     <SelectItem key={location.id} value={location.id}>
