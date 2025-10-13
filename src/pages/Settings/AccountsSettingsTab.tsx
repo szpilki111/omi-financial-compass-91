@@ -4,9 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 
 interface Account {
@@ -31,6 +33,7 @@ export const AccountsSettingsTab: React.FC = () => {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pobierz restrykcje kont dla tej lokalizacji
   const { data: accountRestrictions } = useQuery({
@@ -65,21 +68,28 @@ export const AccountsSettingsTab: React.FC = () => {
 
   // Pobierz konta dostępne dla użytkownika
   const { data: availableAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['available-accounts', user?.location],
+    queryKey: ['available-accounts', user?.location, searchQuery],
     queryFn: async () => {
       if (!user?.location) return [];
 
-      // For admin/prowincjal - show all accounts
+      // For admin/prowincjal - show all accounts without limit
       if (user.role === 'admin' || user.role === 'prowincjal') {
-        const { data, error } = await supabase
+        let query = supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         return data || [];
       }
 
-      // For ekonom - use same logic as AccountCombobox
+      // For ekonom - use same logic as AccountCombobox but without the 50 limit
       // Get the location identifier first
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
@@ -123,13 +133,20 @@ export const AccountsSettingsTab: React.FC = () => {
       let accountIds = locationAccountData?.map(la => la.account_id) || [];
       let allAccountsData: any[] = [];
 
-      // Get manually assigned accounts
+      // Get manually assigned accounts - fetch ALL without limit
       if (accountIds.length > 0) {
-        const { data: manualAccounts, error } = await supabase
+        let query = supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .in('id', accountIds)
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data: manualAccounts, error } = await query;
 
         if (!error && manualAccounts) {
           allAccountsData = [...manualAccounts];
@@ -140,11 +157,18 @@ export const AccountsSettingsTab: React.FC = () => {
       if (locationData?.location_identifier) {
         const identifier = locationData.location_identifier;
         
-        // Get all accounts that end with the location identifier
-        const { data: allAccounts, error: allAccountsError } = await supabase
+        // Get ALL accounts that match the location identifier - no limit
+        let autoQuery = supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          autoQuery = autoQuery.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data: allAccounts, error: allAccountsError } = await autoQuery;
 
         if (!allAccountsError && allAccounts) {
           const matchingAccounts = allAccounts.filter(account => {
@@ -182,6 +206,7 @@ export const AccountsSettingsTab: React.FC = () => {
       // Sort by account number
       allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
 
+      // Return ALL accounts without any limit
       return allAccountsData;
     },
     enabled: !!user?.location
@@ -361,8 +386,18 @@ export const AccountsSettingsTab: React.FC = () => {
           <CardTitle>Dostępne konta</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {availableAccounts.map((account) => {
+          <div className="mb-4 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Szukaj konta po numerze lub nazwie..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <ScrollArea className="h-[calc(100vh-380px)] max-h-[800px]">
+            <div className="space-y-2 pr-4">
+              {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
               const hasAnalytical = accountAnalytical.length > 0;
@@ -433,7 +468,8 @@ export const AccountsSettingsTab: React.FC = () => {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
