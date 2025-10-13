@@ -70,7 +70,7 @@ export const AccountsSettingsTab: React.FC = () => {
     queryFn: async () => {
       if (!user?.location) return [];
 
-      // For admin/prowincjal - show all accounts
+      // For admin/prowincjal - show all accounts without limit
       if (user.role === 'admin' || user.role === 'prowincjal') {
         const { data, error } = await supabase
           .from('accounts')
@@ -80,7 +80,7 @@ export const AccountsSettingsTab: React.FC = () => {
         return data || [];
       }
 
-      // For ekonom - use same logic as AccountCombobox
+      // For ekonom - use same logic as AccountCombobox but without the 50 limit
       // Get the location identifier first
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
@@ -124,7 +124,7 @@ export const AccountsSettingsTab: React.FC = () => {
       let accountIds = locationAccountData?.map(la => la.account_id) || [];
       let allAccountsData: any[] = [];
 
-      // Get manually assigned accounts
+      // Get manually assigned accounts - fetch ALL without limit
       if (accountIds.length > 0) {
         const { data: manualAccounts, error } = await supabase
           .from('accounts')
@@ -141,7 +141,7 @@ export const AccountsSettingsTab: React.FC = () => {
       if (locationData?.location_identifier) {
         const identifier = locationData.location_identifier;
         
-        // Get all accounts that end with the location identifier
+        // Get ALL accounts that match the location identifier - no limit
         const { data: allAccounts, error: allAccountsError } = await supabase
           .from('accounts')
           .select('*')
@@ -183,6 +183,7 @@ export const AccountsSettingsTab: React.FC = () => {
       // Sort by account number
       allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
 
+      // Return ALL accounts without any limit
       return allAccountsData;
     },
     enabled: !!user?.location
