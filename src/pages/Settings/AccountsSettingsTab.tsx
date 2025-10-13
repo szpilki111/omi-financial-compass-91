@@ -362,7 +362,7 @@ export const AccountsSettingsTab: React.FC = () => {
           <CardTitle>Dostępne konta</CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[600px]">
+          <ScrollArea className="h-[calc(100vh-300px)] max-h-[800px]">
             <div className="space-y-2 pr-4">
               {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
