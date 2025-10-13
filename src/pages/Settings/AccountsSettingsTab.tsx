@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 
 interface Account {
@@ -361,8 +362,9 @@ export const AccountsSettingsTab: React.FC = () => {
           <CardTitle>Dostępne konta</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {availableAccounts.map((account) => {
+          <ScrollArea className="h-[600px]">
+            <div className="space-y-2 pr-4">
+              {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
               const hasAnalytical = accountAnalytical.length > 0;
@@ -433,7 +435,8 @@ export const AccountsSettingsTab: React.FC = () => {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
