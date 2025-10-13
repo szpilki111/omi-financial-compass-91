@@ -74,7 +74,7 @@ export const AccountsSettingsTab: React.FC = () => {
       if (user.role === 'admin' || user.role === 'prowincjal') {
         const { data, error } = await supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .order('number');
         if (error) throw error;
         return data || [];
@@ -128,7 +128,7 @@ export const AccountsSettingsTab: React.FC = () => {
       if (accountIds.length > 0) {
         const { data: manualAccounts, error } = await supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .in('id', accountIds)
           .order('number');
 
@@ -144,7 +144,7 @@ export const AccountsSettingsTab: React.FC = () => {
         // Get ALL accounts that match the location identifier - no limit
         const { data: allAccounts, error: allAccountsError } = await supabase
           .from('accounts')
-          .select('*')
+          .select('id, number, name, type, analytical')
           .order('number');
 
         if (!allAccountsError && allAccounts) {
