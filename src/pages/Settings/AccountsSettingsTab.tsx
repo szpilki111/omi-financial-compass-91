@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,6 +33,7 @@ export const AccountsSettingsTab: React.FC = () => {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pobierz restrykcje kont dla tej lokalizacji
   const { data: accountRestrictions } = useQuery({
@@ -356,6 +358,16 @@ export const AccountsSettingsTab: React.FC = () => {
     );
   }
 
+  // Filter accounts based on search query
+  const filteredAccounts = availableAccounts.filter((account) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      account.number.toLowerCase().includes(query) ||
+      account.name.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="space-y-6">
       <Card>
@@ -363,9 +375,18 @@ export const AccountsSettingsTab: React.FC = () => {
           <CardTitle>Dostępne konta</CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-300px)] max-h-[800px]">
+          <div className="mb-4 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Szukaj konta po numerze lub nazwie..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <ScrollArea className="h-[calc(100vh-380px)] max-h-[800px]">
             <div className="space-y-2 pr-4">
-              {availableAccounts.map((account) => {
+              {filteredAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
               const hasAnalytical = accountAnalytical.length > 0;
