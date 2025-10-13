@@ -68,16 +68,23 @@ export const AccountsSettingsTab: React.FC = () => {
 
   // Pobierz konta dostępne dla użytkownika
   const { data: availableAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['available-accounts', user?.location],
+    queryKey: ['available-accounts', user?.location, searchQuery],
     queryFn: async () => {
       if (!user?.location) return [];
 
       // For admin/prowincjal - show all accounts without limit
       if (user.role === 'admin' || user.role === 'prowincjal') {
-        const { data, error } = await supabase
+        let query = supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         return data || [];
       }
@@ -128,11 +135,18 @@ export const AccountsSettingsTab: React.FC = () => {
 
       // Get manually assigned accounts - fetch ALL without limit
       if (accountIds.length > 0) {
-        const { data: manualAccounts, error } = await supabase
+        let query = supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .in('id', accountIds)
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data: manualAccounts, error } = await query;
 
         if (!error && manualAccounts) {
           allAccountsData = [...manualAccounts];
@@ -144,10 +158,17 @@ export const AccountsSettingsTab: React.FC = () => {
         const identifier = locationData.location_identifier;
         
         // Get ALL accounts that match the location identifier - no limit
-        const { data: allAccounts, error: allAccountsError } = await supabase
+        let autoQuery = supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .order('number');
+
+        // Add search filtering
+        if (searchQuery.trim()) {
+          autoQuery = autoQuery.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+        }
+
+        const { data: allAccounts, error: allAccountsError } = await autoQuery;
 
         if (!allAccountsError && allAccounts) {
           const matchingAccounts = allAccounts.filter(account => {
@@ -358,16 +379,6 @@ export const AccountsSettingsTab: React.FC = () => {
     );
   }
 
-  // Filter accounts based on search query
-  const filteredAccounts = availableAccounts.filter((account) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      account.number.toLowerCase().includes(query) ||
-      account.name.toLowerCase().includes(query)
-    );
-  });
-
   return (
     <div className="space-y-6">
       <Card>
@@ -386,7 +397,7 @@ export const AccountsSettingsTab: React.FC = () => {
           </div>
           <ScrollArea className="h-[calc(100vh-380px)] max-h-[800px]">
             <div className="space-y-2 pr-4">
-              {filteredAccounts.map((account) => {
+              {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
               const hasAnalytical = accountAnalytical.length > 0;
