@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccountsSettingsTab } from './AccountsSettingsTab';
+import TrustedDevicesTab from './TrustedDevicesTab';
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -129,6 +129,7 @@ const SettingsPage = () => {
         <Tabs defaultValue="appearance" className="space-y-6">
           <TabsList>
             <TabsTrigger value="appearance">Wygląd</TabsTrigger>
+            <TabsTrigger value="security">Bezpieczeństwo</TabsTrigger>
             <TabsTrigger value="accounts">Konta</TabsTrigger>
           </TabsList>
 
@@ -165,6 +166,10 @@ const SettingsPage = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="security">
+            <TrustedDevicesTab />
           </TabsContent>
 
           <TabsContent value="accounts">

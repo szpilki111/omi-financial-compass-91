@@ -32,9 +32,37 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
   onFocus,
   onBlur
 }) => {
+  const [displayValue, setDisplayValue] = React.useState<string>('');
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  // Update display value when value prop changes
+  React.useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(value === 0 ? '' : value.toFixed(2));
+    }
+  }, [value, isFocused]);
+
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = parseFloat(e.target.value) || 0;
+    const inputValue = e.target.value;
+    setDisplayValue(inputValue);
+    const newValue = parseFloat(inputValue) || 0;
     onChange(newValue);
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true);
+    onFocus?.(e);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(false);
+    // Format to 2 decimal places on blur
+    if (value > 0) {
+      setDisplayValue(value.toFixed(2));
+    } else {
+      setDisplayValue('');
+    }
+    onBlur?.(e);
   };
 
   // Calculate converted amount
@@ -50,13 +78,21 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
       <div className="space-y-1">
         <div className="relative">
           <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={value}
+            type="text"
+            inputMode="decimal"
+            value={displayValue}
             onChange={handleAmountChange}
-            onFocus={onFocus}
-            onBlur={onBlur}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+              // Allow Tab, numbers, decimal point, and control keys
+              if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+                e.preventDefault();
+              }
+            }}
             placeholder={placeholder}
             disabled={disabled}
             className="pr-12"

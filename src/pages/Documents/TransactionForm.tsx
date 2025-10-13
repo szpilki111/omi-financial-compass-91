@@ -455,6 +455,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
             placeholder="Opis operacji finansowej"
             className={errors.description ? 'border-red-500' : ''}
             disabled={isAutoSaving}
@@ -477,13 +482,32 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={field.amount === 0 ? '' : field.amount}
-                        onChange={(e) => handleDebitAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        type="text"
+                        inputMode="decimal"
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(',', '.');
+                          handleDebitAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'debit')}
+                        onBlur={(e) => {
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            // Value is already a number, display formatting happens in value prop
+                            handleDebitAmountChange(field.id, field.amount);
+                          }
+                          handleAmountBlur(e, field.id, 'debit');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                          }
+                        }}
                         placeholder="0.00"
                       />
                     </div>
@@ -527,13 +551,32 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={field.amount === 0 ? '' : field.amount}
-                        onChange={(e) => handleCreditAmountChange(field.id, parseFloat(e.target.value) || 0)}
+                        type="text"
+                        inputMode="decimal"
+                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(',', '.');
+                          handleCreditAmountChange(field.id, parseFloat(value) || 0);
+                        }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
-                        onBlur={(e) => handleAmountBlur(e, field.id, 'credit')}
+                        onBlur={(e) => {
+                          // Format to .00 only if value is integer and no decimal point was entered
+                          const inputValue = e.target.value;
+                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
+                            // Value is already a number, display formatting happens in value prop
+                            handleCreditAmountChange(field.id, field.amount);
+                          }
+                          handleAmountBlur(e, field.id, 'credit');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
+                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                          }
+                        }}
                         placeholder="0.00"
                       />
                     </div>

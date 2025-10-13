@@ -151,6 +151,22 @@ const DocumentDialog = ({
     }
   }, [isOpen, document, transactions.length, showInlineForm]);
 
+  // Add warning before closing browser/tab when dialog is open
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isOpen]);
+
   const checkLastTransactionComplete = () => {
     const errors: ValidationError[] = [];
     

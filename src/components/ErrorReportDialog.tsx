@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X, Loader2 } from "lucide-react";
+import { Upload, X, Loader2, Maximize2 } from "lucide-react";
 
 interface ErrorReportDialogProps {
   open: boolean;
@@ -30,6 +30,7 @@ export const ErrorReportDialog = ({
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
   const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFullScreenshot, setShowFullScreenshot] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -196,8 +197,17 @@ export const ErrorReportDialog = ({
           {autoScreenshot && (
             <div className="space-y-2">
               <Label>Automatyczny screenshot</Label>
-              <div className="border rounded-lg p-2">
-                <img src={autoScreenshot} alt="Screenshot" className="max-h-40 mx-auto" />
+              <div className="border rounded-lg p-2 relative group">
+                <img src={autoScreenshot} alt="Screenshot" className="max-h-40 mx-auto cursor-pointer" onClick={() => setShowFullScreenshot(true)} />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => setShowFullScreenshot(true)}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           )}
@@ -256,6 +266,22 @@ export const ErrorReportDialog = ({
           </div>
         </form>
       </DialogContent>
+
+      {/* Full screen screenshot dialog */}
+      <Dialog open={showFullScreenshot} onOpenChange={setShowFullScreenshot}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-2">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Podgląd screenshota</DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-[calc(95vh-4rem)] flex items-center justify-center bg-black/5 rounded-lg overflow-auto">
+            <img 
+              src={autoScreenshot || ''} 
+              alt="Screenshot pełny ekran" 
+              className="max-w-full max-h-full object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
