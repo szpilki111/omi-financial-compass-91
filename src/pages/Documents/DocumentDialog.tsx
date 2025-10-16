@@ -1560,7 +1560,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
       display_order: transaction.display_order,
     };
     onUpdate(updatedTransaction);
-  }, [formData, currency]);
+  }, [formData, currency, transaction.display_order, onUpdate]);
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
