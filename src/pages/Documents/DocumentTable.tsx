@@ -34,7 +34,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
 
     return mainTransactions.map((mainTx) => {
       const subTransactions = transactions.filter(
-        (t) => t.isCloned && t.clonedType && mainTx.id === t.parentId, // Poprawka: uzyj parentId lub podobnego pola zamiast t.id
+        (t) => t.isCloned && t.clonedType
       );
       return { main: mainTx, subs: subTransactions };
     });
