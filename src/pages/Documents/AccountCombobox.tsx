@@ -321,7 +321,18 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           <CommandInput
             placeholder="Szukaj (nr lub nazwa)..."
             value={searchTerm}
-            onValueChange={setSearchTerm}
+            onValueChange={(value) => {
+              // Automatyczne formatowanie: dodaj myślnik po każdych 3 cyfrach
+              const digitsOnly = value.replace(/\D/g, '');
+              let formatted = '';
+              for (let i = 0; i < digitsOnly.length; i++) {
+                if (i > 0 && i % 3 === 0) {
+                  formatted += '-';
+                }
+                formatted += digitsOnly[i];
+              }
+              setSearchTerm(formatted);
+            }}
           />
           <CommandList>
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
