@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -18,6 +18,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFoo
 import { Textarea } from '@/components/ui/textarea';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
 import InlineTransactionRow, { InlineTransactionRowRef } from './InlineTransactionRow';
+import PrintableDocument from '@/components/PrintableDocument';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
@@ -91,6 +92,7 @@ const DocumentDialog = ({
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const inlineFormRef = useRef<InlineTransactionRowRef>(null);
   const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -131,6 +133,33 @@ const DocumentDialog = ({
     enabled: !!userProfile?.location_id
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, number, name')
+        .order('number', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen
+  });
+
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen
+  });
+
+
   const documentDate = form.watch('document_date');
   const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
     queryKey: ['editingBlocked', document?.id, userProfile?.location_id, documentDate],
@@ -145,6 +174,10 @@ const DocumentDialog = ({
     },
     enabled: !!userProfile?.location_id && !!documentDate && isOpen
   });
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   useEffect(() => {
     const subscription = form.watch(() => {
@@ -1471,6 +1504,17 @@ const DocumentDialog = ({
             </div>
 
             <div className="flex justify-end space-x-2">
+              {document && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrint}
+                  className="flex items-center gap-2"
+                >
+                  <Printer className="h-4 w-4" />
+                  Drukuj
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -1492,6 +1536,19 @@ const DocumentDialog = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden printable version */}
+      <PrintableDocument
+        ref={printRef}
+        documentNumber={form.getValues('document_number')}
+        documentName={form.getValues('document_name')}
+        documentDate={form.getValues('document_date')}
+        currency={selectedCurrency}
+        transactions={transactions}
+        parallelTransactions={parallelTransactions}
+        accounts={accounts || []}
+        locationName={userProfile?.location_id ? locations?.find(l => l.id === userProfile.location_id)?.name : undefined}
+      />
 
       <ConfirmCloseDialog
         isOpen={showConfirmClose}
