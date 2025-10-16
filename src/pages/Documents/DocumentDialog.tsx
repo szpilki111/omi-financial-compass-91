@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -22,6 +22,23 @@ import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -719,6 +736,33 @@ const DocumentDialog = ({
     });
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent, isParallel: boolean = false) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const currentTransactions = isParallel ? parallelTransactions : transactions;
+      const oldIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === active.id);
+      const newIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(currentTransactions, oldIndex, newIndex);
+        if (isParallel) {
+          setParallelTransactions(reordered);
+        } else {
+          setTransactions(reordered);
+        }
+        setHasUnsavedChanges(true);
+      }
+    }
+  };
+
   const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
     const debitAmount = transaction.debit_amount || 0;
     const creditAmount = transaction.credit_amount || 0;
@@ -1094,9 +1138,15 @@ const DocumentDialog = ({
 
             <div className="space-y-4">
               <div className="overflow-x-auto">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => handleDragEnd(event, false)}
+                >
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10"></TableHead>
                         <TableHead className="w-12">
                           <Checkbox
                             checked={selectedTransactions.length === transactions.length && transactions.length > 0}
@@ -1113,6 +1163,10 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableHeader>
                   <TableBody>
+                  <SortableContext
+                    items={transactions.map((_, i) => `transaction-${i}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
                   {transactions.map((transaction, index) => {
                       const errorInfo = validationErrors.find(
                         e => e.type === 'incomplete_transaction' && 
@@ -1120,8 +1174,10 @@ const DocumentDialog = ({
                         e.isParallel === false
                       );
                       return (
-                        <EditableTransactionRow
-                          key={index}
+                        <SortableTransactionRow
+                          key={`transaction-${index}`}
+                          id={`transaction-${index}`}
+                          index={index}
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                           onDelete={() => removeTransaction(index)}
@@ -1136,6 +1192,7 @@ const DocumentDialog = ({
                         />
                       );
                     })}
+                  </SortableContext>
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
@@ -1163,6 +1220,7 @@ const DocumentDialog = ({
                     </TableRow>
                   </TableFooter>
                 </Table>
+                </DndContext>
               </div>
             </div>
           </div>
@@ -1221,9 +1279,15 @@ const DocumentDialog = ({
 
               <div className="space-y-4">
                 <div className="overflow-x-auto">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleDragEnd(event, true)}
+                  >
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-10"></TableHead>
                           <TableHead className="w-12">
                             <Checkbox
                               checked={selectedParallelTransactions.length === parallelTransactions.length && parallelTransactions.length > 0}
@@ -1240,6 +1304,10 @@ const DocumentDialog = ({
                         </TableRow>
                       </TableHeader>
                     <TableBody>
+                    <SortableContext
+                      items={parallelTransactions.map((_, i) => `transaction-${i}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
                     {parallelTransactions.map((transaction, index) => {
                         const errorInfo = validationErrors.find(
                           e => e.type === 'incomplete_transaction' && 
@@ -1247,8 +1315,10 @@ const DocumentDialog = ({
                           e.isParallel === true
                         );
                         return (
-                          <EditableTransactionRow
-                            key={index}
+                          <SortableTransactionRow
+                            key={`transaction-${index}`}
+                            id={`transaction-${index}`}
+                            index={index}
                             transaction={transaction}
                             onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                             onDelete={() => removeParallelTransaction(index)}
@@ -1263,6 +1333,7 @@ const DocumentDialog = ({
                           />
                         );
                       })}
+                    </SortableContext>
                       {showParallelInlineForm && (
                         <InlineTransactionRow
                           onSave={addParallelTransaction}
@@ -1290,6 +1361,7 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableFooter>
                   </Table>
+                  </DndContext>
                 </div>
               </div>
             </div>
@@ -1327,7 +1399,9 @@ const DocumentDialog = ({
   );
 };
 
-const EditableTransactionRow: React.FC<{
+const SortableTransactionRow: React.FC<{
+  id: string;
+  index: number;
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
@@ -1339,7 +1413,57 @@ const EditableTransactionRow: React.FC<{
   onSelect?: (checked: boolean) => void;
   hasValidationError?: boolean;
   missingFields?: ValidationError['missingFields'];
-}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
+}> = ({ id, index, transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <EditableTransactionRow
+      ref={setNodeRef}
+      style={style}
+      dragHandleProps={{ ...attributes, ...listeners }}
+      transaction={transaction}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      onCopy={onCopy}
+      onSplit={onSplit}
+      currency={currency}
+      isEditingBlocked={isEditingBlocked}
+      isSelected={isSelected}
+      onSelect={onSelect}
+      hasValidationError={hasValidationError}
+      missingFields={missingFields}
+    />
+  );
+};
+
+const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
+  transaction: Transaction;
+  onUpdate: (transaction: Transaction) => void;
+  onDelete: () => void;
+  onCopy?: () => void;
+  onSplit?: () => void;
+  currency: string;
+  isEditingBlocked?: boolean;
+  isSelected?: boolean;
+  onSelect?: (checked: boolean) => void;
+  hasValidationError?: boolean;
+  missingFields?: ValidationError['missingFields'];
+  style?: React.CSSProperties;
+  dragHandleProps?: any;
+}>(({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields, style, dragHandleProps }, ref) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1537,6 +1661,8 @@ const EditableTransactionRow: React.FC<{
       </TableCell>
     </TableRow>
   );
-};
+});
+
+EditableTransactionRow.displayName = 'EditableTransactionRow';
 
 export default DocumentDialog;
