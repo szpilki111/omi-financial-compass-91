@@ -30,11 +30,11 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
 
   // Budujemy strukturę transakcji z subtransakcjami
   const transactionsWithSubs = React.useMemo(() => {
-    const mainTransactions = transactions.filter((transaction) => !transaction.isCloned);
+    const mainTransactions = transactions.filter((transaction) => !transaction.parent_transaction_id);
 
     return mainTransactions.map((mainTx) => {
       const subTransactions = transactions.filter(
-        (t) => t.isCloned && t.clonedType
+        (t) => t.parent_transaction_id === mainTx.id
       );
       return { main: mainTx, subs: subTransactions };
     });

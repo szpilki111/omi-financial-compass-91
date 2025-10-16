@@ -766,12 +766,23 @@ const DocumentDialog = ({
         amount: balanceAmount,
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
+        parent_transaction_id: transaction.id,
       };
 
       if (isParallel) {
-        setParallelTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = parallelTransactions.findIndex(t => t.id === transaction.id);
+        setParallelTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       } else {
-        setTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = transactions.findIndex(t => t.id === transaction.id);
+        setTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       }
 
       toast({
@@ -804,12 +815,23 @@ const DocumentDialog = ({
         amount: difference,
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
+        parent_transaction_id: transaction.id,
       };
 
       if (isParallel) {
-        setParallelTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = parallelTransactions.findIndex(t => t.id === transaction.id);
+        setParallelTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       } else {
-        setTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = transactions.findIndex(t => t.id === transaction.id);
+        setTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       }
 
       toast({
