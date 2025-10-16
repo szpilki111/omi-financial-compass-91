@@ -1041,7 +1041,7 @@ export type Database = {
         Args:
           | { new_password: string; user_id: number }
           | { new_password: string; user_id: string }
-        Returns: boolean
+        Returns: undefined
       }
       check_report_editing_blocked: {
         Args: { p_document_date: string; p_location_id: string }
