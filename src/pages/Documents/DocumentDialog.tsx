@@ -759,6 +759,8 @@ const DocumentDialog = ({
       const oldIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === active.id);
       const newIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === over.id);
 
+      console.log('🔄 Drag end:', { oldIndex, newIndex, isParallel });
+
       if (oldIndex !== -1 && newIndex !== -1) {
         const reordered = arrayMove(currentTransactions, oldIndex, newIndex);
         
@@ -767,6 +769,12 @@ const DocumentDialog = ({
           ...t,
           display_order: index + 1
         }));
+        
+        console.log('📝 Updated transactions with new order:', updatedTransactions.map(t => ({ 
+          id: t.id, 
+          display_order: t.display_order, 
+          description: t.description 
+        })));
         
         if (isParallel) {
           setParallelTransactions(updatedTransactions);
@@ -778,6 +786,8 @@ const DocumentDialog = ({
         // Save order to database for existing transactions (those with IDs)
         if (document?.id) {
           const transactionsToUpdate = updatedTransactions.filter(t => t.id);
+          console.log('💾 Saving order to database for transactions:', transactionsToUpdate.map(t => ({ id: t.id, display_order: t.display_order })));
+          
           if (transactionsToUpdate.length > 0) {
             try {
               // Update each transaction's display_order individually
@@ -791,18 +801,24 @@ const DocumentDialog = ({
               const results = await Promise.all(updatePromises);
               const errors = results.filter(r => r.error);
               
+              console.log('✅ Update results:', results);
+              
               if (errors.length > 0) {
-                console.error('Error updating transaction order:', errors);
+                console.error('❌ Error updating transaction order:', errors);
                 toast({
                   title: "Błąd",
                   description: "Nie udało się zapisać nowej kolejności operacji",
                   variant: "destructive"
                 });
+              } else {
+                console.log('✅ Successfully saved new order to database');
               }
             } catch (error) {
-              console.error('Error updating transaction order:', error);
+              console.error('❌ Error updating transaction order:', error);
             }
           }
+        } else {
+          console.log('ℹ️ Document not saved yet, order will be saved when document is created');
         }
       }
     }
