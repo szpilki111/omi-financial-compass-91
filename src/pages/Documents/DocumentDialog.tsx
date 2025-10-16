@@ -1440,7 +1440,7 @@ const DocumentDialog = ({
             </div>
           )}
 
-          <div className="border-t pt-4">
+          <div className="border-t pt-4 space-y-4">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h4 className="font-bold text-lg mb-2">Podsumowanie dokumentu</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -1457,6 +1457,26 @@ const DocumentDialog = ({
                   <div className="font-bold text-lg">{formatAmount(grandTotalSum, selectedCurrency)}</div>
                 </div>
               </div>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setHasUnsavedChanges(false);
+                  onClose();
+                }}
+              >
+                Anuluj
+              </Button>
+              <Button
+                type="submit"
+                onClick={form.handleSubmit(onSubmit)}
+                disabled={isLoading || (isEditingBlocked && Boolean(documentDate))}
+              >
+                {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
+              </Button>
             </div>
           </div>
         </DialogContent>
