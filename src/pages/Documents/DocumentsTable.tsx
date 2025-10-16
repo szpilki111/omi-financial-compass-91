@@ -9,7 +9,8 @@ import {
   TableCell 
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 
@@ -22,7 +23,8 @@ interface Document {
   user_id: string;
   created_at: string;
   updated_at: string;
-  currency: string; // Add currency field
+  currency: string;
+  validation_errors?: any;
   locations?: {
     name: string;
   } | null;
@@ -102,51 +104,69 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
             <TableHead>Data</TableHead>
             <TableHead className="w-24">Liczba operacji</TableHead>
             <TableHead className="text-right">Suma</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Akcje</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {documents.map((document) => (
-            <TableRow 
-              key={document.id} 
-              className="hover:bg-gray-50 cursor-pointer"
-              onClick={() => onDocumentClick(document)}
-            >
-              <TableCell className="font-medium">{document.document_number}</TableCell>
-              <TableCell>{document.document_name}</TableCell>
-              <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
-              <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
-              <TableCell className="text-right font-medium">
-                {formatAmount(document.total_amount || 0, document.currency)}
-              </TableCell>
-              <TableCell>
-                <div className="flex space-x-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDocumentClick(document);
-                    }}
-                    title="Edytuj"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDocumentDelete(document.id);
-                    }}
-                    title="Usuń"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+          {documents.map((document) => {
+            const hasErrors = document.validation_errors && Array.isArray(document.validation_errors) && document.validation_errors.length > 0;
+            const errorCount = hasErrors ? document.validation_errors.filter((e: any) => e.type === 'incomplete_transaction').length : 0;
+            
+            return (
+              <TableRow 
+                key={document.id} 
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => onDocumentClick(document)}
+              >
+                <TableCell className="font-medium">{document.document_number}</TableCell>
+                <TableCell>{document.document_name}</TableCell>
+                <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
+                <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatAmount(document.total_amount || 0, document.currency)}
+                </TableCell>
+                <TableCell>
+                  {hasErrors ? (
+                    <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                      <AlertTriangle className="h-3 w-3" />
+                      {errorCount} błędów
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      OK
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDocumentClick(document);
+                      }}
+                      title="Edytuj"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDocumentDelete(document.id);
+                      }}
+                      title="Usuń"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>

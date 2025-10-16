@@ -574,17 +574,17 @@ const DocumentDialog = ({
       }
     });
 
+    // Set validation errors but allow saving
+    setValidationErrors(errors);
+    
     if (errors.length > 0) {
+      const incompleteCount = errors.filter(e => e.type === 'incomplete_transaction').length;
       toast({
-        title: "Błąd walidacji",
-        description: `Istnieją ${errors.filter(e => e.type === 'incomplete_transaction').length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
-        variant: "destructive"
+        title: "Uwaga - dokument zawiera błędy",
+        description: `Zapisuję dokument z ${incompleteCount} niekompletnymi operacjami. Uzupełnij brakujące pola później.`,
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
-
-    setValidationErrors([]);
 
     setIsLoading(true);
     try {
@@ -594,7 +594,8 @@ const DocumentDialog = ({
           document_number: data.document_number,
           document_name: data.document_name,
           document_date: format(data.document_date, 'yyyy-MM-dd'),
-          currency: data.currency
+          currency: data.currency,
+          validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null
         }).eq('id', document.id);
         if (error) throw error;
       } else {
@@ -604,7 +605,8 @@ const DocumentDialog = ({
           document_date: format(data.document_date, 'yyyy-MM-dd'),
           location_id: user.location,
           user_id: user.id,
-          currency: data.currency
+          currency: data.currency,
+          validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null
         }).select().single();
         if (error) {
           console.error('Error creating document:', error);
