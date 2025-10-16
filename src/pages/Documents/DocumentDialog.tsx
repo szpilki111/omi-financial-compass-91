@@ -480,21 +480,39 @@ const DocumentDialog = ({
     const allTransactions = [...transactions, ...parallelTransactions];
     const errors: ValidationError[] = [];
 
+    console.log('💾 Starting document save process');
+    console.log('Has inline form data:', hasInlineFormData);
+    console.log('Has parallel inline form data:', hasParallelInlineFormData);
+    console.log('Inline getter:', inlineFormDataGetter);
+    console.log('Parallel getter:', parallelInlineFormDataGetter);
+    
     // Collect incomplete transaction data from inline forms
     let inlineTransactionToAdd: Transaction | null = null;
     let parallelInlineTransactionToAdd: Transaction | null = null;
 
     if (hasInlineFormData && inlineFormDataGetter) {
-      inlineTransactionToAdd = inlineFormDataGetter();
-      if (inlineTransactionToAdd) {
-        inlineTransactionToAdd.display_order = allTransactions.length + 1;
+      try {
+        console.log('Attempting to get inline form data...');
+        inlineTransactionToAdd = inlineFormDataGetter();
+        console.log('Inline transaction data:', inlineTransactionToAdd);
+        if (inlineTransactionToAdd) {
+          inlineTransactionToAdd.display_order = allTransactions.length + 1;
+        }
+      } catch (error) {
+        console.error('Error getting inline form data:', error);
       }
     }
 
     if (hasParallelInlineFormData && parallelInlineFormDataGetter) {
-      parallelInlineTransactionToAdd = parallelInlineFormDataGetter();
-      if (parallelInlineTransactionToAdd) {
-        parallelInlineTransactionToAdd.display_order = allTransactions.length + (inlineTransactionToAdd ? 2 : 1);
+      try {
+        console.log('Attempting to get parallel inline form data...');
+        parallelInlineTransactionToAdd = parallelInlineFormDataGetter();
+        console.log('Parallel transaction data:', parallelInlineTransactionToAdd);
+        if (parallelInlineTransactionToAdd) {
+          parallelInlineTransactionToAdd.display_order = allTransactions.length + (inlineTransactionToAdd ? 2 : 1);
+        }
+      } catch (error) {
+        console.error('Error getting parallel inline form data:', error);
       }
     }
 
@@ -504,6 +522,8 @@ const DocumentDialog = ({
       ...(inlineTransactionToAdd ? [inlineTransactionToAdd] : []),
       ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : [])
     ];
+
+    console.log('Transactions to validate:', transactionsToValidate);
 
     if (transactionsToValidate.length === 0) {
       toast({
