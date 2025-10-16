@@ -478,37 +478,31 @@ const DocumentDialog = ({
     const errors: ValidationError[] = [];
 
     if (allTransactions.length === 0) {
-      errors.push({ type: 'no_operations' });
+      // Allow saving empty document, just show warning
       toast({
-        title: "Błąd walidacji",
-        description: "Dokument musi zawierać co najmniej jedną operację",
-        variant: "destructive"
+        title: "Uwaga",
+        description: "Dokument nie zawiera żadnych operacji. Możesz je dodać później.",
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
 
-    // Check if inline forms have unsaved data
+    // Check if inline forms have unsaved data - just warn, don't block
     if (hasInlineFormData) {
       errors.push({ type: 'inline_form' });
       toast({
-        title: "Błąd walidacji",
-        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
-        variant: "destructive"
+        title: "Uwaga",
+        description: "Masz wprowadzone dane w formularzu operacji głównych. Zostały one pominięte podczas zapisu. Zapisz je przed zapisaniem dokumentu.",
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
 
     if (hasParallelInlineFormData) {
       errors.push({ type: 'parallel_inline_form' });
       toast({
-        title: "Błąd walidacji",
-        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
-        variant: "destructive"
+        title: "Uwaga",
+        description: "Masz wprowadzone dane w formularzu operacji równoległych. Zostały one pominięte podczas zapisu. Zapisz je przed zapisaniem dokumentu.",
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
 
     // Check for incomplete existing transactions (have some data but missing required fields)
