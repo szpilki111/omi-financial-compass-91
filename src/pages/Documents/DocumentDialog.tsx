@@ -89,6 +89,9 @@ const DocumentDialog = ({
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [inlineFormDataGetter, setInlineFormDataGetter] = useState<(() => Transaction | null) | null>(null);
+  const [parallelInlineFormDataGetter, setParallelInlineFormDataGetter] = useState<(() => Transaction | null) | null>(null);
+  
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -477,8 +480,32 @@ const DocumentDialog = ({
     const allTransactions = [...transactions, ...parallelTransactions];
     const errors: ValidationError[] = [];
 
-    if (allTransactions.length === 0) {
-      // Allow saving empty document, just show warning
+    // Collect incomplete transaction data from inline forms
+    let inlineTransactionToAdd: Transaction | null = null;
+    let parallelInlineTransactionToAdd: Transaction | null = null;
+
+    if (hasInlineFormData && inlineFormDataGetter) {
+      inlineTransactionToAdd = inlineFormDataGetter();
+      if (inlineTransactionToAdd) {
+        inlineTransactionToAdd.display_order = allTransactions.length + 1;
+      }
+    }
+
+    if (hasParallelInlineFormData && parallelInlineFormDataGetter) {
+      parallelInlineTransactionToAdd = parallelInlineFormDataGetter();
+      if (parallelInlineTransactionToAdd) {
+        parallelInlineTransactionToAdd.display_order = allTransactions.length + (inlineTransactionToAdd ? 2 : 1);
+      }
+    }
+
+    // Add incomplete transactions to the list
+    const transactionsToValidate = [
+      ...allTransactions,
+      ...(inlineTransactionToAdd ? [inlineTransactionToAdd] : []),
+      ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : [])
+    ];
+
+    if (transactionsToValidate.length === 0) {
       toast({
         title: "Uwaga",
         description: "Dokument nie zawiera żadnych operacji. Możesz je dodać później.",
@@ -486,85 +513,36 @@ const DocumentDialog = ({
       });
     }
 
-    // Check if inline forms have unsaved data - just warn, don't block
-    if (hasInlineFormData) {
-      errors.push({ type: 'inline_form' });
-      toast({
-        title: "Uwaga",
-        description: "Masz wprowadzone dane w formularzu operacji głównych. Zostały one pominięte podczas zapisu. Zapisz je przed zapisaniem dokumentu.",
-        variant: "default"
-      });
-    }
+    // Function to count missing fields in a transaction
+    const countMissingFields = (transaction: Transaction) => {
+      let count = 0;
+      if (!transaction.description || transaction.description.trim() === '') count++;
+      if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
+      if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
+      if (!transaction.debit_account_id) count++;
+      if (!transaction.credit_account_id) count++;
+      return count;
+    };
 
-    if (hasParallelInlineFormData) {
-      errors.push({ type: 'parallel_inline_form' });
-      toast({
-        title: "Uwaga",
-        description: "Masz wprowadzone dane w formularzu operacji równoległych. Zostały one pominięte podczas zapisu. Zapisz je przed zapisaniem dokumentu.",
-        variant: "default"
-      });
-    }
-
-    // Check for incomplete existing transactions (have some data but missing required fields)
-    transactions.forEach((transaction, index) => {
-      const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasDebitAmount = transaction.debit_amount > 0;
-      const hasCreditAmount = transaction.credit_amount > 0;
-      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
-      const hasDebitAccount = !!transaction.debit_account_id;
-      const hasCreditAccount = !!transaction.credit_account_id;
+    // Check ALL transactions including inline form data
+    transactionsToValidate.forEach((transaction, index) => {
+      const missingCount = countMissingFields(transaction);
       
-      // Transaction is incomplete if it has any data but missing required fields
-      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+      if (missingCount > 0) {
         const missingFields: ValidationError['missingFields'] = {};
         
-        if (!hasDescription) missingFields.description = true;
-        if (!hasDebitAmount && !hasCreditAmount) {
-          missingFields.debit_amount = true;
-          missingFields.credit_amount = true;
-        }
-        if (!hasDebitAccount) missingFields.debit_account_id = true;
-        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        if (!transaction.description || transaction.description.trim() === '') missingFields.description = true;
+        if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
+        if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
+        if (!transaction.debit_account_id) missingFields.debit_account_id = true;
+        if (!transaction.credit_account_id) missingFields.credit_account_id = true;
         
-        if (Object.keys(missingFields).length > 0) {
-          errors.push({ 
-            type: 'incomplete_transaction', 
-            transactionIndex: index, 
-            isParallel: false,
-            missingFields 
-          });
-        }
-      }
-    });
-
-    parallelTransactions.forEach((transaction, index) => {
-      const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasDebitAmount = transaction.debit_amount > 0;
-      const hasCreditAmount = transaction.credit_amount > 0;
-      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
-      const hasDebitAccount = !!transaction.debit_account_id;
-      const hasCreditAccount = !!transaction.credit_account_id;
-      
-      // Transaction is incomplete if it has any data but missing required fields
-      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
-        const missingFields: ValidationError['missingFields'] = {};
-        
-        if (!hasDescription) missingFields.description = true;
-        if (!hasDebitAmount && !hasCreditAmount) {
-          missingFields.debit_amount = true;
-          missingFields.credit_amount = true;
-        }
-        if (!hasDebitAccount) missingFields.debit_account_id = true;
-        if (!hasCreditAccount) missingFields.credit_account_id = true;
-        
-        if (Object.keys(missingFields).length > 0) {
-          errors.push({ 
-            type: 'incomplete_transaction', 
-            transactionIndex: index, 
-            isParallel: true,
-            missingFields 
-          });
-        }
+        errors.push({ 
+          type: 'incomplete_transaction', 
+          transactionIndex: index, 
+          isParallel: index >= transactions.length,
+          missingFields 
+        });
       }
     });
 
@@ -572,13 +550,30 @@ const DocumentDialog = ({
     setValidationErrors(errors);
     
     if (errors.length > 0) {
-      const incompleteCount = errors.filter(e => e.type === 'incomplete_transaction').length;
+      const totalMissingFields = errors.reduce((sum, e) => {
+        if (e.missingFields) {
+          return sum + Object.keys(e.missingFields).length;
+        }
+        return sum;
+      }, 0);
+      
       toast({
         title: "Uwaga - dokument zawiera błędy",
-        description: `Zapisuję dokument z ${incompleteCount} niekompletnymi operacjami. Uzupełnij brakujące pola później.`,
+        description: `Zapisuję dokument z ${totalMissingFields} pustymi polami. Uzupełnij je później.`,
         variant: "default"
       });
     }
+
+    // Add incomplete transactions from inline forms to the main list
+    const finalTransactions = [
+      ...transactions,
+      ...(inlineTransactionToAdd ? [inlineTransactionToAdd] : [])
+    ];
+    const finalParallelTransactions = [
+      ...parallelTransactions,
+      ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : [])
+    ];
+    const allFinalTransactions = [...finalTransactions, ...finalParallelTransactions];
 
     setIsLoading(true);
     try {
@@ -609,7 +604,7 @@ const DocumentDialog = ({
         documentId = newDocument.id;
       }
 
-      const allTransactionsSafe = allTransactions.map((t) => ({
+      const allTransactionsSafe = allFinalTransactions.map((t) => ({
         ...t,
         currency: data.currency,
         description: typeof t.description === "string" && t.description.trim() !== "" ? t.description : ""
@@ -1269,6 +1264,7 @@ const DocumentDialog = ({
                         currency={selectedCurrency}
                         onHasDataChange={setHasInlineFormData}
                         hasValidationError={validationErrors.some(e => e.type === 'inline_form')}
+                        onGetCurrentData={setInlineFormDataGetter as any}
                       />
                     )}
                   </TableBody>
@@ -1410,6 +1406,7 @@ const DocumentDialog = ({
                           currency={selectedCurrency}
                           onHasDataChange={setHasParallelInlineFormData}
                           hasValidationError={validationErrors.some(e => e.type === 'parallel_inline_form')}
+                          onGetCurrentData={setParallelInlineFormDataGetter as any}
                         />
                       )}
                     </TableBody>

@@ -15,6 +15,7 @@ interface InlineTransactionRowProps {
   currency?: string;
   onHasDataChange?: (hasData: boolean) => void;
   hasValidationError?: boolean;
+  onGetCurrentData?: (getter: () => Transaction | null) => void;
 }
 
 const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
@@ -23,6 +24,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   currency = "PLN",
   onHasDataChange,
   hasValidationError = false,
+  onGetCurrentData,
 }) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -52,6 +54,26 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   useEffect(() => {
     onHasDataChange?.(hasAnyData);
   }, [hasAnyData, onHasDataChange]);
+
+  // Update the getCurrentData function whenever formData changes
+  useEffect(() => {
+    if (onGetCurrentData) {
+      const getCurrentDataFn = (): Transaction | null => {
+        if (!hasAnyData) return null;
+        return {
+          description: formData.description,
+          debit_account_id: formData.debit_account_id || undefined,
+          credit_account_id: formData.credit_account_id || undefined,
+          debit_amount: formData.debit_amount || 0,
+          credit_amount: formData.credit_amount || 0,
+          amount: Math.max(formData.debit_amount || 0, formData.credit_amount || 0),
+          settlement_type: formData.settlement_type,
+          currency: currency,
+        };
+      };
+      onGetCurrentData(getCurrentDataFn);
+    }
+  }, [formData, hasAnyData, currency, onGetCurrentData]);
 
   // Auto-focus on the first field when component mounts
   useEffect(() => {

@@ -111,7 +111,15 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
         <TableBody>
           {documents.map((document) => {
             const hasErrors = document.validation_errors && Array.isArray(document.validation_errors) && document.validation_errors.length > 0;
-            const errorCount = hasErrors ? document.validation_errors.filter((e: any) => e.type === 'incomplete_transaction').length : 0;
+            // Count total missing fields instead of incomplete transactions
+            let totalMissingFields = 0;
+            if (hasErrors) {
+              document.validation_errors.forEach((error: any) => {
+                if (error.missingFields && typeof error.missingFields === 'object') {
+                  totalMissingFields += Object.keys(error.missingFields).length;
+                }
+              });
+            }
             
             return (
               <TableRow 
@@ -127,10 +135,10 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                   {formatAmount(document.total_amount || 0, document.currency)}
                 </TableCell>
                 <TableCell>
-                  {hasErrors ? (
+                  {hasErrors && totalMissingFields > 0 ? (
                     <Badge variant="destructive" className="flex items-center gap-1 w-fit">
                       <AlertTriangle className="h-3 w-3" />
-                      {errorCount} błędów
+                      {totalMissingFields} {totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
