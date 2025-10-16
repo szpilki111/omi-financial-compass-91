@@ -168,6 +168,7 @@ export type Database = {
           location_id: string
           updated_at: string
           user_id: string
+          validation_errors: Json | null
         }
         Insert: {
           created_at?: string
@@ -179,6 +180,7 @@ export type Database = {
           location_id: string
           updated_at?: string
           user_id: string
+          validation_errors?: Json | null
         }
         Update: {
           created_at?: string
@@ -190,6 +192,7 @@ export type Database = {
           location_id?: string
           updated_at?: string
           user_id?: string
+          validation_errors?: Json | null
         }
         Relationships: [
           {
@@ -806,6 +809,7 @@ export type Database = {
           debit_account_id: string | null
           debit_amount: number | null
           description: string
+          display_order: number | null
           document_id: string | null
           document_number: string | null
           exchange_rate: number | null
@@ -827,6 +831,7 @@ export type Database = {
           debit_account_id?: string | null
           debit_amount?: number | null
           description: string
+          display_order?: number | null
           document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
@@ -848,6 +853,7 @@ export type Database = {
           debit_account_id?: string | null
           debit_amount?: number | null
           description?: string
+          display_order?: number | null
           document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
@@ -1041,7 +1047,7 @@ export type Database = {
         Args:
           | { new_password: string; user_id: number }
           | { new_password: string; user_id: string }
-        Returns: boolean
+        Returns: undefined
       }
       check_report_editing_blocked: {
         Args: { p_document_date: string; p_location_id: string }

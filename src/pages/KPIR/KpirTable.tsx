@@ -24,14 +24,22 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
-  // Filtrujemy tylko operacje główne - ukrywamy sklonowane operacje (subtransakcje)
-  // oraz operacje bez opisów
-  const mainTransactions = React.useMemo(() => {
-    return transactions.filter(transaction => 
+  // Budujemy strukturę transakcji z subtransakcjami
+  const transactionsWithSubs = React.useMemo(() => {
+    const mainTransactions = transactions.filter(transaction => 
       !transaction.parent_transaction_id && 
       transaction.description && 
       transaction.description.trim() !== ''
     );
+
+    return mainTransactions.map(mainTx => {
+      const subTransactions = transactions.filter(t => 
+        t.parent_transaction_id === mainTx.id &&
+        t.description &&
+        t.description.trim() !== ''
+      );
+      return { main: mainTx, subs: subTransactions };
+    });
   }, [transactions]);
 
   if (loading) {
@@ -42,7 +50,7 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     );
   }
 
-  if (!mainTransactions.length) {
+  if (!transactionsWithSubs.length) {
     return (
       <div className="text-center py-10 text-omi-gray-500">
         Brak operacji do wyświetlenia
@@ -55,13 +63,11 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
       style: 'currency',
       currency: currency,
       minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
-  const renderTransactionRow = (transaction: KpirTransaction) => {
-    // Sprawdź czy ta transakcja ma subtransakcje (jest split-parentem)
-    const hasSubTransactions = transactions.some(t => t.parent_transaction_id === transaction.id);
-
+  const renderTransactionRow = (transaction: KpirTransaction, isSubTransaction: boolean = false) => {
     // Determine which document number to show (from document or transaction)
     const documentNumber = transaction.document?.document_number || transaction.document_number || '-';
 
@@ -70,14 +76,14 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
     const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
 
     return (
-      <TableRow key={transaction.id} className="hover:bg-omi-100">
+      <TableRow 
+        key={transaction.id} 
+        className={isSubTransaction ? "bg-blue-50/50 hover:bg-blue-100/50" : "hover:bg-omi-100"}
+      >
         <TableCell>{transaction.formattedDate}</TableCell>
         <TableCell>{documentNumber}</TableCell>
         <TableCell>
-          <div className="flex items-center">
-            {hasSubTransactions && (
-              <Split className="h-4 w-4 text-orange-500 mr-2" />
-            )}
+          <div className={isSubTransaction ? "pl-6 text-sm italic" : ""}>
             {transaction.description}
           </div>
         </TableCell>
@@ -153,7 +159,12 @@ const KpirTable: React.FC<KpirTableProps> = ({ transactions, loading, onShowDocu
           </TableRow>
         </TableHeader>
         <TableBody>
-          {mainTransactions.map(transaction => renderTransactionRow(transaction))}
+          {transactionsWithSubs.map(({ main, subs }) => (
+            <React.Fragment key={main.id}>
+              {renderTransactionRow(main, false)}
+              {subs.map(sub => renderTransactionRow(sub, true))}
+            </React.Fragment>
+          ))}
         </TableBody>
       </Table>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -17,11 +17,29 @@ import { AlertTriangle } from 'lucide-react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
-import InlineTransactionRow from './InlineTransactionRow';
+import InlineTransactionRow, { InlineTransactionRowRef } from './InlineTransactionRow';
+import PrintableDocument from '@/components/PrintableDocument';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -72,6 +90,10 @@ const DocumentDialog = ({
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const inlineFormRef = useRef<InlineTransactionRowRef>(null);
+  const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  
   const form = useForm<DocumentFormData>({
     defaultValues: {
       document_number: '',
@@ -111,6 +133,33 @@ const DocumentDialog = ({
     enabled: !!userProfile?.location_id
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, number, name')
+        .order('number', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen
+  });
+
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen
+  });
+
+
   const documentDate = form.watch('document_date');
   const { data: isEditingBlocked, isLoading: checkingBlock } = useQuery({
     queryKey: ['editingBlocked', document?.id, userProfile?.location_id, documentDate],
@@ -125,6 +174,10 @@ const DocumentDialog = ({
     },
     enabled: !!userProfile?.location_id && !!documentDate && isOpen
   });
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   useEffect(() => {
     const subscription = form.watch(() => {
@@ -417,8 +470,21 @@ const DocumentDialog = ({
 
   const loadTransactions = async (documentId: string) => {
     try {
-      const { data, error } = await supabase.from('transactions').select('*').eq('document_id', documentId);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('document_id', documentId)
+        .order('display_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true });
+      
       if (error) throw error;
+      
+      console.log('📥 Loaded transactions from database:', data?.map(t => ({
+        id: t.id,
+        display_order: t.display_order,
+        description: t.description
+      })));
+      
       setTransactions(data || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
@@ -447,114 +513,118 @@ const DocumentDialog = ({
     const allTransactions = [...transactions, ...parallelTransactions];
     const errors: ValidationError[] = [];
 
-    if (allTransactions.length === 0) {
-      errors.push({ type: 'no_operations' });
-      toast({
-        title: "Błąd walidacji",
-        description: "Dokument musi zawierać co najmniej jedną operację",
-        variant: "destructive"
-      });
-      setValidationErrors(errors);
-      return;
+    console.log('💾 Starting document save process');
+    console.log('Has inline form data:', hasInlineFormData);
+    console.log('Has parallel inline form data:', hasParallelInlineFormData);
+    
+    // Collect incomplete transaction data from inline forms
+    let inlineTransactionToAdd: Transaction | null = null;
+    let parallelInlineTransactionToAdd: Transaction | null = null;
+
+    if (hasInlineFormData && inlineFormRef.current) {
+      try {
+        console.log('Attempting to get inline form data...');
+        inlineTransactionToAdd = inlineFormRef.current.getCurrentData();
+        console.log('Inline transaction data:', inlineTransactionToAdd);
+        if (inlineTransactionToAdd) {
+          inlineTransactionToAdd.display_order = allTransactions.length + 1;
+        }
+      } catch (error) {
+        console.error('Error getting inline form data:', error);
+      }
     }
 
-    // Check if inline forms have unsaved data
-    if (hasInlineFormData) {
-      errors.push({ type: 'inline_form' });
-      toast({
-        title: "Błąd walidacji",
-        description: "Masz wprowadzone dane w formularzu operacji głównych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
-        variant: "destructive"
-      });
-      setValidationErrors(errors);
-      return;
+    if (hasParallelInlineFormData && parallelInlineFormRef.current) {
+      try {
+        console.log('Attempting to get parallel inline form data...');
+        parallelInlineTransactionToAdd = parallelInlineFormRef.current.getCurrentData();
+        console.log('Parallel transaction data:', parallelInlineTransactionToAdd);
+        if (parallelInlineTransactionToAdd) {
+          parallelInlineTransactionToAdd.display_order = allTransactions.length + (inlineTransactionToAdd ? 2 : 1);
+        }
+      } catch (error) {
+        console.error('Error getting parallel inline form data:', error);
+      }
     }
 
-    if (hasParallelInlineFormData) {
-      errors.push({ type: 'parallel_inline_form' });
+    // Add incomplete transactions to the list
+    const transactionsToValidate = [
+      ...allTransactions,
+      ...(inlineTransactionToAdd ? [inlineTransactionToAdd] : []),
+      ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : [])
+    ];
+
+    console.log('Transactions to validate:', transactionsToValidate);
+
+    if (transactionsToValidate.length === 0) {
       toast({
-        title: "Błąd walidacji",
-        description: "Masz wprowadzone dane w formularzu operacji równoległych. Dokończ dodawanie operacji lub wyczyść formularz przed zapisem.",
-        variant: "destructive"
+        title: "Uwaga",
+        description: "Dokument nie zawiera żadnych operacji. Możesz je dodać później.",
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
 
-    // Check for incomplete existing transactions (have some data but missing required fields)
-    transactions.forEach((transaction, index) => {
-      const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasDebitAmount = transaction.debit_amount > 0;
-      const hasCreditAmount = transaction.credit_amount > 0;
-      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
-      const hasDebitAccount = !!transaction.debit_account_id;
-      const hasCreditAccount = !!transaction.credit_account_id;
+    // Function to count missing fields in a transaction
+    const countMissingFields = (transaction: Transaction) => {
+      let count = 0;
+      if (!transaction.description || transaction.description.trim() === '') count++;
+      if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
+      if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
+      if (!transaction.debit_account_id) count++;
+      if (!transaction.credit_account_id) count++;
+      return count;
+    };
+
+    // Check ALL transactions including inline form data
+    transactionsToValidate.forEach((transaction, index) => {
+      const missingCount = countMissingFields(transaction);
       
-      // Transaction is incomplete if it has any data but missing required fields
-      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
+      if (missingCount > 0) {
         const missingFields: ValidationError['missingFields'] = {};
         
-        if (!hasDescription) missingFields.description = true;
-        if (!hasDebitAmount && !hasCreditAmount) {
-          missingFields.debit_amount = true;
-          missingFields.credit_amount = true;
-        }
-        if (!hasDebitAccount) missingFields.debit_account_id = true;
-        if (!hasCreditAccount) missingFields.credit_account_id = true;
+        if (!transaction.description || transaction.description.trim() === '') missingFields.description = true;
+        if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
+        if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
+        if (!transaction.debit_account_id) missingFields.debit_account_id = true;
+        if (!transaction.credit_account_id) missingFields.credit_account_id = true;
         
-        if (Object.keys(missingFields).length > 0) {
-          errors.push({ 
-            type: 'incomplete_transaction', 
-            transactionIndex: index, 
-            isParallel: false,
-            missingFields 
-          });
-        }
+        errors.push({ 
+          type: 'incomplete_transaction', 
+          transactionIndex: index, 
+          isParallel: index >= transactions.length,
+          missingFields 
+        });
       }
     });
 
-    parallelTransactions.forEach((transaction, index) => {
-      const hasDescription = transaction.description && transaction.description.trim() !== '';
-      const hasDebitAmount = transaction.debit_amount > 0;
-      const hasCreditAmount = transaction.credit_amount > 0;
-      const hasAnyAmount = hasDebitAmount || hasCreditAmount;
-      const hasDebitAccount = !!transaction.debit_account_id;
-      const hasCreditAccount = !!transaction.credit_account_id;
-      
-      // Transaction is incomplete if it has any data but missing required fields
-      if (hasDescription || hasAnyAmount || hasDebitAccount || hasCreditAccount) {
-        const missingFields: ValidationError['missingFields'] = {};
-        
-        if (!hasDescription) missingFields.description = true;
-        if (!hasDebitAmount && !hasCreditAmount) {
-          missingFields.debit_amount = true;
-          missingFields.credit_amount = true;
-        }
-        if (!hasDebitAccount) missingFields.debit_account_id = true;
-        if (!hasCreditAccount) missingFields.credit_account_id = true;
-        
-        if (Object.keys(missingFields).length > 0) {
-          errors.push({ 
-            type: 'incomplete_transaction', 
-            transactionIndex: index, 
-            isParallel: true,
-            missingFields 
-          });
-        }
-      }
-    });
-
+    // Set validation errors but allow saving
+    setValidationErrors(errors);
+    
     if (errors.length > 0) {
+      const totalMissingFields = errors.reduce((sum, e) => {
+        if (e.missingFields) {
+          return sum + Object.keys(e.missingFields).length;
+        }
+        return sum;
+      }, 0);
+      
       toast({
-        title: "Błąd walidacji",
-        description: `Istnieją ${errors.filter(e => e.type === 'incomplete_transaction').length} niekompletne operacje z wprowadzonymi danymi. Uzupełnij wszystkie pola lub usuń niekompletne operacje.`,
-        variant: "destructive"
+        title: "Uwaga - dokument zawiera błędy",
+        description: `Zapisuję dokument z ${totalMissingFields} pustymi polami. Uzupełnij je później.`,
+        variant: "default"
       });
-      setValidationErrors(errors);
-      return;
     }
 
-    setValidationErrors([]);
+    // Add incomplete transactions from inline forms to the main list
+    const finalTransactions = [
+      ...transactions,
+      ...(inlineTransactionToAdd ? [inlineTransactionToAdd] : [])
+    ];
+    const finalParallelTransactions = [
+      ...parallelTransactions,
+      ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : [])
+    ];
+    const allFinalTransactions = [...finalTransactions, ...finalParallelTransactions];
 
     setIsLoading(true);
     try {
@@ -564,7 +634,8 @@ const DocumentDialog = ({
           document_number: data.document_number,
           document_name: data.document_name,
           document_date: format(data.document_date, 'yyyy-MM-dd'),
-          currency: data.currency
+          currency: data.currency,
+          validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null
         }).eq('id', document.id);
         if (error) throw error;
       } else {
@@ -574,7 +645,8 @@ const DocumentDialog = ({
           document_date: format(data.document_date, 'yyyy-MM-dd'),
           location_id: user.location,
           user_id: user.id,
-          currency: data.currency
+          currency: data.currency,
+          validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null
         }).select().single();
         if (error) {
           console.error('Error creating document:', error);
@@ -583,7 +655,7 @@ const DocumentDialog = ({
         documentId = newDocument.id;
       }
 
-      const allTransactionsSafe = allTransactions.map((t) => ({
+      const allTransactionsSafe = allFinalTransactions.map((t) => ({
         ...t,
         currency: data.currency,
         description: typeof t.description === "string" && t.description.trim() !== "" ? t.description : ""
@@ -610,7 +682,8 @@ const DocumentDialog = ({
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
               user_id: user.id,
-              document_number: data.document_number
+              document_number: data.document_number,
+              display_order: t.display_order
             };
           });
           const { error: transactionError } = await supabase.from('transactions').insert(transactionsToInsert);
@@ -643,7 +716,8 @@ const DocumentDialog = ({
     const currency = form.getValues('currency');
     const transactionWithCurrency = {
       ...transaction,
-      currency
+      currency,
+      display_order: transactions.length + 1
     };
     setTransactions(prev => [...prev, transactionWithCurrency]);
     // Clear validation errors when a new transaction is added
@@ -654,7 +728,8 @@ const DocumentDialog = ({
     const currency = form.getValues('currency');
     const transactionWithCurrency = {
       ...transaction,
-      currency
+      currency,
+      display_order: parallelTransactions.length + 1
     };
     setParallelTransactions(prev => [...prev, transactionWithCurrency]);
     // Clear validation errors when a new transaction is added
@@ -702,11 +777,15 @@ const DocumentDialog = ({
   };
 
   const handleCopyTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    const currentTransactions = isParallel ? parallelTransactions : transactions;
+    const newDisplayOrder = currentTransactions.length + 1;
+    
     const newTransaction: Transaction = {
       ...transaction,
       id: undefined,
       isCloned: true,
-      clonedType: transaction.credit_account_id ? 'credit' : 'debit'
+      clonedType: transaction.credit_account_id ? 'credit' : 'debit',
+      display_order: newDisplayOrder
     };
     if (isParallel) {
       setParallelTransactions(prev => [...prev, newTransaction]);
@@ -717,6 +796,86 @@ const DocumentDialog = ({
       title: "Transakcja skopiowana",
       description: "Transakcja została dodana do listy",
     });
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent, isParallel: boolean = false) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const currentTransactions = isParallel ? parallelTransactions : transactions;
+      const oldIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === active.id);
+      const newIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === over.id);
+
+      console.log('🔄 Drag end:', { oldIndex, newIndex, isParallel });
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(currentTransactions, oldIndex, newIndex);
+        
+        // Update display_order for each transaction
+        const updatedTransactions = reordered.map((t, index) => ({
+          ...t,
+          display_order: index + 1
+        }));
+        
+        console.log('📝 Updated transactions with new order:', updatedTransactions.map(t => ({ 
+          id: t.id, 
+          display_order: t.display_order, 
+          description: t.description 
+        })));
+        
+        if (isParallel) {
+          setParallelTransactions(updatedTransactions);
+        } else {
+          setTransactions(updatedTransactions);
+        }
+        setHasUnsavedChanges(true);
+        
+        // Save order to database for existing transactions (those with IDs)
+        if (document?.id) {
+          const transactionsToUpdate = updatedTransactions.filter(t => t.id);
+          console.log('💾 Saving order to database for transactions:', transactionsToUpdate.map(t => ({ id: t.id, display_order: t.display_order })));
+          
+          if (transactionsToUpdate.length > 0) {
+            try {
+              // Update each transaction's display_order individually
+              const updatePromises = transactionsToUpdate.map(t =>
+                supabase
+                  .from('transactions')
+                  .update({ display_order: t.display_order })
+                  .eq('id', t.id!)
+              );
+              
+              const results = await Promise.all(updatePromises);
+              const errors = results.filter(r => r.error);
+              
+              console.log('✅ Update results:', results);
+              
+              if (errors.length > 0) {
+                console.error('❌ Error updating transaction order:', errors);
+                toast({
+                  title: "Błąd",
+                  description: "Nie udało się zapisać nowej kolejności operacji",
+                  variant: "destructive"
+                });
+              } else {
+                console.log('✅ Successfully saved new order to database');
+              }
+            } catch (error) {
+              console.error('❌ Error updating transaction order:', error);
+            }
+          }
+        } else {
+          console.log('ℹ️ Document not saved yet, order will be saved when document is created');
+        }
+      }
+    }
   };
 
   const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
@@ -1094,9 +1253,15 @@ const DocumentDialog = ({
 
             <div className="space-y-4">
               <div className="overflow-x-auto">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => handleDragEnd(event, false)}
+                >
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10"></TableHead>
                         <TableHead className="w-12">
                           <Checkbox
                             checked={selectedTransactions.length === transactions.length && transactions.length > 0}
@@ -1113,6 +1278,10 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableHeader>
                   <TableBody>
+                  <SortableContext
+                    items={transactions.map((_, i) => `transaction-${i}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
                   {transactions.map((transaction, index) => {
                       const errorInfo = validationErrors.find(
                         e => e.type === 'incomplete_transaction' && 
@@ -1120,8 +1289,10 @@ const DocumentDialog = ({
                         e.isParallel === false
                       );
                       return (
-                        <EditableTransactionRow
-                          key={index}
+                        <SortableTransactionRow
+                          key={`transaction-${index}`}
+                          id={`transaction-${index}`}
+                          index={index}
                           transaction={transaction}
                           onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                           onDelete={() => removeTransaction(index)}
@@ -1136,8 +1307,10 @@ const DocumentDialog = ({
                         />
                       );
                     })}
+                  </SortableContext>
                     {showInlineForm && (
                       <InlineTransactionRow
+                        ref={inlineFormRef}
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
@@ -1163,6 +1336,7 @@ const DocumentDialog = ({
                     </TableRow>
                   </TableFooter>
                 </Table>
+                </DndContext>
               </div>
             </div>
           </div>
@@ -1221,9 +1395,15 @@ const DocumentDialog = ({
 
               <div className="space-y-4">
                 <div className="overflow-x-auto">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleDragEnd(event, true)}
+                  >
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-10"></TableHead>
                           <TableHead className="w-12">
                             <Checkbox
                               checked={selectedParallelTransactions.length === parallelTransactions.length && parallelTransactions.length > 0}
@@ -1240,6 +1420,10 @@ const DocumentDialog = ({
                         </TableRow>
                       </TableHeader>
                     <TableBody>
+                    <SortableContext
+                      items={parallelTransactions.map((_, i) => `transaction-${i}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
                     {parallelTransactions.map((transaction, index) => {
                         const errorInfo = validationErrors.find(
                           e => e.type === 'incomplete_transaction' && 
@@ -1247,8 +1431,10 @@ const DocumentDialog = ({
                           e.isParallel === true
                         );
                         return (
-                          <EditableTransactionRow
-                            key={index}
+                          <SortableTransactionRow
+                            key={`transaction-${index}`}
+                            id={`transaction-${index}`}
+                            index={index}
                             transaction={transaction}
                             onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
                             onDelete={() => removeParallelTransaction(index)}
@@ -1263,8 +1449,10 @@ const DocumentDialog = ({
                           />
                         );
                       })}
+                    </SortableContext>
                       {showParallelInlineForm && (
                         <InlineTransactionRow
+                          ref={parallelInlineFormRef}
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           currency={selectedCurrency}
@@ -1290,12 +1478,13 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableFooter>
                   </Table>
+                  </DndContext>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="border-t pt-4">
+          <div className="border-t pt-4 space-y-4">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h4 className="font-bold text-lg mb-2">Podsumowanie dokumentu</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -1313,9 +1502,53 @@ const DocumentDialog = ({
                 </div>
               </div>
             </div>
+
+            <div className="flex justify-end space-x-2">
+              {document && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrint}
+                  className="flex items-center gap-2"
+                >
+                  <Printer className="h-4 w-4" />
+                  Drukuj
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setHasUnsavedChanges(false);
+                  onClose();
+                }}
+              >
+                Anuluj
+              </Button>
+              <Button
+                type="submit"
+                onClick={form.handleSubmit(onSubmit)}
+                disabled={isLoading || (isEditingBlocked && Boolean(documentDate))}
+              >
+                {isLoading ? 'Zapisywanie...' : (document ? 'Zapisz zmiany' : 'Utwórz dokument')}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden printable version */}
+      <PrintableDocument
+        ref={printRef}
+        documentNumber={form.getValues('document_number')}
+        documentName={form.getValues('document_name')}
+        documentDate={form.getValues('document_date')}
+        currency={selectedCurrency}
+        transactions={transactions}
+        parallelTransactions={parallelTransactions}
+        accounts={accounts || []}
+        locationName={userProfile?.location_id ? locations?.find(l => l.id === userProfile.location_id)?.name : undefined}
+      />
 
       <ConfirmCloseDialog
         isOpen={showConfirmClose}
@@ -1327,7 +1560,9 @@ const DocumentDialog = ({
   );
 };
 
-const EditableTransactionRow: React.FC<{
+const SortableTransactionRow: React.FC<{
+  id: string;
+  index: number;
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
@@ -1339,7 +1574,57 @@ const EditableTransactionRow: React.FC<{
   onSelect?: (checked: boolean) => void;
   hasValidationError?: boolean;
   missingFields?: ValidationError['missingFields'];
-}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
+}> = ({ id, index, transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <EditableTransactionRow
+      ref={setNodeRef}
+      style={style}
+      dragHandleProps={{ ...attributes, ...listeners }}
+      transaction={transaction}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      onCopy={onCopy}
+      onSplit={onSplit}
+      currency={currency}
+      isEditingBlocked={isEditingBlocked}
+      isSelected={isSelected}
+      onSelect={onSelect}
+      hasValidationError={hasValidationError}
+      missingFields={missingFields}
+    />
+  );
+};
+
+const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
+  transaction: Transaction;
+  onUpdate: (transaction: Transaction) => void;
+  onDelete: () => void;
+  onCopy?: () => void;
+  onSplit?: () => void;
+  currency: string;
+  isEditingBlocked?: boolean;
+  isSelected?: boolean;
+  onSelect?: (checked: boolean) => void;
+  hasValidationError?: boolean;
+  missingFields?: ValidationError['missingFields'];
+  style?: React.CSSProperties;
+  dragHandleProps?: any;
+}>(({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields, style, dragHandleProps }, ref) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1366,9 +1651,11 @@ const EditableTransactionRow: React.FC<{
       credit_amount: formData.credit_amount,
       amount: Math.max(formData.debit_amount, formData.credit_amount),
       currency: currency,
+      // CRITICAL: Preserve display_order from original transaction
+      display_order: transaction.display_order,
     };
     onUpdate(updatedTransaction);
-  }, [formData, currency]);
+  }, [formData, currency, transaction.display_order, onUpdate]);
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -1400,11 +1687,20 @@ const EditableTransactionRow: React.FC<{
   };
 
   return (
-    <TableRow className={cn(
-      hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
-      isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
-      "hover:bg-gray-50"
-    )}>
+    <TableRow 
+      ref={ref}
+      style={style}
+      className={cn(
+        hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
+        isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
+        "hover:bg-gray-50"
+      )}
+    >
+      <TableCell>
+        <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing">
+          <GripVertical className="h-4 w-4 text-gray-400" />
+        </div>
+      </TableCell>
       <TableCell>
         <Checkbox
           checked={isSelected}
@@ -1413,7 +1709,7 @@ const EditableTransactionRow: React.FC<{
         />
       </TableCell>
       <TableCell>
-        <Textarea 
+        <Textarea
           value={formData.description} 
           onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
           placeholder="Opis operacji..." 
@@ -1537,6 +1833,8 @@ const EditableTransactionRow: React.FC<{
       </TableCell>
     </TableRow>
   );
-};
+});
+
+EditableTransactionRow.displayName = 'EditableTransactionRow';
 
 export default DocumentDialog;

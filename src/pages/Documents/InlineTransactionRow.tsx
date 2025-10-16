@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
+export interface InlineTransactionRowRef {
+  getCurrentData: () => Transaction | null;
+}
+
 interface InlineTransactionRowProps {
   onSave: (transaction: Transaction) => void;
   isEditingBlocked?: boolean;
@@ -17,13 +21,13 @@ interface InlineTransactionRowProps {
   hasValidationError?: boolean;
 }
 
-const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
+const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransactionRowProps>(({
   onSave,
   isEditingBlocked = false,
   currency = "PLN",
   onHasDataChange,
   hasValidationError = false,
-}) => {
+}, ref) => {
   const { user } = useAuth();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const rowRef = useRef<HTMLTableRowElement>(null);
@@ -52,6 +56,23 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   useEffect(() => {
     onHasDataChange?.(hasAnyData);
   }, [hasAnyData, onHasDataChange]);
+
+  // Expose getCurrentData method via ref
+  useImperativeHandle(ref, () => ({
+    getCurrentData: (): Transaction | null => {
+      if (!hasAnyData) return null;
+      return {
+        description: formData.description,
+        debit_account_id: formData.debit_account_id || undefined,
+        credit_account_id: formData.credit_account_id || undefined,
+        debit_amount: formData.debit_amount || 0,
+        credit_amount: formData.credit_amount || 0,
+        amount: Math.max(formData.debit_amount || 0, formData.credit_amount || 0),
+        settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+    }
+  }), [formData, hasAnyData, currency]);
 
   // Auto-focus on the first field when component mounts
   useEffect(() => {
@@ -332,6 +353,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       )}
       onBlur={handleRowBlur}
     >
+      <TableCell>{/* Empty cell for drag handle */}</TableCell>
       <TableCell>{/* Empty cell for checkbox */}</TableCell>
       <TableCell>
         <Textarea
@@ -418,6 +440,8 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       <TableCell>{/* No action buttons - auto-save handles submission */}</TableCell>
     </TableRow>
   );
-};
+});
+
+InlineTransactionRow.displayName = 'InlineTransactionRow';
 
 export default InlineTransactionRow;

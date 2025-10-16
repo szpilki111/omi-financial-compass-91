@@ -16,6 +16,7 @@ export interface Transaction {
   clonedType?: 'debit' | 'credit';
   debitAccountNumber?: string;
   creditAccountNumber?: string;
+  display_order?: number;
   // Add the missing properties that DocumentTable expects
   debitAccount?: {
     number: string;
