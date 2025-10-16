@@ -1,10 +1,19 @@
-import React from "react";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Transaction } from "./types";
-import { Pencil, Trash2, Copy, Split } from "lucide-react";
-import { Spinner } from "@/components/ui/Spinner";
-import { useAuth } from "@/context/AuthContext";
+
+import React from 'react';
+import { 
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell,
+  TableFooter
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Transaction } from './types';
+import { Pencil, Trash2, Copy, Split } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
+import { useAuth } from '@/context/AuthContext';
 
 interface DocumentTableProps {
   transactions: Transaction[];
@@ -16,25 +25,27 @@ interface DocumentTableProps {
   documentCurrency?: string;
 }
 
-const DocumentTable: React.FC<DocumentTableProps> = ({
-  transactions,
-  loading,
-  onEdit,
-  onDelete,
-  onCopy,
+const DocumentTable: React.FC<DocumentTableProps> = ({ 
+  transactions, 
+  loading, 
+  onEdit, 
+  onDelete, 
+  onCopy, 
   onSplit,
-  documentCurrency = "PLN",
+  documentCurrency = 'PLN'
 }) => {
   const { user } = useAuth();
-  const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
+  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
   // Budujemy strukturę transakcji z subtransakcjami
   const transactionsWithSubs = React.useMemo(() => {
-    const mainTransactions = transactions.filter((transaction) => !transaction.isCloned);
+    const mainTransactions = transactions.filter(transaction => 
+      !transaction.isCloned
+    );
 
-    return mainTransactions.map((mainTx) => {
-      const subTransactions = transactions.filter(
-        (t) => t.isCloned && t.clonedType
+    return mainTransactions.map(mainTx => {
+      const subTransactions = transactions.filter(t => 
+        t.isCloned && t.clonedType && mainTx.id === t.id
       );
       return { main: mainTx, subs: subTransactions };
     });
@@ -49,37 +60,41 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
   }
 
   if (!transactions || transactions.length === 0) {
-    return <div className="text-center py-10 text-omi-gray-500">Brak operacji do wyświetlenia</div>;
+    return (
+      <div className="text-center py-10 text-omi-gray-500">
+        Brak operacji do wyświetlenia
+      </div>
+    );
   }
 
-  const getCurrencySymbol = (currency: string = "PLN") => {
+  const getCurrencySymbol = (currency: string = 'PLN') => {
     const currencySymbols: { [key: string]: string } = {
-      PLN: "zł",
-      EUR: "€",
-      USD: "$",
-      GBP: "£",
-      CHF: "CHF",
-      CZK: "Kč",
-      NOK: "kr",
-      SEK: "kr",
+      'PLN': 'zł',
+      'EUR': '€',
+      'USD': '$',
+      'GBP': '£',
+      'CHF': 'CHF',
+      'CZK': 'Kč',
+      'NOK': 'kr',
+      'SEK': 'kr',
     };
     return currencySymbols[currency] || currency;
   };
 
-  const formatAmount = (amount: number, currency: string = "PLN") => {
+  const formatAmount = (amount: number, currency: string = 'PLN') => {
     const symbol = getCurrencySymbol(currency);
-    return `${amount.toLocaleString("pl-PL", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    return `${amount.toLocaleString('pl-PL', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
     })} ${symbol}`;
   };
 
   const getAccountDisplay = (accountNumber: string | undefined, account: any, accountId: string | undefined) => {
-    const number = accountNumber || account?.number || "N/A";
-    const name = account?.name || "N/A";
-
-    console.log("Account display debug:", { accountNumber, account, accountId, number, name });
-
+    const number = accountNumber || account?.number || 'N/A';
+    const name = account?.name || 'N/A';
+    
+    console.log('Account display debug:', { accountNumber, account, accountId, number, name });
+    
     return `${number} - ${name}`;
   };
 
@@ -137,22 +152,42 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
                 <TableCell>
                   <div className="flex space-x-1">
                     {onEdit && (
-                      <Button variant="ghost" size="icon" onClick={() => onEdit(main)} title="Edytuj">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit(main)}
+                        title="Edytuj"
+                      >
                         <Pencil className="h-4 w-4" />
                       </Button>
                     )}
                     {onCopy && (
-                      <Button variant="ghost" size="icon" onClick={() => onCopy(main)} title="Kopiuj">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onCopy(main)}
+                        title="Kopiuj"
+                      >
                         <Copy className="h-4 w-4" />
                       </Button>
                     )}
                     {onSplit && (
-                      <Button variant="ghost" size="icon" onClick={() => onSplit(main)} title="Podziel">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onSplit(main)}
+                        title="Podziel"
+                      >
                         <Split className="h-4 w-4" />
                       </Button>
                     )}
                     {onDelete && isAdmin && (
-                      <Button variant="ghost" size="icon" onClick={() => onDelete(main.id!)} title="Usuń">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDelete(main.id!)}
+                        title="Usuń"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
@@ -160,9 +195,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
                 </TableCell>
               </TableRow>
               {subs.map((sub) => (
-                <TableRow key={`${main.id}-${sub.clonedType || sub.id}`} className="bg-blue-50/50 hover:bg-blue-100/50">
-                  {" "}
-                  // Lekka poprawka key dla unikalności
+                <TableRow key={`${main.id}-${sub.clonedType}`} className="bg-blue-50/50 hover:bg-blue-100/50">
                   <TableCell>
                     <div className="pl-6 text-sm italic">{sub.description}</div>
                   </TableCell>
@@ -187,12 +220,22 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
                   <TableCell>
                     <div className="flex space-x-1">
                       {onEdit && (
-                        <Button variant="ghost" size="icon" onClick={() => onEdit(sub)} title="Edytuj">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEdit(sub)}
+                          title="Edytuj"
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                       )}
                       {onDelete && isAdmin && (
-                        <Button variant="ghost" size="icon" onClick={() => onDelete(sub.id!)} title="Usuń">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDelete(sub.id!)}
+                          title="Usuń"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
@@ -208,8 +251,12 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
             <TableCell colSpan={2} className="text-right font-bold">
               RAZEM:
             </TableCell>
-            <TableCell className="text-right font-bold text-lg">{formatAmount(debitSum, documentCurrency)}</TableCell>
-            <TableCell className="text-right font-bold text-lg">{formatAmount(creditSum, documentCurrency)}</TableCell>
+            <TableCell className="text-right font-bold text-lg">
+              {formatAmount(debitSum, documentCurrency)}
+            </TableCell>
+            <TableCell className="text-right font-bold text-lg">
+              {formatAmount(creditSum, documentCurrency)}
+            </TableCell>
             <TableCell colSpan={3} className="text-left font-bold text-lg">
               {debitSum === creditSum ? (
                 <span className="text-green-600">Bilans się zgadza ✓</span>
