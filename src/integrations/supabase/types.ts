@@ -806,6 +806,7 @@ export type Database = {
           debit_account_id: string | null
           debit_amount: number | null
           description: string
+          display_order: number | null
           document_id: string | null
           document_number: string | null
           exchange_rate: number | null
@@ -827,6 +828,7 @@ export type Database = {
           debit_account_id?: string | null
           debit_amount?: number | null
           description: string
+          display_order?: number | null
           document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null
@@ -848,6 +850,7 @@ export type Database = {
           debit_account_id?: string | null
           debit_amount?: number | null
           description?: string
+          display_order?: number | null
           document_id?: string | null
           document_number?: string | null
           exchange_rate?: number | null

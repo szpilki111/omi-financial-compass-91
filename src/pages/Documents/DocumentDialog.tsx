@@ -434,7 +434,13 @@ const DocumentDialog = ({
 
   const loadTransactions = async (documentId: string) => {
     try {
-      const { data, error } = await supabase.from('transactions').select('*').eq('document_id', documentId);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('document_id', documentId)
+        .order('display_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true });
+      
       if (error) throw error;
       setTransactions(data || []);
     } catch (error) {
@@ -660,7 +666,8 @@ const DocumentDialog = ({
     const currency = form.getValues('currency');
     const transactionWithCurrency = {
       ...transaction,
-      currency
+      currency,
+      display_order: transactions.length + 1
     };
     setTransactions(prev => [...prev, transactionWithCurrency]);
     // Clear validation errors when a new transaction is added
@@ -671,7 +678,8 @@ const DocumentDialog = ({
     const currency = form.getValues('currency');
     const transactionWithCurrency = {
       ...transaction,
-      currency
+      currency,
+      display_order: parallelTransactions.length + 1
     };
     setParallelTransactions(prev => [...prev, transactionWithCurrency]);
     // Clear validation errors when a new transaction is added
@@ -743,7 +751,7 @@ const DocumentDialog = ({
     })
   );
 
-  const handleDragEnd = (event: DragEndEvent, isParallel: boolean = false) => {
+  const handleDragEnd = async (event: DragEndEvent, isParallel: boolean = false) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
@@ -753,12 +761,49 @@ const DocumentDialog = ({
 
       if (oldIndex !== -1 && newIndex !== -1) {
         const reordered = arrayMove(currentTransactions, oldIndex, newIndex);
+        
+        // Update display_order for each transaction
+        const updatedTransactions = reordered.map((t, index) => ({
+          ...t,
+          display_order: index + 1
+        }));
+        
         if (isParallel) {
-          setParallelTransactions(reordered);
+          setParallelTransactions(updatedTransactions);
         } else {
-          setTransactions(reordered);
+          setTransactions(updatedTransactions);
         }
         setHasUnsavedChanges(true);
+        
+        // Save order to database for existing transactions (those with IDs)
+        if (document?.id) {
+          const transactionsToUpdate = updatedTransactions.filter(t => t.id);
+          if (transactionsToUpdate.length > 0) {
+            try {
+              // Update each transaction's display_order individually
+              const updatePromises = transactionsToUpdate.map(t =>
+                supabase
+                  .from('transactions')
+                  .update({ display_order: t.display_order })
+                  .eq('id', t.id!)
+              );
+              
+              const results = await Promise.all(updatePromises);
+              const errors = results.filter(r => r.error);
+              
+              if (errors.length > 0) {
+                console.error('Error updating transaction order:', errors);
+                toast({
+                  title: "Błąd",
+                  description: "Nie udało się zapisać nowej kolejności operacji",
+                  variant: "destructive"
+                });
+              }
+            } catch (error) {
+              console.error('Error updating transaction order:', error);
+            }
+          }
+        }
       }
     }
   };
