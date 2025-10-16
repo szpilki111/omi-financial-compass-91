@@ -442,6 +442,13 @@ const DocumentDialog = ({
         .order('created_at', { ascending: true });
       
       if (error) throw error;
+      
+      console.log('📥 Loaded transactions from database:', data?.map(t => ({
+        id: t.id,
+        display_order: t.display_order,
+        description: t.description
+      })));
+      
       setTransactions(data || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
