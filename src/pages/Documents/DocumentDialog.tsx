@@ -415,11 +415,39 @@ const DocumentDialog = ({
     }
   }, [document, isOpen, user?.location]);
 
+  const sortTransactionsWithParents = (transactions: Transaction[]): Transaction[] => {
+    const result: Transaction[] = [];
+    const parentMap = new Map<string, Transaction[]>();
+    
+    // Group children by parent
+    transactions.forEach(t => {
+      if (t.parent_transaction_id) {
+        const siblings = parentMap.get(t.parent_transaction_id) || [];
+        siblings.push(t);
+        parentMap.set(t.parent_transaction_id, siblings);
+      }
+    });
+    
+    // Build sorted list with children immediately after parents
+    transactions.forEach(t => {
+      if (!t.parent_transaction_id) {
+        result.push(t);
+        const children = parentMap.get(t.id!);
+        if (children) {
+          result.push(...children);
+        }
+      }
+    });
+    
+    return result;
+  };
+
   const loadTransactions = async (documentId: string) => {
     try {
       const { data, error } = await supabase.from('transactions').select('*').eq('document_id', documentId);
       if (error) throw error;
-      setTransactions(data || []);
+      const sorted = sortTransactionsWithParents(data || []);
+      setTransactions(sorted);
     } catch (error) {
       console.error('Error loading transactions:', error);
     }
@@ -597,8 +625,10 @@ const DocumentDialog = ({
         }
 
         if (allTransactionsSafe.length > 0) {
-          const transactionsToInsert = allTransactionsSafe.map(t => {
-            return {
+          // First pass: insert transactions without parents
+          const parentsToInsert = allTransactionsSafe
+            .filter(t => !t.parent_transaction_id)
+            .map(t => ({
               document_id: documentId,
               debit_account_id: t.debit_account_id || null,
               credit_account_id: t.credit_account_id || null,
@@ -610,13 +640,60 @@ const DocumentDialog = ({
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
               user_id: user.id,
-              document_number: data.document_number
-            };
+              document_number: data.document_number,
+              parent_transaction_id: null
+            }));
+
+          const { data: insertedParents, error: parentError } = await supabase
+            .from('transactions')
+            .insert(parentsToInsert)
+            .select();
+          
+          if (parentError) {
+            console.error('Error inserting parent transactions:', parentError);
+            throw parentError;
+          }
+
+          // Create mapping from old temp IDs to new DB IDs
+          const idMap = new Map<string, string>();
+          let parentIndex = 0;
+          allTransactionsSafe.forEach(t => {
+            if (!t.parent_transaction_id && insertedParents && insertedParents[parentIndex]) {
+              if (t.id) {
+                idMap.set(t.id, insertedParents[parentIndex].id);
+              }
+              parentIndex++;
+            }
           });
-          const { error: transactionError } = await supabase.from('transactions').insert(transactionsToInsert);
-          if (transactionError) {
-            console.error('Error inserting transactions:', transactionError);
-            throw transactionError;
+
+          // Second pass: insert child transactions with correct parent_transaction_id
+          const childrenToInsert = allTransactionsSafe
+            .filter(t => t.parent_transaction_id)
+            .map(t => ({
+              document_id: documentId,
+              debit_account_id: t.debit_account_id || null,
+              credit_account_id: t.credit_account_id || null,
+              amount: t.amount,
+              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+              description: t.description,
+              currency: t.currency,
+              date: format(data.document_date, 'yyyy-MM-dd'),
+              location_id: user.location,
+              user_id: user.id,
+              document_number: data.document_number,
+              parent_transaction_id: idMap.get(t.parent_transaction_id) || null
+            }));
+
+          if (childrenToInsert.length > 0) {
+            const { error: childrenError } = await supabase
+              .from('transactions')
+              .insert(childrenToInsert);
+            
+            if (childrenError) {
+              console.error('Error inserting child transactions:', childrenError);
+              throw childrenError;
+            }
           }
         }
       }
@@ -766,12 +843,23 @@ const DocumentDialog = ({
         amount: balanceAmount,
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
+        parent_transaction_id: transaction.id,
       };
 
       if (isParallel) {
-        setParallelTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = parallelTransactions.findIndex(t => t.id === transaction.id);
+        setParallelTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       } else {
-        setTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = transactions.findIndex(t => t.id === transaction.id);
+        setTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       }
 
       toast({
@@ -804,12 +892,23 @@ const DocumentDialog = ({
         amount: difference,
         debit_account_id: transaction.debit_account_id || '',
         credit_account_id: transaction.credit_account_id || '',
+        parent_transaction_id: transaction.id,
       };
 
       if (isParallel) {
-        setParallelTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = parallelTransactions.findIndex(t => t.id === transaction.id);
+        setParallelTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       } else {
-        setTransactions(prev => [...prev, newTransaction]);
+        const parentIndex = transactions.findIndex(t => t.id === transaction.id);
+        setTransactions(prev => {
+          const updated = [...prev];
+          updated.splice(parentIndex + 1, 0, newTransaction);
+          return updated;
+        });
       }
 
       toast({
@@ -1113,29 +1212,61 @@ const DocumentDialog = ({
                       </TableRow>
                     </TableHeader>
                   <TableBody>
-                  {transactions.map((transaction, index) => {
+                  {React.useMemo(() => {
+                    const mainTransactions = transactions.filter(t => !t.parent_transaction_id);
+                    return mainTransactions.map((mainTx, mainIndex) => {
+                      const subTransactions = transactions.filter(t => t.parent_transaction_id === mainTx.id);
+                      const actualMainIndex = transactions.indexOf(mainTx);
                       const errorInfo = validationErrors.find(
                         e => e.type === 'incomplete_transaction' && 
-                        e.transactionIndex === index && 
+                        e.transactionIndex === actualMainIndex && 
                         e.isParallel === false
                       );
+                      
                       return (
-                        <EditableTransactionRow
-                          key={index}
-                          transaction={transaction}
-                          onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
-                          onDelete={() => removeTransaction(index)}
-                          onCopy={() => handleCopyTransaction(transaction, false)}
-                          onSplit={() => handleSplitTransaction(transaction, false)}
-                          currency={selectedCurrency}
-                          isEditingBlocked={isEditingBlocked}
-                          isSelected={selectedTransactions.includes(index)}
-                          onSelect={(checked) => handleSelectTransaction(index, checked)}
-                          hasValidationError={!!errorInfo}
-                          missingFields={errorInfo?.missingFields}
-                        />
+                        <React.Fragment key={mainTx.id || mainIndex}>
+                          <EditableTransactionRow
+                            transaction={mainTx}
+                            onUpdate={(updatedTransaction) => handleUpdateTransaction(actualMainIndex, updatedTransaction)}
+                            onDelete={() => removeTransaction(actualMainIndex)}
+                            onCopy={() => handleCopyTransaction(mainTx, false)}
+                            onSplit={() => handleSplitTransaction(mainTx, false)}
+                            currency={selectedCurrency}
+                            isEditingBlocked={isEditingBlocked}
+                            isSelected={selectedTransactions.includes(actualMainIndex)}
+                            onSelect={(checked) => handleSelectTransaction(actualMainIndex, checked)}
+                            hasValidationError={!!errorInfo}
+                            missingFields={errorInfo?.missingFields}
+                          />
+                          {subTransactions.map((subTx, subIndex) => {
+                            const actualSubIndex = transactions.indexOf(subTx);
+                            const subErrorInfo = validationErrors.find(
+                              e => e.type === 'incomplete_transaction' && 
+                              e.transactionIndex === actualSubIndex && 
+                              e.isParallel === false
+                            );
+                            return (
+                              <EditableTransactionRow
+                                key={`${mainTx.id}-sub-${subIndex}`}
+                                transaction={subTx}
+                                onUpdate={(updatedTransaction) => handleUpdateTransaction(actualSubIndex, updatedTransaction)}
+                                onDelete={() => removeTransaction(actualSubIndex)}
+                                onCopy={() => handleCopyTransaction(subTx, false)}
+                                onSplit={() => handleSplitTransaction(subTx, false)}
+                                currency={selectedCurrency}
+                                isEditingBlocked={isEditingBlocked}
+                                isSelected={selectedTransactions.includes(actualSubIndex)}
+                                onSelect={(checked) => handleSelectTransaction(actualSubIndex, checked)}
+                                hasValidationError={!!subErrorInfo}
+                                missingFields={subErrorInfo?.missingFields}
+                                isSubTransaction={true}
+                              />
+                            );
+                          })}
+                        </React.Fragment>
                       );
-                    })}
+                    });
+                  }, [transactions, validationErrors, selectedTransactions, selectedCurrency, isEditingBlocked])}
                     {showInlineForm && (
                       <InlineTransactionRow
                         onSave={addTransaction}
@@ -1240,29 +1371,61 @@ const DocumentDialog = ({
                         </TableRow>
                       </TableHeader>
                     <TableBody>
-                    {parallelTransactions.map((transaction, index) => {
+                    {React.useMemo(() => {
+                      const mainTransactions = parallelTransactions.filter(t => !t.parent_transaction_id);
+                      return mainTransactions.map((mainTx, mainIndex) => {
+                        const subTransactions = parallelTransactions.filter(t => t.parent_transaction_id === mainTx.id);
+                        const actualMainIndex = parallelTransactions.indexOf(mainTx);
                         const errorInfo = validationErrors.find(
                           e => e.type === 'incomplete_transaction' && 
-                          e.transactionIndex === index && 
+                          e.transactionIndex === actualMainIndex && 
                           e.isParallel === true
                         );
+                        
                         return (
-                          <EditableTransactionRow
-                            key={index}
-                            transaction={transaction}
-                            onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(index, updatedTransaction)}
-                            onDelete={() => removeParallelTransaction(index)}
-                            onCopy={() => handleCopyTransaction(transaction, true)}
-                            onSplit={() => handleSplitTransaction(transaction, true)}
-                            currency={selectedCurrency}
-                            isEditingBlocked={isEditingBlocked}
-                            isSelected={selectedParallelTransactions.includes(index)}
-                            onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
-                            hasValidationError={!!errorInfo}
-                            missingFields={errorInfo?.missingFields}
-                          />
+                          <React.Fragment key={mainTx.id || mainIndex}>
+                            <EditableTransactionRow
+                              transaction={mainTx}
+                              onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(actualMainIndex, updatedTransaction)}
+                              onDelete={() => removeParallelTransaction(actualMainIndex)}
+                              onCopy={() => handleCopyTransaction(mainTx, true)}
+                              onSplit={() => handleSplitTransaction(mainTx, true)}
+                              currency={selectedCurrency}
+                              isEditingBlocked={isEditingBlocked}
+                              isSelected={selectedParallelTransactions.includes(actualMainIndex)}
+                              onSelect={(checked) => handleSelectParallelTransaction(actualMainIndex, checked)}
+                              hasValidationError={!!errorInfo}
+                              missingFields={errorInfo?.missingFields}
+                            />
+                            {subTransactions.map((subTx, subIndex) => {
+                              const actualSubIndex = parallelTransactions.indexOf(subTx);
+                              const subErrorInfo = validationErrors.find(
+                                e => e.type === 'incomplete_transaction' && 
+                                e.transactionIndex === actualSubIndex && 
+                                e.isParallel === true
+                              );
+                              return (
+                                <EditableTransactionRow
+                                  key={`${mainTx.id}-sub-${subIndex}`}
+                                  transaction={subTx}
+                                  onUpdate={(updatedTransaction) => handleUpdateParallelTransaction(actualSubIndex, updatedTransaction)}
+                                  onDelete={() => removeParallelTransaction(actualSubIndex)}
+                                  onCopy={() => handleCopyTransaction(subTx, true)}
+                                  onSplit={() => handleSplitTransaction(subTx, true)}
+                                  currency={selectedCurrency}
+                                  isEditingBlocked={isEditingBlocked}
+                                  isSelected={selectedParallelTransactions.includes(actualSubIndex)}
+                                  onSelect={(checked) => handleSelectParallelTransaction(actualSubIndex, checked)}
+                                  hasValidationError={!!subErrorInfo}
+                                  missingFields={subErrorInfo?.missingFields}
+                                  isSubTransaction={true}
+                                />
+                              );
+                            })}
+                          </React.Fragment>
                         );
-                      })}
+                      });
+                    }, [parallelTransactions, validationErrors, selectedParallelTransactions, selectedCurrency, isEditingBlocked])}
                       {showParallelInlineForm && (
                         <InlineTransactionRow
                           onSave={addParallelTransaction}
@@ -1339,7 +1502,9 @@ const EditableTransactionRow: React.FC<{
   onSelect?: (checked: boolean) => void;
   hasValidationError?: boolean;
   missingFields?: ValidationError['missingFields'];
-}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields }) => {
+  isSubTransaction?: boolean;
+  className?: string;
+}> = ({ transaction, onUpdate, onDelete, onCopy, onSplit, currency, isEditingBlocked = false, isSelected = false, onSelect, hasValidationError = false, missingFields, isSubTransaction = false, className }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     description: transaction.description || '',
@@ -1403,7 +1568,9 @@ const EditableTransactionRow: React.FC<{
     <TableRow className={cn(
       hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
       isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
-      "hover:bg-gray-50"
+      isSubTransaction ? "bg-blue-50/50 hover:bg-blue-100/50" :
+      "hover:bg-gray-50",
+      className
     )}>
       <TableCell>
         <Checkbox
@@ -1412,7 +1579,7 @@ const EditableTransactionRow: React.FC<{
           disabled={isEditingBlocked}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className={cn(isSubTransaction && "pl-8")}>
         <Textarea 
           value={formData.description} 
           onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
