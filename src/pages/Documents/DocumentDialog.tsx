@@ -633,7 +633,8 @@ const DocumentDialog = ({
               date: format(data.document_date, 'yyyy-MM-dd'),
               location_id: user.location,
               user_id: user.id,
-              document_number: data.document_number
+              document_number: data.document_number,
+              display_order: t.display_order
             };
           });
           const { error: transactionError } = await supabase.from('transactions').insert(transactionsToInsert);
@@ -727,11 +728,15 @@ const DocumentDialog = ({
   };
 
   const handleCopyTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+    const currentTransactions = isParallel ? parallelTransactions : transactions;
+    const newDisplayOrder = currentTransactions.length + 1;
+    
     const newTransaction: Transaction = {
       ...transaction,
       id: undefined,
       isCloned: true,
-      clonedType: transaction.credit_account_id ? 'credit' : 'debit'
+      clonedType: transaction.credit_account_id ? 'credit' : 'debit',
+      display_order: newDisplayOrder
     };
     if (isParallel) {
       setParallelTransactions(prev => [...prev, newTransaction]);
