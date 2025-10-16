@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +17,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import ConfirmCloseDialog from './ConfirmCloseDialog';
-import InlineTransactionRow from './InlineTransactionRow';
+import InlineTransactionRow, { InlineTransactionRowRef } from './InlineTransactionRow';
 import { AccountCombobox } from './AccountCombobox';
 import { Transaction } from './types';
 import CurrencySelector from '@/components/CurrencySelector';
@@ -89,8 +89,8 @@ const DocumentDialog = ({
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [inlineFormDataGetter, setInlineFormDataGetter] = useState<(() => Transaction | null) | null>(null);
-  const [parallelInlineFormDataGetter, setParallelInlineFormDataGetter] = useState<(() => Transaction | null) | null>(null);
+  const inlineFormRef = useRef<InlineTransactionRowRef>(null);
+  const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
   
   const form = useForm<DocumentFormData>({
     defaultValues: {
@@ -483,17 +483,15 @@ const DocumentDialog = ({
     console.log('💾 Starting document save process');
     console.log('Has inline form data:', hasInlineFormData);
     console.log('Has parallel inline form data:', hasParallelInlineFormData);
-    console.log('Inline getter:', inlineFormDataGetter);
-    console.log('Parallel getter:', parallelInlineFormDataGetter);
     
     // Collect incomplete transaction data from inline forms
     let inlineTransactionToAdd: Transaction | null = null;
     let parallelInlineTransactionToAdd: Transaction | null = null;
 
-    if (hasInlineFormData && inlineFormDataGetter) {
+    if (hasInlineFormData && inlineFormRef.current) {
       try {
         console.log('Attempting to get inline form data...');
-        inlineTransactionToAdd = inlineFormDataGetter();
+        inlineTransactionToAdd = inlineFormRef.current.getCurrentData();
         console.log('Inline transaction data:', inlineTransactionToAdd);
         if (inlineTransactionToAdd) {
           inlineTransactionToAdd.display_order = allTransactions.length + 1;
@@ -503,10 +501,10 @@ const DocumentDialog = ({
       }
     }
 
-    if (hasParallelInlineFormData && parallelInlineFormDataGetter) {
+    if (hasParallelInlineFormData && parallelInlineFormRef.current) {
       try {
         console.log('Attempting to get parallel inline form data...');
-        parallelInlineTransactionToAdd = parallelInlineFormDataGetter();
+        parallelInlineTransactionToAdd = parallelInlineFormRef.current.getCurrentData();
         console.log('Parallel transaction data:', parallelInlineTransactionToAdd);
         if (parallelInlineTransactionToAdd) {
           parallelInlineTransactionToAdd.display_order = allTransactions.length + (inlineTransactionToAdd ? 2 : 1);
@@ -1279,12 +1277,12 @@ const DocumentDialog = ({
                   </SortableContext>
                     {showInlineForm && (
                       <InlineTransactionRow
+                        ref={inlineFormRef}
                         onSave={addTransaction}
                         isEditingBlocked={isEditingBlocked}
                         currency={selectedCurrency}
                         onHasDataChange={setHasInlineFormData}
                         hasValidationError={validationErrors.some(e => e.type === 'inline_form')}
-                        onGetCurrentData={setInlineFormDataGetter as any}
                       />
                     )}
                   </TableBody>
@@ -1421,12 +1419,12 @@ const DocumentDialog = ({
                     </SortableContext>
                       {showParallelInlineForm && (
                         <InlineTransactionRow
+                          ref={parallelInlineFormRef}
                           onSave={addParallelTransaction}
                           isEditingBlocked={isEditingBlocked}
                           currency={selectedCurrency}
                           onHasDataChange={setHasParallelInlineFormData}
                           hasValidationError={validationErrors.some(e => e.type === 'parallel_inline_form')}
-                          onGetCurrentData={setParallelInlineFormDataGetter as any}
                         />
                       )}
                     </TableBody>
