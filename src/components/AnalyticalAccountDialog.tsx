@@ -18,6 +18,12 @@ interface AnalyticalAccountDialogProps {
     type: string;
   };
   nextSuffix: string;
+  editMode?: boolean;
+  editData?: {
+    id: string;
+    name: string;
+    number_suffix: string;
+  };
 }
 
 export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = ({
@@ -25,11 +31,22 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
   onClose,
   onSave,
   parentAccount,
-  nextSuffix
+  nextSuffix,
+  editMode = false,
+  editData
 }) => {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Ustaw nazwę z editData gdy dialog się otwiera w trybie edycji
+  React.useEffect(() => {
+    if (editMode && editData) {
+      setName(editData.name);
+    } else {
+      setName('');
+    }
+  }, [editMode, editData, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,39 +64,60 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
     setIsLoading(true);
 
     try {
-      // First, create the entry in analytical_accounts table
-      const { error: analyticalError } = await supabase
-        .from('analytical_accounts')
-        .insert({
-          parent_account_id: parentAccount.id,
-          location_id: user.location,
-          number_suffix: nextSuffix,
-          name: name.trim(),
-          created_by: user.id
-        });
+      if (editMode && editData) {
+        // Tryb edycji - aktualizuj tylko nazwę
+        const { error: analyticalError } = await supabase
+          .from('analytical_accounts')
+          .update({ name: name.trim() })
+          .eq('id', editData.id);
 
-      if (analyticalError) throw analyticalError;
+        if (analyticalError) throw analyticalError;
 
-      // Then, create the actual account in the accounts table
-      const fullAccountNumber = `${parentAccount.number}-${nextSuffix}`;
-      const { error: accountError } = await supabase
-        .from('accounts')
-        .insert({
-          number: fullAccountNumber,
-          name: name.trim(),
-          type: parentAccount.type,
-          analytical: false // This is a sub-account, not a parent analytical account
-        });
+        // Zaktualizuj również nazwę w tabeli accounts
+        const fullAccountNumber = `${parentAccount.number}-${editData.number_suffix}`;
+        const { error: accountError } = await supabase
+          .from('accounts')
+          .update({ name: name.trim() })
+          .eq('number', fullAccountNumber);
 
-      if (accountError) throw accountError;
+        if (accountError) throw accountError;
 
-      toast.success('Konto analityczne zostało utworzone');
+        toast.success('Konto analityczne zostało zaktualizowane');
+      } else {
+        // Tryb tworzenia - istniejąca logika
+        const { error: analyticalError } = await supabase
+          .from('analytical_accounts')
+          .insert({
+            parent_account_id: parentAccount.id,
+            location_id: user.location,
+            number_suffix: nextSuffix,
+            name: name.trim(),
+            created_by: user.id
+          });
+
+        if (analyticalError) throw analyticalError;
+
+        const fullAccountNumber = `${parentAccount.number}-${nextSuffix}`;
+        const { error: accountError } = await supabase
+          .from('accounts')
+          .insert({
+            number: fullAccountNumber,
+            name: name.trim(),
+            type: parentAccount.type,
+            analytical: false
+          });
+
+        if (accountError) throw accountError;
+
+        toast.success('Konto analityczne zostało utworzone');
+      }
+      
       setName('');
       onSave();
       onClose();
     } catch (error) {
-      console.error('Error creating analytical account:', error);
-      toast.error('Błąd podczas tworzenia konta analitycznego');
+      console.error('Error saving analytical account:', error);
+      toast.error(editMode ? 'Błąd podczas aktualizacji konta analitycznego' : 'Błąd podczas tworzenia konta analitycznego');
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +132,7 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Dodaj konto analityczne</DialogTitle>
+          <DialogTitle>{editMode ? 'Edytuj konto analityczne' : 'Dodaj konto analityczne'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -108,7 +146,7 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
           <div className="space-y-2">
             <Label>Numer konta analitycznego</Label>
             <div className="text-sm text-muted-foreground">
-              {parentAccount.number}-{nextSuffix}
+              {parentAccount.number}-{editMode && editData ? editData.number_suffix : nextSuffix}
             </div>
           </div>
 

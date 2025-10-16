@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Search, Pencil } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,6 +34,8 @@ export const AccountsSettingsTab: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editingAnalytical, setEditingAnalytical] = useState<AnalyticalAccount | null>(null);
 
   // Pobierz restrykcje kont dla tej lokalizacji
   const { data: accountRestrictions } = useQuery({
@@ -345,6 +347,15 @@ export const AccountsSettingsTab: React.FC = () => {
   };
 
   const handleAddAnalytical = (account: Account) => {
+    setEditMode(false);
+    setEditingAnalytical(null);
+    setSelectedAccount(account);
+    setDialogOpen(true);
+  };
+
+  const handleEditAnalytical = (account: Account, analytical: AnalyticalAccount) => {
+    setEditMode(true);
+    setEditingAnalytical(analytical);
     setSelectedAccount(account);
     setDialogOpen(true);
   };
@@ -352,6 +363,8 @@ export const AccountsSettingsTab: React.FC = () => {
   const handleDialogSave = () => {
     queryClient.invalidateQueries({ queryKey: ['analytical-accounts'] });
     queryClient.invalidateQueries({ queryKey: ['available-accounts'] });
+    setEditMode(false);
+    setEditingAnalytical(null);
   };
 
   const handleDeleteAnalytical = (analyticalAccountId: string) => {
@@ -452,14 +465,24 @@ export const AccountsSettingsTab: React.FC = () => {
                           </div>
                           
                           {canManageAnalytical && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteAnalytical(analytical.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              Usuń
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditAnalytical(account, analytical)}
+                              >
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Edytuj
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteAnalytical(analytical.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                Usuń
+                              </Button>
+                            </div>
                           )}
                         </div>
                       ))}
@@ -476,10 +499,20 @@ export const AccountsSettingsTab: React.FC = () => {
       {selectedAccount && (
         <AnalyticalAccountDialog
           open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
+          onClose={() => {
+            setDialogOpen(false);
+            setEditMode(false);
+            setEditingAnalytical(null);
+          }}
           onSave={handleDialogSave}
           parentAccount={selectedAccount}
           nextSuffix={getNextSuffix(selectedAccount.id)}
+          editMode={editMode}
+          editData={editingAnalytical ? {
+            id: editingAnalytical.id,
+            name: editingAnalytical.name,
+            number_suffix: editingAnalytical.number_suffix
+          } : undefined}
         />
       )}
     </div>
