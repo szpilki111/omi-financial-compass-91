@@ -37,6 +37,20 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
 
+  // Budujemy strukturę transakcji z subtransakcjami
+  const transactionsWithSubs = React.useMemo(() => {
+    const mainTransactions = transactions.filter(transaction => 
+      !transaction.isCloned
+    );
+
+    return mainTransactions.map(mainTx => {
+      const subTransactions = transactions.filter(t => 
+        t.isCloned && t.clonedType && mainTx.id === t.id
+      );
+      return { main: mainTx, subs: subTransactions };
+    });
+  }, [transactions]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-10">
@@ -84,14 +98,14 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
     return `${number} - ${name}`;
   };
 
-  // Calculate sums
-  const debitSum = transactions.reduce((sum, transaction) => {
-    const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
+  // Calculate sums - only from main transactions to avoid double counting
+  const debitSum = transactionsWithSubs.reduce((sum, { main }) => {
+    const debitAmount = main.debit_amount !== undefined ? main.debit_amount : main.amount;
     return sum + (debitAmount || 0);
   }, 0);
 
-  const creditSum = transactions.reduce((sum, transaction) => {
-    const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
+  const creditSum = transactionsWithSubs.reduce((sum, { main }) => {
+    const creditAmount = main.credit_amount !== undefined ? main.credit_amount : main.amount;
     return sum + (creditAmount || 0);
   }, 0);
 
@@ -113,72 +127,123 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((transaction) => (
-            <TableRow key={transaction.id} className="hover:bg-omi-100">
-              <TableCell>{transaction.description}</TableCell>
-              <TableCell>
-                <div className="space-y-1">
-                  <div className="text-sm font-medium">
-                    Wn: {getAccountDisplay(transaction.debitAccountNumber, transaction.debitAccount, transaction.debit_account_id)}
+          {transactionsWithSubs.map(({ main, subs }) => (
+            <React.Fragment key={main.id}>
+              <TableRow className="hover:bg-omi-100">
+                <TableCell>{main.description}</TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">
+                      Wn: {getAccountDisplay(main.debitAccountNumber, main.debitAccount, main.debit_account_id)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Ma: {getAccountDisplay(main.creditAccountNumber, main.creditAccount, main.credit_account_id)}
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    Ma: {getAccountDisplay(transaction.creditAccountNumber, transaction.creditAccount, transaction.credit_account_id)}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatAmount(main.debit_amount || main.amount, documentCurrency)}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatAmount(main.credit_amount || main.amount, documentCurrency)}
+                </TableCell>
+                <TableCell>{getCurrencySymbol(documentCurrency)}</TableCell>
+                <TableCell>{main.settlement_type}</TableCell>
+                <TableCell>
+                  <div className="flex space-x-1">
+                    {onEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit(main)}
+                        title="Edytuj"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onCopy && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onCopy(main)}
+                        title="Kopiuj"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onSplit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onSplit(main)}
+                        title="Podziel"
+                      >
+                        <Split className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onDelete && isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDelete(main.id!)}
+                        title="Usuń"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right font-medium">
-                {formatAmount(transaction.debit_amount || transaction.amount, documentCurrency)}
-              </TableCell>
-              <TableCell className="text-right font-medium">
-                {formatAmount(transaction.credit_amount || transaction.amount, documentCurrency)}
-              </TableCell>
-              <TableCell>{getCurrencySymbol(documentCurrency)}</TableCell>
-              <TableCell>{transaction.settlement_type}</TableCell>
-              <TableCell>
-                <div className="flex space-x-1">
-                  {onEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(transaction)}
-                      title="Edytuj"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onCopy && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onCopy(transaction)}
-                      title="Kopiuj"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onSplit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onSplit(transaction)}
-                      title="Podziel"
-                    >
-                      <Split className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onDelete && isAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onDelete(transaction.id!)}
-                      title="Usuń"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
+                </TableCell>
+              </TableRow>
+              {subs.map((sub) => (
+                <TableRow key={`${main.id}-${sub.clonedType}`} className="bg-blue-50/50 hover:bg-blue-100/50">
+                  <TableCell>
+                    <div className="pl-6 text-sm italic">{sub.description}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">
+                        Wn: {getAccountDisplay(sub.debitAccountNumber, sub.debitAccount, sub.debit_account_id)}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Ma: {getAccountDisplay(sub.creditAccountNumber, sub.creditAccount, sub.credit_account_id)}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatAmount(sub.debit_amount || sub.amount, documentCurrency)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatAmount(sub.credit_amount || sub.amount, documentCurrency)}
+                  </TableCell>
+                  <TableCell>{getCurrencySymbol(documentCurrency)}</TableCell>
+                  <TableCell>{sub.settlement_type}</TableCell>
+                  <TableCell>
+                    <div className="flex space-x-1">
+                      {onEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEdit(sub)}
+                          title="Edytuj"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {onDelete && isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDelete(sub.id!)}
+                          title="Usuń"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </React.Fragment>
           ))}
         </TableBody>
         <TableFooter>
