@@ -1524,11 +1524,20 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
   };
 
   return (
-    <TableRow className={cn(
-      hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
-      isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
-      "hover:bg-gray-50"
-    )}>
+    <TableRow 
+      ref={ref}
+      style={style}
+      className={cn(
+        hasValidationError ? "bg-destructive/10 border-2 border-destructive" : 
+        isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : 
+        "hover:bg-gray-50"
+      )}
+    >
+      <TableCell>
+        <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing">
+          <GripVertical className="h-4 w-4 text-gray-400" />
+        </div>
+      </TableCell>
       <TableCell>
         <Checkbox
           checked={isSelected}
@@ -1537,7 +1546,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
         />
       </TableCell>
       <TableCell>
-        <Textarea 
+        <Textarea
           value={formData.description} 
           onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} 
           placeholder="Opis operacji..." 

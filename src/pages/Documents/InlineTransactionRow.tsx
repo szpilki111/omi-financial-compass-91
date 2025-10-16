@@ -332,6 +332,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       )}
       onBlur={handleRowBlur}
     >
+      <TableCell>{/* Empty cell for drag handle */}</TableCell>
       <TableCell>{/* Empty cell for checkbox */}</TableCell>
       <TableCell>
         <Textarea
