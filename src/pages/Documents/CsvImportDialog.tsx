@@ -87,10 +87,11 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
     
     setFile(selectedFile);
     
-    // Parse CSV file
+    // Parse CSV file with Polish character encoding
     Papa.parse(selectedFile, {
-      header: false, // Używamy false bo plik może nie mieć nagłówków
+      header: false,
       skipEmptyLines: true,
+      encoding: 'UTF-8',
       complete: (results) => {
         if (results.data.length > 0) {
           const firstRow = results.data[0] as string[];
@@ -199,10 +200,11 @@ const parseAmount = (amountStr: string): number => {
         throw docError;
       }
 
-      // Parsuj pełny plik CSV
+      // Parsuj pełny plik CSV with proper encoding
       Papa.parse(file, {
         header: false,
         skipEmptyLines: true,
+        encoding: 'UTF-8',
         complete: async (results) => {
           try {
             const transactionsToImport = [];
@@ -237,7 +239,7 @@ const parseAmount = (amountStr: string): number => {
               }
               
               if (defaultDebitAccountId && creditAccountId) {
-                const absoluteAmount = Math.abs(amount);
+              const absoluteAmount = Math.abs(amount);
                 transactionsToImport.push({
                   document_id: document.id,
                   document_number: documentNumber,
@@ -245,8 +247,9 @@ const parseAmount = (amountStr: string): number => {
                   description: description,
                   debit_amount: absoluteAmount,
                   credit_amount: absoluteAmount,
-                  debit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
-                  credit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
+                  // Winien po lewej (debit) - wpływy, Ma po prawej (credit) - wypływy
+                  debit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
+                  credit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
                   currency: 'PLN',
                   exchange_rate: 1,
                   settlement_type: 'Bank',

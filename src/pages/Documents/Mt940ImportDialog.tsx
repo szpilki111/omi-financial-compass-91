@@ -270,7 +270,8 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
       }
     };
     
-    reader.readAsText(selectedFile, 'windows-1250');
+    // Try UTF-8 first, fallback to windows-1250 for Polish characters
+    reader.readAsText(selectedFile, 'UTF-8');
   };
 
   const handleImport = async () => {
@@ -315,6 +316,14 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         throw docError;
       }
 
+      // Fetch default accounts
+      const { data: accounts } = await supabase
+        .from('accounts')
+        .select('id, number, name, type');
+
+      const defaultBankAccountId = accounts?.find(acc => acc.number.includes('100'))?.id || '';
+      const defaultIncomeAccountId = accounts?.find(acc => acc.number.includes('700'))?.id || '';
+
       const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
@@ -322,6 +331,11 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         description: transaction.description,
         debit_amount: transaction.amount,
         credit_amount: transaction.amount,
+        // Winien po lewej (debit), Ma po prawej (credit)
+        // Dla wpływów (C): debit = konto docelowe (przychód), credit = kasa/bank
+        // Dla wypływów (D): debit = kasa/bank, credit = konto wydatku
+        debit_account_id: transaction.type === 'C' ? defaultIncomeAccountId : defaultBankAccountId,
+        credit_account_id: transaction.type === 'C' ? defaultBankAccountId : defaultIncomeAccountId,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
