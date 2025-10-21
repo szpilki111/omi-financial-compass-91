@@ -224,11 +224,26 @@ const Dashboard = () => {
     }
   };
 
+  const getRoleVocative = () => {
+    switch (user?.role) {
+      case 'admin':
+        return 'adminie';
+      case 'ekonom':
+        return 'ekonomie';
+      case 'prowincjal':
+        return 'prowincjale';
+      default:
+        return '';
+    }
+  };
+
   return (
    <MainLayout>
     <div className="space-y-6">
         {/* Nagłówek tytułowy */}
-        <h1 className="text-2xl font-bold text-center">Witaj, {user?.name || 'Użytkowniku'}</h1>
+        <h1 className="text-2xl font-bold text-center">
+          Szczęść Boże {getRoleVocative()} {user?.name || 'Użytkowniku'}
+        </h1>
 
         {/* Cards section */}
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-8">
