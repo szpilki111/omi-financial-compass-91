@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,10 +10,38 @@ const EmailTestManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
   const [sentResults, setSentResults] = useState<{ email: string; success: boolean; error?: string }[]>([]);
+  const [targetEmails, setTargetEmails] = useState<string[]>([]);
 
-  const targetEmails = ['admin@oblaci.net', 'crmoblaci@gmail.com'];
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('email')
+          .order('email');
+
+        if (error) throw error;
+
+        const emails = data?.map(profile => profile.email).filter(Boolean) || [];
+        setTargetEmails(emails);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        toast({
+          title: 'Błąd',
+          description: 'Nie udało się pobrać listy użytkowników',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, [toast]);
 
   const handleSendPasswordReset = async () => {
     setIsSending(true);
@@ -84,13 +112,22 @@ const EmailTestManagement = () => {
               <div className="flex-1">
                 <p className="font-medium text-amber-900">Informacja</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Kliknij poniższy przycisk, aby wysłać email z linkiem do resetowania hasła na następujące adresy:
+                  Kliknij poniższy przycisk, aby wysłać email z linkiem do resetowania hasła do wszystkich użytkowników systemu ({targetEmails.length}):
                 </p>
-                <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
-                  {targetEmails.map(email => (
-                    <li key={email}><strong>{email}</strong></li>
-                  ))}
-                </ul>
+                {isLoadingUsers ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                    <span className="text-sm text-amber-700">Ładowanie użytkowników...</span>
+                  </div>
+                ) : (
+                  <div className="max-h-32 overflow-y-auto mt-2">
+                    <ul className="text-sm text-amber-700 list-disc list-inside">
+                      {targetEmails.map(email => (
+                        <li key={email}><strong>{email}</strong></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -98,16 +135,14 @@ const EmailTestManagement = () => {
           <div className="p-4 border rounded-lg">
             <div className="space-y-3">
               <div className="space-y-1">
-                <p className="font-medium">Reset hasła dla użytkowników:</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  {targetEmails.map(email => (
-                    <li key={email}>• {email}</li>
-                  ))}
-                </ul>
+                <p className="font-medium">Reset hasła dla wszystkich użytkowników systemu</p>
+                <p className="text-sm text-muted-foreground">
+                  Liczba użytkowników: {targetEmails.length}
+                </p>
               </div>
               <Button 
                 onClick={handleSendPasswordReset}
-                disabled={isSending}
+                disabled={isSending || isLoadingUsers || targetEmails.length === 0}
                 size="lg"
                 className="w-full"
               >
@@ -116,10 +151,15 @@ const EmailTestManagement = () => {
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                     Wysyłanie...
                   </>
+                ) : isLoadingUsers ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Ładowanie...
+                  </>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Wyślij linki do resetowania
+                    Wyślij linki do resetowania ({targetEmails.length})
                   </>
                 )}
               </Button>
