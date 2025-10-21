@@ -5,7 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Eye, EyeOff } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
+import { z } from 'zod';
+
+const passwordSchema = z.string()
+  .min(8, 'Hasło musi mieć minimum 8 znaków')
+  .regex(/[a-z]/, 'Hasło musi zawierać małą literę')
+  .regex(/[A-Z]/, 'Hasło musi zawierać dużą literę')
+  .regex(/[0-9]/, 'Hasło musi zawierać cyfrę')
+  .regex(/[^a-zA-Z0-9]/, 'Hasło musi zawierać znak specjalny');
 
 const ResetPassword = () => {
   const [newPassword, setNewPassword] = useState('');
@@ -14,6 +22,15 @@ const ResetPassword = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [passwordValidation, setPasswordValidation] = useState({
+    minLength: false,
+    hasLowercase: false,
+    hasUppercase: false,
+    hasNumber: false,
+    hasSpecialChar: false,
+    noEmailParts: true,
+  });
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -25,6 +42,12 @@ const ResetPassword = () => {
 
     if (type === 'recovery' && accessToken) {
       setIsValidToken(true);
+      // Pobierz email użytkownika z sesji
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user?.email) {
+          setUserEmail(user.email);
+        }
+      });
     } else {
       toast({
         title: 'Nieprawidłowy link',
@@ -34,6 +57,34 @@ const ResetPassword = () => {
       setTimeout(() => navigate('/login'), 3000);
     }
   }, [navigate, toast]);
+
+  useEffect(() => {
+    // Waliduj hasło w czasie rzeczywistym
+    if (newPassword) {
+      const emailParts = userEmail.split('@')[0].toLowerCase().split(/[._-]/);
+      const passwordLower = newPassword.toLowerCase();
+      
+      setPasswordValidation({
+        minLength: newPassword.length >= 8,
+        hasLowercase: /[a-z]/.test(newPassword),
+        hasUppercase: /[A-Z]/.test(newPassword),
+        hasNumber: /[0-9]/.test(newPassword),
+        hasSpecialChar: /[^a-zA-Z0-9]/.test(newPassword),
+        noEmailParts: !emailParts.some(part => 
+          part.length >= 3 && passwordLower.includes(part)
+        ),
+      });
+    } else {
+      setPasswordValidation({
+        minLength: false,
+        hasLowercase: false,
+        hasUppercase: false,
+        hasNumber: false,
+        hasSpecialChar: false,
+        noEmailParts: true,
+      });
+    }
+  }, [newPassword, userEmail]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,10 +98,39 @@ const ResetPassword = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
+    // Walidacja z zod
+    const validation = passwordSchema.safeParse(newPassword);
+    if (!validation.success) {
       toast({
-        title: 'Hasło za krótkie',
-        description: 'Hasło musi mieć co najmniej 6 znaków.',
+        title: 'Nieprawidłowe hasło',
+        description: validation.error.errors[0].message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Sprawdź czy hasło nie zawiera fragmentów loginu
+    const emailParts = userEmail.split('@')[0].toLowerCase().split(/[._-]/);
+    const passwordLower = newPassword.toLowerCase();
+    const containsEmailPart = emailParts.some(part => 
+      part.length >= 3 && passwordLower.includes(part)
+    );
+
+    if (containsEmailPart) {
+      toast({
+        title: 'Nieprawidłowe hasło',
+        description: 'Hasło nie może zawierać fragmentów Twojego adresu email.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Sprawdź czy wszystkie wymagania są spełnione
+    const allValid = Object.values(passwordValidation).every(v => v === true);
+    if (!allValid) {
+      toast({
+        title: 'Nieprawidłowe hasło',
+        description: 'Hasło nie spełnia wszystkich wymagań bezpieczeństwa.',
         variant: 'destructive',
       });
       return;
@@ -162,12 +242,76 @@ const ResetPassword = () => {
               </div>
             </div>
 
-            <div className="bg-muted p-3 rounded-lg text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Wymagania dla hasła:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Co najmniej 6 znaków</li>
-                <li>Oba hasła muszą być identyczne</li>
-              </ul>
+            <div className="bg-muted p-4 rounded-lg text-sm space-y-2">
+              <p className="font-medium text-foreground mb-2">Wymagania dla hasła:</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  {passwordValidation.minLength ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.minLength ? 'text-green-600' : 'text-muted-foreground'}>
+                    Minimum 8 znaków
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordValidation.hasLowercase ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}>
+                    Co najmniej jedna mała litera (a-z)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordValidation.hasUppercase ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}>
+                    Co najmniej jedna duża litera (A-Z)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordValidation.hasNumber ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.hasNumber ? 'text-green-600' : 'text-muted-foreground'}>
+                    Co najmniej jedna cyfra (0-9)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordValidation.hasSpecialChar ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.hasSpecialChar ? 'text-green-600' : 'text-muted-foreground'}>
+                    Co najmniej jeden znak specjalny (!@#$%^&*...)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordValidation.noEmailParts ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={passwordValidation.noEmailParts ? 'text-green-600' : 'text-muted-foreground'}>
+                    Nie zawiera fragmentów adresu email
+                  </span>
+                </div>
+              </div>
+              <div className="pt-2 mt-2 border-t border-border">
+                <p className="text-xs text-amber-600 flex items-start gap-1">
+                  <span className="font-bold">!</span>
+                  <span>Hasło nie może być jednym z 3 ostatnich użytych haseł</span>
+                </p>
+              </div>
             </div>
 
             <Button
