@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { sendEmail } from '@/utils/emailUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 const EmailTestManagement = () => {
   const { user } = useAuth();
@@ -12,7 +12,7 @@ const EmailTestManagement = () => {
   const [isSending, setIsSending] = useState(false);
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
 
-  const handleSendTestEmail = async () => {
+  const handleSendPasswordReset = async () => {
     if (!user?.email) {
       toast({
         title: 'Błąd',
@@ -25,145 +25,23 @@ const EmailTestManagement = () => {
     setIsSending(true);
 
     try {
-      const currentDate = new Date().toLocaleString('pl-PL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/`,
       });
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-              }
-              .container {
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-              }
-              .header {
-                background-color: #d97706;
-                color: white;
-                padding: 20px;
-                text-align: center;
-                border-radius: 5px 5px 0 0;
-              }
-              .content {
-                background-color: #f9f9f9;
-                padding: 30px;
-                border-radius: 0 0 5px 5px;
-              }
-              .success-icon {
-                text-align: center;
-                font-size: 48px;
-                color: #059669;
-                margin: 20px 0;
-              }
-              .info-box {
-                background-color: #fff;
-                padding: 15px;
-                margin-top: 15px;
-                border-left: 4px solid #d97706;
-                border-radius: 3px;
-              }
-              .footer {
-                text-align: center;
-                margin-top: 20px;
-                color: #666;
-                font-size: 12px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>System Finansowy OMI</h1>
-              </div>
-              <div class="content">
-                <div class="success-icon">✅</div>
-                <h2 style="text-align: center;">Szczęść Boże ${user.name}!</h2>
-                <p style="text-align: center; font-size: 18px; color: #059669;">
-                  <strong>System wysyłania emaili działa poprawnie!</strong>
-                </p>
-                
-                <div class="info-box">
-                  <p><strong>Data wysłania:</strong> ${currentDate}</p>
-                  <p><strong>Odbiorca:</strong> ${user.email}</p>
-                  <p><strong>Nadawca:</strong> finanse@oblaci.pl</p>
-                </div>
-                
-                <p style="margin-top: 20px;">
-                  To jest testowa wiadomość email z Systemu Finansowego OMI. 
-                  Jeśli widzisz tę wiadomość, oznacza to, że konfiguracja serwera SMTP 
-                  została wykonana poprawnie i system może wysyłać powiadomienia.
-                </p>
-                
-                <p>
-                  System może teraz wysyłać automatyczne powiadomienia o:
-                </p>
-                <ul>
-                  <li>Zmianach statusów raportów</li>
-                  <li>Kodach weryfikacyjnych (2FA)</li>
-                  <li>Innych ważnych wydarzeniach w systemie</li>
-                </ul>
-              </div>
-              <div class="footer">
-                <p>© ${new Date().getFullYear()} System Finansowy OMI</p>
-                <p>Misjonarze Oblaci Maryi Niepokalanej</p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
-
-      const text = `
-Szczęść Boże ${user.name}!
-
-✅ System wysyłania emaili działa poprawnie!
-
-Data wysłania: ${currentDate}
-Odbiorca: ${user.email}
-Nadawca: finanse@oblaci.pl
-
-To jest testowa wiadomość email z Systemu Finansowego OMI. 
-Jeśli widzisz tę wiadomość, oznacza to, że konfiguracja serwera SMTP 
-została wykonana poprawnie i system może wysyłać powiadomienia.
-
-System może teraz wysyłać automatyczne powiadomienia o:
-- Zmianach statusów raportów
-- Kodach weryfikacyjnych (2FA)
-- Innych ważnych wydarzeniach w systemie
-
----
-© ${new Date().getFullYear()} System Finansowy OMI
-Misjonarze Oblaci Maryi Niepokalanej
-      `;
-
-      await sendEmail({
-        to: user.email,
-        subject: '✅ System Finansowy OMI - Test wysyłania emaili',
-        text,
-        html,
-      });
+      if (error) throw error;
 
       setLastSentAt(new Date());
       
       toast({
         title: 'Email wysłany!',
-        description: `Testowy email został wysłany na adres: ${user.email}`,
+        description: `Link do resetowania hasła został wysłany na adres: ${user.email}`,
       });
     } catch (error: any) {
-      console.error('Error sending test email:', error);
+      console.error('Error sending password reset email:', error);
       toast({
         title: 'Błąd wysyłania',
-        description: error.message || 'Nie udało się wysłać testowego emaila',
+        description: error.message || 'Nie udało się wysłać emaila z linkiem do resetowania hasła',
         variant: 'destructive',
       });
     } finally {
@@ -177,10 +55,10 @@ Misjonarze Oblaci Maryi Niepokalanej
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
-            Test systemu wysyłania emaili
+            Reset hasła
           </CardTitle>
           <CardDescription>
-            Sprawdź poprawność konfiguracji serwera SMTP
+            Wyślij email z linkiem do resetowania hasła
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -190,7 +68,7 @@ Misjonarze Oblaci Maryi Niepokalanej
               <div className="flex-1">
                 <p className="font-medium text-amber-900">Informacja</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Kliknij poniższy przycisk, aby wysłać testowy email na Twój adres: <strong>{user?.email}</strong>
+                  Kliknij poniższy przycisk, aby wysłać email z linkiem do resetowania hasła na Twój adres: <strong>{user?.email}</strong>
                 </p>
               </div>
             </div>
@@ -198,11 +76,11 @@ Misjonarze Oblaci Maryi Niepokalanej
 
           <div className="flex items-center justify-between p-4 border rounded-lg">
             <div className="space-y-1">
-              <p className="font-medium">Serwer SMTP</p>
-              <p className="text-sm text-muted-foreground">mail.oblaci.pl (finanse@oblaci.pl)</p>
+              <p className="font-medium">Reset hasła dla</p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
             <Button 
-              onClick={handleSendTestEmail}
+              onClick={handleSendPasswordReset}
               disabled={isSending}
               size="lg"
             >
@@ -214,7 +92,7 @@ Misjonarze Oblaci Maryi Niepokalanej
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Wyślij testowy email
+                  Wyślij link do resetowania
                 </>
               )}
             </Button>
@@ -227,7 +105,7 @@ Misjonarze Oblaci Maryi Niepokalanej
                 <div className="flex-1">
                   <p className="font-medium text-green-900">Email wysłany pomyślnie!</p>
                   <p className="text-sm text-green-700 mt-1">
-                    Ostatni test: {lastSentAt.toLocaleString('pl-PL', {
+                    Ostatnie wysłanie: {lastSentAt.toLocaleString('pl-PL', {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',
@@ -236,7 +114,7 @@ Misjonarze Oblaci Maryi Niepokalanej
                     })}
                   </p>
                   <p className="text-sm text-green-700 mt-2">
-                    Sprawdź swoją skrzynkę pocztową (może się znaleźć w folderze SPAM).
+                    Sprawdź swoją skrzynkę pocztową i kliknij link, aby zresetować hasło.
                   </p>
                 </div>
               </div>
@@ -244,23 +122,23 @@ Misjonarze Oblaci Maryi Niepokalanej
           )}
 
           <div className="pt-4 border-t">
-            <h3 className="font-medium mb-2">Możliwości systemu emailowego:</h3>
+            <h3 className="font-medium mb-2">Informacje o resetowaniu hasła:</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 mt-0.5">•</span>
-                <span>Automatyczne powiadomienia o zmianach statusów raportów</span>
+                <span>Link do resetowania jest ważny przez 1 godzinę</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 mt-0.5">•</span>
-                <span>Wysyłanie kodów weryfikacyjnych przy logowaniu (2FA)</span>
+                <span>Po kliknięciu w link zostaniesz przekierowany do strony ustawiania nowego hasła</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 mt-0.5">•</span>
-                <span>Powiadomienia dla ekonomów o zatwierdzonych/odrzuconych raportach</span>
+                <span>Po zresetowaniu hasła stare hasło przestanie działać</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 mt-0.5">•</span>
-                <span>Przypomnienia o terminach składania raportów</span>
+                <span>Link może się znaleźć w folderze SPAM - sprawdź również tam</span>
               </li>
             </ul>
           </div>
