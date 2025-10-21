@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,42 +10,86 @@ const EmailTestManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
+  const [sentResults, setSentResults] = useState<{ email: string; success: boolean; error?: string }[]>([]);
+  const [targetEmails, setTargetEmails] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('email')
+          .order('email');
+
+        if (error) throw error;
+
+        const emails = data?.map(profile => profile.email).filter(Boolean) || [];
+        setTargetEmails(emails);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        toast({
+          title: 'Błąd',
+          description: 'Nie udało się pobrać listy użytkowników',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, [toast]);
 
   const handleSendPasswordReset = async () => {
-    if (!user?.email) {
-      toast({
-        title: 'Błąd',
-        description: 'Nie można wysłać emaila - brak adresu email w profilu użytkownika',
-        variant: 'destructive',
-      });
-      return;
+    setIsSending(true);
+    setSentResults([]);
+
+    const results: { email: string; success: boolean; error?: string }[] = [];
+
+    for (const email of targetEmails) {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (error) {
+          results.push({ email, success: false, error: error.message });
+        } else {
+          results.push({ email, success: true });
+        }
+      } catch (error: any) {
+        console.error(`Error sending password reset email to ${email}:`, error);
+        results.push({ email, success: false, error: error.message });
+      }
     }
 
-    setIsSending(true);
+    setSentResults(results);
+    setLastSentAt(new Date());
+    setIsSending(false);
 
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/`,
-      });
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
 
-      if (error) throw error;
-
-      setLastSentAt(new Date());
-      
+    if (successCount > 0 && failCount === 0) {
       toast({
-        title: 'Email wysłany!',
-        description: `Link do resetowania hasła został wysłany na adres: ${user.email}`,
+        title: 'Emaile wysłane!',
+        description: `Link do resetowania hasła został wysłany na ${successCount} ${successCount === 1 ? 'adres' : 'adresy'}.`,
       });
-    } catch (error: any) {
-      console.error('Error sending password reset email:', error);
+    } else if (successCount > 0 && failCount > 0) {
+      toast({
+        title: 'Częściowy sukces',
+        description: `Wysłano ${successCount} z ${results.length} emaili. Sprawdź szczegóły poniżej.`,
+        variant: 'default',
+      });
+    } else {
       toast({
         title: 'Błąd wysyłania',
-        description: error.message || 'Nie udało się wysłać emaila z linkiem do resetowania hasła',
+        description: 'Nie udało się wysłać żadnego emaila. Sprawdź szczegóły poniżej.',
         variant: 'destructive',
       });
-    } finally {
-      setIsSending(false);
     }
   };
 
@@ -68,54 +112,113 @@ const EmailTestManagement = () => {
               <div className="flex-1">
                 <p className="font-medium text-amber-900">Informacja</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Kliknij poniższy przycisk, aby wysłać email z linkiem do resetowania hasła na Twój adres: <strong>{user?.email}</strong>
+                  Kliknij poniższy przycisk, aby wysłać email z linkiem do resetowania hasła do wszystkich użytkowników systemu ({targetEmails.length}):
                 </p>
+                {isLoadingUsers ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                    <span className="text-sm text-amber-700">Ładowanie użytkowników...</span>
+                  </div>
+                ) : (
+                  <div className="max-h-32 overflow-y-auto mt-2">
+                    <ul className="text-sm text-amber-700 list-disc list-inside">
+                      {targetEmails.map(email => (
+                        <li key={email}><strong>{email}</strong></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="space-y-1">
-              <p className="font-medium">Reset hasła dla</p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+          <div className="p-4 border rounded-lg">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="font-medium">Reset hasła dla wszystkich użytkowników systemu</p>
+                <p className="text-sm text-muted-foreground">
+                  Liczba użytkowników: {targetEmails.length}
+                </p>
+              </div>
+              <Button 
+                onClick={handleSendPasswordReset}
+                disabled={isSending || isLoadingUsers || targetEmails.length === 0}
+                size="lg"
+                className="w-full"
+              >
+                {isSending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Wysyłanie...
+                  </>
+                ) : isLoadingUsers ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Ładowanie...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Wyślij linki do resetowania ({targetEmails.length})
+                  </>
+                )}
+              </Button>
             </div>
-            <Button 
-              onClick={handleSendPasswordReset}
-              disabled={isSending}
-              size="lg"
-            >
-              {isSending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Wysyłanie...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Wyślij link do resetowania
-                </>
-              )}
-            </Button>
           </div>
 
-          {lastSentAt && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium text-green-900">Email wysłany pomyślnie!</p>
-                  <p className="text-sm text-green-700 mt-1">
-                    Ostatnie wysłanie: {lastSentAt.toLocaleString('pl-PL', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                  <p className="text-sm text-green-700 mt-2">
-                    Sprawdź swoją skrzynkę pocztową i kliknij link, aby zresetować hasło.
-                  </p>
+          {sentResults.length > 0 && (
+            <div className="space-y-3">
+              <div className="bg-muted border rounded-lg p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium">Wyniki wysyłania</p>
+                    {lastSentAt && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Ostatnie wysłanie: {lastSentAt.toLocaleString('pl-PL', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {sentResults.map((result, index) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-lg border ${
+                        result.success
+                          ? 'bg-green-50 border-green-200'
+                          : 'bg-red-50 border-red-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {result.success ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                          <p className={`text-sm font-medium ${
+                            result.success ? 'text-green-900' : 'text-red-900'
+                          }`}>
+                            {result.email}
+                          </p>
+                          <p className={`text-xs mt-1 ${
+                            result.success ? 'text-green-700' : 'text-red-700'
+                          }`}>
+                            {result.success
+                              ? 'Link do resetowania hasła został wysłany pomyślnie'
+                              : `Błąd: ${result.error}`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
