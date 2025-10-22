@@ -316,56 +316,18 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         throw docError;
       }
 
-      // Fetch default accounts
-      const { data: accounts, error: accountsError } = await supabase
-        .from('accounts')
-        .select('id, number, name, type');
-
-      if (accountsError) {
-        console.error('Error fetching accounts:', accountsError);
-        throw accountsError;
-      }
-
-      console.log('Available accounts:', accounts);
-
-      // Szukaj konta bankowego (100) - sprawdź różne formaty
-      const defaultBankAccountId = 
-        accounts?.find(acc => acc.number.startsWith('100'))?.id ||
-        accounts?.find(acc => acc.number.includes('100-'))?.id ||
-        accounts?.find(acc => acc.type === 'Aktywa' && acc.number.startsWith('1'))?.id ||
-        null;
-
-      // Szukaj konta przychodowego (700) - sprawdź różne formaty
-      const defaultIncomeAccountId = 
-        accounts?.find(acc => acc.number.startsWith('700'))?.id ||
-        accounts?.find(acc => acc.number.startsWith('7'))?.id ||
-        accounts?.find(acc => acc.type === 'Przychody')?.id ||
-        null;
-
-      console.log('Found bank account:', accounts?.find(acc => acc.id === defaultBankAccountId));
-      console.log('Found income account:', accounts?.find(acc => acc.id === defaultIncomeAccountId));
-
-      if (!defaultBankAccountId || !defaultIncomeAccountId) {
-        throw new Error(
-          `Nie znaleziono wymaganych kont:\n` +
-          `${!defaultBankAccountId ? '- Konto bankowe (numer zaczynający się od 100 lub 1)\n' : ''}` +
-          `${!defaultIncomeAccountId ? '- Konto przychodowe (numer zaczynający się od 700 lub 7)\n' : ''}` +
-          `Dostępne konta: ${accounts?.map(a => `${a.number} (${a.name})`).join(', ')}`
-        );
-      }
-
+      // Transakcje będą importowane bez przypisanych kont
+      // Użytkownik uzupełni je ręcznie po imporcie
       const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
         date: transaction.date,
         description: transaction.description,
+        amount: transaction.amount,
         debit_amount: transaction.amount,
         credit_amount: transaction.amount,
-        // Winien po lewej (debit), Ma po prawej (credit)
-        // Dla wpływów (C): debit = konto bankowe, credit = konto przychodowe
-        // Dla wypływów (D): debit = konto wydatku, credit = konto bankowe
-        debit_account_id: transaction.type === 'C' ? defaultBankAccountId : defaultIncomeAccountId,
-        credit_account_id: transaction.type === 'C' ? defaultIncomeAccountId : defaultBankAccountId,
+        debit_account_id: null,
+        credit_account_id: null,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
