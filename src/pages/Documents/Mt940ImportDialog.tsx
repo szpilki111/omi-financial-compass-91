@@ -321,8 +321,12 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         .from('accounts')
         .select('id, number, name, type');
 
-      const defaultBankAccountId = accounts?.find(acc => acc.number.includes('100'))?.id || '';
-      const defaultIncomeAccountId = accounts?.find(acc => acc.number.includes('700'))?.id || '';
+      const defaultBankAccountId = accounts?.find(acc => acc.number.includes('100'))?.id || null;
+      const defaultIncomeAccountId = accounts?.find(acc => acc.number.includes('700'))?.id || null;
+
+      if (!defaultBankAccountId || !defaultIncomeAccountId) {
+        throw new Error('Nie znaleziono wymaganych kont bankowych (100) lub przychodowych (700)');
+      }
 
       const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
@@ -332,10 +336,10 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         debit_amount: transaction.amount,
         credit_amount: transaction.amount,
         // Winien po lewej (debit), Ma po prawej (credit)
-        // Dla wpływów (C): debit = konto docelowe (przychód), credit = kasa/bank
-        // Dla wypływów (D): debit = kasa/bank, credit = konto wydatku
-        debit_account_id: transaction.type === 'C' ? defaultIncomeAccountId : defaultBankAccountId,
-        credit_account_id: transaction.type === 'C' ? defaultBankAccountId : defaultIncomeAccountId,
+        // Dla wpływów (C): debit = konto bankowe, credit = konto przychodowe
+        // Dla wypływów (D): debit = konto wydatku, credit = konto bankowe
+        debit_account_id: transaction.type === 'C' ? defaultBankAccountId : defaultIncomeAccountId,
+        credit_account_id: transaction.type === 'C' ? defaultIncomeAccountId : defaultBankAccountId,
         currency: 'PLN',
         exchange_rate: 1,
         settlement_type: 'Bank',
@@ -383,13 +387,16 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby="mt940-description">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Import plików MT940
           </DialogTitle>
         </DialogHeader>
+        <p id="mt940-description" className="sr-only">
+          Import plików bankowych w formacie MT940
+        </p>
         
         <div className="space-y-6">
           <div className="space-y-2">
