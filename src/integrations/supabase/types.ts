@@ -534,6 +534,54 @@ export type Database = {
           },
         ]
       }
+      project_features: {
+        Row: {
+          category: Database["public"]["Enums"]["project_feature_category"]
+          code_location: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          implementation_percentage: number | null
+          notes: string | null
+          priority: Database["public"]["Enums"]["project_feature_priority"]
+          status: Database["public"]["Enums"]["project_feature_status"]
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["project_feature_category"]
+          code_location?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          implementation_percentage?: number | null
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["project_feature_priority"]
+          status?: Database["public"]["Enums"]["project_feature_status"]
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["project_feature_category"]
+          code_location?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          implementation_percentage?: number | null
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["project_feature_priority"]
+          status?: Database["public"]["Enums"]["project_feature_status"]
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       report_account_details: {
         Row: {
           account_id: string
@@ -1043,20 +1091,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      change_user_password: {
-        Args:
-          | { new_password: string; user_id: number }
-          | { new_password: string; user_id: string }
-        Returns: undefined
-      }
+      change_user_password:
+        | {
+            Args: { new_password: string; user_id: string }
+            Returns: undefined
+          }
+        | { Args: { new_password: string; user_id: number }; Returns: boolean }
       check_report_editing_blocked: {
         Args: { p_document_date: string; p_location_id: string }
         Returns: boolean
       }
-      cleanup_expired_verification_codes: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_expired_verification_codes: { Args: never; Returns: undefined }
       create_user_admin: {
         Args: {
           user_email: string
@@ -1075,48 +1120,33 @@ export type Database = {
         Args: { user_id_to_delete: string }
         Returns: undefined
       }
-      exec_sql: {
-        Args: { sql: string }
-        Returns: undefined
-      }
+      exec_sql: { Args: { sql: string }; Returns: undefined }
       generate_document_number: {
         Args: { p_location_id: string; p_month: number; p_year: number }
         Returns: string
       }
-      get_current_user_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_current_user_id_fixed: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_user_location_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_user_role: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_current_user_id: { Args: never; Returns: string }
+      get_current_user_id_fixed: { Args: never; Returns: string }
+      get_user_location_id: { Args: never; Returns: string }
+      get_user_role: { Args: never; Returns: string }
       get_user_setting: {
         Args: { p_user_id: string }
         Returns: {
           windows98_style: boolean
         }[]
       }
-      insert_profile_admin: {
-        Args:
-          | {
+      insert_profile_admin:
+        | {
+            Args: {
               location_id?: string
               user_email: string
               user_id: string
               user_name: string
               user_role: string
             }
-          | { profile_data: Json; user_id: number }
-        Returns: undefined
-      }
+            Returns: undefined
+          }
+        | { Args: { profile_data: Json; user_id: number }; Returns: undefined }
       upsert_user_setting: {
         Args: { p_user_id: string; p_windows98_style: boolean }
         Returns: undefined
@@ -1130,6 +1160,9 @@ export type Database = {
         | "resolved"
         | "closed"
         | "needs_info"
+      project_feature_category: "planned" | "done" | "remaining" | "beyond_plan"
+      project_feature_priority: "low" | "medium" | "high" | "critical"
+      project_feature_status: "not_started" | "in_progress" | "completed"
       report_type:
         | "standard"
         | "zos"
@@ -1274,6 +1307,9 @@ export const Constants = {
         "closed",
         "needs_info",
       ],
+      project_feature_category: ["planned", "done", "remaining", "beyond_plan"],
+      project_feature_priority: ["low", "medium", "high", "critical"],
+      project_feature_status: ["not_started", "in_progress", "completed"],
       report_type: [
         "standard",
         "zos",

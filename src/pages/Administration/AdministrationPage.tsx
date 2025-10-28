@@ -12,6 +12,7 @@ import DatabaseManagement from './DatabaseManagement';
 import ErrorReportsManagement from './ErrorReportsManagement';
 import LoginEventsManagement from './LoginEventsManagement';
 import EmailTestManagement from './EmailTestManagement';
+import ProjectFeaturesManagement from './ProjectFeaturesManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -44,7 +45,7 @@ const AdministrationPage = () => {
         </div>
 
       <Tabs defaultValue="locations" className="w-full">
-        <TabsList className="grid w-full grid-cols-9">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="locations">Placówki</TabsTrigger>
           <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
           <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
@@ -63,6 +64,9 @@ const AdministrationPage = () => {
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="error-reports">Zgłoszenia błędów</TabsTrigger>
+          )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="project-features">Postęp projektu</TabsTrigger>
           )}
         </TabsList>
 
@@ -109,6 +113,12 @@ const AdministrationPage = () => {
         {(user.role === 'admin' || user.role === 'prowincjal') && (
           <TabsContent value="error-reports" className="space-y-4">
             <ErrorReportsManagement />
+          </TabsContent>
+        )}
+
+        {(user.role === 'admin' || user.role === 'prowincjal') && (
+          <TabsContent value="project-features" className="space-y-4">
+            <ProjectFeaturesManagement />
           </TabsContent>
         )}
       </Tabs>
