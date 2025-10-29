@@ -544,6 +544,7 @@ export type Database = {
           id: string
           implementation_percentage: number | null
           notes: string | null
+          parent_feature_id: string | null
           priority: Database["public"]["Enums"]["project_feature_priority"]
           status: Database["public"]["Enums"]["project_feature_status"]
           title: string
@@ -559,6 +560,7 @@ export type Database = {
           id?: string
           implementation_percentage?: number | null
           notes?: string | null
+          parent_feature_id?: string | null
           priority?: Database["public"]["Enums"]["project_feature_priority"]
           status?: Database["public"]["Enums"]["project_feature_status"]
           title: string
@@ -574,13 +576,22 @@ export type Database = {
           id?: string
           implementation_percentage?: number | null
           notes?: string | null
+          parent_feature_id?: string | null
           priority?: Database["public"]["Enums"]["project_feature_priority"]
           status?: Database["public"]["Enums"]["project_feature_status"]
           title?: string
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_features_parent_feature_id_fkey"
+            columns: ["parent_feature_id"]
+            isOneToOne: false
+            referencedRelation: "project_features"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       report_account_details: {
         Row: {
@@ -1091,6 +1102,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_parent_progress: {
+        Args: { p_parent_id: string }
+        Returns: number
+      }
       change_user_password:
         | {
             Args: { new_password: string; user_id: string }

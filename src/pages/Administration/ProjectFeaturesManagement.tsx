@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, CheckCircle, Clock, Circle } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, Clock, Circle, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface ProjectFeature {
   id: string;
@@ -25,6 +25,8 @@ interface ProjectFeature {
   code_location: string | null;
   created_at: string;
   updated_at: string;
+  parent_feature_id: string | null;
+  subtasks?: ProjectFeature[];
 }
 
 const ProjectFeaturesManagement = () => {
@@ -45,7 +47,10 @@ const ProjectFeaturesManagement = () => {
     implementation_percentage: 0,
     notes: '',
     code_location: '',
+    parent_feature_id: null as string | null,
   });
+  const [addingSubtaskFor, setAddingSubtaskFor] = useState<string | null>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchFeatures();
@@ -59,7 +64,28 @@ const ProjectFeaturesManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setFeatures(data || []);
+      
+      // Organize features into parent-child hierarchy
+      const featuresMap = new Map<string, ProjectFeature>();
+      const rootFeatures: ProjectFeature[] = [];
+      
+      (data || []).forEach((feature) => {
+        featuresMap.set(feature.id, { ...feature, subtasks: [] });
+      });
+      
+      featuresMap.forEach((feature) => {
+        if (feature.parent_feature_id) {
+          const parent = featuresMap.get(feature.parent_feature_id);
+          if (parent) {
+            parent.subtasks = parent.subtasks || [];
+            parent.subtasks.push(feature);
+          }
+        } else {
+          rootFeatures.push(feature);
+        }
+      });
+      
+      setFeatures(rootFeatures);
     } catch (error) {
       console.error('Error fetching features:', error);
       toast.error('Błąd pobierania funkcjonalności');
@@ -88,6 +114,12 @@ const ProjectFeaturesManagement = () => {
           .eq('id', editingFeature.id);
 
         if (error) throw error;
+        
+        // Update parent progress if this is a subtask
+        if (editingFeature.parent_feature_id) {
+          await updateParentProgress(editingFeature.parent_feature_id);
+        }
+        
         toast.success('Funkcjonalność zaktualizowana');
       } else {
         const { error } = await supabase
@@ -95,10 +127,17 @@ const ProjectFeaturesManagement = () => {
           .insert([dataToSave]);
 
         if (error) throw error;
+        
+        // Update parent progress if this is a subtask
+        if (dataToSave.parent_feature_id) {
+          await updateParentProgress(dataToSave.parent_feature_id);
+        }
+        
         toast.success('Funkcjonalność dodana');
       }
 
       setIsDialogOpen(false);
+      setAddingSubtaskFor(null);
       resetForm();
       fetchFeatures();
     } catch (error) {
@@ -107,7 +146,24 @@ const ProjectFeaturesManagement = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const updateParentProgress = async (parentId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('calculate_parent_progress', {
+        p_parent_id: parentId,
+      });
+
+      if (error) throw error;
+
+      await supabase
+        .from('project_features')
+        .update({ implementation_percentage: data })
+        .eq('id', parentId);
+    } catch (error) {
+      console.error('Error updating parent progress:', error);
+    }
+  };
+
+  const handleDelete = async (id: string, parentId?: string | null) => {
     if (!confirm('Czy na pewno chcesz usunąć tę funkcjonalność?')) return;
 
     try {
@@ -117,6 +173,12 @@ const ProjectFeaturesManagement = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      // Update parent progress if this was a subtask
+      if (parentId) {
+        await updateParentProgress(parentId);
+      }
+      
       toast.success('Funkcjonalność usunięta');
       fetchFeatures();
     } catch (error) {
@@ -136,12 +198,40 @@ const ProjectFeaturesManagement = () => {
       implementation_percentage: feature.implementation_percentage,
       notes: feature.notes || '',
       code_location: feature.code_location || '',
+      parent_feature_id: feature.parent_feature_id,
     });
     setIsDialogOpen(true);
   };
 
+  const handleAddSubtask = (parentFeature: ProjectFeature) => {
+    setAddingSubtaskFor(parentFeature.id);
+    setFormData({
+      title: '',
+      description: '',
+      category: parentFeature.category,
+      status: 'not_started',
+      priority: 'medium',
+      implementation_percentage: 0,
+      notes: '',
+      code_location: '',
+      parent_feature_id: parentFeature.id,
+    });
+    setIsDialogOpen(true);
+  };
+
+  const toggleExpanded = (featureId: string) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(featureId)) {
+      newExpanded.delete(featureId);
+    } else {
+      newExpanded.add(featureId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
   const resetForm = () => {
     setEditingFeature(null);
+    setAddingSubtaskFor(null);
     setFormData({
       title: '',
       description: '',
@@ -151,6 +241,7 @@ const ProjectFeaturesManagement = () => {
       implementation_percentage: 0,
       notes: '',
       code_location: '',
+      parent_feature_id: null,
     });
   };
 
@@ -202,20 +293,33 @@ const ProjectFeaturesManagement = () => {
     return labels[priority as keyof typeof labels] || priority;
   };
 
+  const getAllFeatures = (featuresList: ProjectFeature[]): ProjectFeature[] => {
+    const all: ProjectFeature[] = [];
+    featuresList.forEach((feature) => {
+      all.push(feature);
+      if (feature.subtasks && feature.subtasks.length > 0) {
+        all.push(...getAllFeatures(feature.subtasks));
+      }
+    });
+    return all;
+  };
+
   const filteredFeatures = features.filter((feature) => {
     if (filterCategory !== 'all' && feature.category !== filterCategory) return false;
     if (filterStatus !== 'all' && feature.status !== filterStatus) return false;
     return true;
   });
 
+  const allFeatures = getAllFeatures(features);
+
   const statistics = {
-    total: features.length,
-    planned: features.filter((f) => f.category === 'planned').length,
-    done: features.filter((f) => f.category === 'done').length,
-    remaining: features.filter((f) => f.category === 'remaining').length,
-    beyond_plan: features.filter((f) => f.category === 'beyond_plan').length,
-    completed: features.filter((f) => f.status === 'completed').length,
-    in_progress: features.filter((f) => f.status === 'in_progress').length,
+    total: allFeatures.length,
+    planned: allFeatures.filter((f) => f.category === 'planned').length,
+    done: allFeatures.filter((f) => f.category === 'done').length,
+    remaining: allFeatures.filter((f) => f.category === 'remaining').length,
+    beyond_plan: allFeatures.filter((f) => f.category === 'beyond_plan').length,
+    completed: allFeatures.filter((f) => f.status === 'completed').length,
+    in_progress: allFeatures.filter((f) => f.status === 'in_progress').length,
   };
 
   if (loading) {
@@ -269,7 +373,11 @@ const ProjectFeaturesManagement = () => {
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingFeature ? 'Edytuj funkcjonalność' : 'Nowa funkcjonalność'}
+                    {editingFeature 
+                      ? 'Edytuj funkcjonalność' 
+                      : addingSubtaskFor 
+                        ? 'Nowe podzadanie' 
+                        : 'Nowa funkcjonalność'}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -354,7 +462,13 @@ const ProjectFeaturesManagement = () => {
                         max="100"
                         value={formData.implementation_percentage}
                         onChange={(e) => setFormData({ ...formData, implementation_percentage: parseInt(e.target.value) || 0 })}
+                        disabled={!!addingSubtaskFor || (editingFeature?.subtasks && editingFeature.subtasks.length > 0)}
                       />
+                      {(addingSubtaskFor || (editingFeature?.subtasks && editingFeature.subtasks.length > 0)) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Postęp jest wyliczany automatycznie na podstawie podzadań
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -439,61 +553,149 @@ const ProjectFeaturesManagement = () => {
                   </TableRow>
                 ) : (
                   filteredFeatures.map((feature) => (
-                    <TableRow key={feature.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{feature.title}</div>
-                          {feature.description && (
-                            <div className="text-sm text-muted-foreground line-clamp-1">
-                              {feature.description}
+                    <React.Fragment key={feature.id}>
+                      <TableRow>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {feature.subtasks && feature.subtasks.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => toggleExpanded(feature.id)}
+                              >
+                                {expandedTasks.has(feature.id) ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </Button>
+                            )}
+                            <div>
+                              <div className="font-medium">{feature.title}</div>
+                              {feature.description && (
+                                <div className="text-sm text-muted-foreground line-clamp-1">
+                                  {feature.description}
+                                </div>
+                              )}
+                              {feature.subtasks && feature.subtasks.length > 0 && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {feature.subtasks.length} podzadań
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getCategoryColor(feature.category)}>
-                          {getCategoryLabel(feature.category)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(feature.status)}
-                          <span className="text-sm">{getStatusLabel(feature.status)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{getPriorityLabel(feature.priority)}</span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-primary h-2 rounded-full"
-                              style={{ width: `${feature.implementation_percentage}%` }}
-                            />
                           </div>
-                          <span className="text-sm font-medium">{feature.implementation_percentage}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(feature)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(feature.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getCategoryColor(feature.category)}>
+                            {getCategoryLabel(feature.category)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(feature.status)}
+                            <span className="text-sm">{getStatusLabel(feature.status)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{getPriorityLabel(feature.priority)}</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-primary h-2 rounded-full"
+                                style={{ width: `${feature.implementation_percentage}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-medium">{feature.implementation_percentage}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleAddSubtask(feature)}
+                              title="Dodaj podzadanie"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(feature)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(feature.id, feature.parent_feature_id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {expandedTasks.has(feature.id) && feature.subtasks?.map((subtask) => (
+                        <TableRow key={subtask.id} className="bg-muted/50">
+                          <TableCell>
+                            <div className="pl-10">
+                              <div className="font-medium text-sm">{subtask.title}</div>
+                              {subtask.description && (
+                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                  {subtask.description}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getCategoryColor(subtask.category)}>
+                              {getCategoryLabel(subtask.category)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(subtask.status)}
+                              <span className="text-sm">{getStatusLabel(subtask.status)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">{getPriorityLabel(subtask.priority)}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-primary h-2 rounded-full"
+                                  style={{ width: `${subtask.implementation_percentage}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">{subtask.implementation_percentage}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(subtask)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(subtask.id, subtask.parent_feature_id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>
