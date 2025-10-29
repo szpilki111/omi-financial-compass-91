@@ -249,7 +249,7 @@ const ProjectFeaturesManagement = () => {
     const labels = {
       planned: 'Zaplanowane',
       done: 'Zrobione',
-      remaining: 'Pozostałe',
+      remaining: 'Do zrobienia',
       beyond_plan: 'Ponad plan',
     };
     return labels[category as keyof typeof labels] || category;
@@ -345,7 +345,7 @@ const ProjectFeaturesManagement = () => {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-yellow-600">{statistics.remaining}</div>
-            <div className="text-sm text-muted-foreground">Pozostałe</div>
+            <div className="text-sm text-muted-foreground">Do zrobienia</div>
           </CardContent>
         </Card>
         <Card>
@@ -413,7 +413,7 @@ const ProjectFeaturesManagement = () => {
                         <SelectContent>
                           <SelectItem value="planned">Zaplanowane</SelectItem>
                           <SelectItem value="done">Zrobione</SelectItem>
-                          <SelectItem value="remaining">Pozostałe</SelectItem>
+                          <SelectItem value="remaining">Do zrobienia</SelectItem>
                           <SelectItem value="beyond_plan">Ponad plan</SelectItem>
                         </SelectContent>
                       </Select>
@@ -514,7 +514,7 @@ const ProjectFeaturesManagement = () => {
                 <SelectItem value="all">Wszystkie kategorie</SelectItem>
                 <SelectItem value="planned">Zaplanowane</SelectItem>
                 <SelectItem value="done">Zrobione</SelectItem>
-                <SelectItem value="remaining">Pozostałe</SelectItem>
+                <SelectItem value="remaining">Do zrobienia</SelectItem>
                 <SelectItem value="beyond_plan">Ponad plan</SelectItem>
               </SelectContent>
             </Select>
