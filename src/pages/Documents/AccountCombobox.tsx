@@ -311,7 +311,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           onFocus={handleButtonFocus}
         >
           <span className="truncate">
-            {displayedAccountName || "Wybierz konto..."}
+            {displayedAccountName || "Wybierz"}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
