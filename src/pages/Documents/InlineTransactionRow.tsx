@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import CurrencyAmountInput from './CurrencyAmountInput';
 
 export interface InlineTransactionRowRef {
   getCurrentData: () => Transaction | null;
@@ -372,36 +373,19 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
-            onChange={(e) => {
-              let value = e.target.value.replace(",", ".");
-              // Validate: max 10 digits before decimal, 2 after
-              const regex = /^\d{0,10}(\.\d{0,2})?$/;
-              if (value && !regex.test(value)) return;
-              handleDebitAmountChange(parseFloat(value) || 0);
-            }}
-            onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.preventDefault();
-              // Allow only numbers, decimal point, and control keys
-              if (!/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete' && e.key !== 'Tab') {
-                e.preventDefault();
-              }
-            }}
-            placeholder="0.00"
-            className={cn("text-right pr-1 tabular-nums", hasValidationError && "border-destructive focus-visible:ring-destructive")}
-            style={{ 
-              width: `${Math.ceil(Math.max((formData.debit_amount === 0 ? 4 : formData.debit_amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
-            }}
-            disabled={isEditingBlocked}
-          />
-          <span className="text-sm text-gray-500 whitespace-nowrap shrink-0">{getCurrencySymbol(currency)}</span>
-        </div>
+        <CurrencyAmountInput
+          label=""
+          value={formData.debit_amount}
+          onChange={handleDebitAmountChange}
+          currency={currency}
+          exchangeRate={1}
+          baseCurrency={currency}
+          placeholder="0.00"
+          disabled={isEditingBlocked}
+          onFocus={handleDebitFocus}
+          onBlur={handleDebitAmountBlur}
+          className={hasValidationError ? "border-destructive" : ""}
+        />
       </TableCell>
       <TableCell>
         <AccountCombobox
@@ -414,36 +398,19 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
-            onChange={(e) => {
-              let value = e.target.value.replace(",", ".");
-              // Validate: max 10 digits before decimal, 2 after
-              const regex = /^\d{0,10}(\.\d{0,2})?$/;
-              if (value && !regex.test(value)) return;
-              handleCreditAmountChange(parseFloat(value) || 0);
-            }}
-            onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.preventDefault();
-              // Allow only numbers, decimal point, and control keys
-              if (!/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete' && e.key !== 'Tab') {
-                e.preventDefault();
-              }
-            }}
-            placeholder="0.00"
-            className={cn("text-right pr-1 tabular-nums", hasValidationError && "border-destructive focus-visible:ring-destructive")}
-            style={{ 
-              width: `${Math.ceil(Math.max((formData.credit_amount === 0 ? 4 : formData.credit_amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
-            }}
-            disabled={isEditingBlocked}
-          />
-          <span className="text-sm text-gray-500 whitespace-nowrap shrink-0">{getCurrencySymbol(currency)}</span>
-        </div>
+        <CurrencyAmountInput
+          label=""
+          value={formData.credit_amount}
+          onChange={handleCreditAmountChange}
+          currency={currency}
+          exchangeRate={1}
+          baseCurrency={currency}
+          placeholder="0.00"
+          disabled={isEditingBlocked}
+          onFocus={handleCreditFocus}
+          onBlur={handleCreditAmountBlur}
+          className={hasValidationError ? "border-destructive" : ""}
+        />
       </TableCell>
       <TableCell>
         <AccountCombobox

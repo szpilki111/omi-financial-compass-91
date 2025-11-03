@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from './types';
 import { AccountCombobox } from './AccountCombobox';
+import CurrencyAmountInput from './CurrencyAmountInput';
+import { calculateInputWidth } from '@/utils/formatCurrency';
 
 interface AmountField {
   id: string;
@@ -20,7 +21,7 @@ interface AmountField {
 interface TransactionFormProps {
   onAdd: (transaction: Transaction) => void;
   onCancel: () => void;
-  onAutoSaveComplete?: () => void; // Nowa prop do obsługi zakończenia auto-save
+  onAutoSaveComplete?: () => void;
 }
 
 const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAutoSaveComplete }) => {
@@ -47,18 +48,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
   const [wasSecondFieldZeroOnFirstFocus, setWasSecondFieldZeroOnFirstFocus] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
 
-  // Auto-focus na pole opisu gdy komponent się montuje
+  // Auto-focus na pole opisu
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (descriptionRef.current) {
-        descriptionRef.current.focus();
-      }
+      descriptionRef.current?.focus();
     }, 100);
-
     return () => clearTimeout(timer);
   }, []);
 
-  // Get user's location from profile
+  // Pobierz location_id
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {
@@ -67,40 +65,32 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
         .select('location_id')
         .eq('id', user?.id)
         .single();
-
       if (error) throw error;
       return data;
     },
     enabled: !!user?.id,
   });
 
-  // Calculate totals
-  const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
-  const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
+  // Suma Winien / Ma
+  const debitTotal = debitFields.reduce((sum, f) => sum + f.amount, 0);
+  const creditTotal = creditFields.reduce((sum, f) => sum + f.amount, 0);
 
-  // Check if form is ready for auto-save
+  // Auto-save
   const checkAutoSave = () => {
     const hasDescription = formData.description.trim().length > 0;
-    const firstDebitField = debitFields[0];
-    const firstCreditField = creditFields[0];
-    
-    const hasValidDebit = firstDebitField.amount > 0 && firstDebitField.accountId.length > 0;
-    const hasValidCredit = firstCreditField.amount > 0 && firstCreditField.accountId.length > 0;
-    
+    const firstDebit = debitFields[0];
+    const firstCredit = creditFields[0];
+    const hasValidDebit = firstDebit.amount > 0 && firstDebit.accountId;
+    const hasValidCredit = firstCredit.amount > 0 && firstCredit.accountId;
+
     if (hasDescription && hasValidDebit && hasValidCredit && !isAutoSaving) {
-      console.log('Auto-save triggered - all required fields filled');
       setIsAutoSaving(true);
-      handleSubmit(null, true); // true indicates auto-save
+      handleSubmit(null, true);
     }
   };
 
-  // Auto-save effect - triggered when key fields change
   useEffect(() => {
-    // Only check auto-save after a small delay to avoid rapid triggers
-    const timer = setTimeout(() => {
-      checkAutoSave();
-    }, 500);
-
+    const timer = setTimeout(checkAutoSave, 500);
     return () => clearTimeout(timer);
   }, [
     formData.description,
@@ -113,37 +103,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Usuń błąd dla danego pola
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-
-    // Jeśli zmienił się opis głównej operacji, zaktualizuj opisy we wszystkich polach
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
     if (field === 'description') {
-      setDebitFields(prev => prev.map(field => ({ ...field, description: value })));
-      setCreditFields(prev => prev.map(field => ({ ...field, description: value })));
+      setDebitFields(prev => prev.map(f => ({ ...f, description: value })));
+      setCreditFields(prev => prev.map(f => ({ ...f, description: value })));
     }
   };
 
-  // Funkcje do obsługi inteligentnych pól kwot
-  const handleAmountFocus = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
-    // Jeśli wartość to "0", usuń ją całkowicie
-    if (e.target.value === '0') {
-      e.target.value = '';
-      // Ustaw wartość w state na 0, żeby input był pusty
-      if (type === 'debit') {
-        setDebitFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount: 0 } : field
-        ));
-      } else {
-        setCreditFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount: 0 } : field
-        ));
-      }
-    }
-    
-    // Ustaw focus dla pierwszego pola i zapamiętaj czy drugie pole było zerem
+  const handleAmountFocus = (fieldId: string, type: 'debit' | 'credit') => {
     if (fieldId === '1') {
       if (type === 'debit') {
         setIsFirstDebitFieldFocused(true);
@@ -155,94 +122,66 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     }
   };
 
-  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, fieldId: string, type: 'debit' | 'credit') => {
-    // Jeśli pole jest puste po utracie fokusa, ustaw na 0
-    if (e.target.value === '' || e.target.value === undefined) {
-      if (type === 'debit') {
-        setDebitFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount: 0 } : field
-        ));
-      } else {
-        setCreditFields(prev => prev.map(field => 
-          field.id === fieldId ? { ...field, amount: 0 } : field
-        ));
-      }
-    }
-
-    // Wyłącz auto-uzupełnianie gdy pierwsze pole traci fokus
+  const handleAmountBlur = (fieldId: string, type: 'debit' | 'credit') => {
     if (fieldId === '1') {
-      if (type === 'debit') {
-        setIsFirstDebitFieldFocused(false);
-      } else {
-        setIsFirstCreditFieldFocused(false);
-      }
+      if (type === 'debit') setIsFirstDebitFieldFocused(false);
+      else setIsFirstCreditFieldFocused(false);
       setWasSecondFieldZeroOnFirstFocus(false);
     }
 
     const fields = type === 'debit' ? debitFields : creditFields;
     const setFields = type === 'debit' ? setDebitFields : setCreditFields;
     const oppositeTotal = type === 'debit' ? creditTotal : debitTotal;
-    const currentTotal = fields.reduce((sum, field) => sum + field.amount, 0);
-    
-    // Check if we need to add more fields to balance the amounts
+    const currentTotal = fields.reduce((sum, f) => sum + f.amount, 0);
+
     if (currentTotal !== oppositeTotal && currentTotal > 0 && oppositeTotal > 0) {
       const difference = Math.abs(currentTotal - oppositeTotal);
-      if (difference > 0) {
-        // Add a new field with the difference amount
+      if (difference > 0.01 && currentTotal < oppositeTotal) {
         const newField: AmountField = {
           id: Date.now().toString(),
           amount: difference,
           accountId: '',
           description: formData.description
         };
-        
-        if (currentTotal < oppositeTotal) {
-          setFields(prev => [...prev, newField]);
-        }
+        setFields(prev => [...prev, newField]);
       }
     }
   };
 
   const handleDebitAmountChange = (fieldId: string, amount: number) => {
-    setDebitFields(prev => prev.map(field => 
-      field.id === fieldId ? { ...field, amount } : field
+    const rounded = parseFloat(amount.toFixed(2));
+    setDebitFields(prev => prev.map(f => 
+      f.id === fieldId ? { ...f, amount: rounded } : f
     ));
 
-    // Auto-uzupełniaj kwotę w pierwszym polu credit podczas wpisywania, ale tylko gdy:
-    // 1. To jest pierwsze pole debit
-    // 2. Pierwsze pole debit ma fokus  
-    // 3. Drugie pole było zerem przed rozpoczęciem pisania
     if (fieldId === '1' && isFirstDebitFieldFocused && wasSecondFieldZeroOnFirstFocus) {
-      setCreditFields(prev => prev.map((field, index) => 
-        index === 0 ? { ...field, amount } : field
+      setCreditFields(prev => prev.map((f, i) => 
+        i === 0 ? { ...f, amount: rounded } : f
       ));
     }
   };
 
   const handleCreditAmountChange = (fieldId: string, amount: number) => {
-    setCreditFields(prev => prev.map(field => 
-      field.id === fieldId ? { ...field, amount } : field
+    const rounded = parseFloat(amount.toFixed(2));
+    setCreditFields(prev => prev.map(f => 
+      f.id === fieldId ? { ...f, amount: rounded } : f
     ));
 
-    // Auto-uzupełniaj kwotę w pierwszym polu debit podczas wpisywania, ale tylko gdy:
-    // 1. To jest pierwsze pole credit
-    // 2. Pierwsze pole credit ma fokus
-    // 3. Drugie pole było zerem przed rozpoczęciem pisania
     if (fieldId === '1' && isFirstCreditFieldFocused && wasSecondFieldZeroOnFirstFocus) {
-      setDebitFields(prev => prev.map((field, index) => 
-        index === 0 ? { ...field, amount } : field
+      setDebitFields(prev => prev.map((f, i) => 
+        i === 0 ? { ...f, amount: rounded } : f
       ));
     }
   };
 
   const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
     if (type === 'debit') {
-      setDebitFields(prev => prev.map(field => 
-        field.id === fieldId ? { ...field, accountId } : field
+      setDebitFields(prev => prev.map(f => 
+        f.id === fieldId ? { ...f, accountId } : f
       ));
     } else {
-      setCreditFields(prev => prev.map(field => 
-        field.id === fieldId ? { ...field, accountId } : field
+      setCreditFields(prev => prev.map(f => 
+        f.id === fieldId ? { ...f, accountId } : f
       ));
     }
   };
@@ -254,183 +193,94 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
       accountId: '',
       description: formData.description
     };
-
-    if (type === 'debit') {
-      setDebitFields(prev => [...prev, newField]);
-    } else {
-      setCreditFields(prev => [...prev, newField]);
-    }
+    if (type === 'debit') setDebitFields(prev => [...prev, newField]);
+    else setCreditFields(prev => [...prev, newField]);
   };
 
   const removeField = (fieldId: string, type: 'debit' | 'credit') => {
     if (type === 'debit' && debitFields.length > 1) {
-      setDebitFields(prev => prev.filter(field => field.id !== fieldId));
+      setDebitFields(prev => prev.filter(f => f.id !== fieldId));
     } else if (type === 'credit' && creditFields.length > 1) {
-      setCreditFields(prev => prev.filter(field => field.id !== fieldId));
+      setCreditFields(prev => prev.filter(f => f.id !== fieldId));
     }
   };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
-    if (!formData.description.trim()) {
-      newErrors.description = 'Opis jest wymagany';
-    }
-
-    if (debitTotal <= 0) {
-      newErrors.amounts = 'Kwoty muszą być większe od zera';
-    }
-    
+    if (!formData.description.trim()) newErrors.description = 'Opis jest wymagany';
+    if (debitTotal <= 0 || creditTotal <= 0) newErrors.amounts = 'Kwoty muszą być większe od zera';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const resetForm = () => {
-    setFormData({
-      description: '',
-      settlement_type: 'Bank',
-    });
-    
-    setDebitFields([
-      { id: '1', amount: 0, accountId: '', description: '' }
-    ]);
-    
-    setCreditFields([
-      { id: '1', amount: 0, accountId: '', description: '' }
-    ]);
-    
+    setFormData({ description: '', settlement_type: 'Bank' });
+    setDebitFields([{ id: '1', amount: 0, accountId: '', description: '' }]);
+    setCreditFields([{ id: '1', amount: 0, accountId: '', description: '' }]);
     setErrors({});
     setIsAutoSaving(false);
   };
 
   const handleSubmit = (e: React.FormEvent | null, isAutoSave: boolean = false) => {
-    if (e) {
-      e.preventDefault();
-    }
-    
+    if (e) e.preventDefault();
     if (!validateForm()) {
-      if (!isAutoSave) {
-        toast({
-          title: "Błąd",
-          description: "Sprawdź poprawność danych",
-          variant: "destructive",
-        });
-      }
+      if (!isAutoSave) toast({ title: "Błąd", description: "Sprawdź poprawność danych", variant: "destructive" });
       setIsAutoSaving(false);
       return;
     }
 
-    // Get valid fields (amount > 0 and account selected)
-    const validDebitFields = debitFields.filter(field => field.amount > 0 && field.accountId);
-    const validCreditFields = creditFields.filter(field => field.amount > 0 && field.accountId);
+    const validDebit = debitFields.filter(f => f.amount > 0 && f.accountId);
+    const validCredit = creditFields.filter(f => f.amount > 0 && f.accountId);
+    const maxTransactions = Math.max(validDebit.length, validCredit.length);
 
-    console.log('Valid debit fields:', validDebitFields);
-    console.log('Valid credit fields:', validCreditFields);
-
-    const createdTransactions: Transaction[] = [];
-
-    // Determine the maximum number of transactions we'll create
-    const maxTransactions = Math.max(validDebitFields.length, validCreditFields.length);
-
-    // Create transactions by pairing fields one-to-one
+    const transactions: Transaction[] = [];
     for (let i = 0; i < maxTransactions; i++) {
-      const debitField = validDebitFields[i] || null;
-      const creditField = validCreditFields[i] || null;
+      const debit = validDebit[i] || null;
+      const credit = validCredit[i] || null;
+      if (!debit && !credit) continue;
 
-      // Skip if both sides are null (shouldn't happen given maxTransactions logic)
-      if (!debitField && !creditField) continue;
-
-      const transaction: Transaction = {
+      transactions.push({
         description: formData.description,
-        debit_account_id: debitField?.accountId || null,
-        credit_account_id: creditField?.accountId || null,
-        debit_amount: debitField?.amount || 0,
-        credit_amount: creditField?.amount || 0,
-        amount: Math.max(debitField?.amount || 0, creditField?.amount || 0),
+        debit_account_id: debit?.accountId || null,
+        credit_account_id: credit?.accountId || null,
+        debit_amount: debit?.amount || 0,
+        credit_amount: credit?.amount || 0,
+        amount: Math.max(debit?.amount || 0, credit?.amount || 0),
         settlement_type: formData.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek',
-      };
-
-      createdTransactions.push(transaction);
+      });
     }
 
-    console.log('Created transactions:', createdTransactions);
-
-    // Add all created transactions
-    createdTransactions.forEach(transaction => {
-      onAdd(transaction);
-    });
+    transactions.forEach(t => onAdd(t));
 
     if (isAutoSave) {
-      toast({
-        title: "Operacja zapisana",
-        description: "Automatycznie zapisano operację - otwieramy nowe okno",
-        duration: 2000,
-      });
-      
-      // Reset only description and amounts, but keep account selections for convenience
-      setFormData(prev => ({
-        ...prev,
-        description: '',
-      }));
-      
-      setDebitFields(prev => prev.map(field => ({ 
-        ...field, 
-        amount: 0, 
-        description: '' 
-      })));
-      
-      setCreditFields(prev => prev.map(field => ({ 
-        ...field, 
-        amount: 0, 
-        description: '' 
-      })));
-      
+      toast({ title: "Zapisano", description: "Automatyczny zapis – nowe okno otwarte", duration: 2000 });
+      setFormData(prev => ({ ...prev, description: '' }));
+      setDebitFields(prev => prev.map(f => ({ ...f, amount: 0, description: '' })));
+      setCreditFields(prev => prev.map(f => ({ ...f, amount: 0, description: '' })));
       setErrors({});
       setIsAutoSaving(false);
-      
-      // Wywołaj callback żeby otworzyć nowe okno
-      if (onAutoSaveComplete) {
-        onAutoSaveComplete();
-      }
-      
-      // Focus on description field for immediate next entry
-      setTimeout(() => {
-        const descriptionField = document.getElementById('description');
-        if (descriptionField) {
-          descriptionField.focus();
-        }
-      }, 100);
+      onAutoSaveComplete?.();
+      setTimeout(() => descriptionRef.current?.focus(), 100);
     } else {
-      // Manual save - close the form
       onCancel();
     }
   };
 
-  // Funkcja do przechodzenia fokusa na następne pole konta
   const focusNextAccountField = (currentFieldId: string, currentType: 'debit' | 'credit') => {
-    // Znajdź indeks aktualnego pola
     const currentFields = currentType === 'debit' ? debitFields : creditFields;
-    const currentIndex = currentFields.findIndex(field => field.id === currentFieldId);
-    
-    // Spróbuj przejść na następne pole tego samego typu
+    const currentIndex = currentFields.findIndex(f => f.id === currentFieldId);
     if (currentIndex < currentFields.length - 1) {
-      const nextFieldId = currentFields[currentIndex + 1].id;
-      const nextButton = document.querySelector(`[data-account-field="${currentType}-${nextFieldId}"] button`);
-      if (nextButton) {
-        (nextButton as HTMLElement).focus();
-        return;
-      }
+      const nextId = currentFields[currentIndex + 1].id;
+      const btn = document.querySelector(`[data-account-field="${currentType}-${nextId}"] button`);
+      btn && (btn as HTMLElement).focus();
+      return;
     }
-    
-    // Jeśli nie ma następnego pola tego samego typu, przejdź na pierwszy z przeciwnego typu
     const oppositeType = currentType === 'debit' ? 'credit' : 'debit';
     const oppositeFields = oppositeType === 'debit' ? debitFields : creditFields;
     if (oppositeFields.length > 0) {
-      const firstOppositeFieldId = oppositeFields[0].id;
-      const firstOppositeButton = document.querySelector(`[data-account-field="${oppositeType}-${firstOppositeFieldId}"] button`);
-      if (firstOppositeButton) {
-        (firstOppositeButton as HTMLElement).focus();
-      }
+      const firstId = oppositeFields[0].id;
+      const btn = document.querySelector(`[data-account-field="${oppositeType}-${firstId}"] button`);
+      btn && (btn as HTMLElement).focus();
     }
   };
 
@@ -442,11 +292,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
         </h4>
         {isAutoSaving && (
           <div className="text-sm text-green-600 font-medium">
-            ✓ Automatyczny zapis aktywny
+            Automatyczny zapis aktywny
           </div>
         )}
       </div>
-      
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label htmlFor="description">Opis operacji *</Label>
@@ -455,66 +305,39 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-              }
-            }}
+            onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
             placeholder="Opis operacji finansowej"
             className={errors.description ? 'border-red-500' : ''}
             disabled={isAutoSaving}
           />
-          {errors.description && (
-            <p className="text-red-500 text-sm mt-1">{errors.description}</p>
-          )}
+          {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Debit Fields */}
+          {/* Winien */}
           <div>
             <div className="flex justify-between items-center mb-3">
               <Label className="text-base font-medium">Winien (Suma: {debitTotal.toFixed(2)} zł)</Label>
+              <Button type="button" size="sm" variant="ghost" onClick={() => addNewField('debit')}>
+                + Dodaj
+              </Button>
             </div>
-            <div className="space-y-3">
-              {debitFields.map((field, index) => (
+            <div className="space-y-4">
+              {debitFields.map((field) => (
                 <div key={field.id} className="space-y-2">
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount.toFixed(2).replace('.', ',')}
-                        onChange={(e) => {
-                          let value = e.target.value.replace(',', '.');
-                          // Validate: max 10 digits before decimal, 2 after
-                          const regex = /^\d{0,10}(\.\d{0,2})?$/;
-                          if (value && !regex.test(value)) return;
-                          handleDebitAmountChange(field.id, parseFloat(value) || 0);
-                        }}
-                        onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
-                        onBlur={(e) => {
-                          // Always round to 2 decimal places
-                          if (field.amount > 0) {
-                            const rounded = parseFloat(field.amount.toFixed(2));
-                            handleDebitAmountChange(field.id, rounded);
-                          }
-                          handleAmountBlur(e, field.id, 'debit');
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                          }
-                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
-                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
-                            e.preventDefault();
-                          }
-                        }}
+                      <CurrencyAmountInput
+                        label=""
+                        value={field.amount}
+                        onChange={(value) => handleDebitAmountChange(field.id, value)}
+                        currency="PLN"
+                        exchangeRate={1}
+                        baseCurrency="PLN"
                         placeholder="0.00"
-                        className="text-right tabular-nums"
-                        style={{ 
-                          width: `${Math.ceil(Math.max((field.amount === 0 ? 4 : field.amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
-                        }}
+                        onFocus={() => handleAmountFocus(field.id, 'debit')}
+                        onBlur={() => handleAmountBlur(field.id, 'debit')}
                       />
                     </div>
                     {debitFields.length > 1 && (
@@ -525,7 +348,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         onClick={() => removeField(field.id, 'debit')}
                         className="text-red-600"
                       >
-                        ✕
+                        X
                       </Button>
                     )}
                   </div>
@@ -533,7 +356,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
-                      onChange={(accountId) => handleAccountChange(field.id, 'debit', accountId)}
+                      onChange={(id) => handleAccountChange(field.id, 'debit', id)}
                       locationId={userProfile?.location_id}
                       side="debit"
                       autoOpenOnFocus={true}
@@ -545,51 +368,30 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
             </div>
           </div>
 
-          {/* Credit Fields */}
+          {/* Ma */}
           <div>
             <div className="flex justify-between items-center mb-3">
               <Label className="text-base font-medium">Ma (Suma: {creditTotal.toFixed(2)} zł)</Label>
+              <Button type="button" size="sm" variant="ghost" onClick={() => addNewField('credit')}>
+                + Dodaj
+              </Button>
             </div>
-            <div className="space-y-3">
-              {creditFields.map((field, index) => (
+            <div className="space-y-4">
+              {creditFields.map((field) => (
                 <div key={field.id} className="space-y-2">
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
                       <Label className="text-sm">Kwota</Label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        value={field.amount === 0 ? '' : field.amount.toFixed(2).replace('.', ',')}
-                        onChange={(e) => {
-                          let value = e.target.value.replace(',', '.');
-                          // Validate: max 10 digits before decimal, 2 after
-                          const regex = /^\d{0,10}(\.\d{0,2})?$/;
-                          if (value && !regex.test(value)) return;
-                          handleCreditAmountChange(field.id, parseFloat(value) || 0);
-                        }}
-                        onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
-                        onBlur={(e) => {
-                          // Always round to 2 decimal places
-                          if (field.amount > 0) {
-                            const rounded = parseFloat(field.amount.toFixed(2));
-                            handleCreditAmountChange(field.id, rounded);
-                          }
-                          handleAmountBlur(e, field.id, 'credit');
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                          }
-                          // Allow Tab, Backspace, Delete, numbers, decimal point, and control keys
-                          if (e.key !== 'Tab' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && !/[\d.,]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
-                            e.preventDefault();
-                          }
-                        }}
+                      <CurrencyAmountInput
+                        label=""
+                        value={field.amount}
+                        onChange={(value) => handleCreditAmountChange(field.id, value)}
+                        currency="PLN"
+                        exchangeRate={1}
+                        baseCurrency="PLN"
                         placeholder="0.00"
-                        className="text-right tabular-nums"
-                        style={{ 
-                          width: `${Math.ceil(Math.max((field.amount === 0 ? 4 : field.amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
-                        }}
+                        onFocus={() => handleAmountFocus(field.id, 'credit')}
+                        onBlur={() => handleAmountBlur(field.id, 'credit')}
                       />
                     </div>
                     {creditFields.length > 1 && (
@@ -600,7 +402,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                         onClick={() => removeField(field.id, 'credit')}
                         className="text-red-600"
                       >
-                        ✕
+                        X
                       </Button>
                     )}
                   </div>
@@ -608,7 +410,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                     <Label className="text-sm">Konto</Label>
                     <AccountCombobox
                       value={field.accountId}
-                      onChange={(accountId) => handleAccountChange(field.id, 'credit', accountId)}
+                      onChange={(id) => handleAccountChange(field.id, 'credit', id)}
                       locationId={userProfile?.location_id}
                       side="credit"
                       autoOpenOnFocus={true}
@@ -621,15 +423,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
           </div>
         </div>
 
-        {errors.amounts && (
-          <div className="text-red-500 text-sm">
-            <p>{errors.amounts}</p>
-          </div>
-        )}
+        {errors.amounts && <p className="text-red-500 text-sm">{errors.amounts}</p>}
 
         <div className="flex gap-2 pt-4">
           <Button type="submit" size="sm" disabled={isAutoSaving}>
-            {isAutoSaving ? "Zapisywanie..." : "Dodaj operację ręcznie"}
+            {isAutoSaving ? "Zapisywanie..." : "Dodaj ręcznie"}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={isAutoSaving}>
             {isAutoSaving ? "Czekaj..." : "Anuluj"}
