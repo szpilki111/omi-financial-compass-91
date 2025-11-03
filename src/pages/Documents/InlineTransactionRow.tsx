@@ -434,8 +434,8 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               }
             }}
             placeholder="0.00"
-            className={cn("text-right min-w-[80px] max-w-[150px]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
-            style={{ width: `${Math.max(80, Math.min(150, (formData.credit_amount.toString().length || 4) * 10))}px` }}
+            className={cn("text-right min-w-[10px] max-w-[150px]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
