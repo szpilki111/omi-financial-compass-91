@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator, FileText } from 'lucide-react';
+import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
@@ -45,6 +45,7 @@ const DocumentsPage = () => {
   const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [isImportSectionOpen, setIsImportSectionOpen] = useState(false);
 
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
@@ -243,6 +244,49 @@ const DocumentsPage = () => {
     });
   };
 
+  const downloadCsvTemplate = () => {
+    const csvContent = `Data,Opis,Kwota,Konto
+2024-01-15,Przykładowa operacja wpływu,1500.00,100-001
+2024-01-16,Przykładowa operacja rozchodu,-750.50,200-001
+2024-01-17,Opłata za usługi,-250.00,400-001`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'szablon_importu.csv';
+    link.click();
+    
+    toast({
+      title: "Szablon pobrany",
+      description: "Szablon CSV został pobrany",
+    });
+  };
+
+  const downloadMt940Template = () => {
+    const mt940Content = `:20:TRANSACTION REF
+:25:PL12345678901234567890123456
+:28C:00001/001
+:60F:C240115PLN10000,00
+:61:2401151501DR750,50NTRFNONREF//EXAMPLE001
+:86:Przykładowa operacja rozchodu
+Szczegóły transakcji
+:61:2401161601CR1500,00NTRFNONREF//EXAMPLE002
+:86:Przykładowa operacja wpływu
+Dodatkowe informacje
+:62F:C240116PLN10749,50`;
+    
+    const blob = new Blob([mt940Content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'szablon_mt940.txt';
+    link.click();
+    
+    toast({
+      title: "Szablon pobrany",
+      description: "Szablon MT940 został pobrany",
+    });
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -256,30 +300,54 @@ const DocumentsPage = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
-          <div className="flex gap-2">
-            <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
-              Wyszukaj konta
-            </Button>
-            <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              Wyszukaj operacje
-            </Button>
-            <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Import MT940
-            </Button>
-            <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Import CSV
-            </Button>
-            <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nowy dokument
-            </Button>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
+            <div className="flex gap-2">
+              <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
+                <Calculator className="h-4 w-4" />
+                Wyszukaj konta
+              </Button>
+              <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Wyszukaj operacje
+              </Button>
+              <Button 
+                onClick={() => setIsImportSectionOpen(!isImportSectionOpen)} 
+                variant="outline" 
+                className="flex items-center gap-2"
+              >
+                <FileUp className="h-4 w-4" />
+                Import z pliku
+                {isImportSectionOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+              <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nowy dokument
+              </Button>
+            </div>
           </div>
+
+          {isImportSectionOpen && (
+            <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border">
+              <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Import CSV
+              </Button>
+              <Button onClick={downloadCsvTemplate} variant="outline" size="sm" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Szablon CSV
+              </Button>
+              <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Import MT940
+              </Button>
+              <Button onClick={downloadMt940Template} variant="outline" size="sm" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Szablon MT940
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}
