@@ -2,7 +2,6 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { calculateInputWidth } from '@/utils/formatCurrency';
 
 interface CurrencyAmountInputProps {
   label: string;
@@ -84,7 +83,12 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
 
   // Calculate dynamic width based on content (min 80px, max 200px)
   const calculateWidth = () => {
-    return calculateInputWidth(displayValue);
+    const baseWidth = 80;
+    const charWidth = 9; // approximate width per character
+    const paddingAndSymbol = 50; // space for currency symbol and padding
+    const contentLength = displayValue.length || placeholder.length;
+    const calculatedWidth = Math.min(Math.max(baseWidth, contentLength * charWidth + paddingAndSymbol), 200);
+    return `${calculatedWidth}px`;
   };
 
   return (
