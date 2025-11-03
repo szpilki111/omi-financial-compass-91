@@ -245,10 +245,18 @@ const DocumentsPage = () => {
   };
 
   const downloadCsvTemplate = () => {
-    const csvContent = `Data,Opis,Kwota,Konto
-2024-01-15,Przykładowa operacja wpływu,1500.00,100-001
-2024-01-16,Przykładowa operacja rozchodu,-750.50,200-001
-2024-01-17,Opłata za usługi,-250.00,400-001`;
+    const csvContent = `Furta;"6.020,00";420-1-1-1;"6.020,00";100
+Kuchnia;"33.480,00";420-1-1-2;"33.480,00";100
+Pralnia;"4.500,00";420-1-1-3;"4.500,00";100
+Warsztat;"8.720,00";420-1-1-4;"8.720,00";100
+Inne;"6.900,00";420-1-1-5;"6.900,00";100
+Kiosk;"11.700,00";420-1-3-1;"11.700,00";100
+Kawiarnia;"11.580,00";420-1-3-2;"11.580,00";100
+Jadłodajnia;"32.090,00";420-1-3-3;"32.090,00";100
+WC;"0,00";420-1-3-4;"0,00";100
+Krypty;"6.840,00";420-1-3-5;"6.840,00";100
+Wieża;"4.800,00";420-1-3-6;"4.800,00";100
+`;
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -263,17 +271,33 @@ const DocumentsPage = () => {
   };
 
   const downloadMt940Template = () => {
-    const mt940Content = `:20:TRANSACTION REF
-:25:PL12345678901234567890123456
-:28C:00001/001
-:60F:C240115PLN10000,00
-:61:2401151501DR750,50NTRFNONREF//EXAMPLE001
-:86:Przykładowa operacja rozchodu
-Szczegóły transakcji
-:61:2401161601CR1500,00NTRFNONREF//EXAMPLE002
-:86:Przykładowa operacja wpływu
-Dodatkowe informacje
-:62F:C240116PLN10749,50`;
+    const mt940Content = `
+:20:1
+:25:/PL69124013721111000012494387
+:28C:00065
+:60F:C250614PLN000000224791,09
+:61:2506160616CN000000058400,00N172NONREF
+:86:172^00PRZELEW                    ^34000
+^3012404416^38PL95124044161111001083941985
+^20Przelew rodk˘w
+^32DOM ZAKONNY MISJONARZY OBLA^33TŕW     —WI¨TY KRZY˝ 1
+^6226-006    NOWA SťUPIA      ^63   PL
+:61:2506160616DN000000000447,30N775NONREF
+:86:775^00PRZELEW INTERNET M/B       ^34000
+^3011402004^38PL81114020040000350231273820
+^20Numer zam˘wienia:…284356
+^32Wydawnictwo, Ksi©garnia, An^33tykwariat G˘rski FILAR Henr
+^62yk R¤CZKA
+:61:2506160616DN000000025707,00N631NONREF
+:86:631^00PRZELEW BETA/INTEGRA       ^34000
+^3012404416^38PL61124044161111001085264998
+^20zasilenie konta (- rewitali^21zacja)
+^32DOM ZAKONNY MISJONARZY OBLA^33TŕW     —WI¨TY KRZY˝ 1
+^6226-006 NOWA SťUPIA
+:62F:C250616PLN000000257036,79
+:64:C250616PLN000000257036,79
+-
+`;
     
     const blob = new Blob([mt940Content], { type: 'text/plain;charset=utf-8;' });
     const link = document.createElement('a');
