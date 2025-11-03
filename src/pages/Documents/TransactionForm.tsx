@@ -511,8 +511,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           }
                         }}
                         placeholder="0.00"
-                        className="text-right"
-                        style={{ width: `${Math.max(80, Math.min(150, (field.amount.toString().length || 4) * 10 + 40))}px` }}
+                        className="text-right tabular-nums"
+                        style={{ 
+                          width: `${Math.ceil(Math.max((field.amount === 0 ? 4 : field.amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
+                        }}
                       />
                     </div>
                     {debitFields.length > 1 && (
@@ -584,8 +586,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           }
                         }}
                         placeholder="0.00"
-                        className="text-right"
-                        style={{ width: `${Math.max(80, Math.min(150, (field.amount.toString().length || 4) * 10 + 40))}px` }}
+                        className="text-right tabular-nums"
+                        style={{ 
+                          width: `${Math.ceil(Math.max((field.amount === 0 ? 4 : field.amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
+                        }}
                       />
                     </div>
                     {creditFields.length > 1 && (

@@ -81,14 +81,14 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
   const convertedAmount = currency !== baseCurrency ? value * exchangeRate : value;
   const showConversion = currency !== baseCurrency && value > 0 && exchangeRate > 0;
 
-  // Calculate dynamic width based on content (min 80px, max 200px)
+  // Calculate exact width based on content - no extra space
   const calculateWidth = () => {
-    const baseWidth = 80;
-    const charWidth = 9; // approximate width per character
-    const paddingAndSymbol = 50; // space for currency symbol and padding
-    const contentLength = displayValue.length || placeholder.length;
-    const calculatedWidth = Math.min(Math.max(baseWidth, contentLength * charWidth + paddingAndSymbol), 200);
-    return `${calculatedWidth}px`;
+    const charWidth = 8.5; // precise width per character in default font
+    const currencySymbolWidth = currency.length * 8; // width of currency symbol
+    const padding = 24; // minimal padding (left + right)
+    const contentLength = Math.max(displayValue.length || 0, 4); // minimum 4 chars for "0.00"
+    const calculatedWidth = contentLength * charWidth + currencySymbolWidth + padding;
+    return `${Math.ceil(calculatedWidth)}px`;
   };
 
   return (
@@ -117,10 +117,10 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
             }}
             placeholder={placeholder}
             disabled={disabled}
-            className="pr-12 text-right"
+            className="pr-10 text-right tabular-nums"
             style={{ width: calculateWidth() }}
           />
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
             {currency}
           </div>
         </div>

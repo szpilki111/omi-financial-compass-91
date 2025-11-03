@@ -372,7 +372,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         />
       </TableCell>
       <TableCell>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-1">
           <Input
             type="text"
             inputMode="decimal"
@@ -394,11 +394,13 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               }
             }}
             placeholder="0.00"
-            className={cn("text-right min-w-[80px] max-w-[150px]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
-            style={{ width: `${Math.max(80, Math.min(150, (formData.debit_amount.toString().length || 4) * 10 + 40))}px` }}
+            className={cn("text-right pr-1 tabular-nums", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ 
+              width: `${Math.ceil(Math.max((formData.debit_amount === 0 ? 4 : formData.debit_amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
+            }}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap shrink-0">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -412,7 +414,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         />
       </TableCell>
       <TableCell>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-1">
           <Input
             type="text"
             inputMode="decimal"
@@ -434,11 +436,13 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               }
             }}
             placeholder="0.00"
-            className={cn("text-right min-w-[80px] max-w-[150px]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
-            style={{ width: `${Math.max(80, Math.min(150, (formData.credit_amount.toString().length || 4) * 10 + 40))}px` }}
+            className={cn("text-right pr-1 tabular-nums", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ 
+              width: `${Math.ceil(Math.max((formData.credit_amount === 0 ? 4 : formData.credit_amount.toFixed(2).length) * 8.5 + 16, 60))}px` 
+            }}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap shrink-0">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
