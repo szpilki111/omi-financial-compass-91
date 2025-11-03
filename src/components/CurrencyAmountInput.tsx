@@ -43,17 +43,7 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
   }, [value, isFocused]);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let inputValue = e.target.value;
-    
-    // Replace comma with period for decimal separator
-    inputValue = inputValue.replace(',', '.');
-    
-    // Validate: max 10 digits before decimal, 2 after
-    const regex = /^\d{0,10}(\.\d{0,2})?$/;
-    if (inputValue && !regex.test(inputValue)) {
-      return; // Don't update if invalid format
-    }
-    
+    const inputValue = e.target.value;
     setDisplayValue(inputValue);
     const newValue = parseFloat(inputValue) || 0;
     onChange(newValue);
@@ -66,11 +56,9 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(false);
-    // Always format to 2 decimal places on blur
-    const roundedValue = parseFloat(value.toFixed(2));
-    if (roundedValue > 0) {
-      setDisplayValue(roundedValue.toFixed(2));
-      onChange(roundedValue); // Update with rounded value
+    // Format to 2 decimal places on blur
+    if (value > 0) {
+      setDisplayValue(value.toFixed(2));
     } else {
       setDisplayValue('');
     }
@@ -81,16 +69,6 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
   const convertedAmount = currency !== baseCurrency ? value * exchangeRate : value;
   const showConversion = currency !== baseCurrency && value > 0 && exchangeRate > 0;
 
-  // Calculate dynamic width based on content (min 80px, max 200px)
-  const calculateWidth = () => {
-    const baseWidth = 80;
-    const charWidth = 9; // approximate width per character
-    const paddingAndSymbol = 50; // space for currency symbol and padding
-    const contentLength = displayValue.length || placeholder.length;
-    const calculatedWidth = Math.min(Math.max(baseWidth, contentLength * charWidth + paddingAndSymbol), 200);
-    return `${calculatedWidth}px`;
-  };
-
   return (
     <div className={`space-y-1 ${className}`}>
       <Label className="text-sm font-medium">
@@ -98,7 +76,7 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
       </Label>
       
       <div className="space-y-1">
-        <div className="relative inline-block">
+        <div className="relative">
           <Input
             type="text"
             inputMode="decimal"
@@ -117,8 +95,7 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
             }}
             placeholder={placeholder}
             disabled={disabled}
-            className="pr-12 text-right"
-            style={{ width: calculateWidth() }}
+            className="pr-12"
           />
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
             {currency}
