@@ -484,18 +484,20 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
+                        value={field.amount === 0 ? '' : field.amount.toFixed(2).replace('.', ',')}
                         onChange={(e) => {
-                          const value = e.target.value.replace(',', '.');
+                          let value = e.target.value.replace(',', '.');
+                          // Validate: max 10 digits before decimal, 2 after
+                          const regex = /^\d{0,10}(\.\d{0,2})?$/;
+                          if (value && !regex.test(value)) return;
                           handleDebitAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'debit')}
                         onBlur={(e) => {
-                          // Format to .00 only if value is integer and no decimal point was entered
-                          const inputValue = e.target.value;
-                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                            // Value is already a number, display formatting happens in value prop
-                            handleDebitAmountChange(field.id, field.amount);
+                          // Always round to 2 decimal places
+                          if (field.amount > 0) {
+                            const rounded = parseFloat(field.amount.toFixed(2));
+                            handleDebitAmountChange(field.id, rounded);
                           }
                           handleAmountBlur(e, field.id, 'debit');
                         }}
@@ -509,6 +511,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           }
                         }}
                         placeholder="0.00"
+                        className="text-right"
+                        style={{ width: `${Math.max(80, Math.min(150, (field.amount.toString().length || 4) * 10 + 40))}px` }}
                       />
                     </div>
                     {debitFields.length > 1 && (
@@ -553,18 +557,20 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                       <Input
                         type="text"
                         inputMode="decimal"
-                        value={field.amount === 0 ? '' : (Number.isInteger(field.amount) ? field.amount.toFixed(2).replace('.', ',') : field.amount.toString().replace('.', ','))}
+                        value={field.amount === 0 ? '' : field.amount.toFixed(2).replace('.', ',')}
                         onChange={(e) => {
-                          const value = e.target.value.replace(',', '.');
+                          let value = e.target.value.replace(',', '.');
+                          // Validate: max 10 digits before decimal, 2 after
+                          const regex = /^\d{0,10}(\.\d{0,2})?$/;
+                          if (value && !regex.test(value)) return;
                           handleCreditAmountChange(field.id, parseFloat(value) || 0);
                         }}
                         onFocus={(e) => handleAmountFocus(e, field.id, 'credit')}
                         onBlur={(e) => {
-                          // Format to .00 only if value is integer and no decimal point was entered
-                          const inputValue = e.target.value;
-                          if (field.amount > 0 && !inputValue.includes('.') && !inputValue.includes(',')) {
-                            // Value is already a number, display formatting happens in value prop
-                            handleCreditAmountChange(field.id, field.amount);
+                          // Always round to 2 decimal places
+                          if (field.amount > 0) {
+                            const rounded = parseFloat(field.amount.toFixed(2));
+                            handleCreditAmountChange(field.id, rounded);
                           }
                           handleAmountBlur(e, field.id, 'credit');
                         }}
@@ -578,6 +584,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
                           }
                         }}
                         placeholder="0.00"
+                        className="text-right"
+                        style={{ width: `${Math.max(80, Math.min(150, (field.amount.toString().length || 4) * 10 + 40))}px` }}
                       />
                     </div>
                     {creditFields.length > 1 && (
