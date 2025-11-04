@@ -266,16 +266,15 @@ Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłos
 Misjonarze Oblaci Maryi Niepokalanej
   `;
 
-  // Get SMTP user for reply-to address
-  const smtpUser = 'errors@oblaci.pl'; // This should match SMTP_USER
-  const replyToAddress = `errors+${reportId}@oblaci.pl`;
+  const fromAddress = 'finanse@oblaci.pl'; // Must match SMTP_USER
+  const replyToAddress = `finanse@oblaci.pl`; // Keep replies to same address
 
   return sendEmail({
     to: recipientEmail,
     subject: `System Finansowy OMI - Nowa odpowiedź: ${reportTitle} [#${reportId}]`,
     text,
     html,
-    from: `System Finansowy OMI <${smtpUser}>`,
+    from: `System Finansowy OMI <${fromAddress}>`,
     replyTo: replyToAddress,
   });
 };
@@ -405,15 +404,15 @@ Możesz odpowiedzieć na tę wiadomość, aby dodać dodatkowe informacje do zg�
 Misjonarze Oblaci Maryi Niepokalanej
   `;
 
-  const smtpUser = 'errors@oblaci.pl';
-  const replyToAddress = `errors+${reportId}@oblaci.pl`;
+  const fromAddress = 'finanse@oblaci.pl'; // Must match SMTP_USER
+  const replyToAddress = `finanse@oblaci.pl`;
 
   return sendEmail({
     to: recipientEmail,
     subject: `System Finansowy OMI - Potwierdzenie zgłoszenia: ${reportTitle} [#${reportId}]`,
     text,
     html,
-    from: `System Finansowy OMI <${smtpUser}>`,
+    from: `System Finansowy OMI <${fromAddress}>`,
     replyTo: replyToAddress,
   });
 };
