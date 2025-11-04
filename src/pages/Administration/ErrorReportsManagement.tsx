@@ -28,6 +28,7 @@ import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useState as useComponentState } from "react";
+import { sendErrorReportResponseEmail } from "@/utils/emailUtils";
 
 const ResponseAttachments = ({ paths }: { paths: string[] }) => {
   const [urls, setUrls] = useComponentState<string[]>([]);
@@ -244,9 +245,34 @@ const ErrorReportsManagement = () => {
         });
 
       if (error) throw error;
+
+      return { userId: user.id };
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-report-responses", selectedReport?.id] });
+      
+      // Send email notification to report author
+      if (selectedReport && selectedReport.profiles?.email) {
+        try {
+          const { data: responderProfile } = await supabase
+            .from("profiles")
+            .select("name")
+            .eq("id", data.userId)
+            .single();
+
+          await sendErrorReportResponseEmail(
+            selectedReport.profiles.email,
+            selectedReport.title,
+            responderProfile?.name || "Administrator",
+            newResponse,
+            selectedReport.id
+          );
+        } catch (emailError) {
+          console.error("Failed to send email notification:", emailError);
+          // Don't fail the whole operation if email fails
+        }
+      }
+      
       setNewResponse("");
       setUploadedFiles([]);
       if (fileInputRef.current) {
@@ -254,7 +280,7 @@ const ErrorReportsManagement = () => {
       }
       toast({
         title: "Sukces",
-        description: "Odpowiedź została dodana.",
+        description: "Odpowiedź została dodana i wysłano powiadomienie email.",
       });
     },
     onError: (error) => {

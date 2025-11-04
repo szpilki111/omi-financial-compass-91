@@ -12,6 +12,7 @@ interface EmailRequest {
   text?: string;
   html?: string;
   from?: string;
+  replyTo?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -21,10 +22,11 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { to, subject, text, html, from }: EmailRequest = await req.json();
+    const { to, subject, text, html, from, replyTo }: EmailRequest = await req.json();
 
     console.log('Attempting to send email to:', to);
     console.log('Subject:', subject);
+    console.log('Reply-To:', replyTo);
 
     // Validate required fields
     if (!to || !subject) {
@@ -75,6 +77,7 @@ const handler = async (req: Request): Promise<Response> => {
       subject: subject,
       content: text || '',
       html: html || undefined,
+      replyTo: replyTo || undefined,
     });
 
     await client.close();

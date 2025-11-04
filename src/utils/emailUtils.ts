@@ -6,6 +6,7 @@ export interface SendEmailParams {
   text?: string;
   html?: string;
   from?: string;
+  replyTo?: string;
 }
 
 /**
@@ -153,6 +154,129 @@ Misjonarze Oblaci Maryi Niepokalanej
     subject: `System Finansowy OMI - Raport ${statusText}`,
     text,
     html,
+  });
+};
+
+/**
+ * Wysyła email z powiadomieniem o nowej odpowiedzi na zgłoszenie błędu
+ */
+export const sendErrorReportResponseEmail = async (
+  recipientEmail: string,
+  reportTitle: string,
+  responderName: string,
+  responseMessage: string,
+  reportId: string
+) => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .header {
+            background-color: #d97706;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+          }
+          .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+          }
+          .response {
+            background-color: #fff;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #d97706;
+            border-radius: 3px;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 12px;
+          }
+          .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 15px 0;
+            background-color: #d97706;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>System Finansowy OMI</h1>
+          </div>
+          <div class="content">
+            <h2>Szczęść Boże!</h2>
+            <p>Otrzymałeś nową odpowiedź na zgłoszenie błędu:</p>
+            
+            <p><strong>Zgłoszenie:</strong> ${reportTitle}</p>
+            <p><strong>Odpowiedź od:</strong> ${responderName}</p>
+            
+            <div class="response">
+              <strong>Treść odpowiedzi:</strong>
+              <p>${responseMessage}</p>
+            </div>
+            
+            <p style="margin-top: 20px;">
+              Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} System Finansowy OMI</p>
+            <p>Misjonarze Oblaci Maryi Niepokalanej</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `
+Szczęść Boże!
+
+Otrzymałeś nową odpowiedź na zgłoszenie błędu:
+
+Zgłoszenie: ${reportTitle}
+Odpowiedź od: ${responderName}
+
+Treść odpowiedzi:
+${responseMessage}
+
+Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.
+
+---
+© ${new Date().getFullYear()} System Finansowy OMI
+Misjonarze Oblaci Maryi Niepokalanej
+  `;
+
+  // Get SMTP user for reply-to address
+  const smtpUser = 'errors@oblaci.pl'; // This should match SMTP_USER
+  const replyToAddress = `errors+${reportId}@oblaci.pl`;
+
+  return sendEmail({
+    to: recipientEmail,
+    subject: `System Finansowy OMI - Nowa odpowiedź: ${reportTitle} [#${reportId}]`,
+    text,
+    html,
+    from: `System Finansowy OMI <${smtpUser}>`,
+    replyTo: replyToAddress,
   });
 };
 
