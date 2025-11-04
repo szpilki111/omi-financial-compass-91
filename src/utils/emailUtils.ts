@@ -281,6 +281,144 @@ Misjonarze Oblaci Maryi Niepokalanej
 };
 
 /**
+ * Wysyła potwierdzenie zgłoszenia błędu do użytkownika
+ */
+export const sendErrorReportConfirmationEmail = async (
+  recipientEmail: string,
+  userName: string,
+  reportTitle: string,
+  reportDescription: string,
+  priority: string,
+  reportId: string
+) => {
+  const priorityLabels: Record<string, string> = {
+    low: "Niski",
+    medium: "Średni", 
+    high: "Wysoki",
+    critical: "Krytyczny",
+  };
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .header {
+            background-color: #d97706;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+          }
+          .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+          }
+          .report-box {
+            background-color: #fff;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #d97706;
+            border-radius: 3px;
+          }
+          .priority {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            background-color: ${priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : priority === 'medium' ? '#d97706' : '#65a30d'};
+            color: white;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 12px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>System Finansowy OMI</h1>
+          </div>
+          <div class="content">
+            <h2>Szczęść Boże ${userName}!</h2>
+            <p>Potwierdzamy otrzymanie Twojego zgłoszenia błędu.</p>
+            
+            <div class="report-box">
+              <p><strong>Tytuł:</strong> ${reportTitle}</p>
+              <p><strong>Priorytet:</strong> <span class="priority">${priorityLabels[priority] || priority}</span></p>
+              <p><strong>Opis:</strong></p>
+              <p>${reportDescription}</p>
+            </div>
+            
+            <p>Numer zgłoszenia: <strong>#${reportId.slice(0, 8)}</strong></p>
+            
+            <p style="margin-top: 20px;">
+              Administrator zostanie powiadomiony o zgłoszeniu i skontaktuje się z Tobą w sprawie rozwiązania problemu.
+            </p>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              Możesz odpowiedzieć na tę wiadomość, aby dodać dodatkowe informacje do zgłoszenia.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} System Finansowy OMI</p>
+            <p>Misjonarze Oblaci Maryi Niepokalanej</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `
+Szczęść Boże ${userName}!
+
+Potwierdzamy otrzymanie Twojego zgłoszenia błędu.
+
+Tytuł: ${reportTitle}
+Priorytet: ${priorityLabels[priority] || priority}
+
+Opis:
+${reportDescription}
+
+Numer zgłoszenia: #${reportId.slice(0, 8)}
+
+Administrator zostanie powiadomiony o zgłoszeniu i skontaktuje się z Tobą w sprawie rozwiązania problemu.
+
+Możesz odpowiedzieć na tę wiadomość, aby dodać dodatkowe informacje do zgłoszenia.
+
+---
+© ${new Date().getFullYear()} System Finansowy OMI
+Misjonarze Oblaci Maryi Niepokalanej
+  `;
+
+  const smtpUser = 'errors@oblaci.pl';
+  const replyToAddress = `errors+${reportId}@oblaci.pl`;
+
+  return sendEmail({
+    to: recipientEmail,
+    subject: `System Finansowy OMI - Potwierdzenie zgłoszenia: ${reportTitle} [#${reportId}]`,
+    text,
+    html,
+    from: `System Finansowy OMI <${smtpUser}>`,
+    replyTo: replyToAddress,
+  });
+};
+
+/**
  * Wysyła email z kodem weryfikacyjnym 2FA
  */
 export const sendVerificationCodeEmail = async (
