@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,52 +37,41 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Either text or html content is required');
     }
 
-    // Get SMTP configuration from environment variables
-    const smtpHost = Deno.env.get('SMTP_HOST');
-    const smtpPort = parseInt(Deno.env.get('SMTP_PORT') || '587');
-    const smtpUser = Deno.env.get('SMTP_USER');
-    const smtpPassword = Deno.env.get('SMTP_PASSWORD');
-
-    if (!smtpHost || !smtpUser || !smtpPassword) {
-      console.error('Missing SMTP configuration');
-      throw new Error('SMTP configuration is incomplete');
+    // Get Resend API key
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      console.error('Missing RESEND_API_KEY');
+      throw new Error('RESEND_API_KEY is not configured');
     }
 
-    console.log('SMTP Configuration:', {
-      host: smtpHost,
-      port: smtpPort,
-      user: smtpUser,
-    });
-
-    // Create SMTP client
-    const client = new SMTPClient({
-      connection: {
-        hostname: smtpHost,
-        port: smtpPort,
-        tls: smtpPort === 465, // Use TLS for port 465 (SSL), false for 587 (STARTTLS)
-        auth: {
-          username: smtpUser,
-          password: smtpPassword,
-        },
-      },
-    });
+    const resend = new Resend(resendApiKey);
 
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Send email
-    await client.send({
-      from: from || smtpUser,
+    // Send email using Resend
+    const emailData: any = {
+      from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
       to: recipients,
       subject: subject,
-      content: text || '',
-      html: html || undefined,
-      replyTo: replyTo || undefined,
-    });
+      reply_to: replyTo || undefined,
+    };
 
-    await client.close();
+    // Add content based on what's provided
+    if (html) {
+      emailData.html = html;
+    }
+    if (text) {
+      emailData.text = text;
+    }
 
-    console.log('Email sent successfully to:', recipients);
+    const result = await resend.emails.send(emailData);
+
+    if (result.error) {
+      throw new Error(`Resend error: ${result.error.message}`);
+    }
+
+    console.log('Email sent successfully to:', recipients, 'ID:', result.data?.id);
 
     return new Response(
       JSON.stringify({ 
