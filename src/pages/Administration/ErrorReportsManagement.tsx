@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Eye, ExternalLink, Paperclip, X } from "lucide-react";
+import { Eye, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -114,8 +114,6 @@ const ErrorReportsManagement = () => {
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [newResponse, setNewResponse] = useState("");
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
@@ -226,11 +224,9 @@ const ErrorReportsManagement = () => {
     mutationFn: async ({
       errorReportId,
       message,
-      attachments,
     }: {
       errorReportId: string;
       message: string;
-      attachments: string[];
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -241,7 +237,7 @@ const ErrorReportsManagement = () => {
           error_report_id: errorReportId,
           user_id: user.id,
           message,
-          attachments: attachments.length > 0 ? attachments : null,
+          attachments: null,
         });
 
       if (error) throw error;
@@ -274,10 +270,6 @@ const ErrorReportsManagement = () => {
       }
       
       setNewResponse("");
-      setUploadedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
       toast({
         title: "Sukces",
         description: "Odpowiedź została dodana i wysłano powiadomienie email.",
@@ -328,44 +320,12 @@ const ErrorReportsManagement = () => {
   const handleAddResponse = async () => {
     if (!selectedReport || !newResponse.trim()) return;
 
-    const attachmentUrls: string[] = [];
-
-    // Upload files if any
-    for (const file of uploadedFiles) {
-      const filePath = `${selectedReport.id}/responses/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("error-reports")
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error("Error uploading file:", uploadError);
-        toast({
-          title: "Błąd",
-          description: `Nie udało się przesłać pliku: ${file.name}`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      attachmentUrls.push(filePath);
-    }
-
     addResponseMutation.mutate({
       errorReportId: selectedReport.id,
       message: newResponse,
-      attachments: attachmentUrls,
     });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setUploadedFiles(Array.from(e.target.files));
-    }
-  };
-
-  const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -616,43 +576,6 @@ const ErrorReportsManagement = () => {
                   rows={3}
                   placeholder="Wprowadź odpowiedź..."
                 />
-                
-                <div className="space-y-2">
-                  <Input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={handleFileChange}
-                    multiple
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Dodaj pliki
-                  </Button>
-
-                  {uploadedFiles.length > 0 && (
-                    <div className="space-y-1">
-                      {uploadedFiles.map((file, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-sm">
-                          <span className="flex-1 truncate">{file.name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFile(idx)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
                 <Button 
                   onClick={handleAddResponse} 
