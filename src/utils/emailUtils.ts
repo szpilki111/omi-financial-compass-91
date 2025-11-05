@@ -46,16 +46,16 @@ export const sendErrorReportResponseEmail = async (
   responseMessage: string,
   reportId: string
 ) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-          }
+  const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
           .container {
             max-width: 600px;
             margin: 0 auto;
@@ -111,7 +111,7 @@ export const sendErrorReportResponseEmail = async (
             
             <div class="response">
               <strong>Treść odpowiedzi:</strong>
-              <p>${responseMessage}</p>
+              <p>${responseMessage.replace(/\n/g, '<br>')}</p>
             </div>
             
             <p style="margin-top: 20px;">
@@ -176,16 +176,16 @@ export const sendErrorReportConfirmationEmail = async (
     critical: "Krytyczny",
   };
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-          }
+  const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
           .container {
             max-width: 600px;
             margin: 0 auto;
@@ -239,7 +239,7 @@ export const sendErrorReportConfirmationEmail = async (
               <p><strong>Tytuł:</strong> ${reportTitle}</p>
               <p><strong>Priorytet:</strong> <span class="priority">${priorityLabels[priority] || priority}</span></p>
               <p><strong>Opis:</strong></p>
-              <p>${reportDescription}</p>
+              <p>${reportDescription.replace(/\n/g, '<br>')}</p>
             </div>
             
             <p>Numer zgłoszenia: <strong>#${reportId.slice(0, 8)}</strong></p>
@@ -304,16 +304,16 @@ export const sendVerificationCodeEmail = async (
   code: string,
   userName: string
 ) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-          }
+  const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
           .container {
             max-width: 600px;
             margin: 0 auto;

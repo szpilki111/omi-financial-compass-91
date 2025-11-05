@@ -64,7 +64,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Send email
+    // Send email with UTF-8 charset
     await client.send({
       from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
       to: recipients.join(','),
@@ -72,6 +72,8 @@ const handler = async (req: Request): Promise<Response> => {
       content: text || '',
       html: html || undefined,
       replyTo: replyTo || undefined,
+      charset: 'UTF-8',
+      encoding: '8bit',
     });
 
     await client.close();
