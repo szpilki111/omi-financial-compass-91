@@ -567,6 +567,7 @@ const ErrorReportsManagement = () => {
                         <span className="font-medium">{selectedReport.profiles?.name || "Nieznany użytkownik"}</span>
                         <span>{format(new Date(selectedReport.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}</span>
                       </div>
+                      <h3 className="font-semibold text-base">{selectedReport.title}</h3>
                       <p className="text-sm whitespace-pre-wrap">{selectedReport.description}</p>
                       {screenshotUrl && (
                         <img src={screenshotUrl} alt="Screenshot" className="max-w-full rounded border" />
