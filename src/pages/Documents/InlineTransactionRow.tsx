@@ -371,7 +371,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           disabled={isEditingBlocked}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -380,18 +380,31 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             value={formData.debit_amount === 0 ? "" : formData.debit_amount}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
-              handleDebitAmountChange(parseFloat(value) || 0);
+              const numValue = parseFloat(value) || 0;
+              // Limit to 10 digits before decimal point
+              if (Math.abs(numValue) < 10000000000) {
+                handleDebitAmountChange(numValue);
+              }
             }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              // Format to 2 decimal places on blur
+              if (formData.debit_amount > 0) {
+                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+              }
+              handleDebitAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
+            style={{ 
+              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toString().length) + 130)}px` 
+            }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -401,10 +414,11 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           locationId={userProfile?.location_id}
           side="debit"
           disabled={isEditingBlocked}
+          autoOpenOnFocus={true}
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -413,18 +427,31 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             value={formData.credit_amount === 0 ? "" : formData.credit_amount}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
-              handleCreditAmountChange(parseFloat(value) || 0);
+              const numValue = parseFloat(value) || 0;
+              // Limit to 10 digits before decimal point
+              if (Math.abs(numValue) < 10000000000) {
+                handleCreditAmountChange(numValue);
+              }
             }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              // Format to 2 decimal places on blur
+              if (formData.credit_amount > 0) {
+                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+              }
+              handleCreditAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
+            style={{ 
+              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toString().length) + 130)}px` 
+            }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -434,6 +461,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           locationId={userProfile?.location_id}
           side="credit"
           disabled={isEditingBlocked}
+          autoOpenOnFocus={true}
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>

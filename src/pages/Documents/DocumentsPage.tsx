@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator, FileText } from 'lucide-react';
+import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
@@ -45,6 +45,7 @@ const DocumentsPage = () => {
   const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [isImportSectionOpen, setIsImportSectionOpen] = useState(false);
 
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
@@ -243,6 +244,73 @@ const DocumentsPage = () => {
     });
   };
 
+  const downloadCsvTemplate = () => {
+    const csvContent = `Furta;"6.020,00";420-1-1-1;"6.020,00";100
+Kuchnia;"33.480,00";420-1-1-2;"33.480,00";100
+Pralnia;"4.500,00";420-1-1-3;"4.500,00";100
+Warsztat;"8.720,00";420-1-1-4;"8.720,00";100
+Inne;"6.900,00";420-1-1-5;"6.900,00";100
+Kiosk;"11.700,00";420-1-3-1;"11.700,00";100
+Kawiarnia;"11.580,00";420-1-3-2;"11.580,00";100
+Jadłodajnia;"32.090,00";420-1-3-3;"32.090,00";100
+WC;"0,00";420-1-3-4;"0,00";100
+Krypty;"6.840,00";420-1-3-5;"6.840,00";100
+Wieża;"4.800,00";420-1-3-6;"4.800,00";100
+`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'szablon_importu.csv';
+    link.click();
+    
+    toast({
+      title: "Szablon pobrany",
+      description: "Szablon CSV został pobrany",
+    });
+  };
+
+  const downloadMt940Template = () => {
+    const mt940Content = `
+:20:1
+:25:/PL69124013721111000012494387
+:28C:00065
+:60F:C250614PLN000000224791,09
+:61:2506160616CN000000058400,00N172NONREF
+:86:172^00PRZELEW                    ^34000
+^3012404416^38PL95124044161111001083941985
+^20Przelew środków
+^32DOM ZAKONNY MISJONARZY OBLATÓW     ŚWIĘTY KRZYŻ 1
+^6226-006    NOWA SŁUPIA      ^63   PL
+:61:2506160616DN000000000447,30N775NONREF
+:86:775^00PRZELEW INTERNET M/B       ^34000
+^3011402004^38PL81114020040000350231273820
+^20Numer zamówienia:…284356
+^32Wydawnictwo, Księgarnia, Antykwariat Górski FILAR Henr
+^62yk RĄCZKA
+:61:2506160616DN000000025707,00N631NONREF
+:86:631^00PRZELEW BETA/INTEGRA       ^34000
+^3012404416^38PL61124044161111001085264998
+^20zasilenie konta (- rewitalizacja)
+^32DOM ZAKONNY MISJONARZY OBLATÓW     ŚWIĘTY KRZYŻ 1
+^6226-006 NOWA SŁUPIA
+:62F:C250616PLN000000257036,79
+:64:C250616PLN000000257036,79
+-
+`;
+    
+    const blob = new Blob([mt940Content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'szablon_mt940.txt';
+    link.click();
+    
+    toast({
+      title: "Szablon pobrany",
+      description: "Szablon MT940 został pobrany",
+    });
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -256,30 +324,54 @@ const DocumentsPage = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
-          <div className="flex gap-2">
-            <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
-              Wyszukaj konta
-            </Button>
-            <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              Wyszukaj operacje
-            </Button>
-            <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Import MT940
-            </Button>
-            <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Import CSV
-            </Button>
-            <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nowy dokument
-            </Button>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900">Dokumenty</h1>
+            <div className="flex gap-2">
+              <Button onClick={handleSearchAccounts} variant="outline" className="flex items-center gap-2">
+                <Calculator className="h-4 w-4" />
+                Wyszukaj konta
+              </Button>
+              <Button onClick={() => navigate('/kpir')} variant="outline" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Wyszukaj operacje
+              </Button>
+              <Button 
+                onClick={() => setIsImportSectionOpen(!isImportSectionOpen)} 
+                variant="outline" 
+                className="flex items-center gap-2"
+              >
+                <FileUp className="h-4 w-4" />
+                Import z pliku
+                {isImportSectionOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+              <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nowy dokument
+              </Button>
+            </div>
           </div>
+
+          {isImportSectionOpen && (
+            <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border">
+              <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Import CSV
+              </Button>
+              <Button onClick={downloadCsvTemplate} variant="outline" size="sm" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Szablon CSV
+              </Button>
+              <Button onClick={() => setIsMt940ImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Import MT940
+              </Button>
+              <Button onClick={downloadMt940Template} variant="outline" size="sm" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Szablon MT940
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}

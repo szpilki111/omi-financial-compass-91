@@ -289,13 +289,17 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   // Funkcja obsługująca focus na przycisku
   const handleButtonFocus = () => {
-    if (autoOpenOnFocus && !disabled && locationId) {
+    if (autoOpenOnFocus && !disabled && locationId && !value) {
       setOpen(true);
     }
   };
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
+        // Nie pozwól otworzyć popover gdy już jest wybrane konto
+        if (isOpen && value) {
+          return;
+        }
         setOpen(isOpen);
         if (!isOpen) {
             setSearchTerm('');
@@ -311,7 +315,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           onFocus={handleButtonFocus}
         >
           <span className="truncate">
-            {displayedAccountName || "Wybierz konto..."}
+            {displayedAccountName || "Wybierz"}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -332,6 +336,24 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                 formatted += digitsOnly[i];
               }
               setSearchTerm(formatted);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                // Znajdź pierwsze pasujące konto
+                const firstAccount = accounts[0];
+                if (firstAccount) {
+                  onChange(firstAccount.id);
+                  setOpen(false);
+                  setSearchTerm('');
+                  // Wywołaj callback po wybraniu konta
+                  if (onAccountSelected) {
+                    setTimeout(() => {
+                      onAccountSelected();
+                    }, 100);
+                  }
+                }
+              }
             }}
           />
           <CommandList>

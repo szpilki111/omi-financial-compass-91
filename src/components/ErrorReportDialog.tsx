@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X, Loader2, Maximize2 } from "lucide-react";
+import { sendErrorReportConfirmationEmail } from "@/utils/emailUtils";
 
 interface ErrorReportDialogProps {
   open: boolean;
@@ -87,7 +88,7 @@ export const ErrorReportDialog = ({
       }
 
       // Create error report
-      const { error: insertError } = await supabase
+      const { data: newReport, error: insertError } = await supabase
         .from("error_reports")
         .insert({
           user_id: userId,
@@ -99,7 +100,9 @@ export const ErrorReportDialog = ({
           additional_files: additionalFileUrls,
           priority,
           status: "new",
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
 
@@ -122,9 +125,32 @@ export const ErrorReportDialog = ({
         await supabase.from("notifications").insert(notifications);
       }
 
+      // Send confirmation email to user
+      try {
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("name, email")
+          .eq("id", userId)
+          .single();
+
+        if (userProfile?.email && newReport?.id) {
+          await sendErrorReportConfirmationEmail(
+            userProfile.email,
+            userProfile.name || "Użytkowniku",
+            title,
+            description,
+            priority,
+            newReport.id
+          );
+        }
+      } catch (emailError) {
+        console.error("Failed to send confirmation email:", emailError);
+        // Don't fail the whole operation if email fails
+      }
+
       toast({
         title: "Zgłoszenie wysłane",
-        description: "Twoje zgłoszenie błędu zostało przesłane do administratorów.",
+        description: "Twoje zgłoszenie błędu zostało przesłane. Potwierdzenie otrzymasz na email.",
       });
 
       // Reset form

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/popover";
 import { Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 import { cn } from '@/lib/utils';
 
 interface Location {
@@ -530,7 +531,8 @@ const LocationAccountsManagement = () => {
               {Object.entries(groupedAssignments).map(([locationName, assignments]) => (
                 <div key={locationName}>
                   <h3 className="text-lg font-medium mb-3">{locationName}</h3>
-                  <Table>
+                  <ScrollableTable>
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Numer konta</TableHead>
@@ -574,6 +576,7 @@ const LocationAccountsManagement = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </ScrollableTable>
                 </div>
               ))}
             </div>

@@ -12,6 +12,7 @@ interface EmailRequest {
   text?: string;
   html?: string;
   from?: string;
+  replyTo?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -21,10 +22,11 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { to, subject, text, html, from }: EmailRequest = await req.json();
+    const { to, subject, text, html, from, replyTo }: EmailRequest = await req.json();
 
     console.log('Attempting to send email to:', to);
     console.log('Subject:', subject);
+    console.log('Reply-To:', replyTo);
 
     // Validate required fields
     if (!to || !subject) {
@@ -35,29 +37,23 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Either text or html content is required');
     }
 
-    // Get SMTP configuration from environment variables
+    // Get SMTP configuration from environment
     const smtpHost = Deno.env.get('SMTP_HOST');
-    const smtpPort = parseInt(Deno.env.get('SMTP_PORT') || '587');
+    const smtpPort = Deno.env.get('SMTP_PORT');
     const smtpUser = Deno.env.get('SMTP_USER');
     const smtpPassword = Deno.env.get('SMTP_PASSWORD');
 
-    if (!smtpHost || !smtpUser || !smtpPassword) {
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
       console.error('Missing SMTP configuration');
       throw new Error('SMTP configuration is incomplete');
     }
 
-    console.log('SMTP Configuration:', {
-      host: smtpHost,
-      port: smtpPort,
-      user: smtpUser,
-    });
-
-    // Create SMTP client
+    // Initialize SMTP client
     const client = new SMTPClient({
       connection: {
         hostname: smtpHost,
-        port: smtpPort,
-        tls: smtpPort === 465, // Use TLS for port 465 (SSL), false for 587 (STARTTLS)
+        port: parseInt(smtpPort),
+        tls: true,
         auth: {
           username: smtpUser,
           password: smtpPassword,
@@ -68,13 +64,16 @@ const handler = async (req: Request): Promise<Response> => {
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Send email
+    // Send email with UTF-8 charset
     await client.send({
-      from: from || smtpUser,
-      to: recipients,
+      from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
+      to: recipients.join(','),
       subject: subject,
       content: text || '',
       html: html || undefined,
+      replyTo: replyTo || undefined,
+      charset: 'UTF-8',
+      encoding: '8bit',
     });
 
     await client.close();

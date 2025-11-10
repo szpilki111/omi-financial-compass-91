@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +7,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Bug } from "lucide-react";
+import html2canvas from "html2canvas";
+import { ErrorReportDialog } from "@/components/ErrorReportDialog";
+import { useToast } from "@/hooks/use-toast";
 import { useDocumentTransactions } from "./useDocumentTransactions";
 import type { KpirTransaction } from "@/types/kpir";
 
@@ -28,6 +33,11 @@ const KpirDocumentDialog: React.FC<DocumentDialogProps> = ({
   onClose,
   document,
 }) => {
+  const { toast } = useToast();
+  const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
+  const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
+  const [isCapturingError, setIsCapturingError] = useState(false);
+
   // Jeśli nie ma dokumentu, nie pokazuj nic
   if (!document) return null;
 
@@ -39,15 +49,68 @@ const KpirDocumentDialog: React.FC<DocumentDialogProps> = ({
     error,
   } = useDocumentTransactions(document.id);
 
+  const captureErrorScreenshot = async () => {
+    setIsCapturingError(true);
+    try {
+      const canvas = await html2canvas(window.document.body, {
+        allowTaint: true,
+        useCORS: true,
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      setErrorScreenshot(dataUrl);
+      setErrorReportDialogOpen(true);
+    } catch (error) {
+      console.error("Error capturing screenshot:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się zrobić screenshota, ale możesz zgłosić błąd bez niego.",
+        variant: "destructive",
+      });
+      setErrorScreenshot(null);
+      setErrorReportDialogOpen(true);
+    } finally {
+      setIsCapturingError(false);
+    }
+  };
+
+  const getBrowserInfo = () => {
+    return {
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: navigator.platform,
+      screenWidth: window.screen.width,
+      screenHeight: window.screen.height,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+    };
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl w-full">
-        <DialogHeader>
-          <DialogTitle>Podgląd dokumentu</DialogTitle>
-          <DialogDescription>
-            Numer: <b>{document.document_number}</b>
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-2xl w-full">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Podgląd dokumentu</DialogTitle>
+                <DialogDescription>
+                  Numer: <b>{document.document_number}</b>
+                </DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={captureErrorScreenshot}
+                disabled={isCapturingError}
+                title="Zgłoś błąd"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                {isCapturingError ? "Robię screenshot..." : "Zgłoś błąd"}
+              </Button>
+            </div>
+          </DialogHeader>
 
         <div className="space-y-2 mt-2">
           <div>
@@ -129,6 +192,15 @@ const KpirDocumentDialog: React.FC<DocumentDialogProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+
+    <ErrorReportDialog
+      open={errorReportDialogOpen}
+      onOpenChange={setErrorReportDialogOpen}
+      autoScreenshot={errorScreenshot}
+      pageUrl={window.location.href}
+      browserInfo={getBrowserInfo()}
+    />
+  </>
   );
 };
 
