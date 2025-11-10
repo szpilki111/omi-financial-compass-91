@@ -11,8 +11,6 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
   const stickyScrollRef = useRef<HTMLDivElement>(null);
   const stickyScrollContentRef = useRef<HTMLDivElement>(null);
   const [isScrollable, setIsScrollable] = useState(false);
-  const [scrollbarPosition, setScrollbarPosition] = useState<'hidden' | 'bottom' | 'floating'>('bottom');
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const mainScroll = mainScrollRef.current;
@@ -86,33 +84,8 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       setIsScrollable(mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
-    // Handle scroll activity - show floating scrollbar
-    const handleScrollActivity = () => {
-      if (!isScrollable) return;
-      
-      setScrollbarPosition('floating');
-      
-      // Clear existing timeout
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
-      
-      // Auto-hide after 3 seconds of inactivity
-      hideTimeoutRef.current = setTimeout(() => {
-        setScrollbarPosition('bottom');
-      }, 3000);
-    };
-
-    // Handle mouse movement over table - show scrollbar
-    const handleMouseMove = () => {
-      if (!isScrollable) return;
-      handleScrollActivity();
-    };
-
     mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
     stickyScroll.addEventListener('scroll', syncStickyToMain, { passive: true });
-    mainScroll.addEventListener('scroll', handleScrollActivity, { passive: true });
-    mainScroll.addEventListener('mousemove', handleMouseMove, { passive: true });
     
     // Initial setup and updates
     updateStickyWidth();
@@ -130,13 +103,8 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
       mainScroll.removeEventListener('scroll', syncMainToSticky);
       stickyScroll.removeEventListener('scroll', syncStickyToMain);
-      mainScroll.removeEventListener('scroll', handleScrollActivity);
-      mainScroll.removeEventListener('mousemove', handleMouseMove);
       resizeObserver.disconnect();
       window.removeEventListener('resize', checkScrollability);
     };
@@ -158,23 +126,19 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
         </div>
       </div>
       
-      {/* Hybrid floating scrollbar with auto-hide */}
+      {/* Fixed sticky scrollbar always visible at bottom */}
       <div
         ref={stickyScrollRef}
         className={cn(
-          "fixed left-6 right-6 overflow-x-auto overflow-y-hidden z-[100]",
+          "fixed left-6 right-6 bottom-4 overflow-x-auto overflow-y-hidden z-[100]",
           "bg-background/90 backdrop-blur-md",
-          "border border-border/50 rounded-full shadow-2xl",
+          "border border-border/50 rounded-lg shadow-lg",
           "px-4 py-2",
-          "transition-all duration-300 ease-in-out",
+          "transition-opacity duration-200",
           "hover:opacity-100 hover:shadow-xl",
-          scrollbarPosition === 'hidden' && "opacity-0 translate-y-4 pointer-events-none",
-          scrollbarPosition === 'bottom' && "bottom-4 opacity-70",
-          scrollbarPosition === 'floating' && "bottom-[35%] md:bottom-[40%] opacity-100 shadow-2xl",
-          !isScrollable && "opacity-30 pointer-events-none"
+          isScrollable ? "opacity-90" : "opacity-0 pointer-events-none"
         )}
         style={{ height: '20px' }}
-        onMouseEnter={() => isScrollable && setScrollbarPosition('floating')}
       >
         <div ref={stickyScrollContentRef} style={{ height: '12px' }} />
       </div>
