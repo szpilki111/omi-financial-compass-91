@@ -138,10 +138,6 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
     console.log("=== Debit amount blur triggered ===");
     console.log("Form data:", formData);
 
-    // Format to 2 decimal places on blur
-    if (formData.debit_amount > 0) {
-      handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
-    }
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log("Amount comparison:", {
@@ -179,10 +175,6 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
     console.log("=== Credit amount blur triggered ===");
     console.log("Form data:", formData);
 
-    // Format to 2 decimal places on blur
-    if (formData.credit_amount > 0) {
-      handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
-    }
 
     const difference = Math.abs(formData.debit_amount - formData.credit_amount);
     console.log("Amount comparison:", {
@@ -377,7 +369,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             type="number"
             step="0.01"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               handleDebitAmountChange(parseFloat(value) || 0);
@@ -389,7 +381,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toString().length) * 12 + 30)}px` 
+              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount..toFixed(2).length) * 12 + 30)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
@@ -414,7 +406,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             type="number"
             step="0.01"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               handleCreditAmountChange(parseFloat(value) || 0);
@@ -426,7 +418,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toString().length) * 12 + 30)}px` 
+              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount..toFixed(2).length) * 12 + 30)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
