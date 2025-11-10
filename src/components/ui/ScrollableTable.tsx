@@ -126,14 +126,19 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
         </div>
       </div>
       
-      {/* Sticky scrollbar always at bottom of viewport */}
+      {/* Floating scrollbar in center of screen */}
       <div
         ref={stickyScrollRef}
         className={cn(
-          "fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg",
+          "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "w-[80%] max-w-4xl",
+          "overflow-x-auto overflow-y-hidden z-40",
+          "bg-background/80 backdrop-blur-md",
+          "border border-border/50 rounded-full shadow-2xl",
+          "px-4 py-2",
           !isScrollable && "opacity-30 pointer-events-none"
         )}
-        style={{ height: '16px' }}
+        style={{ height: '20px' }}
       >
         <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
       </div>
