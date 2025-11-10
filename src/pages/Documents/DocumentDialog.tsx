@@ -1323,9 +1323,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           />
                         </TableHead>
                         <TableHead className="w-[30%]">Opis</TableHead>
-                        <TableHead className="text-right w-24">Kwota Winien</TableHead>
+                        <TableHead className="text-right w-auto">Kwota Winien</TableHead>
                         <TableHead>Konto Winien</TableHead>
-                        <TableHead className="text-right w-24">Kwota Ma</TableHead>
+                        <TableHead className="text-right w-auto">Kwota Ma</TableHead>
                         <TableHead>Konto Ma</TableHead>
                         <TableHead>Akcje</TableHead>
                       </TableRow>
@@ -1476,9 +1476,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           </TableHead>
                           <TableHead className="w-[30%]">Opis</TableHead>
                           <TableHead>Konto Wn</TableHead>
-                          <TableHead className="text-right w-24">Winien</TableHead>
+                          <TableHead className="text-right w-auto">Winien</TableHead>
                           <TableHead>Konto Ma</TableHead>
-                          <TableHead className="text-right w-24">Ma</TableHead>
+                          <TableHead className="text-right w-auto">Ma</TableHead>
                           <TableHead>Akcje</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1813,7 +1813,7 @@ const EditableTransactionRow = React.forwardRef<
             disabled={isEditingBlocked}
           />
         </TableCell>
-        <TableCell className="w-24">
+        <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
             <Input
               type="number"
@@ -1825,8 +1825,11 @@ const EditableTransactionRow = React.forwardRef<
                 setFormData((prev) => ({ ...prev, debit_amount: value }));
               }}
               placeholder="0.00"
+              style={{ 
+                width: `${Math.max(70, (formData.debit_amount === 0 || !formData.debit_amount ? 4 : formData.debit_amount.toString().length) * 12 + 30)}px` 
+              }}
               className={cn(
-                "text-right w-20",
+                "text-right",
                 isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
                 missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
               )}
@@ -1850,7 +1853,7 @@ const EditableTransactionRow = React.forwardRef<
             )}
           />
         </TableCell>
-        <TableCell className="w-24">
+        <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
             <Input
               type="number"
@@ -1862,8 +1865,11 @@ const EditableTransactionRow = React.forwardRef<
                 setFormData((prev) => ({ ...prev, credit_amount: value }));
               }}
               placeholder="0.00"
+              style={{ 
+                width: `${Math.max(70, (formData.credit_amount === 0 || !formData.credit_amount ? 4 : formData.credit_amount.toString().length) * 12 + 30)}px` 
+              }}
               className={cn(
-                "text-right w-20",
+                "text-right",
                 isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
                 missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
               )}
