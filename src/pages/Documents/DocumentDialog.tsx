@@ -1819,7 +1819,7 @@ const EditableTransactionRow = React.forwardRef<
               type="number"
               step="0.01"
               min="0"
-              value={formData.debit_amount ? formData.debit_amount.toFixed(2) : ""}
+              value={formData.debit_amount || ""}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
                 setFormData((prev) => ({ ...prev, debit_amount: value }));
@@ -1859,7 +1859,7 @@ const EditableTransactionRow = React.forwardRef<
               type="number"
               step="0.01"
               min="0"
-              value={formData.debit_amount ? formData.debit_amount.toFixed(2) : ""}
+              value={formData.credit_amount || ""}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
                 setFormData((prev) => ({ ...prev, credit_amount: value }));
