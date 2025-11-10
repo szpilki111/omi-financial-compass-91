@@ -55,10 +55,10 @@ export const AdminScrollButtons = () => {
         <Button
           onClick={() => scroll('left')}
           size="lg"
-          className="fixed left-4 top-1/2 -translate-y-1/2 z-50 rounded-full p-4 shadow-2xl"
+          className="fixed left-6 top-1/2 -translate-y-1/2 z-50 shadow-lg rounded-full"
           aria-label="Przewiń w lewo"
         >
-          <ChevronLeft className="h-6 w-6" />
+          <ChevronLeft className="h-5 w-5" />
         </Button>
       )}
       
@@ -66,10 +66,10 @@ export const AdminScrollButtons = () => {
         <Button
           onClick={() => scroll('right')}
           size="lg"
-          className="fixed right-4 top-1/2 -translate-y-1/2 z-50 rounded-full p-4 shadow-2xl"
+          className="fixed right-6 top-1/2 -translate-y-1/2 z-50 shadow-lg rounded-full"
           aria-label="Przewiń w prawo"
         >
-          <ChevronRight className="h-6 w-6" />
+          <ChevronRight className="h-5 w-5" />
         </Button>
       )}
     </>
