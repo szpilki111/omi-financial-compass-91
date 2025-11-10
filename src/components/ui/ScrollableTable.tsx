@@ -38,26 +38,6 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
 
   return (
     <div className="relative">
-      {showLeftArrow && (
-        <button
-          onClick={() => scroll('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-full p-2 shadow-lg hover:bg-accent transition-colors"
-          aria-label="Przewiń w lewo"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-      )}
-      
-      {showRightArrow && (
-        <button
-          onClick={() => scroll('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-full p-2 shadow-lg hover:bg-accent transition-colors"
-          aria-label="Przewiń w prawo"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      )}
-
       <div
         ref={scrollRef}
         onScroll={checkScroll}
@@ -65,6 +45,26 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       >
         {children}
       </div>
+
+      {showLeftArrow && (
+        <button
+          onClick={() => scroll('left')}
+          className="fixed left-4 top-1/2 -translate-y-1/2 z-50 bg-muted/95 backdrop-blur-sm border-2 border-border rounded-full p-3 shadow-2xl hover:bg-muted hover:scale-110 transition-all duration-200"
+          aria-label="Przewiń w lewo"
+        >
+          <ChevronLeft className="h-6 w-6 text-foreground" />
+        </button>
+      )}
+      
+      {showRightArrow && (
+        <button
+          onClick={() => scroll('right')}
+          className="fixed right-4 top-1/2 -translate-y-1/2 z-50 bg-muted/95 backdrop-blur-sm border-2 border-border rounded-full p-3 shadow-2xl hover:bg-muted hover:scale-110 transition-all duration-200"
+          aria-label="Przewiń w prawo"
+        >
+          <ChevronRight className="h-6 w-6 text-foreground" />
+        </button>
+      )}
     </div>
   );
 };
