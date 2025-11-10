@@ -1324,9 +1324,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         </TableHead>
                         <TableHead className="w-[30%]">Opis</TableHead>
                         <TableHead className="text-right w-30">Kwota Winien</TableHead>
-                        <TableHead className="w-36">Konto Winien</TableHead>
+                        <TableHead className="w-30">Konto Winien</TableHead>
                         <TableHead className="text-right w-30">Kwota Ma</TableHead>
-                        <TableHead className="w-36">Konto Ma</TableHead>
+                        <TableHead className="w-30">Konto Ma</TableHead>
                         <TableHead>Akcje</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1475,9 +1475,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                             />
                           </TableHead>
                           <TableHead className="w-[30%]">Opis</TableHead>
-                          <TableHead className="w-36">Konto Wn</TableHead>
+                          <TableHead className="w-30">Konto Wn</TableHead>
                           <TableHead className="text-right w-30">Winien</TableHead>
-                          <TableHead className="w-36">Konto Ma</TableHead>
+                          <TableHead className="w-30">Konto Ma</TableHead>
                           <TableHead className="text-right w-30">Ma</TableHead>
                           <TableHead>Akcje</TableHead>
                         </TableRow>
