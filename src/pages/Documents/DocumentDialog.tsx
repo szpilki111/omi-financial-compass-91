@@ -1835,7 +1835,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               style={{ 
-                width: `${Math.max(70, (!formData.debit_amount ? 4 : formData.debit_amount.toFixed(2).length) * 10)}px` 
+                width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) * 9 + 20)}px` 
               }}
               className={cn(
                 "text-right",
@@ -1884,7 +1884,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               style={{ 
-                width: `${Math.max(70, (!formData.credit_amount ? 4 : formData.credit_amount.toFixed(2).length) * 10)}px` 
+                width: `${Math.max(60, (!formData.credit_amount ? 3 : formData.credit_amount.toFixed(2).length) * 9 + 20)}px` 
               }}
               className={cn(
                 "text-right",
