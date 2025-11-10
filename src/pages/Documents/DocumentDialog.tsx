@@ -1322,7 +1322,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                             disabled={isEditingBlocked || transactions.length === 0}
                           />
                         </TableHead>
-                        <TableHead className="w-[50%] min-w-[130px]">Opis</TableHead>
+                        <TableHead className="w-[50%] min-w-[300px]">Opis</TableHead>
                         <TableHead className="text-right w-auto">Kwota Winien</TableHead>
                         <TableHead>Konto Winien</TableHead>
                         <TableHead className="text-right w-auto">Kwota Ma</TableHead>
@@ -1476,7 +1476,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               disabled={isEditingBlocked || parallelTransactions.length === 0}
                             />
                           </TableHead>
-                          <TableHead className="w-[50%] min-w-[130px]">Opis</TableHead>
+                          <TableHead className="w-[50%] min-w-[300px]">Opis</TableHead>
                           <TableHead>Konto Wn</TableHead>
                           <TableHead className="text-right w-auto">Winien</TableHead>
                           <TableHead>Konto Ma</TableHead>
