@@ -371,7 +371,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           disabled={isEditingBlocked}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-24">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -388,10 +388,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            className={cn("text-right w-20", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -405,7 +405,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-24">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -422,10 +422,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            className={cn("text-right w-20", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>

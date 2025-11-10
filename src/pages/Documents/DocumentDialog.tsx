@@ -1324,10 +1324,10 @@ const DocumentDialog = ({
                             disabled={isEditingBlocked || transactions.length === 0}
                           />
                         </TableHead>
-                        <TableHead>Opis</TableHead>
-                        <TableHead className="text-right">Kwota Winien</TableHead>
+                        <TableHead className="w-[35%]">Opis</TableHead>
+                        <TableHead className="text-right w-24">Kwota Winien</TableHead>
                         <TableHead>Konto Winien</TableHead>
-                        <TableHead className="text-right">Kwota Ma</TableHead>
+                        <TableHead className="text-right w-24">Kwota Ma</TableHead>
                         <TableHead>Konto Ma</TableHead>
                         <TableHead>Akcje</TableHead>
                       </TableRow>
@@ -1466,11 +1466,11 @@ const DocumentDialog = ({
                               disabled={isEditingBlocked || parallelTransactions.length === 0}
                             />
                           </TableHead>
-                          <TableHead>Opis</TableHead>
+                          <TableHead className="w-[35%]">Opis</TableHead>
                           <TableHead>Konto Wn</TableHead>
-                          <TableHead className="text-right">Winien</TableHead>
+                          <TableHead className="text-right w-24">Winien</TableHead>
                           <TableHead>Konto Ma</TableHead>
-                          <TableHead className="text-right">Ma</TableHead>
+                          <TableHead className="text-right w-24">Ma</TableHead>
                           <TableHead>Akcje</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1783,7 +1783,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
           disabled={isEditingBlocked}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-24">
         <div className="flex items-center space-x-2">
           <Input 
             type="number" 
@@ -1796,14 +1796,14 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
             }}
             placeholder="0.00" 
             className={cn(
-              "text-right", 
+              "text-right w-20", 
               isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
               missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5"
             )}
             disabled={isEditingBlocked || isDebitReadOnly}
             readOnly={isDebitReadOnly}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -1820,7 +1820,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
           )}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="w-24">
         <div className="flex items-center space-x-2">
           <Input 
             type="number" 
@@ -1833,14 +1833,14 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
             }}
             placeholder="0.00" 
             className={cn(
-              "text-right", 
+              "text-right w-20", 
               isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
               missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5"
             )}
             disabled={isEditingBlocked || isCreditReadOnly}
             readOnly={isCreditReadOnly}
           />
-          <span className="text-sm text-gray-500">{getCurrencySymbol(currency)}</span>
+          <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
         </div>
       </TableCell>
       <TableCell>
