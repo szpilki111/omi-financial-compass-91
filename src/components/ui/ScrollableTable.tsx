@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { cn } from '@/lib/utils';
+import React, { useRef, useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface ScrollableTableProps {
   children: React.ReactNode;
@@ -89,7 +89,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
     const adjustFontSize = () => {
       const availableHeight = window.innerHeight - 280; // Same as maxHeight calc
       const tableHeight = mainScroll.scrollHeight;
-      
+
       if (tableHeight > availableHeight) {
         // Calculate optimal font size to fit content
         const ratio = availableHeight / tableHeight;
@@ -100,34 +100,38 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       }
     };
 
-    mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
-    stickyScroll.addEventListener('scroll', syncStickyToMain, { passive: true });
-    
+    mainScroll.addEventListener("scroll", syncMainToSticky, { passive: true });
+    stickyScroll.addEventListener("scroll", syncStickyToMain, { passive: true });
+
     // Initial setup and updates
     updateStickyWidth();
     checkScrollability();
     adjustFontSize();
-    
+
     const resizeObserver = new ResizeObserver(() => {
       updateStickyWidth();
       checkScrollability();
       adjustFontSize();
     });
-    
+
     resizeObserver.observe(mainScroll);
-    window.addEventListener('resize', () => {
-      checkScrollability();
-      adjustFontSize();
-    }, { passive: true });
+    window.addEventListener(
+      "resize",
+      () => {
+        checkScrollability();
+        adjustFontSize();
+      },
+      { passive: true },
+    );
 
     return () => {
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }
-      mainScroll.removeEventListener('scroll', syncMainToSticky);
-      stickyScroll.removeEventListener('scroll', syncStickyToMain);
+      mainScroll.removeEventListener("scroll", syncMainToSticky);
+      stickyScroll.removeEventListener("scroll", syncStickyToMain);
       resizeObserver.disconnect();
-      window.removeEventListener('resize', checkScrollability);
+      window.removeEventListener("resize", checkScrollability);
     };
   }, []);
 
@@ -138,17 +142,17 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
           ref={mainScrollRef}
           className={cn("overflow-auto", className)}
           data-scrollable-table="true"
-          style={{ 
-            maxWidth: '50%',
-            maxHeight: 'calc(100vh - 280px)',
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
             fontSize: `${fontSize}%`,
-            transition: 'font-size 0.2s ease-in-out'
+            transition: "font-size 0.2s ease-in-out",
           }}
         >
           {children}
         </div>
       </div>
-      
+
       {/* Fixed sticky scrollbar always visible at bottom */}
       <div
         ref={stickyScrollRef}
@@ -159,11 +163,11 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
           "px-4 py-2",
           "transition-opacity duration-200",
           "hover:opacity-100 hover:shadow-xl",
-          isScrollable ? "opacity-90" : "opacity-0 pointer-events-none"
+          isScrollable ? "opacity-90" : "opacity-0 pointer-events-none",
         )}
-        style={{ height: '20px' }}
+        style={{ height: "20px" }}
       >
-        <div ref={stickyScrollContentRef} style={{ height: '12px' }} />
+        <div ref={stickyScrollContentRef} style={{ height: "12px" }} />
       </div>
     </>
   );
