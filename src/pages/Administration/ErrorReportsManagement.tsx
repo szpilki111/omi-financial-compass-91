@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useState as useComponentState } from "react";
 import { sendErrorReportResponseEmail } from "@/utils/emailUtils";
+import { ScrollableTable } from "@/components/ui/ScrollableTable";
 
 const ResponseAttachments = ({ paths }: { paths: string[] }) => {
   const [urls, setUrls] = useComponentState<string[]>([]);
@@ -417,7 +418,7 @@ const ErrorReportsManagement = () => {
         </div>
       </div>
 
-      <div className="border rounded-lg overflow-x-auto">
+      <ScrollableTable className="border rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -457,7 +458,7 @@ const ErrorReportsManagement = () => {
             ))}
           </TableBody>
         </Table>
-      </div>
+      </ScrollableTable>
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

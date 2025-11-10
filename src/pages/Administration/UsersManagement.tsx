@@ -28,6 +28,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import UserDialog from './UserDialog';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 import { useAuth } from '@/context/AuthContext';
 
 interface UserProfile {
@@ -285,7 +286,7 @@ const toggleUserBlockedMutation = useMutation({
           {!users?.length ? (
             <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <Table>
               <TableHeader>
                 <TableRow>
@@ -420,7 +421,7 @@ const toggleUserBlockedMutation = useMutation({
                 ))}
               </TableBody>
             </Table>
-            </div>
+            </ScrollableTable>
           )}
         </CardContent>
       </Card>

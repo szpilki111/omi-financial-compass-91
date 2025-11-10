@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, CheckCircle, Clock, Circle, ChevronRight, ChevronDown } from 'lucide-react';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 
 interface ProjectFeature {
   id: string;
@@ -532,7 +533,7 @@ const ProjectFeaturesManagement = () => {
           </div>
 
           {/* Table */}
-          <div className="border rounded-lg overflow-x-auto">
+          <ScrollableTable className="border rounded-lg">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -700,7 +701,7 @@ const ProjectFeaturesManagement = () => {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </ScrollableTable>
         </CardContent>
       </Card>
     </div>

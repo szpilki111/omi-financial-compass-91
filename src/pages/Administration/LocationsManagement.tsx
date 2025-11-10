@@ -16,6 +16,7 @@ import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
 import LocationSettingsDialog from './LocationSettingsDialog';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 
 interface Location {
   id: string;
@@ -211,7 +212,7 @@ const LocationsManagement = () => {
           {!locations?.length ? (
             <p className="text-center text-omi-gray-500">Brak placówek w systemie.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <Table>
               <TableHeader>
                 <TableRow>
@@ -294,7 +295,7 @@ const LocationsManagement = () => {
                 ))}
               </TableBody>
             </Table>
-            </div>
+            </ScrollableTable>
           )}
         </CardContent>
       </Card>

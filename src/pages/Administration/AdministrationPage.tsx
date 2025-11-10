@@ -35,7 +35,7 @@ const AdministrationPage = () => {
   }
 
   return (
-    <MainLayout>
+    <MainLayout fullWidth>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-omi-900">Administracja</h1>
