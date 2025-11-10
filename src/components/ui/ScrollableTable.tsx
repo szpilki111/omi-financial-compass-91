@@ -10,7 +10,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const stickyScrollRef = useRef<HTMLDivElement>(null);
   const stickyScrollContentRef = useRef<HTMLDivElement>(null);
-  const [showStickyScroll, setShowStickyScroll] = useState(false);
+  const [isScrollable, setIsScrollable] = useState(false);
 
   useEffect(() => {
     const mainScroll = mainScrollRef.current;
@@ -26,7 +26,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
     // Sync sticky scrollbar width with main content
     const updateStickyWidth = () => {
       stickyScrollContent.style.width = `${mainScroll.scrollWidth}px`;
-      setShowStickyScroll(mainScroll.scrollWidth > mainScroll.clientWidth);
+      setIsScrollable(mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
     // Continuous sync during smooth scrolling
@@ -79,10 +79,9 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       }
     };
 
-    // Check if table is scrollable (always show sticky scrollbar when scrollable)
+    // Check if table is scrollable
     const checkScrollability = () => {
-      const isScrollable = mainScroll.scrollWidth > mainScroll.clientWidth;
-      setShowStickyScroll(isScrollable);
+      setIsScrollable(mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
     mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
@@ -127,16 +126,17 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
         </div>
       </div>
       
-      {/* Sticky scrollbar at bottom of viewport */}
-      {showStickyScroll && (
-        <div
-          ref={stickyScrollRef}
-          className="fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg"
-          style={{ height: '16px' }}
-        >
-          <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
-        </div>
-      )}
+      {/* Sticky scrollbar always at bottom of viewport */}
+      <div
+        ref={stickyScrollRef}
+        className={cn(
+          "fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg",
+          !isScrollable && "opacity-30 pointer-events-none"
+        )}
+        style={{ height: '16px' }}
+      >
+        <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
+      </div>
     </>
   );
 };
