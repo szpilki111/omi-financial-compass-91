@@ -388,7 +388,8 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            className={cn("text-right w-20", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ width: `${Math.max(5, (formData.debit_amount?.toString().length || 4) + 2)}ch` }}
+            className={cn("text-right min-w-[5ch]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
@@ -422,7 +423,8 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            className={cn("text-right w-20", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ width: `${Math.max(5, (formData.credit_amount?.toString().length || 4) + 2)}ch` }}
+            className={cn("text-right min-w-[5ch]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
