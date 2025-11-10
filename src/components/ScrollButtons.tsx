@@ -2,32 +2,26 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export const tableScrollRef: { current: HTMLDivElement | null } = { current: null };
-
 export const ScrollButtons = () => {
   const scrollAmount = 300;
 
-  useEffect(() => {
-    // Odczekaj na zamontowanie DOM i sprawdź ref
-    const timer = setTimeout(() => {
-      if (tableScrollRef.current) {
-        console.log("ScrollableTable ref is attached:", tableScrollRef.current);
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
+  const getScrollableElement = () => {
+    return document.querySelector('[data-scrollable-table="true"]') as HTMLElement;
+  };
 
   const handleScrollLeft = () => {
-    console.log("Scroll left clicked, ref:", tableScrollRef.current);
-    if (tableScrollRef.current) {
-      tableScrollRef.current.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+    const element = getScrollableElement();
+    console.log("Scroll left clicked, element:", element);
+    if (element) {
+      element.scrollBy({ left: -scrollAmount, behavior: "smooth" });
     }
   };
 
   const handleScrollRight = () => {
-    console.log("Scroll right clicked, ref:", tableScrollRef.current);
-    if (tableScrollRef.current) {
-      tableScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    const element = getScrollableElement();
+    console.log("Scroll right clicked, element:", element);
+    if (element) {
+      element.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   };
 
