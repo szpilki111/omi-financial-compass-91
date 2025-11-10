@@ -1813,6 +1813,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
           locationId={userProfile?.location_id}
           side="debit"
           disabled={isEditingBlocked || isDebitReadOnly}
+          autoOpenOnFocus={true}
           className={cn(
             isDebitReadOnly && "opacity-50",
             missingFields?.debit_account_id && "border-destructive bg-destructive/5"
@@ -1849,6 +1850,7 @@ const EditableTransactionRow = React.forwardRef<HTMLTableRowElement, {
           locationId={userProfile?.location_id}
           side="credit"
           disabled={isEditingBlocked || isCreditReadOnly}
+          autoOpenOnFocus={true}
           className={cn(
             isCreditReadOnly && "opacity-50",
             missingFields?.credit_account_id && "border-destructive bg-destructive/5"

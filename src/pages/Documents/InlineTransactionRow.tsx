@@ -401,6 +401,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           locationId={userProfile?.location_id}
           side="debit"
           disabled={isEditingBlocked}
+          autoOpenOnFocus={true}
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
@@ -434,6 +435,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           locationId={userProfile?.location_id}
           side="credit"
           disabled={isEditingBlocked}
+          autoOpenOnFocus={true}
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
