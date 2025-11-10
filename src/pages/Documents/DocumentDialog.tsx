@@ -1813,7 +1813,7 @@ const EditableTransactionRow = React.forwardRef<
             disabled={isEditingBlocked}
           />
         </TableCell>
-        <TableCell className="w-24">
+        <TableCell className="w-30">
           <div className="flex items-center space-x-2">
             <Input
               type="number"
@@ -1826,7 +1826,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               className={cn(
-                "text-right w-20",
+                "text-right w-26",
                 isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
                 missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
               )}
@@ -1850,7 +1850,7 @@ const EditableTransactionRow = React.forwardRef<
             )}
           />
         </TableCell>
-        <TableCell className="w-24">
+        <TableCell className="w-30">
           <div className="flex items-center space-x-2">
             <Input
               type="number"
@@ -1863,7 +1863,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               className={cn(
-                "text-right w-20",
+                "text-right w-26",
                 isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
                 missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
               )}
