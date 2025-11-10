@@ -287,7 +287,7 @@ const toggleUserBlockedMutation = useMutation({
             <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
           ) : (
             <ScrollableTable>
-              <Table>
+              <Table style={{ minWidth: '1400px' }}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Login</TableHead>

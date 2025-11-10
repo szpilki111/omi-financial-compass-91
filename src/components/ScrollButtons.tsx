@@ -40,16 +40,18 @@ export const ScrollButtons = () => {
 
   // Debug scrollable element on mount
   useEffect(() => {
-    const element = getScrollableElement();
-    console.log("Scrollable element on mount:", element);
-    if (element) {
-      console.log("Element scroll properties:", {
-        scrollWidth: element.scrollWidth,
-        clientWidth: element.clientWidth,
-        scrollLeft: element.scrollLeft,
-        isScrollable: element.scrollWidth > element.clientWidth,
-      });
-    }
+    setTimeout(() => {
+      const element = getScrollableElement();
+      console.log("Scrollable element on mount:", element);
+      if (element) {
+        console.log("Element scroll properties:", {
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          scrollLeft: element.scrollLeft,
+          isScrollable: element.scrollWidth > element.clientWidth,
+        });
+      }
+    }, 150);
   }, []);
 
   return (
