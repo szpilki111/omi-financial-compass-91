@@ -387,7 +387,13 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               }
             }}
             onFocus={handleDebitFocus}
-            onBlur={handleDebitAmountBlur}
+            onBlur={(e) => {
+              // Format to 2 decimal places on blur
+              if (formData.debit_amount > 0) {
+                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
+              }
+              handleDebitAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
             }}
