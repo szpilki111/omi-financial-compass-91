@@ -380,7 +380,11 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             value={formData.debit_amount === 0 ? "" : formData.debit_amount}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
-              handleDebitAmountChange(parseFloat(value) || 0);
+              const numValue = parseFloat(value) || 0;
+              // Limit to 10 digits before decimal point
+              if (Math.abs(numValue) < 10000000000) {
+                handleDebitAmountChange(numValue);
+              }
             }}
             onFocus={handleDebitFocus}
             onBlur={handleDebitAmountBlur}
