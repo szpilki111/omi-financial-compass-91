@@ -1819,23 +1819,14 @@ const EditableTransactionRow = React.forwardRef<
               type="number"
               step="0.01"
               min="0"
-              value={formData.debit_amount ? formData.debit_amount.toFixed(2) : ""}
+              value={formData.debit_amount || ""}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
-                // Limit to 10 digits before decimal point
-                if (Math.abs(value) < 10000000000) {
-                  setFormData((prev) => ({ ...prev, debit_amount: value }));
-                }
-              }}
-              onBlur={(e) => {
-                // Format to 2 decimal places on blur
-                if (formData.debit_amount > 0) {
-                  setFormData((prev) => ({ ...prev, debit_amount: parseFloat(formData.debit_amount.toFixed(2)) }));
-                }
+                setFormData((prev) => ({ ...prev, debit_amount: value }));
               }}
               placeholder="0.00"
               style={{ 
-                width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) * 9 + 20)}px` 
+                width: `${Math.max(70, (formData.debit_amount === 0 || !formData.debit_amount ? 4 : formData.debit_amount.toString().length) * 12 + 30)}px` 
               }}
               className={cn(
                 "text-right",
@@ -1868,23 +1859,14 @@ const EditableTransactionRow = React.forwardRef<
               type="number"
               step="0.01"
               min="0"
-              value={formData.credit_amount ? formData.credit_amount.toFixed(2) : ""}
+              value={formData.credit_amount || ""}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
-                // Limit to 10 digits before decimal point
-                if (Math.abs(value) < 10000000000) {
-                  setFormData((prev) => ({ ...prev, credit_amount: value }));
-                }
-              }}
-              onBlur={(e) => {
-                // Format to 2 decimal places on blur
-                if (formData.credit_amount > 0) {
-                  setFormData((prev) => ({ ...prev, credit_amount: parseFloat(formData.credit_amount.toFixed(2)) }));
-                }
+                setFormData((prev) => ({ ...prev, credit_amount: value }));
               }}
               placeholder="0.00"
               style={{ 
-                width: `${Math.max(60, (!formData.credit_amount ? 3 : formData.credit_amount.toFixed(2).length) * 9 + 20)}px` 
+                width: `${Math.max(70, (formData.credit_amount === 0 || !formData.credit_amount ? 4 : formData.credit_amount.toString().length) * 12 + 30)}px` 
               }}
               className={cn(
                 "text-right",
