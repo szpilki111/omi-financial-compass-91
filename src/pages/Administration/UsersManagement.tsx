@@ -39,6 +39,7 @@ interface UserProfile {
   location?: {
     name: string;
   };
+  locations?: Array<{ name: string }>;
   last_successful_login?: string | null;
   last_failed_login?: string | null;
 }
@@ -79,7 +80,7 @@ const getRoleLabel = (role: string) => {
 
 const UsersManagement = () => {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [editingUser, setEditingUser] = useState<(UserProfile & { location_ids?: string[] }) | null>(null);
   const [displayedCount, setDisplayedCount] = useState(1);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -102,8 +103,8 @@ const UsersManagement = () => {
 
       if (profilesError) throw profilesError;
 
-      // Get latest login events for each user
-      const usersWithLoginEvents = await Promise.all(
+      // Get latest login events and locations for each user
+      const usersWithDetails = await Promise.all(
         profiles.map(async (profile) => {
           // Normalize email for consistent queries
           const normalizedEmail = profile.email?.toLowerCase().trim();
@@ -128,15 +129,24 @@ const UsersManagement = () => {
             .limit(1)
             .maybeSingle();
 
+          // Get user locations from user_locations table
+          const { data: userLocs } = await supabase
+            .from("user_locations")
+            .select("location_id, locations(name)")
+            .eq("user_id", profile.id);
+
+          const locations = userLocs?.map(ul => ({ name: (ul.locations as any)?.name })) || [];
+
           return {
             ...profile,
+            locations,
             last_successful_login: successfulLogin?.created_at || null,
             last_failed_login: failedLogin?.created_at || null,
           };
         }),
       );
 
-      return usersWithLoginEvents as UserProfile[];
+      return usersWithDetails as UserProfile[];
     },
   });
 
@@ -332,7 +342,19 @@ const UsersManagement = () => {
                       <TableCell>
                         <Badge {...getRoleBadgeProps(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </TableCell>
-                      <TableCell>{user.location?.name || "-"}</TableCell>
+                      <TableCell>
+                        {user.locations && user.locations.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.locations.map((loc, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {loc.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       {(userRole === "prowincjal" || userRole === "admin") && (
                         <>
                           <TableCell>
@@ -387,8 +409,17 @@ const UsersManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              setEditingUser(user);
+                            onClick={async () => {
+                              // Fetch user locations before editing
+                              const { data: userLocs } = await supabase
+                                .from('user_locations')
+                                .select('location_id')
+                                .eq('user_id', user.id);
+                              
+                              setEditingUser({
+                                ...user,
+                                location_ids: userLocs?.map(ul => ul.location_id) || []
+                              });
                               setIsUserDialogOpen(true);
                             }}
                           >

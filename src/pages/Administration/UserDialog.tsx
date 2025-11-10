@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -42,7 +43,7 @@ const userSchema = z.object({
   role: z.enum(['ekonom', 'prowincjal', 'admin', 'proboszcz', 'asystent', 'asystent_ekonoma_prowincjalnego', 'ekonom_prowincjalny'], {
     required_error: 'Wybierz rolę użytkownika',
   }),
-  location_id: z.string().optional(),
+  location_ids: z.array(z.string()).default([]),
   new_location_name: z.string().optional(),
 });
 
@@ -61,6 +62,7 @@ interface UserDialogProps {
     phone: string | null;
     role: string;
     location_id: string | null;
+    location_ids?: string[];
   } | null;
 }
 
@@ -85,41 +87,10 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
       phone: editingUser?.phone || '',
       password: '',
       role: (editingUser?.role as any) || 'ekonom',
-      location_id: editingUser?.location_id || 'no-location',
+      location_ids: editingUser?.location_ids || [],
       new_location_name: '',
     },
   });
-
-  // Reset form when editingUser changes
-  React.useEffect(() => {
-    if (editingUser) {
-      form.reset({
-        login: editingUser.login,
-        first_name: editingUser.first_name,
-        last_name: editingUser.last_name,
-        position: editingUser.position,
-        email: editingUser.email,
-        phone: editingUser.phone || '',
-        password: '',
-        role: editingUser.role as any,
-        location_id: editingUser.location_id || 'no-location',
-        new_location_name: '',
-      });
-    } else {
-      form.reset({
-        login: '',
-        first_name: '',
-        last_name: '',
-        position: '',
-        email: '',
-        phone: '',
-        password: '',
-        role: 'ekonom',
-        location_id: 'no-location',
-        new_location_name: '',
-      });
-    }
-  }, [editingUser, form]);
 
   // Pobierz listę placówek
   const { data: locations } = useQuery({
@@ -135,14 +106,60 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     }
   });
 
+  // Pobierz lokalizacje użytkownika przy edycji
+  const { data: userLocations } = useQuery({
+    queryKey: ['user-locations', editingUser?.id],
+    enabled: !!editingUser?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_locations')
+        .select('location_id')
+        .eq('user_id', editingUser!.id);
+      
+      if (error) throw error;
+      return data.map(ul => ul.location_id);
+    }
+  });
+
+  // Reset form when editingUser or userLocations changes
+  React.useEffect(() => {
+    if (editingUser) {
+      form.reset({
+        login: editingUser.login,
+        first_name: editingUser.first_name,
+        last_name: editingUser.last_name,
+        position: editingUser.position,
+        email: editingUser.email,
+        phone: editingUser.phone || '',
+        password: '',
+        role: editingUser.role as any,
+        location_ids: userLocations || [],
+        new_location_name: '',
+      });
+    } else {
+      form.reset({
+        login: '',
+        first_name: '',
+        last_name: '',
+        position: '',
+        email: '',
+        phone: '',
+        password: '',
+        role: 'ekonom',
+        location_ids: [],
+        new_location_name: '',
+      });
+    }
+  }, [editingUser, userLocations, form]);
+
   // Mutacja do tworzenia użytkownika
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       console.log("Tworzenie użytkownika przez administratora/prowincjała...");
 
-      // Opcjonalne utworzenie nowej lokalizacji
-      let selectedLocationId: string | null = userData.location_id === 'no-location' ? null : (userData.location_id || null);
+      let selectedLocationIds = [...userData.location_ids];
 
+      // Opcjonalne utworzenie nowej lokalizacji
       if (isCreatingNewLocation && userData.new_location_name?.trim()) {
         console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
         const { data: locationData, error: locationError } = await supabase
@@ -156,8 +173,8 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
           throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
         }
         if (locationData) {
-          selectedLocationId = locationData.id;
-          console.log("Lokalizacja utworzona:", selectedLocationId);
+          selectedLocationIds.push(locationData.id);
+          console.log("Lokalizacja utworzona:", locationData.id);
         }
       }
 
@@ -175,7 +192,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
             email: userData.email,
             phone: userData.phone,
             role: userData.role,
-            location_id: selectedLocationId,
+            location_id: selectedLocationIds[0] || null, // Backward compatibility
           },
         },
       });
@@ -189,6 +206,20 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
       }
 
       console.log("Nowy użytkownik utworzony:", fnData.user_id);
+
+      // Dodaj lokalizacje do tabeli user_locations
+      if (selectedLocationIds.length > 0) {
+        const { error: locError } = await supabase
+          .from('user_locations')
+          .insert(selectedLocationIds.map(locId => ({
+            user_id: fnData.user_id,
+            location_id: locId
+          })));
+        
+        if (locError) {
+          console.error("Error adding user locations:", locError);
+        }
+      }
 
       return fnData;
     },
@@ -237,9 +268,9 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     mutationFn: async (userData: UserFormData) => {
       if (!editingUser) throw new Error('Brak użytkownika do edycji');
 
-      // Opcjonalne utworzenie nowej lokalizacji
-      let selectedLocationId: string | null = userData.location_id === 'no-location' ? null : (userData.location_id || null);
+      let selectedLocationIds = [...userData.location_ids];
 
+      // Opcjonalne utworzenie nowej lokalizacji
       if (isCreatingNewLocation && userData.new_location_name?.trim()) {
         console.log("Tworzenie nowej lokalizacji:", userData.new_location_name);
         const { data: locationData, error: locationError } = await supabase
@@ -253,8 +284,8 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
           throw new Error("Nie udało się utworzyć lokalizacji: " + locationError.message);
         }
         if (locationData) {
-          selectedLocationId = locationData.id;
-          console.log("Lokalizacja utworzona:", selectedLocationId);
+          selectedLocationIds.push(locationData.id);
+          console.log("Lokalizacja utworzona:", locationData.id);
         }
       }
 
@@ -269,13 +300,35 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
           email: userData.email,
           phone: userData.phone,
           role: userData.role,
-          location_id: selectedLocationId,
+          location_id: selectedLocationIds[0] || null, // Backward compatibility
         })
         .eq('id', editingUser.id);
 
       if (updateError) {
         console.error('Error updating user:', updateError);
         throw new Error('Nie udało się zaktualizować użytkownika: ' + updateError.message);
+      }
+
+      // Aktualizuj lokalizacje w tabeli user_locations
+      // Najpierw usuń stare
+      await supabase
+        .from('user_locations')
+        .delete()
+        .eq('user_id', editingUser.id);
+
+      // Potem dodaj nowe
+      if (selectedLocationIds.length > 0) {
+        const { error: locError } = await supabase
+          .from('user_locations')
+          .insert(selectedLocationIds.map(locId => ({
+            user_id: editingUser.id,
+            location_id: locId
+          })));
+        
+        if (locError) {
+          console.error("Error updating user locations:", locError);
+          throw new Error('Nie udało się zaktualizować lokalizacji');
+        }
       }
     },
     onSuccess: () => {
@@ -470,7 +523,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <FormLabel>Placówka (opcjonalnie)</FormLabel>
+                <FormLabel>Placówki (opcjonalnie)</FormLabel>
                 <Button 
                   type="button" 
                   variant="ghost" 
@@ -501,24 +554,35 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
               ) : (
                 <FormField
                   control={form.control}
-                  name="location_id"
-                  render={({ field }) => (
+                  name="location_ids"
+                  render={() => (
                     <FormItem>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Wybierz placówkę" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-h-[200px] overflow-y-auto">
-                          <SelectItem value="no-location">Brak przypisania</SelectItem>
-                          {locations?.map((location) => (
-                            <SelectItem key={location.id} value={location.id}>
-                              {location.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="border rounded-md p-3 max-h-[200px] overflow-y-auto space-y-2">
+                        {locations?.map((location) => (
+                          <FormField
+                            key={location.id}
+                            control={form.control}
+                            name="location_ids"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(location.id)}
+                                    onCheckedChange={(checked) => {
+                                      return checked
+                                        ? field.onChange([...field.value, location.id])
+                                        : field.onChange(field.value?.filter((value) => value !== location.id))
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="font-normal cursor-pointer">
+                                  {location.name}
+                                </FormLabel>
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

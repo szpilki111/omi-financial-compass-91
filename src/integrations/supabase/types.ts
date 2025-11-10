@@ -1002,6 +1002,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_locations: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_locations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_locations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_login_events: {
         Row: {
           created_at: string
@@ -1143,6 +1179,7 @@ export type Database = {
       get_current_user_id: { Args: never; Returns: string }
       get_current_user_id_fixed: { Args: never; Returns: string }
       get_user_location_id: { Args: never; Returns: string }
+      get_user_location_ids: { Args: never; Returns: string[] }
       get_user_role: { Args: never; Returns: string }
       get_user_setting: {
         Args: { p_user_id: string }
