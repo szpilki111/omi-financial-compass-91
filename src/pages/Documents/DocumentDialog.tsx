@@ -1827,6 +1827,12 @@ const EditableTransactionRow = React.forwardRef<
                   setFormData((prev) => ({ ...prev, debit_amount: value }));
                 }
               }}
+              onBlur={(e) => {
+                // Format to 2 decimal places on blur
+                if (formData.debit_amount > 0) {
+                  setFormData((prev) => ({ ...prev, debit_amount: parseFloat(formData.debit_amount.toFixed(2)) }));
+                }
+              }}
               placeholder="0.00"
               style={{
                 width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) + 130)}px`,
@@ -1868,6 +1874,12 @@ const EditableTransactionRow = React.forwardRef<
                 // Limit to 10 digits before decimal point
                 if (Math.abs(value) < 10000000000) {
                   setFormData((prev) => ({ ...prev, credit_amount: value }));
+                }
+              }}
+              onBlur={(e) => {
+                // Format to 2 decimal places on blur
+                if (formData.credit_amount > 0) {
+                  setFormData((prev) => ({ ...prev, credit_amount: parseFloat(formData.credit_amount.toFixed(2)) }));
                 }
               }}
               placeholder="0.00"
