@@ -1866,7 +1866,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               style={{
-                width: `${Math.max(70, (formData.credit_amount === 0 || !formData.credit_amount ? 4 : formData.credit_amount.toString().length) * 12 + 30)}px`,
+                width: `${Math.max(70, (formData.credit_amount === 0 || !formData.credit_amount ? 4 : formData.credit_amount.toString().length) + 130)}px`,
               }}
               className={cn(
                 "text-right",
