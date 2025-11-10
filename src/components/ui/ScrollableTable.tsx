@@ -79,11 +79,10 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       }
     };
 
-    // Check if sticky scrollbar should be visible
-    const checkVisibility = () => {
-      const rect = mainScroll.getBoundingClientRect();
-      const isMainScrollbarVisible = rect.bottom > window.innerHeight;
-      setShowStickyScroll(isMainScrollbarVisible && mainScroll.scrollWidth > mainScroll.clientWidth);
+    // Check if table is scrollable (always show sticky scrollbar when scrollable)
+    const checkScrollability = () => {
+      const isScrollable = mainScroll.scrollWidth > mainScroll.clientWidth;
+      setShowStickyScroll(isScrollable);
     };
 
     mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
@@ -91,16 +90,15 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
     
     // Initial setup and updates
     updateStickyWidth();
-    checkVisibility();
+    checkScrollability();
     
     const resizeObserver = new ResizeObserver(() => {
       updateStickyWidth();
-      checkVisibility();
+      checkScrollability();
     });
     
     resizeObserver.observe(mainScroll);
-    window.addEventListener('scroll', checkVisibility, { passive: true });
-    window.addEventListener('resize', checkVisibility, { passive: true });
+    window.addEventListener('resize', checkScrollability, { passive: true });
 
     return () => {
       if (rafId !== null) {
@@ -109,8 +107,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       mainScroll.removeEventListener('scroll', syncMainToSticky);
       stickyScroll.removeEventListener('scroll', syncStickyToMain);
       resizeObserver.disconnect();
-      window.removeEventListener('scroll', checkVisibility);
-      window.removeEventListener('resize', checkVisibility);
+      window.removeEventListener('resize', checkScrollability);
     };
   }, []);
 
@@ -130,12 +127,12 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
         </div>
       </div>
       
-      {/* Sticky scrollbar at bottom of screen */}
+      {/* Sticky scrollbar at bottom of viewport */}
       {showStickyScroll && (
         <div
           ref={stickyScrollRef}
-          className="fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background border-t border-border"
-          style={{ height: '20px' }}
+          className="fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg"
+          style={{ height: '16px' }}
         >
           <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
         </div>
