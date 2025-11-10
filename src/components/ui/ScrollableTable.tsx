@@ -12,6 +12,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       <div
         className={cn("overflow-x-auto", className)}
         data-scrollable-table="true"
+        style={{ maxWidth: '100%' }}
       >
         {children}
       </div>
