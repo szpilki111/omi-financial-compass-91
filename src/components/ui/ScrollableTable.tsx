@@ -11,7 +11,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
   const stickyScrollRef = useRef<HTMLDivElement>(null);
   const stickyScrollContentRef = useRef<HTMLDivElement>(null);
   const [isScrollable, setIsScrollable] = useState(false);
-  const [fontSize, setFontSize] = useState(100); // percentage
+  const [fontSize, setFontSize] = useState(80); // percentage
 
   useEffect(() => {
     const mainScroll = mainScrollRef.current;
