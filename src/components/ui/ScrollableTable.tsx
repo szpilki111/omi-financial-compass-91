@@ -19,22 +19,63 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
 
     if (!mainScroll || !stickyScroll || !stickyScrollContent) return;
 
+    let rafId: number | null = null;
+    let isMainScrolling = false;
+    let isStickyScrolling = false;
+
     // Sync sticky scrollbar width with main content
     const updateStickyWidth = () => {
       stickyScrollContent.style.width = `${mainScroll.scrollWidth}px`;
       setShowStickyScroll(mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
+    // Continuous sync during smooth scrolling
+    const continuousSync = () => {
+      if (isMainScrolling && stickyScroll.scrollLeft !== mainScroll.scrollLeft) {
+        stickyScroll.scrollLeft = mainScroll.scrollLeft;
+        rafId = requestAnimationFrame(continuousSync);
+      } else if (isStickyScrolling && mainScroll.scrollLeft !== stickyScroll.scrollLeft) {
+        mainScroll.scrollLeft = stickyScroll.scrollLeft;
+        rafId = requestAnimationFrame(continuousSync);
+      }
+    };
+
     // Sync scroll positions
     const syncMainToSticky = () => {
-      if (stickyScroll.scrollLeft !== mainScroll.scrollLeft) {
-        stickyScroll.scrollLeft = mainScroll.scrollLeft;
+      if (!isStickyScrolling) {
+        isMainScrolling = true;
+        if (stickyScroll.scrollLeft !== mainScroll.scrollLeft) {
+          stickyScroll.scrollLeft = mainScroll.scrollLeft;
+        }
+        if (rafId === null) {
+          rafId = requestAnimationFrame(continuousSync);
+        }
+        setTimeout(() => {
+          isMainScrolling = false;
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+        }, 100);
       }
     };
 
     const syncStickyToMain = () => {
-      if (mainScroll.scrollLeft !== stickyScroll.scrollLeft) {
-        mainScroll.scrollLeft = stickyScroll.scrollLeft;
+      if (!isMainScrolling) {
+        isStickyScrolling = true;
+        if (mainScroll.scrollLeft !== stickyScroll.scrollLeft) {
+          mainScroll.scrollLeft = stickyScroll.scrollLeft;
+        }
+        if (rafId === null) {
+          rafId = requestAnimationFrame(continuousSync);
+        }
+        setTimeout(() => {
+          isStickyScrolling = false;
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+        }, 100);
       }
     };
 
@@ -45,8 +86,8 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       setShowStickyScroll(isMainScrollbarVisible && mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
-    mainScroll.addEventListener('scroll', syncMainToSticky);
-    stickyScroll.addEventListener('scroll', syncStickyToMain);
+    mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
+    stickyScroll.addEventListener('scroll', syncStickyToMain, { passive: true });
     
     // Initial setup and updates
     updateStickyWidth();
@@ -58,10 +99,13 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
     });
     
     resizeObserver.observe(mainScroll);
-    window.addEventListener('scroll', checkVisibility);
-    window.addEventListener('resize', checkVisibility);
+    window.addEventListener('scroll', checkVisibility, { passive: true });
+    window.addEventListener('resize', checkVisibility, { passive: true });
 
     return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       mainScroll.removeEventListener('scroll', syncMainToSticky);
       stickyScroll.removeEventListener('scroll', syncStickyToMain);
       resizeObserver.disconnect();
