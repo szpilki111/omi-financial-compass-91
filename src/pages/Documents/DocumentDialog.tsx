@@ -1826,7 +1826,7 @@ const EditableTransactionRow = React.forwardRef<
               }}
               placeholder="0.00"
               style={{
-                width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) + 100)}px`,
+                width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) + 130)}px`,
               }}
               className={cn(
                 "text-right",
