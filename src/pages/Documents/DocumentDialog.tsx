@@ -1114,7 +1114,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   if (checkingBlock) {
     return (
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto mx-auto">
           <DialogHeader>
             <DialogTitle>Sprawdzanie uprawnień...</DialogTitle>
           </DialogHeader>
@@ -1129,7 +1129,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto mx-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>{document ? "Edytuj dokument" : "Nowy dokument"}</DialogTitle>
