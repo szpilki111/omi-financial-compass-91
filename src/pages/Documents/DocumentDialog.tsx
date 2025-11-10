@@ -9,7 +9,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer, Bug } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { ErrorReportDialog } from '@/components/ErrorReportDialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -90,6 +92,9 @@ const DocumentDialog = ({
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
+  const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
+  const [isCapturingError, setIsCapturingError] = useState(false);
   const inlineFormRef = useRef<InlineTransactionRowRef>(null);
   const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -177,6 +182,43 @@ const DocumentDialog = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const captureErrorScreenshot = async () => {
+    setIsCapturingError(true);
+    try {
+      const canvas = await html2canvas(document.body, {
+        allowTaint: true,
+        useCORS: true,
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      setErrorScreenshot(dataUrl);
+      setErrorReportDialogOpen(true);
+    } catch (error) {
+      console.error("Error capturing screenshot:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się zrobić screenshota, ale możesz zgłosić błąd bez niego.",
+        variant: "destructive",
+      });
+      setErrorScreenshot(null);
+      setErrorReportDialogOpen(true);
+    } finally {
+      setIsCapturingError(false);
+    }
+  };
+
+  const getBrowserInfo = () => {
+    return {
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: navigator.platform,
+      screenWidth: window.screen.width,
+      screenHeight: window.screen.height,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+    };
   };
 
   useEffect(() => {
@@ -1090,9 +1132,22 @@ const DocumentDialog = ({
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {document ? 'Edytuj dokument' : 'Nowy dokument'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {document ? 'Edytuj dokument' : 'Nowy dokument'}
+              </DialogTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={captureErrorScreenshot}
+                disabled={isCapturingError}
+                title="Zgłoś błąd"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                {isCapturingError ? "Robię screenshot..." : "Zgłoś błąd"}
+              </Button>
+            </div>
           </DialogHeader>
 
           {isEditingBlocked && documentDate && (
@@ -1555,6 +1610,14 @@ const DocumentDialog = ({
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
         onSave={handleSaveAndClose}
+      />
+
+      <ErrorReportDialog
+        open={errorReportDialogOpen}
+        onOpenChange={setErrorReportDialogOpen}
+        autoScreenshot={errorScreenshot}
+        pageUrl={window.location.href}
+        browserInfo={getBrowserInfo()}
       />
     </>
   );

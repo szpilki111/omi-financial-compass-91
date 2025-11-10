@@ -8,6 +8,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Bug } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { ErrorReportDialog } from '@/components/ErrorReportDialog';
 import {
   Select,
   SelectContent,
@@ -36,6 +39,9 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
+  const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
+  const [isCapturingError, setIsCapturingError] = useState(false);
   
   const [formData, setFormData] = useState({
     date: '',
@@ -240,13 +246,64 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
       setLoading(false);
     }
   };
+
+  const captureErrorScreenshot = async () => {
+    setIsCapturingError(true);
+    try {
+      const canvas = await html2canvas(window.document.body, {
+        allowTaint: true,
+        useCORS: true,
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      setErrorScreenshot(dataUrl);
+      setErrorReportDialogOpen(true);
+    } catch (error) {
+      console.error("Error capturing screenshot:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się zrobić screenshota, ale możesz zgłosić błąd bez niego.",
+        variant: "destructive",
+      });
+      setErrorScreenshot(null);
+      setErrorReportDialogOpen(true);
+    } finally {
+      setIsCapturingError(false);
+    }
+  };
+
+  const getBrowserInfo = () => {
+    return {
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: navigator.platform,
+      screenWidth: window.screen.width,
+      screenHeight: window.screen.height,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+    };
+  };
   
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edytuj operację finansową</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Edytuj operację finansową</DialogTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={captureErrorScreenshot}
+                disabled={isCapturingError}
+                title="Zgłoś błąd"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                {isCapturingError ? "Robię screenshot..." : "Zgłoś błąd"}
+              </Button>
+            </div>
+          </DialogHeader>
         
         <form id="edit-form" onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,6 +420,15 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
         </form>
       </DialogContent>
     </Dialog>
+
+    <ErrorReportDialog
+      open={errorReportDialogOpen}
+      onOpenChange={setErrorReportDialogOpen}
+      autoScreenshot={errorScreenshot}
+      pageUrl={window.location.href}
+      browserInfo={getBrowserInfo()}
+    />
+  </>
   );
 };
 
