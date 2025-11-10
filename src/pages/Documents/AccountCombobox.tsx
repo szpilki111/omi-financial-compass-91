@@ -333,6 +333,24 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
               setSearchTerm(formatted);
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                // Znajdź pierwsze pasujące konto
+                const firstAccount = accounts[0];
+                if (firstAccount) {
+                  onChange(firstAccount.id);
+                  setOpen(false);
+                  setSearchTerm('');
+                  // Wywołaj callback po wybraniu konta
+                  if (onAccountSelected) {
+                    setTimeout(() => {
+                      onAccountSelected();
+                    }, 100);
+                  }
+                }
+              }
+            }}
           />
           <CommandList>
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
