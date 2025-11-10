@@ -11,6 +11,7 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
   const stickyScrollRef = useRef<HTMLDivElement>(null);
   const stickyScrollContentRef = useRef<HTMLDivElement>(null);
   const [isScrollable, setIsScrollable] = useState(false);
+  const [fontSize, setFontSize] = useState(100); // percentage
 
   useEffect(() => {
     const mainScroll = mainScrollRef.current;
@@ -84,20 +85,40 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       setIsScrollable(mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
+    // Auto-scale font size to fit table on screen
+    const adjustFontSize = () => {
+      const availableHeight = window.innerHeight - 280; // Same as maxHeight calc
+      const tableHeight = mainScroll.scrollHeight;
+      
+      if (tableHeight > availableHeight) {
+        // Calculate optimal font size to fit content
+        const ratio = availableHeight / tableHeight;
+        const newFontSize = Math.max(60, Math.min(100, Math.floor(ratio * 100)));
+        setFontSize(newFontSize);
+      } else {
+        setFontSize(100); // Reset to 100% if it fits
+      }
+    };
+
     mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
     stickyScroll.addEventListener('scroll', syncStickyToMain, { passive: true });
     
     // Initial setup and updates
     updateStickyWidth();
     checkScrollability();
+    adjustFontSize();
     
     const resizeObserver = new ResizeObserver(() => {
       updateStickyWidth();
       checkScrollability();
+      adjustFontSize();
     });
     
     resizeObserver.observe(mainScroll);
-    window.addEventListener('resize', checkScrollability, { passive: true });
+    window.addEventListener('resize', () => {
+      checkScrollability();
+      adjustFontSize();
+    }, { passive: true });
 
     return () => {
       if (rafId !== null) {
@@ -119,7 +140,9 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
           data-scrollable-table="true"
           style={{ 
             maxWidth: '100%',
-            maxHeight: 'calc(100vh - 280px)'
+            maxHeight: 'calc(100vh - 280px)',
+            fontSize: `${fontSize}%`,
+            transition: 'font-size 0.2s ease-in-out'
           }}
         >
           {children}
