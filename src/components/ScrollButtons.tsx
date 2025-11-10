@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export const tableScrollRef = useRef<HTMLDivElement>(null);
+export const tableScrollRef: { current: HTMLDivElement | null } = { current: null };
 
 export const ScrollButtons = () => {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
