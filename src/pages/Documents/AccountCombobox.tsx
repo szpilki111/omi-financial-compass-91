@@ -289,13 +289,17 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   // Funkcja obsługująca focus na przycisku
   const handleButtonFocus = () => {
-    if (autoOpenOnFocus && !disabled && locationId) {
+    if (autoOpenOnFocus && !disabled && locationId && !value) {
       setOpen(true);
     }
   };
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
+        // Nie pozwól otworzyć popover gdy już jest wybrane konto
+        if (isOpen && value) {
+          return;
+        }
         setOpen(isOpen);
         if (!isOpen) {
             setSearchTerm('');
