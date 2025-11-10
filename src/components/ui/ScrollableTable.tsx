@@ -81,8 +81,9 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
 
     // Check if sticky scrollbar should be visible
     const checkVisibility = () => {
-      const isScrollable = mainScroll.scrollWidth > mainScroll.clientWidth;
-      setShowStickyScroll(isScrollable);
+      const rect = mainScroll.getBoundingClientRect();
+      const isMainScrollbarVisible = rect.bottom > window.innerHeight;
+      setShowStickyScroll(isMainScrollbarVisible && mainScroll.scrollWidth > mainScroll.clientWidth);
     };
 
     mainScroll.addEventListener('scroll', syncMainToSticky, { passive: true });
@@ -133,8 +134,8 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
       {showStickyScroll && (
         <div
           ref={stickyScrollRef}
-          className="fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-50 bg-background border-t border-border shadow-lg"
-          style={{ height: '24px', paddingLeft: '1rem', paddingRight: '1rem' }}
+          className="fixed bottom-0 left-0 right-0 overflow-x-auto overflow-y-hidden z-40 bg-background border-t border-border"
+          style={{ height: '20px' }}
         >
           <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
         </div>
