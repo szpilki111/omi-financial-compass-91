@@ -4,7 +4,6 @@ import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import { Toaster } from '@/components/ui/toaster';
 import { ErrorReportButton } from '@/components/ErrorReportButton';
-import { ScrollButtons } from '@/components/ScrollButtons';
 import { useAuth } from '@/context/AuthContext';
 
 interface MainLayoutProps {
@@ -24,7 +23,6 @@ const MainLayout = ({ children, fullWidth = false }: MainLayoutProps) => {
       </main>
       <Toaster />
       {user && <ErrorReportButton />}
-      {user && location.pathname === "/administracja" && <ScrollButtons />}
     </div>
   );
 };

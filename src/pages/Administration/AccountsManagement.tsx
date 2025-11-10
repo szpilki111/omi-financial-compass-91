@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Edit, Save, X, Upload, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 
 interface Account {
   id: string;
@@ -500,7 +501,7 @@ const AccountsManagement = () => {
               {debouncedSearchQuery ? 'Nie znaleziono kont pasujących do wyszukiwanego zapytania.' : 'Brak kont do wyświetlenia.'}
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -655,7 +656,7 @@ const AccountsManagement = () => {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </ScrollableTable>
           )}
         </CardContent>
       </Card>
