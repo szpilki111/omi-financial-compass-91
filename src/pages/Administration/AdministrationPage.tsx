@@ -13,7 +13,6 @@ import ErrorReportsManagement from './ErrorReportsManagement';
 import LoginEventsManagement from './LoginEventsManagement';
 import EmailTestManagement from './EmailTestManagement';
 import ProjectFeaturesManagement from './ProjectFeaturesManagement';
-import { AdminScrollButtons } from './AdminScrollButtons';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -37,7 +36,6 @@ const AdministrationPage = () => {
 
   return (
     <MainLayout fullWidth>
-      <AdminScrollButtons />
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-omi-900">Administracja</h1>

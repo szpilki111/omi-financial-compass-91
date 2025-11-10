@@ -1,8 +1,10 @@
 
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import { Toaster } from '@/components/ui/toaster';
 import { ErrorReportButton } from '@/components/ErrorReportButton';
+import { ScrollButtons } from '@/components/ScrollButtons';
 import { useAuth } from '@/context/AuthContext';
 
 interface MainLayoutProps {
@@ -12,6 +14,7 @@ interface MainLayoutProps {
 
 const MainLayout = ({ children, fullWidth = false }: MainLayoutProps) => {
   const { user } = useAuth();
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-omi-gray-100">
@@ -21,6 +24,7 @@ const MainLayout = ({ children, fullWidth = false }: MainLayoutProps) => {
       </main>
       <Toaster />
       {user && <ErrorReportButton />}
+      {user && location.pathname === "/administracja" && <ScrollButtons />}
     </div>
   );
 };
