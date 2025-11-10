@@ -389,7 +389,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(60, formData.debit_amount === 0 ? 3 : formData.debit_amount.toFixed(2).length) * 9 + 20}px` 
+              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toFixed(2).length) * 10)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
@@ -436,7 +436,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(60, formData.credit_amount === 0 ? 3 : formData.credit_amount.toFixed(2).length) * 9 + 20}px` 
+              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toFixed(2).length) * 10)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
