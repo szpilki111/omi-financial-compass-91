@@ -428,7 +428,13 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               }
             }}
             onFocus={handleCreditFocus}
-            onBlur={handleCreditAmountBlur}
+            onBlur={(e) => {
+              // Format to 2 decimal places on blur
+              if (formData.credit_amount > 0) {
+                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
+              }
+              handleCreditAmountBlur();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
             }}
