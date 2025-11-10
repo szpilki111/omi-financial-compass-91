@@ -310,7 +310,6 @@ const UsersManagement = () => {
                     <TableHead>Imię i nazwisko</TableHead>
                     <TableHead>Stanowisko</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Telefon</TableHead>
                     <TableHead>Rola</TableHead>
                     <TableHead>Placówka</TableHead>
                     {(userRole === "prowincjal" || userRole === "admin") && (
@@ -320,7 +319,6 @@ const UsersManagement = () => {
                         <TableHead>Status</TableHead>
                       </>
                     )}
-                    <TableHead>Data utworzenia</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -331,7 +329,6 @@ const UsersManagement = () => {
                       <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
                       <TableCell>{user.position}</TableCell>
                       <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.phone || "-"}</TableCell>
                       <TableCell>
                         <Badge {...getRoleBadgeProps(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </TableCell>
@@ -385,7 +382,6 @@ const UsersManagement = () => {
                           </TableCell>
                         </>
                       )}
-                      <TableCell>{new Date(user.created_at).toLocaleDateString("pl-PL")}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
@@ -437,7 +433,7 @@ const UsersManagement = () => {
                   ))}
                   {displayedCount < users.length && (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-4">
+                      <TableCell colSpan={10} className="text-center py-4">
                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
                           Ładowanie kolejnych użytkowników...
