@@ -371,7 +371,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           disabled={isEditingBlocked}
         />
       </TableCell>
-      <TableCell className="w-24">
+      <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -388,8 +388,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            style={{ width: `${Math.max(5, (formData.debit_amount?.toString().length || 4) + 2)}ch` }}
-            className={cn("text-right min-w-[5ch]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ 
+              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toString().length) * 12 + 30)}px` 
+            }}
+            className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
@@ -406,7 +408,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           className={hasValidationError ? "border-destructive" : ""}
         />
       </TableCell>
-      <TableCell className="w-24">
+      <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
             type="number"
@@ -423,8 +425,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               if (e.key === "Enter") e.preventDefault();
             }}
             placeholder="0.00"
-            style={{ width: `${Math.max(5, (formData.credit_amount?.toString().length || 4) + 2)}ch` }}
-            className={cn("text-right min-w-[5ch]", hasValidationError && "border-destructive focus-visible:ring-destructive")}
+            style={{ 
+              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toString().length) * 12 + 30)}px` 
+            }}
+            className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
           />
           <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
