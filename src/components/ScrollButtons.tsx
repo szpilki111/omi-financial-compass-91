@@ -1,43 +1,31 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export const tableScrollRef: { current: HTMLDivElement | null } = { current: null };
 
 export const ScrollButtons = () => {
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollAmount = 300;
 
-  const updateScrollState = () => {
-    if (tableScrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = tableScrollRef.current;
-      setCanScrollLeft(scrollLeft > 0);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
-    }
-  };
-
   useEffect(() => {
-    updateScrollState();
-    const handleScroll = () => updateScrollState();
-    const scrollableDiv = tableScrollRef.current;
-    if (scrollableDiv) {
-      scrollableDiv.addEventListener("scroll", handleScroll);
-      window.addEventListener("resize", handleScroll);
-      return () => {
-        scrollableDiv.removeEventListener("scroll", handleScroll);
-        window.removeEventListener("resize", handleScroll);
-      };
-    }
+    // Odczekaj na zamontowanie DOM i sprawdź ref
+    const timer = setTimeout(() => {
+      if (tableScrollRef.current) {
+        console.log("ScrollableTable ref is attached:", tableScrollRef.current);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
-  const scrollLeft = () => {
+  const handleScrollLeft = () => {
+    console.log("Scroll left clicked, ref:", tableScrollRef.current);
     if (tableScrollRef.current) {
       tableScrollRef.current.scrollBy({ left: -scrollAmount, behavior: "smooth" });
     }
   };
 
-  const scrollRight = () => {
+  const handleScrollRight = () => {
+    console.log("Scroll right clicked, ref:", tableScrollRef.current);
     if (tableScrollRef.current) {
       tableScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
@@ -46,8 +34,7 @@ export const ScrollButtons = () => {
   return (
     <>
       <Button
-        onClick={scrollLeft}
-        disabled={!canScrollLeft}
+        onClick={handleScrollLeft}
         className="fixed left-6 top-1/2 transform -translate-y-1/2 z-50 shadow-lg rounded-full"
         size="lg"
         title="Przewiń w lewo"
@@ -55,8 +42,7 @@ export const ScrollButtons = () => {
         <ChevronLeft className="h-5 w-5" />
       </Button>
       <Button
-        onClick={scrollRight}
-        disabled={!canScrollRight}
+        onClick={handleScrollRight}
         className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50 shadow-lg rounded-full"
         size="lg"
         title="Przewiń w prawo"
