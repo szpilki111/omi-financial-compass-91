@@ -28,7 +28,7 @@ import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useState as useComponentState } from "react";
-import { sendErrorReportResponseEmail } from "@/utils/emailUtils";
+
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
 
 const ResponseAttachments = ({ paths }: { paths: string[] }) => {
@@ -248,32 +248,24 @@ const ErrorReportsManagement = () => {
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-report-responses", selectedReport?.id] });
       
-      // Send email notification to report author
+      // Send email notification asynchronously in background
       if (selectedReport && selectedReport.profiles?.email) {
-        try {
-          const { data: responderProfile } = await supabase
-            .from("profiles")
-            .select("name")
-            .eq("id", data.userId)
-            .single();
-
-          await sendErrorReportResponseEmail(
-            selectedReport.profiles.email,
-            selectedReport.title,
-            responderProfile?.name || "Administrator",
-            newResponse,
-            selectedReport.id
-          );
-        } catch (emailError) {
-          console.error("Failed to send email notification:", emailError);
-          // Don't fail the whole operation if email fails
-        }
+        supabase.functions.invoke('send-error-response-notification', {
+          body: {
+            reportId: selectedReport.id,
+            responderId: data.userId,
+            message: newResponse,
+          },
+        }).catch((error) => {
+          console.error("Failed to queue email notification:", error);
+          // Don't fail the whole operation if email queueing fails
+        });
       }
       
       setNewResponse("");
       toast({
         title: "Sukces",
-        description: "Odpowiedź została dodana i wysłano powiadomienie email.",
+        description: "Odpowiedź została dodana.",
       });
     },
     onError: (error) => {
