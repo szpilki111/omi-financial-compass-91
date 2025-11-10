@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,9 +80,11 @@ const getRoleLabel = (role: string) => {
 const UsersManagement = () => {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [displayedCount, setDisplayedCount] = useState(4);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const loadMoreRef = useRef<HTMLTableRowElement>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -135,6 +137,34 @@ const UsersManagement = () => {
       return usersWithLoginEvents as UserProfile[];
     }
   });
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+        if (target.isIntersecting && users && displayedCount < users.length) {
+          setDisplayedCount((prev) => Math.min(prev + 4, users.length));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (loadMoreRef.current) {
+        observer.unobserve(loadMoreRef.current);
+      }
+    };
+  }, [users, displayedCount]);
+
+  // Reset displayed count when users data changes
+  useEffect(() => {
+    setDisplayedCount(4);
+  }, [users]);
 
 // Mutacja do usuwania użytkownika używając logiki z Login
 const deleteUserMutation = useMutation({
@@ -309,8 +339,11 @@ const toggleUserBlockedMutation = useMutation({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
+                {users.slice(0, displayedCount).map((user, index) => (
+                  <TableRow 
+                    key={user.id}
+                    ref={index === displayedCount - 1 ? loadMoreRef : null}
+                  >
                     <TableCell className="font-medium">{user.login}</TableCell>
                     <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
                     <TableCell>{user.position}</TableCell>
@@ -419,6 +452,16 @@ const toggleUserBlockedMutation = useMutation({
                     </TableCell>
                   </TableRow>
                 ))}
+                {displayedCount < users.length && (
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-center py-4">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                        Ładowanie kolejnych użytkowników...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
             </ScrollableTable>
