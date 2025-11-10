@@ -530,7 +530,8 @@ const LocationAccountsManagement = () => {
               {Object.entries(groupedAssignments).map(([locationName, assignments]) => (
                 <div key={locationName}>
                   <h3 className="text-lg font-medium mb-3">{locationName}</h3>
-                  <Table>
+                  <div className="overflow-x-auto">
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Numer konta</TableHead>
@@ -574,6 +575,7 @@ const LocationAccountsManagement = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
               ))}
             </div>

@@ -285,7 +285,8 @@ const toggleUserBlockedMutation = useMutation({
           {!users?.length ? (
             <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Login</TableHead>
@@ -419,6 +420,7 @@ const toggleUserBlockedMutation = useMutation({
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

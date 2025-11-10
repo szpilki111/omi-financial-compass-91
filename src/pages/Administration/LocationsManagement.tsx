@@ -211,7 +211,8 @@ const LocationsManagement = () => {
           {!locations?.length ? (
             <p className="text-center text-omi-gray-500">Brak placówek w systemie.</p>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nazwa</TableHead>
@@ -293,6 +294,7 @@ const LocationsManagement = () => {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
