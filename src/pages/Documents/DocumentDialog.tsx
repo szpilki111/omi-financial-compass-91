@@ -1381,9 +1381,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         <TableCell className="text-right font-bold text-lg">
                           {formatAmount(mainDebitSum, selectedCurrency)}
                         </TableCell>
+                        <TableCell></TableCell>
                         <TableCell className="text-right font-bold text-lg">
                           {formatAmount(mainCreditSum, selectedCurrency)}
                         </TableCell>
+                        <TableCell></TableCell>
                         <TableCell className="text-left font-bold">
                           Suma: {formatAmount(mainDebitSum + mainCreditSum, selectedCurrency)}
                         </TableCell>
@@ -1532,9 +1534,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           <TableCell colSpan={3} className="text-right font-bold">
                             RAZEM:
                           </TableCell>
+                          <TableCell></TableCell>
                           <TableCell className="text-right font-bold text-lg">
                             {formatAmount(parallelDebitSum, selectedCurrency)}
                           </TableCell>
+                          <TableCell></TableCell>
                           <TableCell className="text-right font-bold text-lg">
                             {formatAmount(parallelCreditSum, selectedCurrency)}
                           </TableCell>
