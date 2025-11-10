@@ -1867,7 +1867,7 @@ const EditableTransactionRow = React.forwardRef<
                 const value = parseFloat(e.target.value) || 0;
                 // Limit to 10 digits before decimal point
                 if (Math.abs(value) < 10000000000) {
-                  setFormData((prev) => ({ ...prev, debit_amount: value }));
+                  setFormData((prev) => ({ ...prev, credit_amount: value }));
                 }
               }}
               placeholder="0.00"
