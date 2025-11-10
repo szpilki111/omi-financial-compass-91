@@ -132,15 +132,16 @@ export const ScrollableTable = ({ children, className }: ScrollableTableProps) =
         className={cn(
           "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
           "w-[80%] max-w-4xl",
-          "overflow-x-auto overflow-y-hidden z-40",
+          "overflow-x-auto overflow-y-hidden z-[100]",
           "bg-background/80 backdrop-blur-md",
           "border border-border/50 rounded-full shadow-2xl",
           "px-4 py-2",
+          "cursor-pointer",
           !isScrollable && "opacity-30 pointer-events-none"
         )}
-        style={{ height: '20px' }}
+        style={{ height: '24px' }}
       >
-        <div ref={stickyScrollContentRef} style={{ height: '1px' }} />
+        <div ref={stickyScrollContentRef} style={{ height: '16px' }} />
       </div>
     </>
   );
