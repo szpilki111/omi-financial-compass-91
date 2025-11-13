@@ -511,7 +511,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       if (error) throw error;
 
       console.log(
-        "📥 Loaded transactions from database:",
+        "Loaded transactions from database:",
         data?.map((t) => ({
           id: t.id,
           display_order: t.display_order,
@@ -520,28 +520,41 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         })),
       );
 
-      // Separate main and parallel transactions and ensure display_order
-      const mainTransactions = (data || [])
-        .filter((t) => !t.is_parallel)
-        .map((t, idx) => ({
+      // Podziel na główne i równoległe
+      const mainTransactions = (data || []).filter((t) => !t.is_parallel);
+      const parallelTxs = (data || []).filter((t) => t.is_parallel);
+
+      // Sortuj według display_order z bazy (bez nadpisywania!)
+      const sortByDisplayOrder = (txs: any[]) =>
+        [...txs].sort((a, b) => {
+          const aOrder = a.display_order ?? 0;
+          const bOrder = b.display_order ?? 0;
+          return aOrder - bOrder;
+        });
+
+      const sortedMain = sortByDisplayOrder(mainTransactions);
+      const sortedParallel = sortByDisplayOrder(parallelTxs);
+
+      // Opcjonalnie: normalizuj display_order (1, 2, 3...) – tylko jeśli chcesz ciągłość
+      // Jeśli chcesz zachować oryginalne wartości z bazy – pomiń to!
+      const normalizeOrder = (txs: any[]) =>
+        txs.map((t, idx) => ({
           ...t,
-          display_order: t.display_order ?? idx + 1, // fallback dla transakcji bez display_order
+          display_order: idx + 1, // tylko jeśli chcesz wymusić ciągłość
         }));
 
-      const parallelTxs = (data || [])
-        .filter((t) => t.is_parallel)
-        .map((t, idx) => ({
-          ...t,
-          display_order: t.display_order ?? idx + 1,
-        }));
+      // Użyj tej wersji, jeśli chcesz zachować oryginalne display_order:
+      setTransactions(sortedMain);
+      setParallelTransactions(sortedParallel);
 
-      console.log("📥 Loaded transactions with display_order:", {
-        main: mainTransactions.map((t) => ({ id: t.id, display_order: t.display_order, description: t.description })),
-        parallel: parallelTxs.map((t) => ({ id: t.id, display_order: t.display_order, description: t.description })),
+      // LUB użyj tej, jeśli chcesz ciągłość 1,2,3... (zalecane):
+      // setTransactions(normalizeOrder(sortedMain));
+      // setParallelTransactions(normalizeOrder(sortedParallel));
+
+      console.log("UI order (after sort):", {
+        main: sortedMain.map((t) => ({ id: t.id, display_order: t.display_order })),
+        parallel: sortedParallel.map((t) => ({ id: t.id, display_order: t.display_order })),
       });
-
-      setTransactions(mainTransactions);
-      setParallelTransactions(parallelTxs);
     } catch (error) {
       console.error("Error loading transactions:", error);
     }
