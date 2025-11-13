@@ -4,31 +4,32 @@ export const sendErrorReportUpdateEmail = async (
   reportTitle: string,
   reportId: string,
   previousStatus?: string,
-  newStatus?: string
+  newStatus?: string,
 ) => {
-  const smtpHost = Deno.env.get('SMTP_HOST');
-  const smtpPort = Deno.env.get('SMTP_PORT');
-  const smtpUser = Deno.env.get('SMTP_USER');
-  const smtpPassword = Deno.env.get('SMTP_PASSWORD');
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const smtpHost = Deno.env.get("SMTP_HOST");
+  const smtpPort = Deno.env.get("SMTP_PORT");
+  const smtpUser = Deno.env.get("SMTP_USER");
+  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
 
   if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-    console.error('Missing SMTP configuration');
+    console.error("Missing SMTP configuration");
     return;
   }
 
   const statusLabels: Record<string, string> = {
-    'new': 'Nowe',
-    'in_progress': 'W trakcie',
-    'resolved': 'Rozwiązane',
-    'closed': 'Zamknięte',
-    'needs_info': 'Wymaga informacji'
+    new: "Nowe",
+    in_progress: "W trakcie",
+    resolved: "Rozwiązane",
+    closed: "Zamknięte",
+    needs_info: "Wymaga informacji",
   };
 
-  const statusText = previousStatus && newStatus 
-    ? `<p><strong>Poprzedni status:</strong> ${statusLabels[previousStatus] || previousStatus}</p>
+  const statusText =
+    previousStatus && newStatus
+      ? `<p><strong>Poprzedni status:</strong> ${statusLabels[previousStatus] || previousStatus}</p>
        <p><strong>Nowy status:</strong> ${statusLabels[newStatus] || newStatus}</p>`
-    : '<p>Nastąpiła aktualizacja Twojego zgłoszenia.</p>';
+      : "<p>Nastąpiła aktualizacja Twojego zgłoszenia.</p>";
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -54,16 +55,16 @@ export const sendErrorReportUpdateEmail = async (
           <div class="status-box">
             ${statusText}
           </div>
-          <a href="${supabaseUrl}/administracja" class="button">Zobacz zgłoszenie</a>
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const statusTextPlain = previousStatus && newStatus 
-    ? `Poprzedni status: ${statusLabels[previousStatus] || previousStatus}\nNowy status: ${statusLabels[newStatus] || newStatus}`
-    : 'Nastąpiła aktualizacja Twojego zgłoszenia.';
+  const statusTextPlain =
+    previousStatus && newStatus
+      ? `Poprzedni status: ${statusLabels[previousStatus] || previousStatus}\nNowy status: ${statusLabels[newStatus] || newStatus}`
+      : "Nastąpiła aktualizacja Twojego zgłoszenia.";
 
   const textContent = `
 Zmiana statusu zgłoszenia
@@ -77,14 +78,14 @@ Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
       },
       body: JSON.stringify({
         to,
-        subject: 'Zmiana statusu zgłoszenia błędu',
+        subject: "Zmiana statusu zgłoszenia błędu",
         html: htmlContent,
         text: textContent,
       }),
@@ -92,10 +93,10 @@ Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('Failed to send update email:', error);
+      console.error("Failed to send update email:", error);
     }
   } catch (error) {
-    console.error('Error sending update email:', error);
+    console.error("Error sending update email:", error);
   }
 };
 
@@ -104,16 +105,16 @@ export const sendErrorReportResponseEmail = async (
   reportTitle: string,
   responderName: string,
   message: string,
-  reportId: string
+  reportId: string,
 ) => {
-  const smtpHost = Deno.env.get('SMTP_HOST');
-  const smtpPort = Deno.env.get('SMTP_PORT');
-  const smtpUser = Deno.env.get('SMTP_USER');
-  const smtpPassword = Deno.env.get('SMTP_PASSWORD');
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const smtpHost = Deno.env.get("SMTP_HOST");
+  const smtpPort = Deno.env.get("SMTP_PORT");
+  const smtpUser = Deno.env.get("SMTP_USER");
+  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
 
   if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-    console.error('Missing SMTP configuration');
+    console.error("Missing SMTP configuration");
     return;
   }
 
@@ -142,7 +143,6 @@ export const sendErrorReportResponseEmail = async (
           <div class="message-box">
             <p>${message}</p>
           </div>
-          <a href="${supabaseUrl}/administracja" class="button">Zobacz zgłoszenie</a>
         </div>
       </div>
     </body>
@@ -163,14 +163,14 @@ Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
       },
       body: JSON.stringify({
         to,
-        subject: 'Nowa odpowiedź w zgłoszeniu błędu',
+        subject: "Nowa odpowiedź w zgłoszeniu błędu",
         html: emailHtml,
         text: emailText,
       }),
@@ -178,9 +178,9 @@ Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('Failed to send response email:', error);
+      console.error("Failed to send response email:", error);
     }
   } catch (error) {
-    console.error('Error sending response email:', error);
+    console.error("Error sending response email:", error);
   }
 };
