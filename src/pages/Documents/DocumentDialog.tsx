@@ -1834,8 +1834,6 @@ const EditableTransactionRow = React.forwardRef<
         credit_amount: formData.credit_amount,
         amount: Math.max(formData.debit_amount, formData.credit_amount),
         currency: currency,
-        // CRITICAL: Preserve display_order from original transaction
-        // display_order: transaction.display_order,
       };
       onUpdate(updatedTransaction);
     }, [formData, currency, transaction.display_order, onUpdate]);
