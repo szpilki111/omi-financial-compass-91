@@ -521,8 +521,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       );
 
       // Podziel na główne i równoległe
-      const mainTransactions = (data || []).filter((t) => !t.is_parallel);
-      const parallelTxs = (data || []).filter((t) => t.is_parallel);
+      const mainTransactions = (data || [])
+        .filter((t) => !t.is_parallel)
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      const parallelTxs = (data || [])
+        .filter((t) => t.is_parallel)
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
       // Sortuj według display_order z bazy (bez nadpisywania!)
       const sortByDisplayOrder = (txs: any[]) =>
@@ -693,15 +697,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     // Preserve display_order from drag-and-drop, or assign new order for transactions without it
     const allFinalTransactions = [
-      ...finalTransactions.map((t, idx) => ({
+      ...finalTransactions.map((t) => ({
         ...t,
-        display_order: t.display_order ?? idx + 1, // fallback tylko dla nowych transakcji
         is_parallel: false,
+        // NIE NADPISUJ display_order – używaj tego z drag & drop!
       })),
-      ...finalParallelTransactions.map((t, idx) => ({
+      ...finalParallelTransactions.map((t) => ({
         ...t,
-        display_order: t.display_order ?? finalTransactions.length + idx + 1, // kontynuuj numerację
         is_parallel: true,
+        // NIE NADPISUJ display_order
       })),
     ];
 
