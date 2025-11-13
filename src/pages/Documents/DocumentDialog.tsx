@@ -520,9 +520,25 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         })),
       );
 
-      // Separate main and parallel transactions
-      const mainTransactions = (data || []).filter((t) => !t.is_parallel);
-      const parallelTxs = (data || []).filter((t) => t.is_parallel);
+      // Separate main and parallel transactions and ensure display_order
+      const mainTransactions = (data || [])
+        .filter((t) => !t.is_parallel)
+        .map((t, idx) => ({
+          ...t,
+          display_order: t.display_order ?? idx + 1, // fallback dla transakcji bez display_order
+        }));
+
+      const parallelTxs = (data || [])
+        .filter((t) => t.is_parallel)
+        .map((t, idx) => ({
+          ...t,
+          display_order: t.display_order ?? idx + 1,
+        }));
+
+      console.log("📥 Loaded transactions with display_order:", {
+        main: mainTransactions.map(t => ({ id: t.id, display_order: t.display_order, description: t.description })),
+        parallel: parallelTxs.map(t => ({ id: t.id, display_order: t.display_order, description: t.description }))
+      });
 
       setTransactions(mainTransactions);
       setParallelTransactions(parallelTxs);
@@ -664,17 +680,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     // Preserve display_order from drag-and-drop, or assign new order for transactions without it
     const allFinalTransactions = [
-      ...finalTransactions.map((t) => ({
+      ...finalTransactions.map((t, idx) => ({
         ...t,
-        display_order: t.display_order, // ZACHOWAJ istniejący!
+        display_order: t.display_order ?? idx + 1, // fallback tylko dla nowych transakcji
         is_parallel: false,
       })),
-      ...finalParallelTransactions.map((t) => ({
+      ...finalParallelTransactions.map((t, idx) => ({
         ...t,
-        display_order: t.display_order,
+        display_order: t.display_order ?? (finalTransactions.length + idx + 1), // kontynuuj numerację
         is_parallel: true,
       })),
     ];
+
+    console.log("💾 ZAPISUJĘ display_order do bazy:", allFinalTransactions.map(t => ({
+      id: t.id,
+      description: t.description?.substring(0, 30),
+      display_order: t.display_order,
+      is_parallel: t.is_parallel
+    })));
 
     setIsLoading(true);
     try {
