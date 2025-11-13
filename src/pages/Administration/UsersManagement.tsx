@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import UserDialog from "./UserDialog";
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
@@ -395,13 +395,14 @@ const UsersManagement = () => {
                                   size="sm"
                                   onClick={() => handleToggleBlocked(user.id, !user.blocked)}
                                   disabled={toggleUserBlockedMutation.isPending}
-                                  className="h-7 w-7 p-0" // mały kwadratowy przycisk
-                                            >
+                                  className="h-7 w-7 p-0"
+                                >
                                   {user.blocked ? (
                                     <Lock className="h-3 w-3" />
                                   ) : (
                                     <Unlock className="h-3 w-3" />
                                   )}
+                                </Button>
                               )}
                             </div>
                           </TableCell>
