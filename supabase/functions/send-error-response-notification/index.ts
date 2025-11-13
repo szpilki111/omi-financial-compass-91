@@ -32,18 +32,26 @@ const handler = async (req: Request): Promise<Response> => {
     const emailTask = async () => {
       try {
         // Fetch report details
-        const { data: report } = await supabase
+        const { data: report, error: reportError } = await supabase
           .from('error_reports')
-          .select(`
-            id,
-            title,
-            profiles!error_reports_user_id_fkey(email, name)
-          `)
+          .select('id, title, user_id')
           .eq('id', reportId)
           .single();
 
-        if (!report?.profiles) {
-          console.error('Report or user profile not found');
+        if (reportError || !report) {
+          console.error('Report not found:', reportError);
+          return;
+        }
+
+        // Fetch user profile
+        const { data: userProfile, error: userError } = await supabase
+          .from('profiles')
+          .select('email, name')
+          .eq('id', report.user_id)
+          .single();
+
+        if (userError || !userProfile) {
+          console.error('User profile not found:', userError);
           return;
         }
 
@@ -57,7 +65,7 @@ const handler = async (req: Request): Promise<Response> => {
         // Send email notification based on whether message is provided
         if (message) {
           await sendErrorReportResponseEmail(
-            report.profiles.email,
+            userProfile.email,
             report.title,
             responder?.name || 'Administrator',
             message,
@@ -65,7 +73,7 @@ const handler = async (req: Request): Promise<Response> => {
           );
         } else {
           await sendErrorReportUpdateEmail(
-            report.profiles.email,
+            userProfile.email,
             report.title,
             report.id
           );
