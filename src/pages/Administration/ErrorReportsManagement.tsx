@@ -203,9 +203,28 @@ const ErrorReportsManagement = () => {
         .eq("id", id);
 
       if (error) throw error;
+
+      // Get current user for sending notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      return { reportId: id, userId: user?.id };
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-reports"] });
+      
+      // Send email notification about status change
+      if (data.userId && selectedReport?.profiles?.email) {
+        supabase.functions.invoke('send-error-response-notification', {
+          body: {
+            reportId: data.reportId,
+            responderId: data.userId,
+            // No message = simple update notification
+          },
+        }).catch((error) => {
+          console.error("Failed to queue email notification:", error);
+        });
+      }
+      
       toast({
         title: "Zaktualizowano",
         description: "Status zgłoszenia został zaktualizowany.",

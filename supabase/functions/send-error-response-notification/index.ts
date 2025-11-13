@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
-import { sendErrorReportResponseEmail } from "../_shared/emailUtils.ts";
+import { sendErrorReportResponseEmail, sendErrorReportUpdateEmail } from "../_shared/emailUtils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +10,7 @@ const corsHeaders = {
 interface NotificationRequest {
   reportId: string;
   responderId: string;
-  message: string;
+  message?: string; // Optional - if not provided, sends simple update notification
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -54,14 +54,22 @@ const handler = async (req: Request): Promise<Response> => {
           .eq('id', responderId)
           .single();
 
-        // Send email notification
-        await sendErrorReportResponseEmail(
-          report.profiles.email,
-          report.title,
-          responder?.name || 'Administrator',
-          message,
-          report.id
-        );
+        // Send email notification based on whether message is provided
+        if (message) {
+          await sendErrorReportResponseEmail(
+            report.profiles.email,
+            report.title,
+            responder?.name || 'Administrator',
+            message,
+            report.id
+          );
+        } else {
+          await sendErrorReportUpdateEmail(
+            report.profiles.email,
+            report.title,
+            report.id
+          );
+        }
 
         console.log('Email notification sent successfully');
       } catch (error) {
