@@ -966,8 +966,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     if (over && active.id !== over.id) {
       const currentTransactions = isParallel ? parallelTransactions : transactions;
-      const oldIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === active.id);
-      const newIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === over.id);
+      const oldIndex = currentTransactions.findIndex((t, i) => (t.id || `temp-${i}`) === active.id);
+      const newIndex = currentTransactions.findIndex((t, i) => (t.id || `temp-${i}`) === over.id);
 
       console.log("🔄 Drag end:", { oldIndex, newIndex, isParallel });
 
@@ -1416,7 +1416,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </TableHeader>
                     <TableBody>
                       <SortableContext
-                        items={transactions.map((_, i) => `transaction-${i}`)}
+                        items={transactions.map((t, i) => t.id || `temp-${i}`)}
                         strategy={verticalListSortingStrategy}
                       >
                         {transactions.map((transaction, index) => {
@@ -1428,8 +1428,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           );
                           return (
                             <SortableTransactionRow
-                              key={`transaction-${index}`}
-                              id={`transaction-${index}`}
+                              key={transaction.id || `temp-${index}`}
+                              id={transaction.id || `temp-${index}`}
                               index={index}
                               transaction={transaction}
                               onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
@@ -1570,7 +1570,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       </TableHeader>
                       <TableBody>
                         <SortableContext
-                          items={parallelTransactions.map((_, i) => `transaction-${i}`)}
+                          items={parallelTransactions.map((t, i) => t.id || `temp-${i}`)}
                           strategy={verticalListSortingStrategy}
                         >
                           {parallelTransactions.map((transaction, index) => {
@@ -1582,8 +1582,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                             );
                             return (
                               <SortableTransactionRow
-                                key={`transaction-${index}`}
-                                id={`transaction-${index}`}
+                                key={transaction.id || `temp-${index}`}
+                                id={transaction.id || `temp-${index}`}
                                 index={index}
                                 transaction={transaction}
                                 onUpdate={(updatedTransaction) =>
