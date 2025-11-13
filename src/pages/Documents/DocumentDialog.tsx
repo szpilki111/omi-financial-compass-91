@@ -1048,8 +1048,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         debit_amount: isDebitSideSmaller ? balanceAmount : undefined,
         credit_amount: isDebitSideSmaller ? undefined : balanceAmount,
         amount: balanceAmount,
-        debit_account_id: transaction.debit_account_id || "",
-        credit_account_id: transaction.credit_account_id || "",
+        // Only set account on the side that has an amount
+        debit_account_id: isDebitSideSmaller ? transaction.debit_account_id : undefined,
+        credit_account_id: isDebitSideSmaller ? undefined : transaction.credit_account_id,
       };
 
       if (isParallel) {
@@ -1102,8 +1103,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         debit_amount: isDebitSmaller ? difference : undefined,
         credit_amount: isDebitSmaller ? undefined : difference,
         amount: difference,
-        debit_account_id: transaction.debit_account_id || "",
-        credit_account_id: transaction.credit_account_id || "",
+        // Only set account on the side that has an amount
+        debit_account_id: isDebitSmaller ? transaction.debit_account_id : undefined,
+        credit_account_id: isDebitSmaller ? undefined : transaction.credit_account_id,
       };
 
       if (isParallel) {
