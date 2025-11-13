@@ -662,10 +662,18 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : []),
     ];
     
-    // Assign proper display_order to avoid conflicts
+    // Preserve display_order from drag-and-drop, or assign new order for transactions without it
     const allFinalTransactions = [
-      ...finalTransactions.map((t, idx) => ({ ...t, display_order: idx + 1, is_parallel: false })),
-      ...finalParallelTransactions.map((t, idx) => ({ ...t, display_order: idx + 1, is_parallel: true }))
+      ...finalTransactions.map((t, idx) => ({ 
+        ...t, 
+        display_order: t.display_order ?? idx + 1, 
+        is_parallel: false 
+      })),
+      ...finalParallelTransactions.map((t, idx) => ({ 
+        ...t, 
+        display_order: t.display_order ?? idx + 1, 
+        is_parallel: true 
+      }))
     ];
 
     setIsLoading(true);
