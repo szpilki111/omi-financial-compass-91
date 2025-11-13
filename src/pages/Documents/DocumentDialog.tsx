@@ -879,7 +879,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
-    setTransactions((prev) => prev.map((t, i) => (i === index ? updatedTransaction : t)));
+    setTransactions((prev) =>
+      prev.map((t, i) =>
+        i === index
+          ? {
+              ...updatedTransaction,
+              display_order: t.display_order, // ← ZACHOWAJ STARY display_order
+            }
+          : t,
+      ),
+    );
     // Clear validation errors when a transaction is updated
     setValidationErrors((prev) =>
       prev.filter(
