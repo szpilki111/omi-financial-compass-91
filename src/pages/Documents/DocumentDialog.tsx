@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer, Bug } from "lucide-react";
 import html2canvas from "html2canvas";
-import { ErrorReportDialog } from "@/components/ErrorReportDialog";display_order: transaction.display_order,
+import { ErrorReportDialog } from "@/components/ErrorReportDialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -1834,6 +1834,8 @@ const EditableTransactionRow = React.forwardRef<
         credit_amount: formData.credit_amount,
         amount: Math.max(formData.debit_amount, formData.credit_amount),
         currency: currency,
+        // CRITICAL: Preserve display_order from original transaction
+        // display_order: transaction.display_order,
       };
       onUpdate(updatedTransaction);
     }, [formData, currency, transaction.display_order, onUpdate]);
