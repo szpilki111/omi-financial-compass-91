@@ -193,9 +193,11 @@ const ErrorReportsManagement = () => {
     mutationFn: async ({
       id,
       status,
+      previousStatus,
     }: {
       id: string;
       status: "new" | "in_progress" | "resolved" | "closed" | "needs_info";
+      previousStatus: string;
     }) => {
       const { error } = await supabase
         .from("error_reports")
@@ -207,7 +209,7 @@ const ErrorReportsManagement = () => {
       // Get current user for sending notification
       const { data: { user } } = await supabase.auth.getUser();
       
-      return { reportId: id, userId: user?.id };
+      return { reportId: id, userId: user?.id, previousStatus, newStatus: status };
     },
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-reports"] });
@@ -218,7 +220,8 @@ const ErrorReportsManagement = () => {
           body: {
             reportId: data.reportId,
             responderId: data.userId,
-            // No message = simple update notification
+            previousStatus: data.previousStatus,
+            newStatus: data.newStatus,
           },
         }).catch((error) => {
           console.error("Failed to queue email notification:", error);
@@ -494,10 +497,12 @@ const ErrorReportsManagement = () => {
                   <Select 
                     value={newStatus} 
                     onValueChange={(value: "new" | "in_progress" | "resolved" | "closed" | "needs_info") => {
+                      const previousStatus = selectedReport.status;
                       setNewStatus(value);
                       updateMutation.mutate({
                         id: selectedReport.id,
                         status: value,
+                        previousStatus,
                       });
                     }}
                   >
