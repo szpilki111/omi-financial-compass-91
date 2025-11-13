@@ -515,11 +515,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         data?.map((t) => ({
           id: t.id,
           display_order: t.display_order,
+          is_parallel: t.is_parallel,
           description: t.description,
         })),
       );
 
-      setTransactions(data || []);
+      // Separate main and parallel transactions
+      const mainTransactions = (data || []).filter((t) => !t.is_parallel);
+      const parallelTxs = (data || []).filter((t) => t.is_parallel);
+      
+      setTransactions(mainTransactions);
+      setParallelTransactions(parallelTxs);
     } catch (error) {
       console.error("Error loading transactions:", error);
     }
@@ -655,7 +661,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       ...parallelTransactions,
       ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : []),
     ];
-    const allFinalTransactions = [...finalTransactions, ...finalParallelTransactions];
+    
+    // Assign proper display_order to avoid conflicts
+    const allFinalTransactions = [
+      ...finalTransactions.map((t, idx) => ({ ...t, display_order: idx + 1, is_parallel: false })),
+      ...finalParallelTransactions.map((t, idx) => ({ ...t, display_order: idx + 1, is_parallel: true }))
+    ];
 
     setIsLoading(true);
     try {
@@ -700,34 +711,88 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       }));
 
       if (documentId) {
-        const { error: deleteError } = await supabase.from("transactions").delete().eq("document_id", documentId);
-        if (deleteError) {
-          console.error("Error deleting existing transactions:", deleteError);
-          throw deleteError;
+        // Use UPDATE/INSERT/DELETE strategy instead of DELETE+INSERT
+        const existingTransactionIds = new Set(
+          allTransactionsSafe.filter(t => t.id).map(t => t.id)
+        );
+        
+        // Get all existing transactions for this document
+        const { data: existingTransactions } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("document_id", documentId);
+        
+        // Delete transactions that are no longer in the list
+        const transactionsToDelete = (existingTransactions || [])
+          .filter(t => !existingTransactionIds.has(t.id))
+          .map(t => t.id);
+        
+        if (transactionsToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("transactions")
+            .delete()
+            .in("id", transactionsToDelete);
+          if (deleteError) throw deleteError;
         }
 
-        if (allTransactionsSafe.length > 0) {
-          const transactionsToInsert = allTransactionsSafe.map((t) => {
-            return {
-              document_id: documentId,
-              debit_account_id: t.debit_account_id || null,
-              credit_account_id: t.credit_account_id || null,
-              amount: t.amount,
-              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
-              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
-              description: t.description,
-              currency: t.currency,
-              date: format(data.document_date, "yyyy-MM-dd"),
-              location_id: user.location,
-              user_id: user.id,
-              document_number: data.document_number,
-              display_order: t.display_order,
-            };
-          });
-          const { error: transactionError } = await supabase.from("transactions").insert(transactionsToInsert);
-          if (transactionError) {
-            console.error("Error inserting transactions:", transactionError);
-            throw transactionError;
+        // Separate transactions for UPDATE and INSERT
+        const transactionsToUpdate = allTransactionsSafe.filter(t => t.id);
+        const transactionsToInsert = allTransactionsSafe.filter(t => !t.id);
+
+        // Update existing transactions
+        if (transactionsToUpdate.length > 0) {
+          const updatePromises = transactionsToUpdate.map((t) =>
+            supabase
+              .from("transactions")
+              .update({
+                debit_account_id: t.debit_account_id || null,
+                credit_account_id: t.credit_account_id || null,
+                amount: t.amount,
+                debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+                credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+                description: t.description,
+                currency: t.currency,
+                date: format(data.document_date, "yyyy-MM-dd"),
+                document_number: data.document_number,
+                display_order: t.display_order,
+                is_parallel: t.is_parallel || false,
+              })
+              .eq("id", t.id!)
+          );
+          
+          const results = await Promise.all(updatePromises);
+          const errors = results.filter((r) => r.error);
+          if (errors.length > 0) {
+            console.error("Error updating transactions:", errors);
+            throw errors[0].error;
+          }
+        }
+
+        // Insert new transactions
+        if (transactionsToInsert.length > 0) {
+          const transactionsData = transactionsToInsert.map((t) => ({
+            document_id: documentId,
+            debit_account_id: t.debit_account_id || null,
+            credit_account_id: t.credit_account_id || null,
+            amount: t.amount,
+            debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+            credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+            description: t.description,
+            currency: t.currency,
+            date: format(data.document_date, "yyyy-MM-dd"),
+            location_id: user.location,
+            user_id: user.id,
+            document_number: data.document_number,
+            display_order: t.display_order,
+            is_parallel: t.is_parallel || false,
+          }));
+          
+          const { error: insertError } = await supabase
+            .from("transactions")
+            .insert(transactionsData);
+          if (insertError) {
+            console.error("Error inserting transactions:", insertError);
+            throw insertError;
           }
         }
       }
@@ -878,43 +943,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
         setHasUnsavedChanges(true);
 
-        // Save order to database for existing transactions (those with IDs)
-        if (document?.id) {
-          const transactionsToUpdate = updatedTransactions.filter((t) => t.id);
-          console.log(
-            "💾 Saving order to database for transactions:",
-            transactionsToUpdate.map((t) => ({ id: t.id, display_order: t.display_order })),
-          );
-
-          if (transactionsToUpdate.length > 0) {
-            try {
-              // Update each transaction's display_order individually
-              const updatePromises = transactionsToUpdate.map((t) =>
-                supabase.from("transactions").update({ display_order: t.display_order }).eq("id", t.id!),
-              );
-
-              const results = await Promise.all(updatePromises);
-              const errors = results.filter((r) => r.error);
-
-              console.log("✅ Update results:", results);
-
-              if (errors.length > 0) {
-                console.error("❌ Error updating transaction order:", errors);
-                toast({
-                  title: "Błąd",
-                  description: "Nie udało się zapisać nowej kolejności operacji",
-                  variant: "destructive",
-                });
-              } else {
-                console.log("✅ Successfully saved new order to database");
-              }
-            } catch (error) {
-              console.error("❌ Error updating transaction order:", error);
-            }
-          }
-        } else {
-          console.log("ℹ️ Document not saved yet, order will be saved when document is created");
-        }
+        // Mark as having unsaved changes - order will be saved when document is saved
+        setHasUnsavedChanges(true);
+        console.log("ℹ️ Transaction order changed, will be saved when document is saved");
       }
     }
   };
