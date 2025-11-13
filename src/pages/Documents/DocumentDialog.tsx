@@ -640,11 +640,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Function to count missing fields in a transaction
     const countMissingFields = (transaction: Transaction) => {
       let count = 0;
+      
+      // Check if this is a split transaction (one side empty, other filled)
+      const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
+      const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+      const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
+      
       if (!transaction.description || transaction.description.trim() === "") count++;
-      if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
-      if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
-      if (!transaction.debit_account_id) count++;
-      if (!transaction.credit_account_id) count++;
+      
+      // For split transactions, only validate the filled side
+      if (isSplitTransaction) {
+        if (hasDebit && !transaction.debit_account_id) count++;
+        if (hasCredit && !transaction.credit_account_id) count++;
+      } else {
+        // For normal transactions, both sides must be filled
+        if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
+        if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
+        if (!transaction.debit_account_id) count++;
+        if (!transaction.credit_account_id) count++;
+      }
+      
       return count;
     };
 
@@ -654,12 +669,25 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (missingCount > 0) {
         const missingFields: ValidationError["missingFields"] = {};
+        
+        // Check if this is a split transaction
+        const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
+        const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+        const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
 
         if (!transaction.description || transaction.description.trim() === "") missingFields.description = true;
-        if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
-        if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
-        if (!transaction.debit_account_id) missingFields.debit_account_id = true;
-        if (!transaction.credit_account_id) missingFields.credit_account_id = true;
+        
+        if (isSplitTransaction) {
+          // For split transactions, only validate the filled side
+          if (hasDebit && !transaction.debit_account_id) missingFields.debit_account_id = true;
+          if (hasCredit && !transaction.credit_account_id) missingFields.credit_account_id = true;
+        } else {
+          // For normal transactions, validate both sides
+          if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
+          if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
+          if (!transaction.debit_account_id) missingFields.debit_account_id = true;
+          if (!transaction.credit_account_id) missingFields.credit_account_id = true;
+        }
 
         errors.push({
           type: "incomplete_transaction",
