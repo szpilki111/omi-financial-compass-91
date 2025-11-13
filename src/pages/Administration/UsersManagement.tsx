@@ -395,10 +395,13 @@ const UsersManagement = () => {
                                   size="sm"
                                   onClick={() => handleToggleBlocked(user.id, !user.blocked)}
                                   disabled={toggleUserBlockedMutation.isPending}
-                                  className="h-7 text-xs"
-                                >
-                                  {user.blocked ? "Odblokuj" : "Zablokuj"}
-                                </Button>
+                                  className="h-7 w-7 p-0" // mały kwadratowy przycisk
+                                            >
+                                  {user.blocked ? (
+                                    <Lock className="h-3 w-3" />
+                                  ) : (
+                                    <Unlock className="h-3 w-3" />
+                                  )}
                               )}
                             </div>
                           </TableCell>
