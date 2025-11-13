@@ -523,7 +523,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       // Separate main and parallel transactions
       const mainTransactions = (data || []).filter((t) => !t.is_parallel);
       const parallelTxs = (data || []).filter((t) => t.is_parallel);
-      
+
       setTransactions(mainTransactions);
       setParallelTransactions(parallelTxs);
     } catch (error) {
@@ -661,19 +661,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       ...parallelTransactions,
       ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : []),
     ];
-    
+
     // Preserve display_order from drag-and-drop, or assign new order for transactions without it
     const allFinalTransactions = [
-      ...finalTransactions.map((t, idx) => ({ 
-        ...t, 
-        display_order: t.display_order ?? idx + 1, 
-        is_parallel: false 
+      ...finalTransactions.map((t) => ({
+        ...t,
+        display_order: t.display_order, // ZACHOWAJ istniejący!
+        is_parallel: false,
       })),
-      ...finalParallelTransactions.map((t, idx) => ({ 
-        ...t, 
-        display_order: t.display_order ?? idx + 1, 
-        is_parallel: true 
-      }))
+      ...finalParallelTransactions.map((t) => ({
+        ...t,
+        display_order: t.display_order,
+        is_parallel: true,
+      })),
     ];
 
     setIsLoading(true);
@@ -720,32 +720,27 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (documentId) {
         // Use UPDATE/INSERT/DELETE strategy instead of DELETE+INSERT
-        const existingTransactionIds = new Set(
-          allTransactionsSafe.filter(t => t.id).map(t => t.id)
-        );
-        
+        const existingTransactionIds = new Set(allTransactionsSafe.filter((t) => t.id).map((t) => t.id));
+
         // Get all existing transactions for this document
         const { data: existingTransactions } = await supabase
           .from("transactions")
           .select("id")
           .eq("document_id", documentId);
-        
+
         // Delete transactions that are no longer in the list
         const transactionsToDelete = (existingTransactions || [])
-          .filter(t => !existingTransactionIds.has(t.id))
-          .map(t => t.id);
-        
+          .filter((t) => !existingTransactionIds.has(t.id))
+          .map((t) => t.id);
+
         if (transactionsToDelete.length > 0) {
-          const { error: deleteError } = await supabase
-            .from("transactions")
-            .delete()
-            .in("id", transactionsToDelete);
+          const { error: deleteError } = await supabase.from("transactions").delete().in("id", transactionsToDelete);
           if (deleteError) throw deleteError;
         }
 
         // Separate transactions for UPDATE and INSERT
-        const transactionsToUpdate = allTransactionsSafe.filter(t => t.id);
-        const transactionsToInsert = allTransactionsSafe.filter(t => !t.id);
+        const transactionsToUpdate = allTransactionsSafe.filter((t) => t.id);
+        const transactionsToInsert = allTransactionsSafe.filter((t) => !t.id);
 
         // Update existing transactions
         if (transactionsToUpdate.length > 0) {
@@ -765,9 +760,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 display_order: t.display_order,
                 is_parallel: t.is_parallel || false,
               })
-              .eq("id", t.id!)
+              .eq("id", t.id!),
           );
-          
+
           const results = await Promise.all(updatePromises);
           const errors = results.filter((r) => r.error);
           if (errors.length > 0) {
@@ -794,10 +789,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             display_order: t.display_order,
             is_parallel: t.is_parallel || false,
           }));
-          
-          const { error: insertError } = await supabase
-            .from("transactions")
-            .insert(transactionsData);
+
+          const { error: insertError } = await supabase.from("transactions").insert(transactionsData);
           if (insertError) {
             console.error("Error inserting transactions:", insertError);
             throw insertError;
