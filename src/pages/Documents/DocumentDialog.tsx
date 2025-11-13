@@ -536,8 +536,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }));
 
       console.log("📥 Loaded transactions with display_order:", {
-        main: mainTransactions.map(t => ({ id: t.id, display_order: t.display_order, description: t.description })),
-        parallel: parallelTxs.map(t => ({ id: t.id, display_order: t.display_order, description: t.description }))
+        main: mainTransactions.map((t) => ({ id: t.id, display_order: t.display_order, description: t.description })),
+        parallel: parallelTxs.map((t) => ({ id: t.id, display_order: t.display_order, description: t.description })),
       });
 
       setTransactions(mainTransactions);
@@ -687,17 +687,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       })),
       ...finalParallelTransactions.map((t, idx) => ({
         ...t,
-        display_order: t.display_order ?? (finalTransactions.length + idx + 1), // kontynuuj numerację
+        display_order: t.display_order ?? finalTransactions.length + idx + 1, // kontynuuj numerację
         is_parallel: true,
       })),
     ];
 
-    console.log("💾 ZAPISUJĘ display_order do bazy:", allFinalTransactions.map(t => ({
-      id: t.id,
-      description: t.description?.substring(0, 30),
-      display_order: t.display_order,
-      is_parallel: t.is_parallel
-    })));
+    console.log(
+      "💾 ZAPISUJĘ display_order do bazy:",
+      allFinalTransactions.map((t) => ({
+        id: t.id,
+        description: t.description?.substring(0, 30),
+        display_order: t.display_order,
+        is_parallel: t.is_parallel,
+      })),
+    );
 
     setIsLoading(true);
     try {
@@ -1810,7 +1813,7 @@ const EditableTransactionRow = React.forwardRef<
         amount: Math.max(formData.debit_amount, formData.credit_amount),
         currency: currency,
         // CRITICAL: Preserve display_order from original transaction
-        display_order: transaction.display_order,
+        // display_order: transaction.display_order,
       };
       onUpdate(updatedTransaction);
     }, [formData, currency, transaction.display_order, onUpdate]);
