@@ -135,7 +135,7 @@ const UsersManagement = () => {
             .select("location_id, locations(name)")
             .eq("user_id", profile.id);
 
-          const locations = userLocs?.map(ul => ({ name: (ul.locations as any)?.name })) || [];
+          const locations = userLocs?.map((ul) => ({ name: (ul.locations as any)?.name })) || [];
 
           return {
             ...profile,
@@ -397,11 +397,7 @@ const UsersManagement = () => {
                                   disabled={toggleUserBlockedMutation.isPending}
                                   className="h-7 w-7 p-0"
                                 >
-                                  {user.blocked ? (
-                                    <Lock className="h-3 w-3" />
-                                  ) : (
-                                    <Unlock className="h-3 w-3" />
-                                  )}
+                                  {user.blocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                                 </Button>
                               )}
                             </div>
@@ -413,21 +409,15 @@ const UsersManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={async () => {
-                              // Fetch user locations before editing
-                              const { data: userLocs } = await supabase
-                                .from('user_locations')
-                                .select('location_id')
-                                .eq('user_id', user.id);
-                              
-                              setEditingUser({
-                                ...user,
-                                location_ids: userLocs?.map(ul => ul.location_id) || []
-                              });
-                              setIsUserDialogOpen(true);
-                            }}
+                            onClick={handleEdit}
+                            disabled={isPending}
+                            className="h-7 w-7 p-0"
                           >
-                            Edytuj
+                            {isPending ? (
+                              <div className="h-3 w-3 border-2 border-t-transparent border-gray-400 rounded-full animate-spin" />
+                            ) : (
+                              <Pencil className="h-3 w-3" />
+                            )}
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
