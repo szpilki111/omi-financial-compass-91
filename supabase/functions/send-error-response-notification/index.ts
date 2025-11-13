@@ -10,7 +10,9 @@ const corsHeaders = {
 interface NotificationRequest {
   reportId: string;
   responderId: string;
-  message?: string; // Optional - if not provided, sends simple update notification
+  message?: string;
+  previousStatus?: string;
+  newStatus?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -19,7 +21,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { reportId, responderId, message }: NotificationRequest = await req.json();
+    const { reportId, responderId, message, previousStatus, newStatus }: NotificationRequest = await req.json();
 
     console.log('Processing notification for report:', reportId);
 
@@ -75,7 +77,9 @@ const handler = async (req: Request): Promise<Response> => {
           await sendErrorReportUpdateEmail(
             userProfile.email,
             report.title,
-            report.id
+            report.id,
+            previousStatus,
+            newStatus
           );
         }
 
