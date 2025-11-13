@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Lock, Unlock, Pencil } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import UserDialog from "./UserDialog";
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
@@ -286,11 +286,6 @@ const UsersManagement = () => {
     toggleUserBlockedMutation.mutate({ userId, blocked });
   };
 
-  const handleEdit = (user: UserProfile) => {
-    setEditingUser(user);
-    setIsUserDialogOpen(true);
-  };
-
   const userRole = user?.role;
 
   if (isLoading) {
@@ -414,10 +409,15 @@ const UsersManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEdit(user)}
+                            onClick={handleEdit}
+                            disabled={isPending}
                             className="h-7 w-7 p-0"
                           >
-                            <Pencil className="h-3 w-3" />
+                            {isPending ? (
+                              <div className="h-3 w-3 border-2 border-t-transparent border-gray-400 rounded-full animate-spin" />
+                            ) : (
+                              <Pencil className="h-3 w-3" />
+                            )}
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
