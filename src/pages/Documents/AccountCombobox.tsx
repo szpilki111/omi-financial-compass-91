@@ -46,6 +46,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [displayedAccountName, setDisplayedAccountName] = useState('');
+  const [shouldAutoOpen, setShouldAutoOpen] = useState(true); // Track if we should auto-open
 
   useEffect(() => {
     if (value && locationId) {
@@ -289,10 +290,19 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   // Funkcja obsługująca focus na przycisku
   const handleButtonFocus = () => {
-    if (autoOpenOnFocus && !disabled && locationId) {
+    if (autoOpenOnFocus && !disabled && locationId && shouldAutoOpen) {
       setOpen(true);
     }
   };
+  
+  // Reset shouldAutoOpen when value changes from empty to filled
+  useEffect(() => {
+    if (value) {
+      setShouldAutoOpen(false);
+    } else {
+      setShouldAutoOpen(true);
+    }
+  }, [value]);
 
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
@@ -342,6 +352,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                   onChange(firstAccount.id);
                   setOpen(false);
                   setSearchTerm('');
+                  setShouldAutoOpen(false); // Prevent auto-open after Enter selection
                   // Wywołaj callback po wybraniu konta
                   if (onAccountSelected) {
                     setTimeout(() => {
@@ -370,6 +381,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                     onChange(currentValue === value ? '' : currentValue);
                     setOpen(false);
                     setSearchTerm('');
+                    setShouldAutoOpen(false); // Prevent auto-open after selection
                     // Wywołaj callback po wybraniu konta
                     if (onAccountSelected && currentValue !== value && currentValue !== '') {
                       setTimeout(() => {
