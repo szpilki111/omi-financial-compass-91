@@ -193,9 +193,11 @@ const ErrorReportsManagement = () => {
     mutationFn: async ({
       id,
       status,
+      previousStatus,
     }: {
       id: string;
       status: "new" | "in_progress" | "resolved" | "closed" | "needs_info";
+      previousStatus: string;
     }) => {
       const { error } = await supabase
         .from("error_reports")
@@ -203,9 +205,29 @@ const ErrorReportsManagement = () => {
         .eq("id", id);
 
       if (error) throw error;
+
+      // Get current user for sending notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      return { reportId: id, userId: user?.id, previousStatus, newStatus: status };
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-reports"] });
+      
+      // Send email notification about status change
+      if (data.userId && selectedReport?.profiles?.email) {
+        supabase.functions.invoke('send-error-response-notification', {
+          body: {
+            reportId: data.reportId,
+            responderId: data.userId,
+            previousStatus: data.previousStatus,
+            newStatus: data.newStatus,
+          },
+        }).catch((error) => {
+          console.error("Failed to queue email notification:", error);
+        });
+      }
+      
       toast({
         title: "Zaktualizowano",
         description: "Status zgłoszenia został zaktualizowany.",
@@ -475,10 +497,12 @@ const ErrorReportsManagement = () => {
                   <Select 
                     value={newStatus} 
                     onValueChange={(value: "new" | "in_progress" | "resolved" | "closed" | "needs_info") => {
+                      const previousStatus = selectedReport.status;
                       setNewStatus(value);
                       updateMutation.mutate({
                         id: selectedReport.id,
                         status: value,
+                        previousStatus,
                       });
                     }}
                   >

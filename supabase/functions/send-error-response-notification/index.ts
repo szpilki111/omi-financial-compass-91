@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
-import { sendErrorReportResponseEmail } from "../_shared/emailUtils.ts";
+import { sendErrorReportResponseEmail, sendErrorReportUpdateEmail } from "../_shared/emailUtils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +10,9 @@ const corsHeaders = {
 interface NotificationRequest {
   reportId: string;
   responderId: string;
-  message: string;
+  message?: string;
+  previousStatus?: string;
+  newStatus?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -19,7 +21,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { reportId, responderId, message }: NotificationRequest = await req.json();
+    const { reportId, responderId, message, previousStatus, newStatus }: NotificationRequest = await req.json();
 
     console.log('Processing notification for report:', reportId);
 
@@ -32,18 +34,26 @@ const handler = async (req: Request): Promise<Response> => {
     const emailTask = async () => {
       try {
         // Fetch report details
-        const { data: report } = await supabase
+        const { data: report, error: reportError } = await supabase
           .from('error_reports')
-          .select(`
-            id,
-            title,
-            profiles!error_reports_user_id_fkey(email, name)
-          `)
+          .select('id, title, user_id')
           .eq('id', reportId)
           .single();
 
-        if (!report?.profiles) {
-          console.error('Report or user profile not found');
+        if (reportError || !report) {
+          console.error('Report not found:', reportError);
+          return;
+        }
+
+        // Fetch user profile
+        const { data: userProfile, error: userError } = await supabase
+          .from('profiles')
+          .select('email, name')
+          .eq('id', report.user_id)
+          .single();
+
+        if (userError || !userProfile) {
+          console.error('User profile not found:', userError);
           return;
         }
 
@@ -54,14 +64,24 @@ const handler = async (req: Request): Promise<Response> => {
           .eq('id', responderId)
           .single();
 
-        // Send email notification
-        await sendErrorReportResponseEmail(
-          report.profiles.email,
-          report.title,
-          responder?.name || 'Administrator',
-          message,
-          report.id
-        );
+        // Send email notification based on whether message is provided
+        if (message) {
+          await sendErrorReportResponseEmail(
+            userProfile.email,
+            report.title,
+            responder?.name || 'Administrator',
+            message,
+            report.id
+          );
+        } else {
+          await sendErrorReportUpdateEmail(
+            userProfile.email,
+            report.title,
+            report.id,
+            previousStatus,
+            newStatus
+          );
+        }
 
         console.log('Email notification sent successfully');
       } catch (error) {

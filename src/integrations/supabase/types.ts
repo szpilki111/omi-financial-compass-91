@@ -873,6 +873,7 @@ export type Database = {
           document_number: string | null
           exchange_rate: number | null
           id: string
+          is_parallel: boolean
           is_split_transaction: boolean | null
           location_id: string
           parent_transaction_id: string | null
@@ -895,6 +896,7 @@ export type Database = {
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_parallel?: boolean
           is_split_transaction?: boolean | null
           location_id: string
           parent_transaction_id?: string | null
@@ -917,6 +919,7 @@ export type Database = {
           document_number?: string | null
           exchange_rate?: number | null
           id?: string
+          is_parallel?: boolean
           is_split_transaction?: boolean | null
           location_id?: string
           parent_transaction_id?: string | null

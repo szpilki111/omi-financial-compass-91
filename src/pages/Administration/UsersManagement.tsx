@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock, Check, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import UserDialog from "./UserDialog";
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
@@ -60,7 +60,7 @@ const getRoleBadgeProps = (role: string) => {
 const getRoleLabel = (role: string) => {
   switch (role) {
     case "admin":
-      return "Administrator";
+      return "Admin";
     case "prowincjal":
       return "Prowincjał";
     case "ekonom":
@@ -135,7 +135,7 @@ const UsersManagement = () => {
             .select("location_id, locations(name)")
             .eq("user_id", profile.id);
 
-          const locations = userLocs?.map(ul => ({ name: (ul.locations as any)?.name })) || [];
+          const locations = userLocs?.map((ul) => ({ name: (ul.locations as any)?.name })) || [];
 
           return {
             ...profile,
@@ -386,7 +386,7 @@ const UsersManagement = () => {
                                   variant="outline"
                                   className="text-xs bg-green-50 text-green-700 border-green-200"
                                 >
-                                  Aktywne
+                                  <Check className="h-3 w-3" />
                                 </Badge>
                               )}
                               {(userRole === "prowincjal" || userRole === "admin") && (
@@ -395,9 +395,9 @@ const UsersManagement = () => {
                                   size="sm"
                                   onClick={() => handleToggleBlocked(user.id, !user.blocked)}
                                   disabled={toggleUserBlockedMutation.isPending}
-                                  className="h-7 text-xs"
+                                  className="h-7 w-7 p-0"
                                 >
-                                  {user.blocked ? "Odblokuj" : "Zablokuj"}
+                                  {user.blocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                                 </Button>
                               )}
                             </div>
@@ -412,18 +412,18 @@ const UsersManagement = () => {
                             onClick={async () => {
                               // Fetch user locations before editing
                               const { data: userLocs } = await supabase
-                                .from('user_locations')
-                                .select('location_id')
-                                .eq('user_id', user.id);
-                              
+                                .from("user_locations")
+                                .select("location_id")
+                                .eq("user_id", user.id);
+
                               setEditingUser({
                                 ...user,
-                                location_ids: userLocs?.map(ul => ul.location_id) || []
+                                location_ids: userLocs?.map((ul) => ul.location_id) || [],
                               });
                               setIsUserDialogOpen(true);
                             }}
                           >
-                            Edytuj
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

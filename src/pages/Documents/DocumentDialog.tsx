@@ -511,15 +511,54 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       if (error) throw error;
 
       console.log(
-        "📥 Loaded transactions from database:",
+        "Loaded transactions from database:",
         data?.map((t) => ({
           id: t.id,
           display_order: t.display_order,
+          is_parallel: t.is_parallel,
           description: t.description,
         })),
       );
 
-      setTransactions(data || []);
+      // Podziel na główne i równoległe
+      const mainTransactions = (data || [])
+        .filter((t) => !t.is_parallel)
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      const parallelTxs = (data || [])
+        .filter((t) => t.is_parallel)
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+      // Sortuj według display_order z bazy (bez nadpisywania!)
+      const sortByDisplayOrder = (txs: any[]) =>
+        [...txs].sort((a, b) => {
+          const aOrder = a.display_order ?? 0;
+          const bOrder = b.display_order ?? 0;
+          return aOrder - bOrder;
+        });
+
+      const sortedMain = sortByDisplayOrder(mainTransactions);
+      const sortedParallel = sortByDisplayOrder(parallelTxs);
+
+      // Opcjonalnie: normalizuj display_order (1, 2, 3...) – tylko jeśli chcesz ciągłość
+      // Jeśli chcesz zachować oryginalne wartości z bazy – pomiń to!
+      const normalizeOrder = (txs: any[]) =>
+        txs.map((t, idx) => ({
+          ...t,
+          display_order: idx + 1, // tylko jeśli chcesz wymusić ciągłość
+        }));
+
+      // Użyj tej wersji, jeśli chcesz zachować oryginalne display_order:
+      setTransactions(sortedMain);
+      setParallelTransactions(sortedParallel);
+
+      // LUB użyj tej, jeśli chcesz ciągłość 1,2,3... (zalecane):
+      // setTransactions(normalizeOrder(sortedMain));
+      // setParallelTransactions(normalizeOrder(sortedParallel));
+
+      console.log("UI order (after sort):", {
+        main: sortedMain.map((t) => ({ id: t.id, display_order: t.display_order })),
+        parallel: sortedParallel.map((t) => ({ id: t.id, display_order: t.display_order })),
+      });
     } catch (error) {
       console.error("Error loading transactions:", error);
     }
@@ -601,11 +640,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Function to count missing fields in a transaction
     const countMissingFields = (transaction: Transaction) => {
       let count = 0;
+      
+      // Check if this is a split transaction (one side empty, other filled)
+      const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
+      const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+      const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
+      
       if (!transaction.description || transaction.description.trim() === "") count++;
-      if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
-      if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
-      if (!transaction.debit_account_id) count++;
-      if (!transaction.credit_account_id) count++;
+      
+      // For split transactions, only validate the filled side
+      if (isSplitTransaction) {
+        if (hasDebit && !transaction.debit_account_id) count++;
+        if (hasCredit && !transaction.credit_account_id) count++;
+      } else {
+        // For normal transactions, both sides must be filled
+        if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
+        if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
+        if (!transaction.debit_account_id) count++;
+        if (!transaction.credit_account_id) count++;
+      }
+      
       return count;
     };
 
@@ -615,12 +669,25 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (missingCount > 0) {
         const missingFields: ValidationError["missingFields"] = {};
+        
+        // Check if this is a split transaction
+        const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
+        const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+        const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
 
         if (!transaction.description || transaction.description.trim() === "") missingFields.description = true;
-        if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
-        if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
-        if (!transaction.debit_account_id) missingFields.debit_account_id = true;
-        if (!transaction.credit_account_id) missingFields.credit_account_id = true;
+        
+        if (isSplitTransaction) {
+          // For split transactions, only validate the filled side
+          if (hasDebit && !transaction.debit_account_id) missingFields.debit_account_id = true;
+          if (hasCredit && !transaction.credit_account_id) missingFields.credit_account_id = true;
+        } else {
+          // For normal transactions, validate both sides
+          if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
+          if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
+          if (!transaction.debit_account_id) missingFields.debit_account_id = true;
+          if (!transaction.credit_account_id) missingFields.credit_account_id = true;
+        }
 
         errors.push({
           type: "incomplete_transaction",
@@ -655,7 +722,30 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       ...parallelTransactions,
       ...(parallelInlineTransactionToAdd ? [parallelInlineTransactionToAdd] : []),
     ];
-    const allFinalTransactions = [...finalTransactions, ...finalParallelTransactions];
+
+    // Preserve display_order from drag-and-drop, or assign new order for transactions without it
+    const allFinalTransactions = [
+      ...finalTransactions.map((t) => ({
+        ...t,
+        is_parallel: false,
+        // NIE NADPISUJ display_order – używaj tego z drag & drop!
+      })),
+      ...finalParallelTransactions.map((t) => ({
+        ...t,
+        is_parallel: true,
+        // NIE NADPISUJ display_order
+      })),
+    ];
+
+    console.log(
+      "💾 ZAPISUJĘ display_order do bazy:",
+      allFinalTransactions.map((t) => ({
+        id: t.id,
+        description: t.description?.substring(0, 30),
+        display_order: t.display_order,
+        is_parallel: t.is_parallel,
+      })),
+    );
 
     setIsLoading(true);
     try {
@@ -700,34 +790,81 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       }));
 
       if (documentId) {
-        const { error: deleteError } = await supabase.from("transactions").delete().eq("document_id", documentId);
-        if (deleteError) {
-          console.error("Error deleting existing transactions:", deleteError);
-          throw deleteError;
+        // Use UPDATE/INSERT/DELETE strategy instead of DELETE+INSERT
+        const existingTransactionIds = new Set(allTransactionsSafe.filter((t) => t.id).map((t) => t.id));
+
+        // Get all existing transactions for this document
+        const { data: existingTransactions } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("document_id", documentId);
+
+        // Delete transactions that are no longer in the list
+        const transactionsToDelete = (existingTransactions || [])
+          .filter((t) => !existingTransactionIds.has(t.id))
+          .map((t) => t.id);
+
+        if (transactionsToDelete.length > 0) {
+          const { error: deleteError } = await supabase.from("transactions").delete().in("id", transactionsToDelete);
+          if (deleteError) throw deleteError;
         }
 
-        if (allTransactionsSafe.length > 0) {
-          const transactionsToInsert = allTransactionsSafe.map((t) => {
-            return {
-              document_id: documentId,
-              debit_account_id: t.debit_account_id || null,
-              credit_account_id: t.credit_account_id || null,
-              amount: t.amount,
-              debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
-              credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
-              description: t.description,
-              currency: t.currency,
-              date: format(data.document_date, "yyyy-MM-dd"),
-              location_id: user.location,
-              user_id: user.id,
-              document_number: data.document_number,
-              display_order: t.display_order,
-            };
-          });
-          const { error: transactionError } = await supabase.from("transactions").insert(transactionsToInsert);
-          if (transactionError) {
-            console.error("Error inserting transactions:", transactionError);
-            throw transactionError;
+        // Separate transactions for UPDATE and INSERT
+        const transactionsToUpdate = allTransactionsSafe.filter((t) => t.id);
+        const transactionsToInsert = allTransactionsSafe.filter((t) => !t.id);
+
+        // Update existing transactions
+        if (transactionsToUpdate.length > 0) {
+          const updatePromises = transactionsToUpdate.map((t) =>
+            supabase
+              .from("transactions")
+              .update({
+                debit_account_id: t.debit_account_id || null,
+                credit_account_id: t.credit_account_id || null,
+                amount: t.amount,
+                debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+                credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+                description: t.description,
+                currency: t.currency,
+                date: format(data.document_date, "yyyy-MM-dd"),
+                document_number: data.document_number,
+                display_order: t.display_order,
+                is_parallel: t.is_parallel || false,
+              })
+              .eq("id", t.id!),
+          );
+
+          const results = await Promise.all(updatePromises);
+          const errors = results.filter((r) => r.error);
+          if (errors.length > 0) {
+            console.error("Error updating transactions:", errors);
+            throw errors[0].error;
+          }
+        }
+
+        // Insert new transactions
+        if (transactionsToInsert.length > 0) {
+          const transactionsData = transactionsToInsert.map((t) => ({
+            document_id: documentId,
+            debit_account_id: t.debit_account_id || null,
+            credit_account_id: t.credit_account_id || null,
+            amount: t.amount,
+            debit_amount: t.debit_amount !== undefined ? t.debit_amount : 0,
+            credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
+            description: t.description,
+            currency: t.currency,
+            date: format(data.document_date, "yyyy-MM-dd"),
+            location_id: user.location,
+            user_id: user.id,
+            document_number: data.document_number,
+            display_order: t.display_order,
+            is_parallel: t.is_parallel || false,
+          }));
+
+          const { error: insertError } = await supabase.from("transactions").insert(transactionsData);
+          if (insertError) {
+            console.error("Error inserting transactions:", insertError);
+            throw insertError;
           }
         }
       }
@@ -787,7 +924,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
-    setTransactions((prev) => prev.map((t, i) => (i === index ? updatedTransaction : t)));
+    setTransactions((prev) =>
+      prev.map((t, i) =>
+        i === index
+          ? {
+              ...updatedTransaction,
+              display_order: t.display_order, // ← ZACHOWAJ STARY display_order
+            }
+          : t,
+      ),
+    );
     // Clear validation errors when a transaction is updated
     setValidationErrors((prev) =>
       prev.filter(
@@ -848,8 +994,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     if (over && active.id !== over.id) {
       const currentTransactions = isParallel ? parallelTransactions : transactions;
-      const oldIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === active.id);
-      const newIndex = currentTransactions.findIndex((t, i) => `transaction-${i}` === over.id);
+      const oldIndex = currentTransactions.findIndex((t, i) => (t.id || `temp-${i}`) === active.id);
+      const newIndex = currentTransactions.findIndex((t, i) => (t.id || `temp-${i}`) === over.id);
 
       console.log("🔄 Drag end:", { oldIndex, newIndex, isParallel });
 
@@ -878,48 +1024,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
         setHasUnsavedChanges(true);
 
-        // Save order to database for existing transactions (those with IDs)
-        if (document?.id) {
-          const transactionsToUpdate = updatedTransactions.filter((t) => t.id);
-          console.log(
-            "💾 Saving order to database for transactions:",
-            transactionsToUpdate.map((t) => ({ id: t.id, display_order: t.display_order })),
-          );
-
-          if (transactionsToUpdate.length > 0) {
-            try {
-              // Update each transaction's display_order individually
-              const updatePromises = transactionsToUpdate.map((t) =>
-                supabase.from("transactions").update({ display_order: t.display_order }).eq("id", t.id!),
-              );
-
-              const results = await Promise.all(updatePromises);
-              const errors = results.filter((r) => r.error);
-
-              console.log("✅ Update results:", results);
-
-              if (errors.length > 0) {
-                console.error("❌ Error updating transaction order:", errors);
-                toast({
-                  title: "Błąd",
-                  description: "Nie udało się zapisać nowej kolejności operacji",
-                  variant: "destructive",
-                });
-              } else {
-                console.log("✅ Successfully saved new order to database");
-              }
-            } catch (error) {
-              console.error("❌ Error updating transaction order:", error);
-            }
-          }
-        } else {
-          console.log("ℹ️ Document not saved yet, order will be saved when document is created");
-        }
+        // Mark as having unsaved changes - order will be saved when document is saved
+        setHasUnsavedChanges(true);
+        console.log("ℹ️ Transaction order changed, will be saved when document is saved");
       }
     }
   };
 
-  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false, transactionIndex?: number) => {
     const debitAmount = transaction.debit_amount || 0;
     const creditAmount = transaction.credit_amount || 0;
 
@@ -964,14 +1076,31 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         debit_amount: isDebitSideSmaller ? balanceAmount : undefined,
         credit_amount: isDebitSideSmaller ? undefined : balanceAmount,
         amount: balanceAmount,
-        debit_account_id: transaction.debit_account_id || "",
-        credit_account_id: transaction.credit_account_id || "",
+        // Only set account on the side that has an amount
+        debit_account_id: isDebitSideSmaller ? transaction.debit_account_id : undefined,
+        credit_account_id: isDebitSideSmaller ? undefined : transaction.credit_account_id,
       };
 
       if (isParallel) {
-        setParallelTransactions((prev) => [...prev, newTransaction]);
+        setParallelTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       } else {
-        setTransactions((prev) => [...prev, newTransaction]);
+        setTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       }
 
       toast({
@@ -1002,14 +1131,31 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         debit_amount: isDebitSmaller ? difference : undefined,
         credit_amount: isDebitSmaller ? undefined : difference,
         amount: difference,
-        debit_account_id: transaction.debit_account_id || "",
-        credit_account_id: transaction.credit_account_id || "",
+        // Only set account on the side that has an amount
+        debit_account_id: isDebitSmaller ? transaction.debit_account_id : undefined,
+        credit_account_id: isDebitSmaller ? undefined : transaction.credit_account_id,
       };
 
       if (isParallel) {
-        setParallelTransactions((prev) => [...prev, newTransaction]);
+        setParallelTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       } else {
-        setTransactions((prev) => [...prev, newTransaction]);
+        setTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       }
 
       toast({
@@ -1017,6 +1163,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues("currency")}`,
       });
     }
+    
+    setHasUnsavedChanges(true);
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -1332,7 +1480,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </TableHeader>
                     <TableBody>
                       <SortableContext
-                        items={transactions.map((_, i) => `transaction-${i}`)}
+                        items={transactions.map((t, i) => t.id || `temp-${i}`)}
                         strategy={verticalListSortingStrategy}
                       >
                         {transactions.map((transaction, index) => {
@@ -1344,14 +1492,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           );
                           return (
                             <SortableTransactionRow
-                              key={`transaction-${index}`}
-                              id={`transaction-${index}`}
+                              key={transaction.id || `temp-${index}`}
+                              id={transaction.id || `temp-${index}`}
                               index={index}
                               transaction={transaction}
                               onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                               onDelete={() => removeTransaction(index)}
                               onCopy={() => handleCopyTransaction(transaction, false)}
-                              onSplit={() => handleSplitTransaction(transaction, false)}
+                              onSplit={() => handleSplitTransaction(transaction, false, index)}
                               currency={selectedCurrency}
                               isEditingBlocked={isEditingBlocked}
                               isSelected={selectedTransactions.includes(index)}
@@ -1486,7 +1634,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       </TableHeader>
                       <TableBody>
                         <SortableContext
-                          items={parallelTransactions.map((_, i) => `transaction-${i}`)}
+                          items={parallelTransactions.map((t, i) => t.id || `temp-${i}`)}
                           strategy={verticalListSortingStrategy}
                         >
                           {parallelTransactions.map((transaction, index) => {
@@ -1498,8 +1646,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                             );
                             return (
                               <SortableTransactionRow
-                                key={`transaction-${index}`}
-                                id={`transaction-${index}`}
+                                key={transaction.id || `temp-${index}`}
+                                id={transaction.id || `temp-${index}`}
                                 index={index}
                                 transaction={transaction}
                                 onUpdate={(updatedTransaction) =>
@@ -1507,7 +1655,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                                 }
                                 onDelete={() => removeParallelTransaction(index)}
                                 onCopy={() => handleCopyTransaction(transaction, true)}
-                                onSplit={() => handleSplitTransaction(transaction, true)}
+                                onSplit={() => handleSplitTransaction(transaction, true, index)}
                                 currency={selectedCurrency}
                                 isEditingBlocked={isEditingBlocked}
                                 isSelected={selectedParallelTransactions.includes(index)}
@@ -1754,8 +1902,6 @@ const EditableTransactionRow = React.forwardRef<
         credit_amount: formData.credit_amount,
         amount: Math.max(formData.debit_amount, formData.credit_amount),
         currency: currency,
-        // CRITICAL: Preserve display_order from original transaction
-        display_order: transaction.display_order,
       };
       onUpdate(updatedTransaction);
     }, [formData, currency, transaction.display_order, onUpdate]);
