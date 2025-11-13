@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Lock, Unlock } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock, Check, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import UserDialog from "./UserDialog";
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
@@ -386,7 +386,7 @@ const UsersManagement = () => {
                                   variant="outline"
                                   className="text-xs bg-green-50 text-green-700 border-green-200"
                                 >
-                                  Aktywne
+                                  <Check className="h-3 w-3" />
                                 </Badge>
                               )}
                               {(userRole === "prowincjal" || userRole === "admin") && (
@@ -423,7 +423,7 @@ const UsersManagement = () => {
                               setIsUserDialogOpen(true);
                             }}
                           >
-                            Edytuj
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
