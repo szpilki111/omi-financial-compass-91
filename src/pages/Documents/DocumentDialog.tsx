@@ -1003,7 +1003,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
-  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false) => {
+  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false, transactionIndex?: number) => {
     const debitAmount = transaction.debit_amount || 0;
     const creditAmount = transaction.credit_amount || 0;
 
@@ -1053,9 +1053,25 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       };
 
       if (isParallel) {
-        setParallelTransactions((prev) => [...prev, newTransaction]);
+        setParallelTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       } else {
-        setTransactions((prev) => [...prev, newTransaction]);
+        setTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       }
 
       toast({
@@ -1091,9 +1107,25 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       };
 
       if (isParallel) {
-        setParallelTransactions((prev) => [...prev, newTransaction]);
+        setParallelTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       } else {
-        setTransactions((prev) => [...prev, newTransaction]);
+        setTransactions((prev) => {
+          if (transactionIndex !== undefined) {
+            const newArray = [...prev];
+            newArray.splice(transactionIndex + 1, 0, newTransaction);
+            // Update display_order for all transactions after insertion
+            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+          }
+          return [...prev, newTransaction];
+        });
       }
 
       toast({
@@ -1101,6 +1133,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues("currency")}`,
       });
     }
+    
+    setHasUnsavedChanges(true);
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -1435,7 +1469,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                               onDelete={() => removeTransaction(index)}
                               onCopy={() => handleCopyTransaction(transaction, false)}
-                              onSplit={() => handleSplitTransaction(transaction, false)}
+                              onSplit={() => handleSplitTransaction(transaction, false, index)}
                               currency={selectedCurrency}
                               isEditingBlocked={isEditingBlocked}
                               isSelected={selectedTransactions.includes(index)}
@@ -1591,7 +1625,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                                 }
                                 onDelete={() => removeParallelTransaction(index)}
                                 onCopy={() => handleCopyTransaction(transaction, true)}
-                                onSplit={() => handleSplitTransaction(transaction, true)}
+                                onSplit={() => handleSplitTransaction(transaction, true, index)}
                                 currency={selectedCurrency}
                                 isEditingBlocked={isEditingBlocked}
                                 isSelected={selectedParallelTransactions.includes(index)}
