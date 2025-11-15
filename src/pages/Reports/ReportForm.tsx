@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
-import { calculateAndSaveReportSummary } from '@/utils/financeUtils';
+import { calculateAndSaveReportSummary, getOpeningBalance, calculateFinancialSummary } from '@/utils/financeUtils';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import YearToDateAccountsBreakdown from '@/components/reports/YearToDateAccountsBreakdown';
 import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
@@ -140,7 +140,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         }
         
         // Pobierz saldo otwarcia
-        const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
         const openingBalance = await getOpeningBalance(locationIds, month, year);
         
         // Oblicz podsumowanie finansowe
@@ -177,7 +176,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         const month = parseInt(selectedMonth);
         const year = parseInt(selectedYear);
         
-        const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
         const openingBalance = await getOpeningBalance(locationIds, 1, year);
         
         const dateFrom = `${year}-01-01`;

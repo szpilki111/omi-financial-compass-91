@@ -31,7 +31,9 @@ export const calculateFinancialSummary = async (
         exchange_rate,
         location_id,
         debit_amount,
-        credit_amount
+        credit_amount,
+        debit_account:accounts!debit_account_id(number, name),
+        credit_account:accounts!credit_account_id(number, name)
       `)
       .order('date', { ascending: false });
 
@@ -54,165 +56,73 @@ export const calculateFinancialSummary = async (
       query = query.lte('date', dateTo);
     }
 
-    const { data, error } = await query;
+    const { data: transactions, error } = await query;
 
     if (error) {
       console.error("❌ Błąd pobierania transakcji:", error);
       throw error;
     }
 
-    // Pobierz wszystkie konta
-    const { data: accounts, error: accountsError } = await supabase
-      .from('accounts')
-      .select('id, number, name');
-
-    if (accountsError) {
-      console.error("❌ Błąd pobierania kont:", accountsError);
-      throw accountsError;
-    }
-
-    // Pobierz location_identifiers jeśli używamy filtra lokalizacji
-    let locationIdentifiers: Map<string, string> = new Map();
-    if (locationIdsArray && locationIdsArray.length > 0) {
-      const { data: locations } = await supabase
-        .from('locations')
-        .select('id, location_identifier')
-        .in('id', locationIdsArray);
-      
-      if (locations) {
-        locationIdentifiers = new Map(
-          locations
-            .filter(loc => loc.location_identifier)
-            .map(loc => [loc.id, loc.location_identifier!])
-        );
-      }
-    }
-
-    // Pobierz jawne przypisania z location_accounts
-    const { data: locationAccounts } = await supabase
-      .from('location_accounts')
-      .select('account_id, location_id');
-
-    const explicitAssignments = new Map<string, Set<string>>();
-    if (locationAccounts) {
-      locationAccounts.forEach((la: any) => {
-        if (!explicitAssignments.has(la.account_id)) {
-          explicitAssignments.set(la.account_id, new Set());
-        }
-        explicitAssignments.get(la.account_id)!.add(la.location_id);
-      });
-    }
-
-    // Funkcja do sprawdzania czy konto należy do lokalizacji
-    const accountBelongsToLocation = (accountNumber: string, accountId: string, transactionLocationId: string): boolean => {
-      // 1. Sprawdź jawne przypisanie
-      if (explicitAssignments.has(accountId)) {
-        return explicitAssignments.get(accountId)!.has(transactionLocationId);
-      }
-
-      // 2. Sprawdź sufiks konta
-      const locationIdentifier = locationIdentifiers.get(transactionLocationId);
-      if (locationIdentifier && accountNumber.includes('-')) {
-        // Konto ma format np. "100-2-3", sprawdź czy sufiks pasuje do location_identifier
-        const accountSuffix = accountNumber.substring(accountNumber.indexOf('-') + 1);
-        return accountSuffix.startsWith(locationIdentifier);
-      }
-
-      // 3. Konta bez sufiksu (np. "100", "420") traktuj jako wspólne
-      if (!accountNumber.includes('-')) {
-        return true;
-      }
-
-      // 4. Jeśli nie ma filtra lokalizacji, zwróć wszystkie
-      if (!locationIdsArray || locationIdsArray.length === 0) {
-        return true;
-      }
-
-      return false;
-    };
-
-    const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
-
-    const formattedTransactions: KpirTransaction[] = data.map((transaction: any) => {
-      const debitAccount = accountsMap.get(transaction.debit_account_id);
-      const creditAccount = accountsMap.get(transaction.credit_account_id);
-      
-      return {
-        ...transaction,
-        debitAccount: debitAccount || { number: 'Nieznane', name: 'Nieznane konto' },
-        creditAccount: creditAccount || { number: 'Nieznane', name: 'Nieznane konto' },
-        formattedDate: new Date(transaction.date).toLocaleDateString('pl-PL'),
-        settlement_type: transaction.settlement_type as 'Gotówka' | 'Bank' | 'Rozrachunek'
-      };
-    });
-
-    console.log(`✅ Pobrano ${formattedTransactions.length} transakcji dla lokalizacji`, {
+    console.log(`✅ Pobrano ${transactions?.length || 0} transakcji dla lokalizacji`, {
       locationIdsArray,
       dateFrom,
       dateTo,
-      transactionsCount: formattedTransactions.length
+      transactionsCount: transactions?.length || 0
     });
 
-    // Funkcja pomocnicza do wydobycia bazowego numeru konta (bez sufiksu lokalizacji)
+    if (!transactions || transactions.length === 0) {
+      console.log('⚠️ Brak transakcji do analizy');
+      return { income: 0, expense: 0, balance: 0, transactions: [] };
+    }
+
+    // Funkcja do wyciągania bazowego numeru konta (bez sufiksu lokalizacji)
     const getBaseAccount = (num: string) => num?.split('-')[0] || '';
 
     let income = 0;
     let expense = 0;
 
-    if (!formattedTransactions || formattedTransactions.length === 0) {
-      console.log('⚠️ Brak transakcji do analizy');
-      return { income: 0, expense: 0, balance: 0, transactions: [] };
-    }
-
     // Analiza każdej transakcji
-    // PRZYCHODY: 7xx lub 2xx po stronie MA (kredyt)
-    // KOSZTY: 4xx lub 2xx po stronie WN (debet)
-    formattedTransactions.forEach((transaction, index) => {
-      const debitNum = transaction.debitAccount?.number || '';
-      const creditNum = transaction.creditAccount?.number || '';
+    // PRZYCHODY: 7xx MA lub 2xx MA
+    // KOSZTY: 4xx WN lub 2xx WN
+    transactions.forEach((transaction: any, index: number) => {
+      const debitNum = transaction.debit_account?.number || '';
+      const creditNum = transaction.credit_account?.number || '';
       const baseDebit = getBaseAccount(debitNum);
       const baseCredit = getBaseAccount(creditNum);
 
-      let transactionIncome = 0;
-      let transactionExpense = 0;
-
-      // PRZYCHODY: 7xx lub 2xx po stronie MA (kredyt)
+      // PRZYCHODY: 7xx MA lub 2xx MA
       if (baseCredit && (baseCredit.startsWith('7') || baseCredit.startsWith('2'))) {
         const amount = transaction.credit_amount ?? transaction.amount ?? 0;
         if (amount > 0) {
-          transactionIncome = amount;
-          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) = ${amount} PLN`);
+          income += amount;
+          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) → ${amount} PLN`);
         }
       }
 
-      // KOSZTY: 4xx lub 2xx po stronie WN (debet)
+      // KOSZTY: 4xx WN lub 2xx WN
       if (baseDebit && (baseDebit.startsWith('4') || baseDebit.startsWith('2'))) {
         const amount = transaction.debit_amount ?? transaction.amount ?? 0;
         if (amount > 0) {
-          transactionExpense = amount;
-          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) = ${amount} PLN`);
+          expense += amount;
+          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) → ${amount} PLN`);
         }
       }
-
-      // Dodaj do sum całkowitych
-      income += transactionIncome;
-      expense += transactionExpense;
     });
 
     const balance = income - expense;
 
-    console.log(`✅ Podsumowanie finansowe:`, {
+    console.log(`✅ PODSUMOWANIE:`, {
       income,
       expense,
       balance,
-      transactionsAnalyzed: formattedTransactions.length
+      transactionsAnalyzed: transactions.length
     });
 
     return {
       income,
       expense,
       balance,
-      transactions: formattedTransactions
+      transactions: []
     };
   } catch (error) {
     console.error('❌ Błąd podczas obliczania podsumowania finansowego:', error);
