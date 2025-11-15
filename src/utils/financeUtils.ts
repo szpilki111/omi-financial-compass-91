@@ -3,14 +3,19 @@ import { KpirTransaction } from "@/types/kpir";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Oblicza podsumowanie finansowe na podstawie transakcji dla określonej lokalizacji i okresu
+ * Oblicza podsumowanie finansowe na podstawie transakcji dla jednej lub wielu lokalizacji i okresu
  */
 export const calculateFinancialSummary = async (
-  locationId: string | null | undefined,
+  locationIds: string | string[] | null | undefined,
   dateFrom?: string,
   dateTo?: string
 ) => {
   try {
+    // Konwertuj locationIds na tablicę
+    const locationIdsArray = locationIds 
+      ? (Array.isArray(locationIds) ? locationIds : [locationIds])
+      : null;
+
     let query = supabase
       .from('transactions')
       .select(`
@@ -30,9 +35,13 @@ export const calculateFinancialSummary = async (
       `)
       .order('date', { ascending: false });
 
-    // Filtr po lokalizacji
-    if (locationId) {
-      query = query.eq('location_id', locationId);
+    // Filtr po lokalizacjach
+    if (locationIdsArray && locationIdsArray.length > 0) {
+      if (locationIdsArray.length === 1) {
+        query = query.eq('location_id', locationIdsArray[0]);
+      } else {
+        query = query.in('location_id', locationIdsArray);
+      }
     }
 
     // Zastosuj filtr daty od
@@ -52,27 +61,75 @@ export const calculateFinancialSummary = async (
       throw error;
     }
 
-    // Pobierz konta TYLKO przypisane do lokalizacji
-    let accountsQuery = supabase
+    // Pobierz wszystkie konta
+    const { data: accounts, error: accountsError } = await supabase
       .from('accounts')
-      .select(`
-        id, 
-        number, 
-        name,
-        location_accounts!inner(location_id)
-      `);
-
-    // Jeśli mamy lokalizację, filtruj konta tylko dla tej lokalizacji
-    if (locationId) {
-      accountsQuery = accountsQuery.eq('location_accounts.location_id', locationId);
-    }
-
-    const { data: accounts, error: accountsError } = await accountsQuery;
+      .select('id, number, name');
 
     if (accountsError) {
       console.error("❌ Błąd pobierania kont:", accountsError);
       throw accountsError;
     }
+
+    // Pobierz location_identifiers jeśli używamy filtra lokalizacji
+    let locationIdentifiers: Map<string, string> = new Map();
+    if (locationIdsArray && locationIdsArray.length > 0) {
+      const { data: locations } = await supabase
+        .from('locations')
+        .select('id, location_identifier')
+        .in('id', locationIdsArray);
+      
+      if (locations) {
+        locationIdentifiers = new Map(
+          locations
+            .filter(loc => loc.location_identifier)
+            .map(loc => [loc.id, loc.location_identifier!])
+        );
+      }
+    }
+
+    // Pobierz jawne przypisania z location_accounts
+    const { data: locationAccounts } = await supabase
+      .from('location_accounts')
+      .select('account_id, location_id');
+
+    const explicitAssignments = new Map<string, Set<string>>();
+    if (locationAccounts) {
+      locationAccounts.forEach((la: any) => {
+        if (!explicitAssignments.has(la.account_id)) {
+          explicitAssignments.set(la.account_id, new Set());
+        }
+        explicitAssignments.get(la.account_id)!.add(la.location_id);
+      });
+    }
+
+    // Funkcja do sprawdzania czy konto należy do lokalizacji
+    const accountBelongsToLocation = (accountNumber: string, accountId: string, transactionLocationId: string): boolean => {
+      // 1. Sprawdź jawne przypisanie
+      if (explicitAssignments.has(accountId)) {
+        return explicitAssignments.get(accountId)!.has(transactionLocationId);
+      }
+
+      // 2. Sprawdź sufiks konta
+      const locationIdentifier = locationIdentifiers.get(transactionLocationId);
+      if (locationIdentifier && accountNumber.includes('-')) {
+        // Konto ma format np. "100-2-3", sprawdź czy sufiks pasuje do location_identifier
+        const accountSuffix = accountNumber.substring(accountNumber.indexOf('-') + 1);
+        return accountSuffix.startsWith(locationIdentifier);
+      }
+
+      // 3. Konta bez sufiksu (np. "100", "420") traktuj jako wspólne
+      if (!accountNumber.includes('-')) {
+        return true;
+      }
+
+      // 4. Jeśli nie ma filtra lokalizacji, zwróć wszystkie
+      if (!locationIdsArray || locationIdsArray.length === 0) {
+        return true;
+      }
+
+      return false;
+    };
 
     const accountsMap = new Map(accounts.map((acc: any) => [acc.id, { number: acc.number, name: acc.name }]));
 
@@ -107,10 +164,23 @@ export const calculateFinancialSummary = async (
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
-    // Analiza każdej transakcji
+    // Analiza każdej transakcji - filtruj tylko te z odpowiednimi kontami
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
+      
+      // Sprawdź czy konta należą do lokalizacji transakcji
+      const debitBelongs = transaction.debit_account_id 
+        ? accountBelongsToLocation(debitAccountNumber, transaction.debit_account_id, transaction.location_id)
+        : false;
+      const creditBelongs = transaction.credit_account_id
+        ? accountBelongsToLocation(creditAccountNumber, transaction.credit_account_id, transaction.location_id)
+        : false;
+      
+      // Pomiń transakcję jeśli żadne konto nie należy do lokalizacji
+      if (!debitBelongs && !creditBelongs) {
+        return;
+      }
 
       let transactionIncome = 0;
       let transactionExpense = 0;
@@ -153,55 +223,78 @@ export const calculateFinancialSummary = async (
 };
 
 /**
- * Pobiera saldo otwarcia dla określonej lokalizacji i okresu
+ * Pobiera saldo otwarcia dla danego miesiąca i roku
+ * Saldo otwarcia = saldo zamknięcia poprzedniego miesiąca
+ * Obsługuje wiele lokalizacji - sumuje salda
  */
 export const getOpeningBalance = async (
-  locationId: string | null | undefined,
+  locationIds: string | string[],
   month: number,
   year: number
-) => {
+): Promise<number> => {
   try {
-    // Jeśli to styczeń, saldo otwarcia to 0
-    if (month === 1) {
-      return 0;
+    // Konwertuj na tablicę
+    const locationIdsArray = Array.isArray(locationIds) ? locationIds : [locationIds];
+    
+    // Dla stycznia pobierz saldo z grudnia poprzedniego roku
+    let previousMonth = month - 1;
+    let previousYear = year;
+    
+    if (previousMonth === 0) {
+      previousMonth = 12;
+      previousYear = year - 1;
     }
-    
-    // Oblicz poprzedni miesiąc
-    const previousMonth = month - 1;
-    const previousYear = previousMonth === 0 ? year - 1 : year;
-    const actualPreviousMonth = previousMonth === 0 ? 12 : previousMonth;
-    
-    // Sprawdź czy istnieje raport z poprzedniego miesiąca
-    const { data: previousReport, error } = await supabase
+
+    // Sprawdź czy istnieją raporty z poprzedniego miesiąca dla wszystkich lokalizacji
+    const { data: previousReports, error } = await supabase
       .from('reports')
       .select(`
         id,
+        location_id,
         report_details (
-          balance,
-          opening_balance
+          opening_balance,
+          balance
         )
       `)
-      .eq('location_id', locationId)
-      .eq('month', actualPreviousMonth)
-      .eq('year', previousYear)
-      .maybeSingle();
-    
+      .in('location_id', locationIdsArray)
+      .eq('month', previousMonth)
+      .eq('year', previousYear);
+
     if (error) {
-      console.error('❌ Błąd podczas pobierania poprzedniego raportu:', error);
+      console.error(`❌ Błąd pobierania raportów z poprzedniego okresu:`, error);
       return 0;
     }
-    
-    if (previousReport?.report_details) {
-      const previousOpeningBalance = previousReport.report_details.opening_balance || 0;
-      const previousBalance = previousReport.report_details.balance || 0;
-      const openingBalance = previousOpeningBalance + previousBalance;
-      
-      return openingBalance;
+
+    if (!previousReports || previousReports.length === 0) {
+      console.log(`ℹ️ Brak raportów z poprzedniego okresu (${previousMonth}/${previousYear})`);
+      return 0;
     }
+
+    // Sumuj salda zamknięcia ze wszystkich lokalizacji
+    let totalOpeningBalance = 0;
     
-    return 0;
+    previousReports.forEach((report: any) => {
+      const reportDetails = Array.isArray(report.report_details) 
+        ? report.report_details[0] 
+        : report.report_details;
+
+      if (reportDetails) {
+        const openingBalance = reportDetails.opening_balance || 0;
+        const balance = reportDetails.balance || 0;
+        totalOpeningBalance += (openingBalance + balance);
+      }
+    });
+
+    console.log(`✅ Saldo otwarcia dla ${month}/${year} (${locationIdsArray.length} lokalizacji):`, {
+      previousMonth,
+      previousYear,
+      locationsCount: previousReports.length,
+      totalOpeningBalance
+    });
+
+    return totalOpeningBalance;
   } catch (error) {
-    console.error('❌ Błąd podczas pobierania salda otwarcia:', error);
+    console.error("❌ Błąd pobierania salda otwarcia:", error);
     return 0;
   }
 };
