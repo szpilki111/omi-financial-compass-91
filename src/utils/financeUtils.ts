@@ -146,6 +146,13 @@ export const calculateFinancialSummary = async (
       };
     });
 
+    console.log(`✅ Pobrano ${formattedTransactions.length} transakcji dla lokalizacji`, {
+      locationIdsArray,
+      dateFrom,
+      dateTo,
+      transactionsCount: formattedTransactions.length
+    });
+
     // Funkcje do sprawdzania kont - TYLKO konta 200, 400, 700
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
@@ -161,26 +168,15 @@ export const calculateFinancialSummary = async (
     let expense = 0;
 
     if (!formattedTransactions || formattedTransactions.length === 0) {
+      console.log('⚠️ Brak transakcji do analizy');
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
-    // Analiza każdej transakcji - filtruj tylko te z odpowiednimi kontami
+    // Analiza każdej transakcji - bez dodatkowego filtrowania
+    // (transakcje są już filtrowane po location_id w query)
     formattedTransactions.forEach(transaction => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
-      
-      // Sprawdź czy konta należą do lokalizacji transakcji
-      const debitBelongs = transaction.debit_account_id 
-        ? accountBelongsToLocation(debitAccountNumber, transaction.debit_account_id, transaction.location_id)
-        : false;
-      const creditBelongs = transaction.credit_account_id
-        ? accountBelongsToLocation(creditAccountNumber, transaction.credit_account_id, transaction.location_id)
-        : false;
-      
-      // Pomiń transakcję jeśli żadne konto nie należy do lokalizacji
-      if (!debitBelongs && !creditBelongs) {
-        return;
-      }
 
       let transactionIncome = 0;
       let transactionExpense = 0;
@@ -209,6 +205,13 @@ export const calculateFinancialSummary = async (
     });
 
     const balance = income - expense;
+
+    console.log(`✅ Podsumowanie finansowe:`, {
+      income,
+      expense,
+      balance,
+      transactionsAnalyzed: formattedTransactions.length
+    });
 
     return {
       income,
