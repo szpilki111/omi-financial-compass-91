@@ -153,22 +153,8 @@ export const calculateFinancialSummary = async (
       transactionsCount: formattedTransactions.length
     });
 
-    // Funkcje do sprawdzania kont
-    // PRZYCHODY: tylko konta 7xx
-    // KOSZTY: tylko konta 4xx
-    const isIncomeAccount = (accountNum: string) => {
-      if (!accountNum || accountNum === 'Nieznane') return false;
-      // Sprawdź czy numer konta (bez sufiksu lokalizacji) zaczyna się od 7
-      const baseAccountNumber = accountNum.split('-')[0];
-      return baseAccountNumber.startsWith('7');
-    };
-
-    const isExpenseAccount = (accountNum: string) => {
-      if (!accountNum || accountNum === 'Nieznane') return false;
-      // Sprawdź czy numer konta (bez sufiksu lokalizacji) zaczyna się od 4
-      const baseAccountNumber = accountNum.split('-')[0];
-      return baseAccountNumber.startsWith('4');
-    };
+    // Funkcja pomocnicza do wydobycia bazowego numeru konta (bez sufiksu lokalizacji)
+    const getBaseAccount = (num: string) => num?.split('-')[0] || '';
 
     let income = 0;
     let expense = 0;
@@ -178,38 +164,33 @@ export const calculateFinancialSummary = async (
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
-    // Analiza każdej transakcji - bez dodatkowego filtrowania
-    // (transakcje są już filtrowane po location_id w query)
+    // Analiza każdej transakcji
+    // PRZYCHODY: 7xx lub 2xx po stronie MA (kredyt)
+    // KOSZTY: 4xx lub 2xx po stronie WN (debet)
     formattedTransactions.forEach((transaction, index) => {
-      const debitAccountNumber = transaction.debitAccount?.number || '';
-      const creditAccountNumber = transaction.creditAccount?.number || '';
+      const debitNum = transaction.debitAccount?.number || '';
+      const creditNum = transaction.creditAccount?.number || '';
+      const baseDebit = getBaseAccount(debitNum);
+      const baseCredit = getBaseAccount(creditNum);
 
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      // PRZYCHODY: konta 7xx po stronie kredytu (MA)
-      if (isIncomeAccount(creditAccountNumber)) {
-        if (transaction.credit_amount != null && transaction.credit_amount > 0) {
-          transactionIncome = transaction.credit_amount;
-        } else if (transaction.amount != null && transaction.amount > 0) {
-          transactionIncome = transaction.amount;
-        }
-        
-        if (transactionIncome > 0) {
-          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditAccountNumber} = ${transactionIncome} PLN`);
+      // PRZYCHODY: 7xx lub 2xx po stronie MA (kredyt)
+      if (baseCredit && (baseCredit.startsWith('7') || baseCredit.startsWith('2'))) {
+        const amount = transaction.credit_amount ?? transaction.amount ?? 0;
+        if (amount > 0) {
+          transactionIncome = amount;
+          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) = ${amount} PLN`);
         }
       }
 
-      // KOSZTY: konta 4xx po stronie debetu (WN)
-      if (isExpenseAccount(debitAccountNumber)) {
-        if (transaction.debit_amount != null && transaction.debit_amount > 0) {
-          transactionExpense = transaction.debit_amount;
-        } else if (transaction.amount != null && transaction.amount > 0) {
-          transactionExpense = transaction.amount;
-        }
-        
-        if (transactionExpense > 0) {
-          console.log(`  ✅ KOSZT [${index}]: ${debitAccountNumber} = ${transactionExpense} PLN`);
+      // KOSZTY: 4xx lub 2xx po stronie WN (debet)
+      if (baseDebit && (baseDebit.startsWith('4') || baseDebit.startsWith('2'))) {
+        const amount = transaction.debit_amount ?? transaction.amount ?? 0;
+        if (amount > 0) {
+          transactionExpense = amount;
+          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) = ${amount} PLN`);
         }
       }
 
