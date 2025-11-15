@@ -87,10 +87,22 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
         .select('location_id, location:locations(id, name)')
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Błąd pobierania lokalizacji użytkownika:', error);
+        throw error;
+      }
+      
+      console.log('🏢 Pobrane lokalizacje użytkownika:', data);
       return data || [];
     }
   });
+
+  // Debug: sprawdź ile lokalizacji ma użytkownik
+  React.useEffect(() => {
+    if (userLocations) {
+      console.log('📍 Liczba lokalizacji użytkownika:', userLocations.length, userLocations);
+    }
+  }, [userLocations]);
 
   const { data: reports, isLoading, error, refetch } = useQuery({
     queryKey: ['reports', refreshKey, selectedLocationId],
