@@ -153,15 +153,21 @@ export const calculateFinancialSummary = async (
       transactionsCount: formattedTransactions.length
     });
 
-    // Funkcje do sprawdzania kont - TYLKO konta 200, 400, 700
+    // Funkcje do sprawdzania kont
+    // PRZYCHODY: tylko konta 7xx
+    // KOSZTY: tylko konta 4xx
     const isIncomeAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('7') || accountNum.startsWith('200');
+      // Sprawdź czy numer konta (bez sufiksu lokalizacji) zaczyna się od 7
+      const baseAccountNumber = accountNum.split('-')[0];
+      return baseAccountNumber.startsWith('7');
     };
 
     const isExpenseAccount = (accountNum: string) => {
       if (!accountNum || accountNum === 'Nieznane') return false;
-      return accountNum.startsWith('4') || accountNum.startsWith('200');
+      // Sprawdź czy numer konta (bez sufiksu lokalizacji) zaczyna się od 4
+      const baseAccountNumber = accountNum.split('-')[0];
+      return baseAccountNumber.startsWith('4');
     };
 
     let income = 0;
@@ -174,28 +180,36 @@ export const calculateFinancialSummary = async (
 
     // Analiza każdej transakcji - bez dodatkowego filtrowania
     // (transakcje są już filtrowane po location_id w query)
-    formattedTransactions.forEach(transaction => {
+    formattedTransactions.forEach((transaction, index) => {
       const debitAccountNumber = transaction.debitAccount?.number || '';
       const creditAccountNumber = transaction.creditAccount?.number || '';
 
       let transactionIncome = 0;
       let transactionExpense = 0;
 
-      // PRZYCHODY: konta 7xx lub 200 po stronie kredytu (MA)
+      // PRZYCHODY: konta 7xx po stronie kredytu (MA)
       if (isIncomeAccount(creditAccountNumber)) {
         if (transaction.credit_amount != null && transaction.credit_amount > 0) {
           transactionIncome = transaction.credit_amount;
-        } else {
+        } else if (transaction.amount != null && transaction.amount > 0) {
           transactionIncome = transaction.amount;
+        }
+        
+        if (transactionIncome > 0) {
+          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditAccountNumber} = ${transactionIncome} PLN`);
         }
       }
 
-      // KOSZTY: konta 4xx lub 200 po stronie debetu (WN)
+      // KOSZTY: konta 4xx po stronie debetu (WN)
       if (isExpenseAccount(debitAccountNumber)) {
         if (transaction.debit_amount != null && transaction.debit_amount > 0) {
           transactionExpense = transaction.debit_amount;
-        } else {
+        } else if (transaction.amount != null && transaction.amount > 0) {
           transactionExpense = transaction.amount;
+        }
+        
+        if (transactionExpense > 0) {
+          console.log(`  ✅ KOSZT [${index}]: ${debitAccountNumber} = ${transactionExpense} PLN`);
         }
       }
 
