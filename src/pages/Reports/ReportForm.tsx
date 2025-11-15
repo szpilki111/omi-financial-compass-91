@@ -471,26 +471,33 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Lokalizacje</FormLabel>
-                <Select 
-                  onValueChange={(value) => {
-                    // Obsługa pojedynczego wyboru - można rozszerzyć na multiple
-                    field.onChange([value]);
-                  }} 
-                  defaultValue={field.value?.[0]}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz lokalizację" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {availableLocations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {availableLocations.length === 1 ? (
+                  // Jeśli jest tylko jedna lokalizacja - pokaż tylko nazwę
+                  <div className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                    {availableLocations[0].name}
+                  </div>
+                ) : (
+                  // Jeśli jest wiele lokalizacji - pokaż select
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange([value]);
+                    }} 
+                    value={field.value?.[0]}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz lokalizację" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableLocations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <FormMessage />
               </FormItem>
             )}
