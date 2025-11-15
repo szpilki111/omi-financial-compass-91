@@ -323,7 +323,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
                         <Button variant="ghost" onClick={() => onReportSelect(report.id)}>
                           Szczegóły
                         </Button>
-                        {report.status === 'draft' && (
+                        {report.status !== 'submitted' && report.status !== 'approved' && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button 
