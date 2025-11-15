@@ -1,9 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Resend } from "npm:resend@2.0.0";
-
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,44 +56,95 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Found ${provincialAdmins.length} provincial administrators to notify`);
 
     // Send email to each provincial administrator
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
     for (const admin of provincialAdmins) {
       console.log(`Sending notification to: ${admin.email}`);
       
-      // W trybie testowym wysyłaj na Twój email, w produkcji na email admina
-      const recipientEmail = admin.email === 'prowincjal@omi.pl' ? 'crmoblaci@gmail.com' : admin.email;
-      
-      const emailResponse = await resend.emails.send({
-        from: "System Raportowania <onboarding@resend.dev>",
-        to: [recipientEmail],
-        subject: `Nowy raport do sprawdzenia: ${reportTitle}`,
-        html: `
-          <h2>Nowy raport został złożony do sprawdzenia</h2>
-          <p>Szanowny/a ${admin.name},</p>
-          <p>Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0;">
-            <p><strong>Tytuł raportu:</strong> ${reportTitle}</p>
-            <p><strong>Okres:</strong> ${period}</p>
-            <p><strong>Placówka:</strong> ${locationName}</p>
-            <p><strong>Złożony przez:</strong> ${submittedBy}</p>
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .report-box { background-color: #f5f5f5; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📊 Nowy raport do sprawdzenia</h1>
+            </div>
+            <div class="content">
+              <p>Szanowny/a ${admin.name},</p>
+              <p>Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie:</p>
+              
+              <div class="report-box">
+                <p><strong>Tytuł raportu:</strong> ${reportTitle}</p>
+                <p><strong>Okres:</strong> ${period}</p>
+                <p><strong>Placówka:</strong> ${locationName}</p>
+                <p><strong>Złożony przez:</strong> ${submittedBy}</p>
+              </div>
+              
+              <p>Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.</p>
+              
+              <div class="footer">
+                <p>System Raportowania OMI</p>
+              </div>
+            </div>
           </div>
-          
-          <p>Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.</p>
-          
-          ${recipientEmail !== admin.email ? 
-            `<p><strong>Uwaga:</strong> Ten email został wysłany na adres testowy (${recipientEmail}) zamiast na docelowy adres (${admin.email}) z powodu ograniczeń trybu testowego Resend.</p>` : 
-            ''
-          }
-          
-          <p>Pozdrawienia,<br>System Raportowania</p>
-        `,
-      });
+        </body>
+        </html>
+      `;
 
-      console.log(`Email sent to ${recipientEmail}:`, emailResponse);
-      
-      if (emailResponse.error) {
-        console.error(`Failed to send email to ${recipientEmail}:`, emailResponse.error);
-        throw new Error(`Failed to send email: ${emailResponse.error.message}`);
+      const textContent = `
+Nowy raport do sprawdzenia
+
+Szanowny/a ${admin.name},
+
+Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie:
+
+Tytuł raportu: ${reportTitle}
+Okres: ${period}
+Placówka: ${locationName}
+Złożony przez: ${submittedBy}
+
+Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.
+
+System Raportowania OMI
+      `;
+
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            to: admin.email,
+            subject: `Nowy raport do sprawdzenia: ${reportTitle}`,
+            html: htmlContent,
+            text: textContent,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error(`Failed to send email to ${admin.email}:`, error);
+          throw new Error(`Failed to send email: ${error}`);
+        }
+
+        console.log(`Email sent successfully to ${admin.email}`);
+      } catch (error) {
+        console.error(`Error sending email to ${admin.email}:`, error);
+        throw error;
       }
     }
 
