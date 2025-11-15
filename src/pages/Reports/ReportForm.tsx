@@ -17,8 +17,11 @@ import YearToDateAccountsBreakdown from '@/components/reports/YearToDateAccounts
 import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
 
 const reportFormSchema = z.object({
-  month: z.string().min(1, 'Miesiąc jest wymagany'),
+  month: z.string().optional(),
   year: z.string().min(1, 'Rok jest wymagany'),
+  periodType: z.enum(['month', 'quarter', 'year']).default('month'),
+  quarter: z.string().optional(),
+  locationIds: z.array(z.string()).min(1, 'Wybierz przynajmniej jedną lokalizację'),
   showFromYearStart: z.boolean().default(false)
 });
 
@@ -54,16 +57,38 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const [isCalculating, setIsCalculating] = useState(false);
   const [isCalculatingYearToDate, setIsCalculatingYearToDate] = useState(false);
 
+  const [availableLocations, setAvailableLocations] = useState<Array<{ id: string, name: string }>>([]);
+
+  // Pobierz dostępne lokalizacje
+  React.useEffect(() => {
+    const fetchLocations = async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name');
+      
+      if (!error && data) {
+        setAvailableLocations(data);
+      }
+    };
+    fetchLocations();
+  }, []);
+
   const form = useForm<z.infer<typeof reportFormSchema>>({
     resolver: zodResolver(reportFormSchema),
     defaultValues: {
       month: new Date().getMonth() + 1 + '',
       year: new Date().getFullYear() + '',
+      periodType: 'month',
+      quarter: '1',
+      locationIds: user?.location ? [user.location] : [],
       showFromYearStart: false
     }
   });
 
-  const [selectedMonth, selectedYear, showFromYearStart] = form.watch(['month', 'year', 'showFromYearStart']);
+  const [selectedMonth, selectedYear, periodType, quarter, locationIds, showFromYearStart] = form.watch([
+    'month', 'year', 'periodType', 'quarter', 'locationIds', 'showFromYearStart'
+  ]);
   
   const [financialSummary, setFinancialSummary] = useState({
     income: 0,
@@ -82,25 +107,44 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Oblicz podsumowanie finansowe na podstawie wybranych parametrów
   React.useEffect(() => {
     const calculatePreview = async () => {
-      if (!selectedMonth || !selectedYear || !user?.location) return;
+      if (!selectedYear || !locationIds || locationIds.length === 0) return;
+      if (periodType === 'month' && !selectedMonth) return;
+      if (periodType === 'quarter' && !quarter) return;
       
       setIsCalculating(true);
       try {
-        const month = parseInt(selectedMonth);
         const year = parseInt(selectedYear);
+        let dateFrom: string;
+        let dateTo: string;
+        let month: number;
+
+        // Oblicz zakres dat w zależności od typu okresu
+        if (periodType === 'year') {
+          dateFrom = `${year}-01-01`;
+          dateTo = `${year}-12-31`;
+          month = 1; // Dla salda otwarcia
+        } else if (periodType === 'quarter') {
+          const q = parseInt(quarter || '1');
+          const startMonth = (q - 1) * 3 + 1;
+          const endMonth = q * 3;
+          dateFrom = new Date(year, startMonth - 1, 1).toISOString().split('T')[0];
+          dateTo = new Date(year, endMonth, 0).toISOString().split('T')[0];
+          month = startMonth;
+        } else {
+          // month
+          month = parseInt(selectedMonth!);
+          const firstDayOfMonth = new Date(year, month - 1, 1);
+          const lastDayOfMonth = new Date(year, month, 0);
+          dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+          dateTo = lastDayOfMonth.toISOString().split('T')[0];
+        }
         
         // Pobierz saldo otwarcia
         const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
-        const openingBalance = await getOpeningBalance(user.location, month, year);
-        
-        // Oblicz daty
-        const firstDayOfMonth = new Date(year, month - 1, 1);
-        const lastDayOfMonth = new Date(year, month, 0);
-        const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-        const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+        const openingBalance = await getOpeningBalance(locationIds, month, year);
         
         // Oblicz podsumowanie finansowe
-        const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
+        const summary = await calculateFinancialSummary(locationIds, dateFrom, dateTo);
         
         setFinancialSummary({
           ...summary,
@@ -115,45 +159,44 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     };
 
     calculatePreview();
-  }, [selectedMonth, selectedYear, user?.location]);
+  }, [selectedMonth, selectedYear, periodType, quarter, locationIds]);
 
   // Oblicz podsumowanie od początku roku
   React.useEffect(() => {
-    const calculateYearToDatePreview = async () => {
-      if (!showFromYearStart || !selectedYear || !user?.location) {
-        setYearToDateSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
-        return;
-      }
+    if (!showFromYearStart) {
+      setYearToDateSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
+      return;
+    }
+
+    const calculateYearToDate = async () => {
+      if (!selectedYear || !locationIds || locationIds.length === 0) return;
+      if (periodType !== 'month' || !selectedMonth) return;
       
       setIsCalculatingYearToDate(true);
       try {
+        const month = parseInt(selectedMonth);
         const year = parseInt(selectedYear);
         
-        const { calculateFinancialSummary } = await import('@/utils/financeUtils');
+        const { getOpeningBalance, calculateFinancialSummary } = await import('@/utils/financeUtils');
+        const openingBalance = await getOpeningBalance(locationIds, 1, year);
         
-        // Oblicz daty od początku roku do końca wybranego miesiąca
-        const firstDayOfYear = new Date(year, 0, 1);
-        const selectedMonth = parseInt(form.getValues('month'));
-        const lastDayOfSelectedMonth = new Date(year, selectedMonth, 0);
-        const dateFrom = firstDayOfYear.toISOString().split('T')[0];
-        const dateTo = lastDayOfSelectedMonth.toISOString().split('T')[0];
+        const dateFrom = `${year}-01-01`;
+        const lastDayOfMonth = new Date(year, month, 0);
+        const dateTo = lastDayOfMonth.toISOString().split('T')[0];
         
-        // Oblicz podsumowanie finansowe za cały okres
-        const summary = await calculateFinancialSummary(user.location, dateFrom, dateTo);
+        const summary = await calculateFinancialSummary(locationIds, dateFrom, dateTo);
         
         setYearToDateSummary({
           ...summary,
-          openingBalance: 0 // Saldo otwarcia roku to zawsze 0
+          openingBalance
         });
       } catch (error) {
-        console.error('Błąd podczas obliczania podglądu rok-do-daty:', error);
-        setYearToDateSummary({ income: 0, expense: 0, balance: 0, openingBalance: 0 });
-      } finally {
-        setIsCalculatingYearToDate(false);
+        console.error("Błąd obliczania podglądu od początku roku:", error);
       }
+      setIsCalculatingYearToDate(false);
     };
 
-    calculateYearToDatePreview();
+    calculateYearToDate();
   }, [showFromYearStart, selectedYear, selectedMonth, user?.location, form]);
 
   const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
@@ -289,22 +332,20 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="month"
+            name="periodType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Miesiąc</FormLabel>
+                <FormLabel>Typ okresu</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Wybierz miesiąc, za który tworzysz raport" />
+                      <SelectValue placeholder="Wybierz typ okresu" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {months.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="month">Miesiąc</SelectItem>
+                    <SelectItem value="quarter">Kwartał</SelectItem>
+                    <SelectItem value="year">Rok</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -321,13 +362,99 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Wybierz rok, za który tworzysz raport" />
+                      <SelectValue placeholder="Wybierz rok" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {years.map((year) => (
                       <SelectItem key={year} value={year.toString()}>
                         {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {periodType === 'month' && (
+            <FormField
+              control={form.control}
+              name="month"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Miesiąc</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz miesiąc" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {periodType === 'quarter' && (
+            <FormField
+              control={form.control}
+              name="quarter"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Kwartał</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz kwartał" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="1">Q1 (Styczeń-Marzec)</SelectItem>
+                      <SelectItem value="2">Q2 (Kwiecień-Czerwiec)</SelectItem>
+                      <SelectItem value="3">Q3 (Lipiec-Wrzesień)</SelectItem>
+                      <SelectItem value="4">Q4 (Październik-Grudzień)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={form.control}
+            name="locationIds"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Lokalizacje</FormLabel>
+                <Select 
+                  onValueChange={(value) => {
+                    // Obsługa pojedynczego wyboru - można rozszerzyć na multiple
+                    field.onChange([value]);
+                  }} 
+                  defaultValue={field.value?.[0]}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wybierz lokalizację" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {availableLocations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -380,20 +507,48 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           )}
         </div>
 
-        {/* Szczegółowa rozpiska kont dla miesięcznego podsumowania */}
-        {selectedMonth && selectedYear && user?.location && (
-          <ReportAccountsBreakdown
-            reportId=""
-            locationId={user.location}
-            month={parseInt(selectedMonth)}
-            year={parseInt(selectedYear)}
-          />
+        {/* Szczegółowa rozpiska kont dla podsumowania */}
+        {selectedYear && locationIds && locationIds.length > 0 && locationIds[0] && (
+          <>
+            {periodType === 'month' && selectedMonth && (
+              <ReportAccountsBreakdown
+                reportId=""
+                locationId={locationIds[0]}
+                month={parseInt(selectedMonth)}
+                year={parseInt(selectedYear)}
+              />
+            )}
+            {periodType === 'quarter' && quarter && (
+              <ReportAccountsBreakdown
+                reportId=""
+                locationId={locationIds[0]}
+                month={parseInt(quarter) * 3}
+                year={parseInt(selectedYear)}
+                dateRange={{
+                  from: new Date(parseInt(selectedYear), (parseInt(quarter) - 1) * 3, 1).toISOString().split('T')[0],
+                  to: new Date(parseInt(selectedYear), parseInt(quarter) * 3, 0).toISOString().split('T')[0]
+                }}
+              />
+            )}
+            {periodType === 'year' && (
+              <ReportAccountsBreakdown
+                reportId=""
+                locationId={locationIds[0]}
+                month={12}
+                year={parseInt(selectedYear)}
+                dateRange={{
+                  from: `${selectedYear}-01-01`,
+                  to: `${selectedYear}-12-31`
+                }}
+              />
+            )}
+          </>
         )}
 
-        {/* Sekcja ze stanem kasowym i finansowym dla miesięcznego podsumowania */}
-        {selectedMonth && selectedYear && user?.location && (
+        {/* Sekcja ze stanem kasowym i finansowym */}
+        {selectedYear && locationIds && locationIds.length > 0 && locationIds[0] && periodType === 'month' && selectedMonth && (
           <YearToDateCashFlowBreakdown
-            locationId={user.location}
+            locationId={locationIds[0]}
             month={parseInt(selectedMonth)}
             year={parseInt(selectedYear)}
           />
@@ -492,14 +647,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
             </div>
 
             {/* Szczegółowa rozpiska kont dla podsumowania rok-do-daty */}
-            <YearToDateAccountsBreakdown
-              locationId={user?.location || ''}
-              month={parseInt(selectedMonth || '1')}
-              year={parseInt(selectedYear || new Date().getFullYear().toString())}
-            />
+            {locationIds && locationIds.length > 0 && locationIds[0] && selectedMonth && (
+              <YearToDateAccountsBreakdown
+                locationId={locationIds[0]}
+                month={parseInt(selectedMonth)}
+                year={parseInt(selectedYear)}
+              />
+            )}
 
             {/* Stan kasowy i finansowy domu dla podsumowania rok-do-daty */}
-            {selectedMonth && selectedYear && user?.location && (
+            {selectedMonth && selectedYear && locationIds && locationIds.length > 0 && locationIds[0] && (
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold mb-4">
                   Stan kasowy i finansowy domu od początku {selectedYear} roku
@@ -507,7 +664,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 </h3>
                 
                 <YearToDateCashFlowBreakdown
-                  locationId={user.location}
+                  locationId={locationIds[0]}
                   month={parseInt(selectedMonth)}
                   year={parseInt(selectedYear)}
                 />
