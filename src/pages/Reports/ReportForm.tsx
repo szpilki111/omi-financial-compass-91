@@ -62,13 +62,35 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   // Pobierz dostępne lokalizacje
   React.useEffect(() => {
     const fetchLocations = async () => {
-      const { data, error } = await supabase
-        .from('locations')
-        .select('id, name')
-        .order('name');
+      const { data: userRole } = await supabase.rpc('get_user_role');
       
-      if (!error && data) {
-        setAvailableLocations(data);
+      // Admin i prowincjał widzą wszystkie lokalizacje
+      if (userRole === 'admin' || userRole === 'prowincjal') {
+        const { data, error } = await supabase
+          .from('locations')
+          .select('id, name')
+          .order('name');
+        
+        if (!error && data) {
+          setAvailableLocations(data);
+        }
+      } else {
+        // Inni użytkownicy widzą tylko swoje lokalizacje z user_locations
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('user_locations')
+          .select('location_id, location:locations(id, name)')
+          .eq('user_id', user.id);
+        
+        if (!error && data) {
+          const locations = data.map((ul: any) => ({
+            id: ul.location?.id || ul.location_id,
+            name: ul.location?.name || 'Nieznana lokalizacja'
+          }));
+          setAvailableLocations(locations);
+        }
       }
     };
     fetchLocations();
@@ -81,10 +103,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       year: new Date().getFullYear() + '',
       periodType: 'month',
       quarter: '1',
-      locationIds: user?.location ? [user.location] : [],
+      locationIds: [],
       showFromYearStart: false
     }
   });
+
+  // Ustaw domyślną lokalizację po załadowaniu dostępnych lokalizacji
+  React.useEffect(() => {
+    if (availableLocations.length > 0 && form.getValues('locationIds').length === 0) {
+      form.setValue('locationIds', [availableLocations[0].id]);
+    }
+  }, [availableLocations, form]);
 
   const [selectedMonth, selectedYear, periodType, quarter, locationIds, showFromYearStart] = form.watch([
     'month', 'year', 'periodType', 'quarter', 'locationIds', 'showFromYearStart'
