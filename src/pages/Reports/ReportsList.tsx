@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/Spinner';
-import { Search, X, Trash2 } from 'lucide-react';
+import { Search, X, Trash2, MapPin } from 'lucide-react';
 import DeleteReportDialog from '@/components/reports/DeleteReportDialog';
 
 interface ReportsListProps {
@@ -73,9 +73,27 @@ const monthNames = [
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 0 }) => {
   const [searchMonth, setSearchMonth] = useState<string>('all');
   const [searchYear, setSearchYear] = useState<string>('all');
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Pobierz lokalizacje użytkownika
+  const { data: userLocations } = useQuery({
+    queryKey: ['user-locations'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('user_locations')
+        .select('location_id, location:locations(id, name)')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const { data: reports, isLoading, error, refetch } = useQuery({
-    queryKey: ['reports', refreshKey],
+    queryKey: ['reports', refreshKey, selectedLocationId],
     queryFn: async () => {
       const { data: userRole } = await supabase.rpc('get_user_role');
       console.log('Rola użytkownika:', userRole);
@@ -88,11 +106,17 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
       `);
       
       if (userRole === 'ekonom') {
-        const { data: locationId } = await supabase.rpc('get_user_location_id');
-        console.log('ID lokalizacji użytkownika:', locationId);
-        
-        if (locationId) {
-          query = query.eq('location_id', locationId);
+        // Jeśli wybrano konkretną lokalizację, filtruj po niej
+        if (selectedLocationId) {
+          query = query.eq('location_id', selectedLocationId);
+        } else {
+          // Jeśli nie wybrano, użyj domyślnej lokalizacji
+          const { data: locationId } = await supabase.rpc('get_user_location_id');
+          console.log('ID lokalizacji użytkownika:', locationId);
+          
+          if (locationId) {
+            query = query.eq('location_id', locationId);
+          }
         }
       }
       
@@ -199,6 +223,34 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
 
   return (
     <div className="space-y-4">
+      {/* Selektor lokalizacji (jeśli użytkownik ma więcej niż jedną) */}
+      {userLocations && userLocations.length > 1 && (
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Lokalizacja:</span>
+            </div>
+            <Select 
+              value={selectedLocationId || 'all'} 
+              onValueChange={(value) => setSelectedLocationId(value === 'all' ? null : value)}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Wybierz lokalizację" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie lokalizacje</SelectItem>
+                {userLocations.map((ul: any) => (
+                  <SelectItem key={ul.location_id} value={ul.location_id}>
+                    {ul.location?.name || 'Nieznana lokalizacja'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* Filtry wyszukiwania */}
       <div className="bg-white p-4 rounded-lg shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
