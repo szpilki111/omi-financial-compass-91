@@ -85,11 +85,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           .eq('user_id', user.id);
         
         if (!error && data) {
-          const locations = data.map((ul: any) => ({
-            id: ul.location?.id || ul.location_id,
-            name: ul.location?.name || 'Nieznana lokalizacja'
-          }));
-          setAvailableLocations(locations);
+          // Odfiltruj lokalizacje, których nie można załadować (location = null)
+          const validLocations = data
+            .filter((ul: any) => ul.location !== null)
+            .map((ul: any) => ({
+              id: ul.location.id,
+              name: ul.location.name
+            }));
+          
+          console.log('📍 Dostępne lokalizacje w formularzu:', validLocations);
+          setAvailableLocations(validLocations);
         }
       }
     };

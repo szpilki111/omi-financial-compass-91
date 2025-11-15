@@ -92,17 +92,15 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
         throw error;
       }
       
+      // Odfiltruj lokalizacje, których nie można załadować (location = null)
+      const validLocations = (data || []).filter((ul: any) => ul.location !== null);
+      
       console.log('🏢 Pobrane lokalizacje użytkownika:', data);
-      return data || [];
+      console.log('✅ Poprawne lokalizacje (location !== null):', validLocations);
+      
+      return validLocations;
     }
   });
-
-  // Debug: sprawdź ile lokalizacji ma użytkownik
-  React.useEffect(() => {
-    if (userLocations) {
-      console.log('📍 Liczba lokalizacji użytkownika:', userLocations.length, userLocations);
-    }
-  }, [userLocations]);
 
   const { data: reports, isLoading, error, refetch } = useQuery({
     queryKey: ['reports', refreshKey, selectedLocationId],
