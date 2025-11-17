@@ -157,6 +157,198 @@ export type Database = {
           },
         ]
       }
+      budget_categories: {
+        Row: {
+          account_type: string
+          created_at: string | null
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          account_type: string
+          created_at?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          account_type?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      budget_category_mappings: {
+        Row: {
+          account_prefix: string
+          category_id: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          account_prefix: string
+          category_id: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          account_prefix?: string
+          category_id?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_category_mappings_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_items: {
+        Row: {
+          account_name: string
+          account_prefix: string
+          account_type: string
+          budget_plan_id: string
+          created_at: string | null
+          forecasted_amount: number | null
+          id: string
+          planned_amount: number
+          previous_year_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name: string
+          account_prefix: string
+          account_type: string
+          budget_plan_id: string
+          created_at?: string | null
+          forecasted_amount?: number | null
+          id?: string
+          planned_amount?: number
+          previous_year_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string
+          account_prefix?: string
+          account_type?: string
+          budget_plan_id?: string
+          created_at?: string | null
+          forecasted_amount?: number | null
+          id?: string
+          planned_amount?: number
+          previous_year_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_items_budget_plan_id_fkey"
+            columns: ["budget_plan_id"]
+            isOneToOne: false
+            referencedRelation: "budget_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_plans: {
+        Row: {
+          additional_expenses: number | null
+          additional_expenses_description: string | null
+          approved_at: string | null
+          approved_by: string | null
+          comments: string | null
+          created_at: string | null
+          created_by: string | null
+          forecast_method: string
+          id: string
+          location_id: string
+          planned_cost_reduction: number | null
+          planned_cost_reduction_description: string | null
+          rejection_reason: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          additional_expenses?: number | null
+          additional_expenses_description?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          comments?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          forecast_method?: string
+          id?: string
+          location_id: string
+          planned_cost_reduction?: number | null
+          planned_cost_reduction_description?: string | null
+          rejection_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          additional_expenses?: number | null
+          additional_expenses_description?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          comments?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          forecast_method?: string
+          id?: string
+          location_id?: string
+          planned_cost_reduction?: number | null
+          planned_cost_reduction_description?: string | null
+          rejection_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_plans_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_plans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_plans_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_plans_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           created_at: string
