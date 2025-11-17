@@ -21,6 +21,7 @@ import DocumentsPage from "./pages/Documents/DocumentsPage";
 import { AccountSearchPage } from "./pages/AccountSearch";
 import { AdministrationPage } from "./pages/Administration";
 import SettingsPage from "./pages/Settings/SettingsPage";
+import { BudgetPage } from "./pages/Budget";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -89,6 +90,13 @@ const App = () => (
               <Route path="/reports" element={
                 <ProtectedRoute>
                   <Reports />
+                </ProtectedRoute>
+              } />
+              
+              {/* Budget routes */}
+              <Route path="/budzet" element={
+                <ProtectedRoute>
+                  <BudgetPage />
                 </ProtectedRoute>
               } />
               <Route path="/reports/:reportId" element={

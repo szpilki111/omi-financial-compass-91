@@ -38,6 +38,11 @@ const Header = () => {
         icon: '/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png'
       },
       { 
+        name: 'Budżet', 
+        path: '/budzet',
+        icon: '/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png'
+      },
+      { 
         name: 'Ustawienia', 
         path: '/settings',
         icon: '/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png'
