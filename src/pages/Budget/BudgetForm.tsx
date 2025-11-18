@@ -12,8 +12,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { BudgetFormData, BudgetPlan } from '@/types/budget';
 import { generateForecast, INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, formatCurrency } from '@/utils/budgetUtils';
+import { sendBudgetNotification } from '@/utils/budgetNotifications';
 import BudgetItemsTable from './BudgetItemsTable';
 import { Spinner } from '@/components/ui/Spinner';
+import { Upload, X, FileText } from 'lucide-react';
 
 interface BudgetFormProps {
   budgetId: string | null;
@@ -35,6 +37,10 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
     planned_cost_reduction: 0,
     planned_cost_reduction_description: '',
   });
+
+  const [comments, setComments] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   const [budgetItems, setBudgetItems] = useState<{
     income: { account_prefix: string; account_name: string; forecasted: number; planned: number; previous: number }[];
@@ -93,6 +99,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         planned_cost_reduction: existingBudget.planned_cost_reduction,
         planned_cost_reduction_description: existingBudget.planned_cost_reduction_description || '',
       });
+      setComments(existingBudget.comments || '');
+      setAttachments(existingBudget.attachments || []);
 
       // Load budget items
       const income = existingBudget.budget_items
@@ -188,6 +196,59 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       toast.error('Błąd generowania prognozy');
     } finally {
       setIsGeneratingForecast(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingFile(true);
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${formData.location_id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('budget-attachments')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('budget-attachments')
+          .getPublicUrl(filePath);
+
+        uploadedUrls.push(filePath);
+      }
+
+      setAttachments([...attachments, ...uploadedUrls]);
+      toast.success('Załączniki dodane');
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast.error('Błąd przesyłania załączników');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleRemoveAttachment = async (filePath: string) => {
+    try {
+      const { error } = await supabase.storage
+        .from('budget-attachments')
+        .remove([filePath]);
+
+      if (error) throw error;
+
+      setAttachments(attachments.filter(a => a !== filePath));
+      toast.success('Załącznik usunięty');
+    } catch (error) {
+      console.error('Error removing attachment:', error);
+      toast.error('Błąd usuwania załącznika');
     }
   };
 
@@ -473,6 +534,74 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Notes and Attachments */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Notatki i załączniki</CardTitle>
+          <CardDescription>
+            Dodaj dodatkowe informacje i dokumenty do budżetu
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="comments">Notatki</Label>
+            <Textarea
+              id="comments"
+              placeholder="Dodatkowe informacje, komentarze..."
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Załączniki</Label>
+            <div className="flex gap-2">
+              <input
+                type="file"
+                id="file-upload"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={uploadingFile}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => document.getElementById('file-upload')?.click()}
+                disabled={uploadingFile}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {uploadingFile ? 'Przesyłanie...' : 'Dodaj załączniki'}
+              </Button>
+            </div>
+
+            {attachments.length > 0 && (
+              <div className="space-y-2 mt-4">
+                {attachments.map((filePath, index) => {
+                  const fileName = filePath.split('/').pop() || filePath;
+                  return (
+                    <div key={index} className="flex items-center justify-between p-2 border rounded">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{fileName}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveAttachment(filePath)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
