@@ -10,6 +10,7 @@ import FinancialCard from '@/components/dashboard/FinancialCard';
 import QuickAccessCard from '@/components/dashboard/QuickAccessCard';
 import NotificationCard from '@/components/dashboard/NotificationCard';
 import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
+import BudgetStatusCard from '@/components/dashboard/BudgetStatusCard';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen, Activity, CheckCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -246,7 +247,7 @@ const Dashboard = () => {
         </h1>
 
         {/* Cards section */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-8">
+        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mt-8">
             <Link to="/dokumenty">
                 <Card>
                     <CardHeader>
@@ -272,7 +273,27 @@ const Dashboard = () => {
                     </CardContent>
                 </Card>
             </Link>
+
+            <Link to="/budzet">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-center">Budżet</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <CardDescription className="text-center">
+                            Planowanie i realizacja budżetu
+                        </CardDescription>
+                    </CardContent>
+                </Card>
+            </Link>
         </div>
+
+        {/* Budget Status Card - only for users with location */}
+        {user?.location && (
+          <div className="max-w-4xl mx-auto mt-8">
+            <BudgetStatusCard />
+          </div>
+        )}
     </div>
 </MainLayout>
 
