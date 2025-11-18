@@ -191,6 +191,73 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
     }
   };
 
+  const handleCopyFromPreviousYear = async () => {
+    if (!formData.location_id || !formData.year) {
+      toast.error('Wybierz lokalizację i rok');
+      return;
+    }
+
+    const previousYear = formData.year - 1;
+
+    setIsGeneratingForecast(true);
+    try {
+      // Fetch previous year's budget
+      const { data: prevBudget, error: budgetError } = await supabase
+        .from('budget_plans')
+        .select('id')
+        .eq('location_id', formData.location_id)
+        .eq('year', previousYear)
+        .maybeSingle();
+
+      if (budgetError || !prevBudget) {
+        toast.error(`Nie znaleziono budżetu z ${previousYear} roku`);
+        setIsGeneratingForecast(false);
+        return;
+      }
+
+      // Fetch budget items from previous year
+      const { data: prevItems, error: itemsError } = await supabase
+        .from('budget_items')
+        .select('*')
+        .eq('budget_plan_id', prevBudget.id);
+
+      if (itemsError || !prevItems) {
+        toast.error('Błąd pobierania pozycji budżetowych');
+        setIsGeneratingForecast(false);
+        return;
+      }
+
+      // Map to current budget items
+      const incomeItems = prevItems
+        .filter(item => item.account_type === 'income')
+        .map(item => ({
+          account_prefix: item.account_prefix,
+          account_name: item.account_name,
+          forecasted: item.planned_amount,
+          planned: item.planned_amount,
+          previous: item.planned_amount,
+        }));
+
+      const expenseItems = prevItems
+        .filter(item => item.account_type === 'expense')
+        .map(item => ({
+          account_prefix: item.account_prefix,
+          account_name: item.account_name,
+          forecasted: item.planned_amount,
+          planned: item.planned_amount,
+          previous: item.planned_amount,
+        }));
+
+      setBudgetItems({ income: incomeItems, expenses: expenseItems });
+      toast.success(`Skopiowano budżet z ${previousYear} roku`);
+    } catch (error) {
+      console.error('Error copying budget:', error);
+      toast.error('Błąd kopiowania budżetu');
+    } finally {
+      setIsGeneratingForecast(false);
+    }
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (status: 'draft' | 'submitted') => {
       // Save budget plan
@@ -388,12 +455,23 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
           </div>
 
           {(formData.forecast_method !== 'manual' || budgetItems.income.length === 0) && (
-            <Button
-              onClick={handleGenerateForecast}
-              disabled={isGeneratingForecast || !formData.location_id}
-            >
-              {isGeneratingForecast ? 'Generowanie...' : formData.forecast_method === 'manual' ? 'Utwórz puste pozycje' : 'Wygeneruj prognozę'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGenerateForecast}
+                disabled={isGeneratingForecast || !formData.location_id}
+              >
+                {isGeneratingForecast ? 'Generowanie...' : formData.forecast_method === 'manual' ? 'Utwórz puste pozycje' : 'Wygeneruj prognozę'}
+              </Button>
+              {!isEditing && (
+                <Button
+                  variant="outline"
+                  onClick={handleCopyFromPreviousYear}
+                  disabled={isGeneratingForecast || !formData.location_id}
+                >
+                  Kopiuj z {formData.year - 1} roku
+                </Button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

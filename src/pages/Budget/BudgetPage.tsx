@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, BarChart } from 'lucide-react';
 import BudgetList from './BudgetList';
 import BudgetForm from './BudgetForm';
 import BudgetView from './BudgetView';
+import BudgetDeviationReport from './BudgetDeviationReport';
 
-type ViewMode = 'list' | 'create' | 'edit' | 'view';
+type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations';
 
 const BudgetPage = () => {
   const navigate = useNavigate();
@@ -30,6 +31,11 @@ const BudgetPage = () => {
   const handleView = (budgetId: string) => {
     setViewMode('view');
     setSelectedBudgetId(budgetId);
+  };
+
+  const handleViewDeviations = () => {
+    setViewMode('deviations');
+    setSelectedBudgetId(null);
   };
 
   const handleBack = () => {
@@ -57,10 +63,16 @@ const BudgetPage = () => {
               </Button>
             )}
             {viewMode === 'list' && (
-              <Button onClick={handleCreateNew}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nowy budżet
-              </Button>
+              <>
+                <Button onClick={handleViewDeviations} variant="outline">
+                  <BarChart className="mr-2 h-4 w-4" />
+                  Raport odchyleń
+                </Button>
+                <Button onClick={handleCreateNew}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nowy budżet
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -87,6 +99,10 @@ const BudgetPage = () => {
             onEdit={handleEdit}
             onBack={handleBack}
           />
+        )}
+
+        {viewMode === 'deviations' && (
+          <BudgetDeviationReport />
         )}
       </div>
     </MainLayout>
