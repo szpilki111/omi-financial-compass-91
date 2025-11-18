@@ -3,13 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, BarChart } from 'lucide-react';
+import { ArrowLeft, Plus, BarChart, BarChart3 } from 'lucide-react';
 import BudgetList from './BudgetList';
 import BudgetForm from './BudgetForm';
 import BudgetView from './BudgetView';
 import BudgetDeviationReport from './BudgetDeviationReport';
+import BudgetMultiYearComparison from './BudgetMultiYearComparison';
 
-type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations';
+type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations' | 'multi-year';
 
 const BudgetPage = () => {
   const navigate = useNavigate();
@@ -35,6 +36,11 @@ const BudgetPage = () => {
 
   const handleViewDeviations = () => {
     setViewMode('deviations');
+    setSelectedBudgetId(null);
+  };
+
+  const handleViewMultiYear = () => {
+    setViewMode('multi-year');
     setSelectedBudgetId(null);
   };
 
@@ -67,6 +73,10 @@ const BudgetPage = () => {
                 <Button onClick={handleViewDeviations} variant="outline">
                   <BarChart className="mr-2 h-4 w-4" />
                   Raport odchyleń
+                </Button>
+                <Button onClick={handleViewMultiYear} variant="outline">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Porównanie wieloletnie
                 </Button>
                 <Button onClick={handleCreateNew}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -103,6 +113,10 @@ const BudgetPage = () => {
 
         {viewMode === 'deviations' && (
           <BudgetDeviationReport />
+        )}
+
+        {viewMode === 'multi-year' && (
+          <BudgetMultiYearComparison />
         )}
       </div>
     </MainLayout>

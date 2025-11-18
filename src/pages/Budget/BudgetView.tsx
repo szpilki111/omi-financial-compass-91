@@ -3,10 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Check, X } from 'lucide-react';
+import { Edit, Check, X, FileText, Download } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/Spinner';
+import { sendBudgetNotification } from '@/utils/budgetNotifications';
 import BudgetItemsTable from './BudgetItemsTable';
 import BudgetRealizationBar from './BudgetRealizationBar';
 
@@ -56,6 +57,23 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       return;
     }
 
+    // Send approval email
+    const { data: creatorData } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', budget.created_by)
+      .single();
+
+    if (creatorData?.email && budget.locations?.name) {
+      await sendBudgetNotification({
+        type: 'budget_approved',
+        budgetId,
+        recipientEmail: creatorData.email,
+        budgetYear: budget.year,
+        locationName: budget.locations.name,
+      });
+    }
+
     toast.success('Budżet zatwierdzony');
     refetch();
   };
@@ -76,6 +94,24 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       toast.error('Błąd odrzucania budżetu');
       console.error(error);
       return;
+    }
+
+    // Send rejection email
+    const { data: creatorData } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', budget.created_by)
+      .single();
+
+    if (creatorData?.email && budget.locations?.name) {
+      await sendBudgetNotification({
+        type: 'budget_rejected',
+        budgetId,
+        recipientEmail: creatorData.email,
+        budgetYear: budget.year,
+        locationName: budget.locations.name,
+        rejectionReason: reason,
+      });
     }
 
     toast.success('Budżet odrzucony');
@@ -181,6 +217,44 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
             <div className="p-4 bg-destructive/10 rounded-md">
               <div className="text-sm font-medium text-destructive">Powód odrzucenia:</div>
               <div className="text-sm mt-1">{budget.rejection_reason}</div>
+            </div>
+          )}
+
+          {budget.comments && (
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">Notatki</div>
+              <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap">
+                {budget.comments}
+              </div>
+            </div>
+          )}
+
+          {budget.attachments && budget.attachments.length > 0 && (
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">Załączniki</div>
+              <div className="space-y-2">
+                {budget.attachments.map((filePath: string, index: number) => {
+                  const fileName = filePath.split('/').pop() || filePath;
+                  return (
+                    <div key={index} className="flex items-center gap-2 p-2 border rounded">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm flex-1">{fileName}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const { data } = supabase.storage
+                            .from('budget-attachments')
+                            .getPublicUrl(filePath);
+                          window.open(data.publicUrl, '_blank');
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

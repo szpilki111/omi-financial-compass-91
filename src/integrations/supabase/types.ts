@@ -263,6 +263,7 @@ export type Database = {
           additional_expenses_description: string | null
           approved_at: string | null
           approved_by: string | null
+          attachments: string[] | null
           comments: string | null
           created_at: string | null
           created_by: string | null
@@ -283,6 +284,7 @@ export type Database = {
           additional_expenses_description?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          attachments?: string[] | null
           comments?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -303,6 +305,7 @@ export type Database = {
           additional_expenses_description?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          attachments?: string[] | null
           comments?: string | null
           created_at?: string | null
           created_by?: string | null

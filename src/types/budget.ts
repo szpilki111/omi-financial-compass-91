@@ -9,6 +9,7 @@ export interface BudgetPlan {
   planned_cost_reduction: number;
   planned_cost_reduction_description: string | null;
   comments: string | null;
+  attachments: string[] | null;
   rejection_reason: string | null;
   created_by: string;
   created_at: string;
