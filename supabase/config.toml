@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.send-email]
 verify_jwt = true
 
+[functions.send-budget-notification]
+verify_jwt = false
+
 [functions.process-inbound-email]
 verify_jwt = false
 
