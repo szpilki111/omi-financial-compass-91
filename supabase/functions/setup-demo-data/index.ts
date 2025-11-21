@@ -293,6 +293,318 @@ serve(async (req: Request) => {
       console.log(`Dodano powiadomienia dla użytkownika ID: ${profile.id}`);
     }
 
+    // 6. Dodanie danych testowych dla budżetów
+    console.log("Rozpoczęcie tworzenia danych budżetowych...");
+    
+    // Przygotowanie struktur kont
+    const incomeAccounts = [
+      { prefix: '701-2-2', name: 'Intencje odprawione', baseAmount: 150000 },
+      { prefix: '702-2-2', name: 'Duszpasterstwo OMI', baseAmount: 50000 },
+      { prefix: '703-2-2', name: 'Duszpasterstwo parafialne', baseAmount: 35000 },
+      { prefix: '704-2-2', name: 'Kolęda', baseAmount: 25000 },
+      { prefix: '710-2-2', name: 'Odsetki i przychody finansowe', baseAmount: 5000 },
+      { prefix: '720-2-2', name: 'Ofiary', baseAmount: 40000 },
+    ];
+
+    const expenseAccounts = [
+      { prefix: '401-2-2', name: 'Biurowe', baseAmount: 11550 },
+      { prefix: '402-2-2', name: 'Poczta', baseAmount: 2500 },
+      { prefix: '403-2-2', name: 'Telefony, Internet TV', baseAmount: 8400 },
+      { prefix: '412-2-2', name: 'Utrzymanie samochodu', baseAmount: 28000 },
+      { prefix: '420-2-2', name: 'Pensje osób zatrudnionych', baseAmount: 72000 },
+      { prefix: '424-2-2', name: 'Leczenie, opieka zdrowotna', baseAmount: 15000 },
+      { prefix: '440-2-2', name: 'Kuchnia i koszty posiłków', baseAmount: 45000 },
+      { prefix: '444-2-2', name: 'Media, energia, woda, gaz', baseAmount: 38500 },
+      { prefix: '445-2-2', name: 'Podatki i opłaty urzędowe', baseAmount: 12000 },
+      { prefix: '451-2-2', name: 'Zakupy / remonty zwyczajne', baseAmount: 22000 },
+    ];
+
+    // Dla każdej lokalizacji twórz budżety dla lat 2023-2026
+    for (const location of locations || []) {
+      const locationProfile = profiles?.find(p => p.location_id === location.id);
+      if (!locationProfile) continue;
+
+      // 2023 - Zatwierdzony budżet z pełną realizacją
+      const budget2023 = await supabase.from("budget_plans").insert({
+        location_id: location.id,
+        year: 2023,
+        status: 'approved',
+        forecast_method: 'last_year',
+        additional_expenses: 0,
+        planned_cost_reduction: 0,
+        created_by: locationProfile.id,
+        approved_by: adminUserId,
+        submitted_at: new Date('2023-01-15').toISOString(),
+        submitted_by: locationProfile.id,
+        approved_at: new Date('2023-01-20').toISOString(),
+        comments: 'Budżet zatwierdzony bez uwag'
+      }).select().single();
+
+      if (!budget2023.error && budget2023.data) {
+        // Dodaj pozycje budżetowe dla 2023
+        for (const account of [...incomeAccounts, ...expenseAccounts]) {
+          const variance = 0.9 + Math.random() * 0.2; // ±10% wariancja
+          const plannedAmount = account.baseAmount * variance;
+          const previousYearAmount = account.baseAmount * (0.85 + Math.random() * 0.2);
+
+          await supabase.from("budget_items").insert({
+            budget_plan_id: budget2023.data.id,
+            account_prefix: account.prefix,
+            account_name: account.name,
+            account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+            planned_amount: plannedAmount,
+            forecasted_amount: plannedAmount,
+            previous_year_amount: previousYearAmount
+          });
+        }
+        
+        // Generuj transakcje dla całego 2023 (pełna realizacja)
+        for (let month = 1; month <= 12; month++) {
+          for (const account of expenseAccounts.slice(0, 5)) { // 5 transakcji na miesiąc
+            const day = Math.floor(Math.random() * 28) + 1;
+            const date = `2023-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const amount = (account.baseAmount / 12) * (0.8 + Math.random() * 0.4);
+            
+            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const creditAccount = accounts?.find(a => a.type === 'asset');
+            
+            if (debitAccount && creditAccount) {
+              await supabase.from("transactions").insert({
+                date: date,
+                document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2023`,
+                description: `Wydatek - ${account.name}`,
+                debit_amount: amount,
+                credit_amount: amount,
+                debit_account_id: debitAccount.id,
+                credit_account_id: creditAccount.id,
+                settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                user_id: locationProfile.id,
+                location_id: location.id,
+                currency: 'PLN'
+              });
+            }
+          }
+        }
+      }
+
+      // 2024 - Zatwierdzony budżet z pełną realizacją
+      const budget2024 = await supabase.from("budget_plans").insert({
+        location_id: location.id,
+        year: 2024,
+        status: 'approved',
+        forecast_method: 'last_year',
+        additional_expenses: 10000,
+        additional_expenses_description: 'Planowany remont dachu',
+        planned_cost_reduction: 5000,
+        planned_cost_reduction_description: 'Oszczędności na mediach',
+        created_by: locationProfile.id,
+        approved_by: adminUserId,
+        submitted_at: new Date('2024-01-10').toISOString(),
+        submitted_by: locationProfile.id,
+        approved_at: new Date('2024-01-15').toISOString(),
+        comments: 'Budżet z uwzględnieniem remontu dachu'
+      }).select().single();
+
+      if (!budget2024.error && budget2024.data) {
+        for (const account of [...incomeAccounts, ...expenseAccounts]) {
+          const variance = 0.9 + Math.random() * 0.2;
+          const plannedAmount = account.baseAmount * variance * 1.05; // 5% wzrost względem 2023
+          const previousYearAmount = account.baseAmount * variance;
+
+          await supabase.from("budget_items").insert({
+            budget_plan_id: budget2024.data.id,
+            account_prefix: account.prefix,
+            account_name: account.name,
+            account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+            planned_amount: plannedAmount,
+            forecasted_amount: plannedAmount,
+            previous_year_amount: previousYearAmount
+          });
+        }
+
+        // Generuj transakcje dla całego 2024
+        for (let month = 1; month <= 12; month++) {
+          for (const account of expenseAccounts.slice(0, 6)) {
+            const day = Math.floor(Math.random() * 28) + 1;
+            const date = `2024-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const amount = (account.baseAmount * 1.05 / 12) * (0.8 + Math.random() * 0.4);
+            
+            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const creditAccount = accounts?.find(a => a.type === 'asset');
+            
+            if (debitAccount && creditAccount) {
+              await supabase.from("transactions").insert({
+                date: date,
+                document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2024`,
+                description: `Wydatek - ${account.name}`,
+                debit_amount: amount,
+                credit_amount: amount,
+                debit_account_id: debitAccount.id,
+                credit_account_id: creditAccount.id,
+                settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                user_id: locationProfile.id,
+                location_id: location.id,
+                currency: 'PLN'
+              });
+            }
+          }
+        }
+      }
+
+      // 2025 - Zatwierdzony budżet z częściową realizacją (do listopada)
+      const budget2025 = await supabase.from("budget_plans").insert({
+        location_id: location.id,
+        year: 2025,
+        status: 'approved',
+        forecast_method: 'avg_3_years',
+        additional_expenses: 15000,
+        additional_expenses_description: 'Rozbudowa obiektu sklepu',
+        planned_cost_reduction: 8000,
+        planned_cost_reduction_description: 'Zwolnienie dwóch pracowników',
+        created_by: locationProfile.id,
+        approved_by: adminUserId,
+        submitted_at: new Date('2025-01-05').toISOString(),
+        submitted_by: locationProfile.id,
+        approved_at: new Date('2025-01-12').toISOString(),
+        comments: 'Budżet z uwzględnieniem rozbudowy'
+      }).select().single();
+
+      if (!budget2025.error && budget2025.data) {
+        for (const account of [...incomeAccounts, ...expenseAccounts]) {
+          const variance = 0.9 + Math.random() * 0.2;
+          const plannedAmount = account.baseAmount * variance * 1.08; // 8% wzrost
+          const previousYearAmount = account.baseAmount * variance * 1.05;
+
+          await supabase.from("budget_items").insert({
+            budget_plan_id: budget2025.data.id,
+            account_prefix: account.prefix,
+            account_name: account.name,
+            account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+            planned_amount: plannedAmount,
+            forecasted_amount: plannedAmount,
+            previous_year_amount: previousYearAmount
+          });
+        }
+
+        // Generuj transakcje dla stycznia-listopada 2025 (różne poziomy realizacji)
+        for (let month = 1; month <= 11; month++) {
+          // Różne poziomy realizacji dla różnych miesięcy
+          let realizationFactor = 1.0;
+          if (month <= 3) realizationFactor = 0.65; // Q1: 65% - zielony
+          else if (month <= 6) realizationFactor = 0.82; // Q2: 82% - pomarańczowy
+          else if (month <= 9) realizationFactor = 1.05; // Q3: 105% - czerwony
+          else realizationFactor = 0.45; // Q4: 45% - szary
+
+          for (const account of expenseAccounts.slice(0, 7)) {
+            const day = Math.floor(Math.random() * 28) + 1;
+            const date = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const amount = (account.baseAmount * 1.08 / 12) * realizationFactor * (0.9 + Math.random() * 0.2);
+            
+            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const creditAccount = accounts?.find(a => a.type === 'asset');
+            
+            if (debitAccount && creditAccount) {
+              await supabase.from("transactions").insert({
+                date: date,
+                document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2025`,
+                description: `Wydatek - ${account.name}`,
+                debit_amount: amount,
+                credit_amount: amount,
+                debit_account_id: debitAccount.id,
+                credit_account_id: creditAccount.id,
+                settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                user_id: locationProfile.id,
+                location_id: location.id,
+                currency: 'PLN'
+              });
+            }
+          }
+        }
+      }
+
+      // 2026 - Draft (do edycji przez ekonoma)
+      const budget2026Draft = await supabase.from("budget_plans").insert({
+        location_id: location.id,
+        year: 2026,
+        status: 'draft',
+        forecast_method: 'avg_3_years',
+        additional_expenses: 0,
+        planned_cost_reduction: 0,
+        created_by: locationProfile.id,
+        comments: 'Budżet w przygotowaniu - do uzupełnienia'
+      }).select().single();
+
+      if (!budget2026Draft.error && budget2026Draft.data) {
+        for (const account of [...incomeAccounts, ...expenseAccounts]) {
+          const variance = 0.9 + Math.random() * 0.2;
+          const plannedAmount = account.baseAmount * variance * 1.10; // 10% wzrost
+          const previousYearAmount = account.baseAmount * variance * 1.08;
+
+          await supabase.from("budget_items").insert({
+            budget_plan_id: budget2026Draft.data.id,
+            account_prefix: account.prefix,
+            account_name: account.name,
+            account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+            planned_amount: plannedAmount,
+            forecasted_amount: plannedAmount,
+            previous_year_amount: previousYearAmount
+          });
+        }
+      }
+
+      // 2026 - Submitted (czeka na zatwierdzenie)
+      if (Math.random() > 0.5) { // 50% lokalizacji ma submitted budget
+        const budget2026Submitted = await supabase.from("budget_plans").insert({
+          location_id: location.id,
+          year: 2027, // Użyj 2027 dla submitted
+          status: 'submitted',
+          forecast_method: 'last_year',
+          additional_expenses: 12000,
+          additional_expenses_description: 'Wymiana okien',
+          planned_cost_reduction: 6000,
+          planned_cost_reduction_description: 'Redukcja kosztów energii',
+          created_by: locationProfile.id,
+          submitted_at: new Date().toISOString(),
+          submitted_by: locationProfile.id,
+          comments: 'Budżet złożony do zatwierdzenia przez prowincjała'
+        }).select().single();
+
+        if (!budget2026Submitted.error && budget2026Submitted.data) {
+          for (const account of [...incomeAccounts, ...expenseAccounts]) {
+            const variance = 0.9 + Math.random() * 0.2;
+            const plannedAmount = account.baseAmount * variance * 1.12;
+            const previousYearAmount = account.baseAmount * variance * 1.10;
+
+            await supabase.from("budget_items").insert({
+              budget_plan_id: budget2026Submitted.data.id,
+              account_prefix: account.prefix,
+              account_name: account.name,
+              account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+              planned_amount: plannedAmount,
+              forecasted_amount: plannedAmount,
+              previous_year_amount: previousYearAmount
+            });
+          }
+        }
+      }
+
+      // Dodaj powiadomienie o budżecie dla ekonoma
+      await supabase.from("notifications").insert({
+        title: "Status budżetu 2026",
+        message: "Budżet na rok 2026 jest w trakcie przygotowania. Proszę uzupełnić brakujące dane.",
+        priority: "medium",
+        user_id: locationProfile.id,
+        read: false,
+        action_label: "Przejdź do budżetu",
+        action_link: "/budzet"
+      });
+
+      console.log(`Dodano dane budżetowe dla lokalizacji: ${location.name}`);
+    }
+
+    console.log("Zakończono tworzenie danych budżetowych!");
+    
+
     return new Response(
       JSON.stringify({
         success: true,
