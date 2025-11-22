@@ -1385,6 +1385,10 @@ export type Database = {
           windows98_style: boolean
         }[]
       }
+      handle_signup_or_signin: {
+        Args: { email: string; pass: string }
+        Returns: Json
+      }
       insert_profile_admin:
         | {
             Args: {
