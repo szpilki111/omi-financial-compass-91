@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.send-error-response-notification]
 verify_jwt = true
+
+[functions.setup-demo-data]
+verify_jwt = false
