@@ -52,8 +52,13 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       .eq('id', budgetId);
 
     if (error) {
-      toast.error('Błąd zatwierdzania budżetu');
-      console.error(error);
+      console.error('[BUDGET] Error approving budget:', error);
+      
+      if (error.code === '42501' || error.message?.includes('permission')) {
+        toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do zatwierdzenia tego budżetu');
+      } else {
+        toast.error(`[BŁĄD APLIKACJI] Błąd zatwierdzania budżetu: ${error.message}`);
+      }
       return;
     }
 
@@ -91,8 +96,13 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       .eq('id', budgetId);
 
     if (error) {
-      toast.error('Błąd odrzucania budżetu');
-      console.error(error);
+      console.error('[BUDGET] Error rejecting budget:', error);
+      
+      if (error.code === '42501' || error.message?.includes('permission')) {
+        toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do odrzucenia tego budżetu');
+      } else {
+        toast.error(`[BŁĄD APLIKACJI] Błąd odrzucania budżetu: ${error.message}`);
+      }
       return;
     }
 

@@ -11,15 +11,19 @@ import { BudgetPlan } from '@/types/budget';
 interface BudgetListProps {
   onView: (budgetId: string) => void;
   onEdit: (budgetId: string) => void;
+  filterYear?: number | null;
+  filterLocationId?: string | null;
+  filterStatus?: string | null;
+  searchText?: string;
 }
 
-const BudgetList = ({ onView, onEdit }: BudgetListProps) => {
+const BudgetList = ({ onView, onEdit, filterYear, filterLocationId, filterStatus, searchText }: BudgetListProps) => {
   const { user } = useAuth();
 
   const { data: budgets, isLoading, refetch } = useQuery({
-    queryKey: ['budget-plans', user?.id],
+    queryKey: ['budget-plans', user?.id, filterYear, filterLocationId, filterStatus],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('budget_plans')
         .select(`
           *,
@@ -30,6 +34,19 @@ const BudgetList = ({ onView, onEdit }: BudgetListProps) => {
         `)
         .order('year', { ascending: false })
         .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (filterYear) {
+        query = query.eq('year', filterYear);
+      }
+      if (filterLocationId) {
+        query = query.eq('location_id', filterLocationId);
+      }
+      if (filterStatus && filterStatus !== 'all') {
+        query = query.eq('status', filterStatus);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as any[];
@@ -46,8 +63,13 @@ const BudgetList = ({ onView, onEdit }: BudgetListProps) => {
       .eq('id', budgetId);
 
     if (error) {
-      toast.error('Błąd usuwania budżetu');
-      console.error(error);
+      console.error('[BUDGET] Error deleting budget:', error);
+      
+      if (error.code === '42501' || error.message?.includes('permission')) {
+        toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do usunięcia tego budżetu');
+      } else {
+        toast.error(`[BŁĄD APLIKACJI] Błąd usuwania budżetu: ${error.message}`);
+      }
       return;
     }
 
@@ -74,12 +96,23 @@ const BudgetList = ({ onView, onEdit }: BudgetListProps) => {
     return <div>Ładowanie budżetów...</div>;
   }
 
-  if (!budgets || budgets.length === 0) {
+  // Client-side text search filter
+  const filteredBudgets = budgets?.filter(budget => {
+    if (!searchText) return true;
+    const searchLower = searchText.toLowerCase();
+    const locationName = (budget.locations as any)?.name?.toLowerCase() || '';
+    const creatorName = budget.created_by_profile?.name?.toLowerCase() || '';
+    return locationName.includes(searchLower) || creatorName.includes(searchLower);
+  });
+
+  if (!filteredBudgets || filteredBudgets.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-center text-muted-foreground">
-            Brak budżetów. Kliknij "Nowy budżet" aby utworzyć pierwszy plan budżetowy.
+            {searchText || filterYear || filterLocationId || (filterStatus && filterStatus !== 'all')
+              ? 'Nie znaleziono budżetów pasujących do wybranych filtrów.'
+              : 'Brak budżetów. Kliknij "Nowy budżet" aby utworzyć pierwszy plan budżetowy.'}
           </p>
         </CardContent>
       </Card>
@@ -88,7 +121,7 @@ const BudgetList = ({ onView, onEdit }: BudgetListProps) => {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {budgets.map((budget) => (
+      {filteredBudgets.map((budget) => (
         <Card key={budget.id}>
           <CardHeader>
             <div className="flex items-start justify-between">
