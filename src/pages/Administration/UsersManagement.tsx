@@ -335,9 +335,15 @@ const UsersManagement = () => {
                 <TableBody>
                   {users.slice(0, displayedCount).map((user, index) => (
                     <TableRow key={user.id} ref={index === displayedCount - 1 ? loadMoreRef : null}>
-                      <TableCell className="font-medium">{user.login}</TableCell>
-                      <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
-                      <TableCell>{user.position}</TableCell>
+                      <TableCell className="font-medium">
+                        {user.login || (user.email ? user.email.split("@")[0] : "-")}
+                      </TableCell>
+                      <TableCell>
+                        {user.first_name || user.last_name
+                          ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+                          : user.name || "-"}
+                      </TableCell>
+                      <TableCell>{user.position || "-"}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Badge {...getRoleBadgeProps(user.role)}>{getRoleLabel(user.role)}</Badge>
