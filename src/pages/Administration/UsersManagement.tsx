@@ -319,7 +319,7 @@ const UsersManagement = () => {
                     <TableHead className="max-w-[180px]">Login</TableHead>
                     <TableHead>Imię i nazwisko</TableHead>
                     <TableHead>Stanowisko</TableHead>
-                    <TableHead>Email</TableHead>
+                    <TableHead className="max-w-[300px]">Email</TableHead>
                     <TableHead>Rola</TableHead>
                     <TableHead>Placówka</TableHead>
                     {(userRole === "prowincjal" || userRole === "admin") && (
@@ -344,7 +344,7 @@ const UsersManagement = () => {
                           : user.name || "-"}
                       </TableCell>
                       <TableCell>{user.position || "-"}</TableCell>
-                      <TableCell>{user.email}</TableCell>
+                      <TableCell className="max-w-[300px] truncate">{user.email}</TableCell>
                       <TableCell>
                         <Badge {...getRoleBadgeProps(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </TableCell>
