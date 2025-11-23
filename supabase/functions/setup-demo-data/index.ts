@@ -486,19 +486,26 @@ serve(async (req: Request) => {
           });
         }
 
-        // Generuj transakcje dla stycznia-listopada 2025 (różne poziomy realizacji)
+        // Generuj transakcje dla stycznia-listopada 2025 (RÓŻNORODNE POZIOMY REALIZACJI DLA BATERII)
         for (let month = 1; month <= 11; month++) {
-          // Różne poziomy realizacji dla różnych miesięcy
+          // Różne poziomy realizacji dla lepszej wizualizacji baterii (więcej kolorów)
           let realizationFactor = 1.0;
-          if (month <= 3) realizationFactor = 0.65; // Q1: 65% - zielony
-          else if (month <= 6) realizationFactor = 0.82; // Q2: 82% - pomarańczowy
-          else if (month <= 9) realizationFactor = 1.05; // Q3: 105% - czerwony
-          else realizationFactor = 0.45; // Q4: 45% - szary
+          if (month === 1) realizationFactor = 0.72; // Styczeń: 72% - zielony
+          else if (month === 2) realizationFactor = 0.65; // Luty: 65% - zielony
+          else if (month === 3) realizationFactor = 0.85; // Marzec: 85% - pomarańczowy
+          else if (month === 4) realizationFactor = 0.78; // Kwiecień: 78% - zielony
+          else if (month === 5) realizationFactor = 0.92; // Maj: 92% - pomarańczowy
+          else if (month === 6) realizationFactor = 1.03; // Czerwiec: 103% - czerwony
+          else if (month === 7) realizationFactor = 0.88; // Lipiec: 88% - pomarańczowy
+          else if (month === 8) realizationFactor = 1.08; // Sierpień: 108% - czerwony
+          else if (month === 9) realizationFactor = 0.70; // Wrzesień: 70% - zielony
+          else if (month === 10) realizationFactor = 0.45; // Październik: 45% - szary
+          else realizationFactor = 0.38; // Listopad: 38% - szary
 
-          for (const account of expenseAccounts.slice(0, 7)) {
+          for (const account of expenseAccounts) {
             const day = Math.floor(Math.random() * 28) + 1;
             const date = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const amount = (account.baseAmount * 1.08 / 12) * realizationFactor * (0.9 + Math.random() * 0.2);
+            const amount = (account.baseAmount * 1.08 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
             
             const debitAccount = accounts?.find(a => a.type === 'expense');
             const creditAccount = accounts?.find(a => a.type === 'asset');

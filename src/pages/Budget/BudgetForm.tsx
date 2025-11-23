@@ -23,6 +23,31 @@ interface BudgetFormProps {
   onCancel: () => void;
 }
 
+// Helper function for detailed error messages
+const getBudgetSaveErrorMessage = (error: any, action: 'draft' | 'submitted'): string => {
+  const errorMessage = error?.message || '';
+  const errorCode = error?.code || '';
+  const errorDetails = error?.details || '';
+
+  // Check for duplicate key / unique constraint
+  if (errorCode === '23505' || errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+    return `[BŁĄD DANYCH UŻYTKOWNIKA] Budżet dla tej lokalizacji i roku już istnieje. Wybierz inny rok lub lokalizację.`;
+  }
+
+  // Check for RLS / permissions errors
+  if (
+    errorCode === '42501' || 
+    errorMessage.includes('row-level security') || 
+    errorMessage.includes('permission denied') ||
+    errorMessage.includes('policy')
+  ) {
+    return `[BŁĄD UPRAWNIEŃ APLIKACJI] Nie masz uprawnień do ${action === 'submitted' ? 'złożenia' : 'zapisania'} tego budżetu. Skontaktuj się z administratorem.`;
+  }
+
+  // Generic application error
+  return `[BŁĄD APLIKACJI] Nie udało się ${action === 'submitted' ? 'złożyć' : 'zapisać'} budżetu. Szczegóły: ${errorMessage || errorDetails || 'nieznany błąd'}. Spróbuj ponownie lub skontaktuj się z administratorem.`;
+};
+
 const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -37,6 +62,10 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
     planned_cost_reduction: 0,
     planned_cost_reduction_description: '',
   });
+
+  // String states for modifier inputs
+  const [additionalExpensesInput, setAdditionalExpensesInput] = useState('0');
+  const [plannedCostReductionInput, setPlannedCostReductionInput] = useState('0');
 
   const [comments, setComments] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -99,6 +128,11 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         planned_cost_reduction: existingBudget.planned_cost_reduction,
         planned_cost_reduction_description: existingBudget.planned_cost_reduction_description || '',
       });
+      
+      // Initialize string inputs from existing budget
+      setAdditionalExpensesInput(String(existingBudget.additional_expenses || 0));
+      setPlannedCostReductionInput(String(existingBudget.planned_cost_reduction || 0));
+      
       setComments(existingBudget.comments || '');
       setAttachments(existingBudget.attachments || []);
 
@@ -192,8 +226,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       setBudgetItems({ income: incomeItems, expenses: expenseItems });
       toast.success('Prognoza wygenerowana');
     } catch (error) {
-      console.error('Error generating forecast:', error);
-      toast.error('Błąd generowania prognozy');
+      console.error('[BUDGET] Error generating forecast:', error);
+      toast.error('[BŁĄD APLIKACJI] Błąd generowania prognozy budżetu. Sprawdź czy istnieją dane finansowe dla wybranej lokalizacji.');
     } finally {
       setIsGeneratingForecast(false);
     }
@@ -229,8 +263,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       setAttachments([...attachments, ...uploadedUrls]);
       toast.success('Załączniki dodane');
     } catch (error) {
-      console.error('Error uploading files:', error);
-      toast.error('Błąd przesyłania załączników');
+      console.error('[BUDGET] Error uploading files:', error);
+      toast.error('[BŁĄD APLIKACJI] Błąd przesyłania załączników do storage. Spróbuj ponownie.');
     } finally {
       setUploadingFile(false);
     }
@@ -247,8 +281,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       setAttachments(attachments.filter(a => a !== filePath));
       toast.success('Załącznik usunięty');
     } catch (error) {
-      console.error('Error removing attachment:', error);
-      toast.error('Błąd usuwania załącznika');
+      console.error('[BUDGET] Error removing attachment:', error);
+      toast.error('[BŁĄD APLIKACJI] Błąd usuwania załącznika ze storage. Spróbuj ponownie.');
     }
   };
 
@@ -271,7 +305,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         .maybeSingle();
 
       if (budgetError || !prevBudget) {
-        toast.error(`Nie znaleziono budżetu z ${previousYear} roku`);
+        toast.error(`Nie znaleziono budżetu z ${previousYear} roku dla tej lokalizacji`);
         setIsGeneratingForecast(false);
         return;
       }
@@ -283,7 +317,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         .eq('budget_plan_id', prevBudget.id);
 
       if (itemsError || !prevItems) {
-        toast.error('Błąd pobierania pozycji budżetowych');
+        toast.error('[BŁĄD APLIKACJI] Błąd pobierania pozycji budżetowych z poprzedniego roku');
         setIsGeneratingForecast(false);
         return;
       }
@@ -312,8 +346,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       setBudgetItems({ income: incomeItems, expenses: expenseItems });
       toast.success(`Skopiowano budżet z ${previousYear} roku`);
     } catch (error) {
-      console.error('Error copying budget:', error);
-      toast.error('Błąd kopiowania budżetu');
+      console.error('[BUDGET] Error copying budget:', error);
+      toast.error('[BŁĄD APLIKACJI] Błąd kopiowania budżetu z poprzedniego roku');
     } finally {
       setIsGeneratingForecast(false);
     }
@@ -331,6 +365,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         additional_expenses_description: formData.additional_expenses_description || null,
         planned_cost_reduction: formData.planned_cost_reduction,
         planned_cost_reduction_description: formData.planned_cost_reduction_description || null,
+        comments: comments || null,
+        attachments: attachments.length > 0 ? attachments : null,
       };
 
       if (status === 'submitted') {
@@ -398,11 +434,55 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       queryClient.invalidateQueries({ queryKey: ['budget-plans'] });
       onSaved();
     },
-    onError: (error) => {
-      console.error('Error saving budget:', error);
-      toast.error('Błąd zapisywania budżetu');
+    onError: (error, status) => {
+      console.error(`[BUDGET] Error saving budget as ${status}:`, error);
+      const errorMessage = getBudgetSaveErrorMessage(error, status);
+      toast.error(errorMessage);
     },
   });
+
+  const handleAdditionalExpensesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(',', '.');
+    setAdditionalExpensesInput(value);
+
+    if (value === '' || value === '-') {
+      // Tymczasowo 0 w liczbie, ale pozwalamy na string
+      return;
+    }
+
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed)) {
+      setFormData({ ...formData, additional_expenses: Math.max(0, parsed) });
+    }
+  };
+
+  const handlePlannedCostReductionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(',', '.');
+    setPlannedCostReductionInput(value);
+
+    if (value === '' || value === '-') {
+      return;
+    }
+
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed)) {
+      setFormData({ ...formData, planned_cost_reduction: Math.max(0, parsed) });
+    }
+  };
+
+  const handleAdditionalExpensesBlur = () => {
+    if (additionalExpensesInput === '' || additionalExpensesInput === '-') {
+      setAdditionalExpensesInput('0');
+      setFormData({ ...formData, additional_expenses: 0 });
+    }
+  };
+
+  const handlePlannedCostReductionBlur = () => {
+    if (plannedCostReductionInput === '' || plannedCostReductionInput === '-') {
+      setPlannedCostReductionInput('0');
+      setFormData({ ...formData, planned_cost_reduction: 0 });
+    }
+  };
 
   if (isLoadingBudget) {
     return (
@@ -486,10 +566,10 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
               <Label htmlFor="additional_expenses">Prognozowane inne wydatki</Label>
               <Input
                 id="additional_expenses"
-                type="number"
-                step="0.01"
-                value={formData.additional_expenses}
-                onChange={(e) => setFormData({ ...formData, additional_expenses: parseFloat(e.target.value) || 0 })}
+                type="text"
+                value={additionalExpensesInput}
+                onChange={handleAdditionalExpensesChange}
+                onBlur={handleAdditionalExpensesBlur}
               />
               <Textarea
                 placeholder="Opis (np. rozbudowa sklepu)"
@@ -502,10 +582,10 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
               <Label htmlFor="planned_cost_reduction">Planowana redukcja kosztów</Label>
               <Input
                 id="planned_cost_reduction"
-                type="number"
-                step="0.01"
-                value={formData.planned_cost_reduction}
-                onChange={(e) => setFormData({ ...formData, planned_cost_reduction: parseFloat(e.target.value) || 0 })}
+                type="text"
+                value={plannedCostReductionInput}
+                onChange={handlePlannedCostReductionChange}
+                onBlur={handlePlannedCostReductionBlur}
               />
               <Textarea
                 placeholder="Opis (np. zwolnienie pracowników)"

@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, BarChart, BarChart3 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { ArrowLeft, Plus, BarChart, BarChart3, Search } from 'lucide-react';
 import BudgetList from './BudgetList';
 import BudgetForm from './BudgetForm';
 import BudgetView from './BudgetView';
@@ -15,9 +22,33 @@ type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations' | 'multi-year
 const BudgetPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Filter states
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterLocationId, setFilterLocationId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string | null>('all');
+  const [searchText, setSearchText] = useState('');
+
+  const showFilters = user?.role === 'prowincjal' || user?.role === 'admin';
+
+  // Fetch locations for filter
+  const { data: locations } = useQuery({
+    queryKey: ['locations-for-filter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: showFilters,
+  });
 
   const handleCreateNew = () => {
     setViewMode('create');
@@ -56,6 +87,17 @@ const BudgetPage = () => {
     setRefreshKey(prev => prev + 1);
   };
 
+  const handleClearFilters = () => {
+    setFilterYear(null);
+    setFilterLocationId(null);
+    setFilterStatus('all');
+    setSearchText('');
+  };
+
+  // Generate year options (current year - 2 to current year + 3)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - 2 + i);
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -87,11 +129,103 @@ const BudgetPage = () => {
           </div>
         </div>
 
+        {viewMode === 'list' && showFilters && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Search className="h-5 w-5 text-muted-foreground" />
+                  <Label>Filtry wyszukiwania</Label>
+                </div>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-year">Rok</Label>
+                    <Select
+                      value={filterYear?.toString() || 'all'}
+                      onValueChange={(value) => setFilterYear(value === 'all' ? null : parseInt(value))}
+                    >
+                      <SelectTrigger id="filter-year">
+                        <SelectValue placeholder="Wszystkie" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Wszystkie</SelectItem>
+                        {yearOptions.map(year => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-location">Lokalizacja</Label>
+                    <Select
+                      value={filterLocationId || 'all'}
+                      onValueChange={(value) => setFilterLocationId(value === 'all' ? null : value)}
+                    >
+                      <SelectTrigger id="filter-location">
+                        <SelectValue placeholder="Wszystkie" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Wszystkie</SelectItem>
+                        {locations?.map(location => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-status">Status</Label>
+                    <Select
+                      value={filterStatus || 'all'}
+                      onValueChange={(value) => setFilterStatus(value)}
+                    >
+                      <SelectTrigger id="filter-status">
+                        <SelectValue placeholder="Wszystkie" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Wszystkie</SelectItem>
+                        <SelectItem value="draft">Projekt</SelectItem>
+                        <SelectItem value="submitted">Złożony</SelectItem>
+                        <SelectItem value="approved">Zatwierdzony</SelectItem>
+                        <SelectItem value="rejected">Odrzucony</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-search">Szukaj</Label>
+                    <Input
+                      id="filter-search"
+                      placeholder="Nazwa lokalizacji lub twórcy"
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={handleClearFilters}>
+                    Wyczyść filtry
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {viewMode === 'list' && (
           <BudgetList
             key={refreshKey}
             onView={handleView}
             onEdit={handleEdit}
+            filterYear={filterYear}
+            filterLocationId={filterLocationId}
+            filterStatus={filterStatus}
+            searchText={searchText}
           />
         )}
 
