@@ -316,7 +316,7 @@ const UsersManagement = () => {
               <Table style={{ minWidth: "1400px" }}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Login</TableHead>
+                    <TableHead className="max-w-[180px]">Login</TableHead>
                     <TableHead>Imię i nazwisko</TableHead>
                     <TableHead>Stanowisko</TableHead>
                     <TableHead>Email</TableHead>
@@ -335,7 +335,7 @@ const UsersManagement = () => {
                 <TableBody>
                   {users.slice(0, displayedCount).map((user, index) => (
                     <TableRow key={user.id} ref={index === displayedCount - 1 ? loadMoreRef : null}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium max-w-[180px] truncate">
                         {user.login || (user.email ? user.email.split("@")[0] : "-")}
                       </TableCell>
                       <TableCell>
