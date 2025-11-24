@@ -319,10 +319,45 @@ serve(async (req: Request) => {
       { prefix: '451-2-2', name: 'Zakupy / remonty zwyczajne', baseAmount: 22000 },
     ];
 
-    // Dla każdej lokalizacji twórz budżety dla lat 2023-2026
+    // Dla każdej lokalizacji twórz budżety dla lat 2023-2028
     for (const location of locations || []) {
       const locationProfile = profiles?.find(p => p.location_id === location.id);
       if (!locationProfile) continue;
+
+      // Usuń istniejące budżety i transakcje dla tej lokalizacji (lata 2023-2028)
+      console.log(`Usuwanie starych danych budżetowych dla lokalizacji: ${location.name}`);
+      
+      // Pobierz ID budżetów do usunięcia
+      const { data: existingBudgets } = await supabase
+        .from("budget_plans")
+        .select("id")
+        .eq("location_id", location.id)
+        .gte("year", 2023)
+        .lte("year", 2028);
+
+      if (existingBudgets && existingBudgets.length > 0) {
+        const budgetIds = existingBudgets.map(b => b.id);
+        
+        // Usuń pozycje budżetowe
+        await supabase
+          .from("budget_items")
+          .delete()
+          .in("budget_plan_id", budgetIds);
+        
+        // Usuń budżety
+        await supabase
+          .from("budget_plans")
+          .delete()
+          .in("id", budgetIds);
+      }
+
+      // Usuń transakcje dla lat 2023-2028
+      await supabase
+        .from("transactions")
+        .delete()
+        .eq("location_id", location.id)
+        .gte("date", "2023-01-01")
+        .lte("date", "2028-12-31");
 
       // 2023 - Zatwierdzony budżet z pełną realizacją
       const budget2023 = await supabase.from("budget_plans").insert({
