@@ -170,7 +170,7 @@ serve(async (req: Request) => {
     // Pobierz konta
     const { data: accounts, error: accountsError } = await supabase
       .from("accounts")
-      .select("id, type");
+      .select("id, type, number");
     
     if (accountsError) throw new Error(`Błąd przy pobieraniu kont: ${accountsError.message}`);
     
@@ -365,7 +365,8 @@ serve(async (req: Request) => {
             const date = `2023-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount / 12) * (0.8 + Math.random() * 0.4);
             
-            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const accountNumber = account.prefix.split('-')[0];
+            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -429,7 +430,8 @@ serve(async (req: Request) => {
             const date = `2024-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount * 1.05 / 12) * (0.8 + Math.random() * 0.4);
             
-            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const accountNumber = account.prefix.split('-')[0];
+            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -507,7 +509,8 @@ serve(async (req: Request) => {
             const date = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount * 1.08 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
             
-            const debitAccount = accounts?.find(a => a.type === 'expense');
+            const accountNumber = account.prefix.split('-')[0];
+            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -529,61 +532,33 @@ serve(async (req: Request) => {
         }
       }
 
-      // 2026 - Draft (do edycji przez ekonoma)
-      const budget2026Draft = await supabase.from("budget_plans").insert({
-        location_id: location.id,
-        year: 2026,
-        status: 'draft',
-        forecast_method: 'avg_3_years',
-        additional_expenses: 0,
-        planned_cost_reduction: 0,
-        created_by: locationProfile.id,
-        comments: 'Budżet w przygotowaniu - do uzupełnienia'
-      }).select().single();
-
-      if (!budget2026Draft.error && budget2026Draft.data) {
-        for (const account of [...incomeAccounts, ...expenseAccounts]) {
-          const variance = 0.9 + Math.random() * 0.2;
-          const plannedAmount = account.baseAmount * variance * 1.10; // 10% wzrost
-          const previousYearAmount = account.baseAmount * variance * 1.08;
-
-          await supabase.from("budget_items").insert({
-            budget_plan_id: budget2026Draft.data.id,
-            account_prefix: account.prefix,
-            account_name: account.name,
-            account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
-            planned_amount: plannedAmount,
-            forecasted_amount: plannedAmount,
-            previous_year_amount: previousYearAmount
-          });
-        }
-      }
-
-      // 2026 - Submitted (czeka na zatwierdzenie)
-      if (Math.random() > 0.5) { // 50% lokalizacji ma submitted budget
-        const budget2026Submitted = await supabase.from("budget_plans").insert({
+      // 2026 - Zatwierdzony budżet z realizacją (tylko dla Gorzowa)
+      if (location.name === 'Gorzów') {
+        const budget2026 = await supabase.from("budget_plans").insert({
           location_id: location.id,
-          year: 2027, // Użyj 2027 dla submitted
-          status: 'submitted',
-          forecast_method: 'last_year',
-          additional_expenses: 12000,
-          additional_expenses_description: 'Wymiana okien',
-          planned_cost_reduction: 6000,
-          planned_cost_reduction_description: 'Redukcja kosztów energii',
+          year: 2026,
+          status: 'approved',
+          forecast_method: 'avg_3_years',
+          additional_expenses: 18000,
+          additional_expenses_description: 'Remont kuchni',
+          planned_cost_reduction: 10000,
+          planned_cost_reduction_description: 'Optymalizacja kosztów mediów',
           created_by: locationProfile.id,
-          submitted_at: new Date().toISOString(),
+          approved_by: adminUserId,
+          submitted_at: new Date('2026-01-08').toISOString(),
           submitted_by: locationProfile.id,
-          comments: 'Budżet złożony do zatwierdzenia przez prowincjała'
+          approved_at: new Date('2026-01-15').toISOString(),
+          comments: 'Budżet z uwzględnieniem remontu kuchni'
         }).select().single();
 
-        if (!budget2026Submitted.error && budget2026Submitted.data) {
+        if (!budget2026.error && budget2026.data) {
           for (const account of [...incomeAccounts, ...expenseAccounts]) {
             const variance = 0.9 + Math.random() * 0.2;
-            const plannedAmount = account.baseAmount * variance * 1.12;
-            const previousYearAmount = account.baseAmount * variance * 1.10;
+            const plannedAmount = account.baseAmount * variance * 1.10;
+            const previousYearAmount = account.baseAmount * variance * 1.08;
 
             await supabase.from("budget_items").insert({
-              budget_plan_id: budget2026Submitted.data.id,
+              budget_plan_id: budget2026.data.id,
               account_prefix: account.prefix,
               account_name: account.name,
               account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
@@ -591,6 +566,277 @@ serve(async (req: Request) => {
               forecasted_amount: plannedAmount,
               previous_year_amount: previousYearAmount
             });
+          }
+
+          // Generuj transakcje dla stycznia-grudnia 2026 (różne poziomy realizacji)
+          for (let month = 1; month <= 12; month++) {
+            let realizationFactor = 1.0;
+            if (month === 1) realizationFactor = 0.68; // Styczeń: 68% - zielony
+            else if (month === 2) realizationFactor = 0.82; // Luty: 82% - pomarańczowy
+            else if (month === 3) realizationFactor = 0.75; // Marzec: 75% - zielony
+            else if (month === 4) realizationFactor = 0.95; // Kwiecień: 95% - pomarańczowy
+            else if (month === 5) realizationFactor = 1.06; // Maj: 106% - czerwony
+            else if (month === 6) realizationFactor = 0.88; // Czerwiec: 88% - pomarańczowy
+            else if (month === 7) realizationFactor = 0.42; // Lipiec: 42% - szary
+            else if (month === 8) realizationFactor = 0.79; // Sierpień: 79% - zielony
+            else if (month === 9) realizationFactor = 1.11; // Wrzesień: 111% - czerwony
+            else if (month === 10) realizationFactor = 0.85; // Październik: 85% - pomarańczowy
+            else if (month === 11) realizationFactor = 0.70; // Listopad: 70% - zielony
+            else realizationFactor = 0.48; // Grudzień: 48% - szary
+
+            for (const account of expenseAccounts) {
+              const day = Math.floor(Math.random() * 28) + 1;
+              const date = `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const amount = (account.baseAmount * 1.10 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
+              
+              const accountNumber = account.prefix.split('-')[0];
+              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const creditAccount = accounts?.find(a => a.type === 'asset');
+              
+              if (debitAccount && creditAccount) {
+                await supabase.from("transactions").insert({
+                  date: date,
+                  document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2026`,
+                  description: `Wydatek - ${account.name}`,
+                  debit_amount: amount,
+                  credit_amount: amount,
+                  debit_account_id: debitAccount.id,
+                  credit_account_id: creditAccount.id,
+                  settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                  user_id: locationProfile.id,
+                  location_id: location.id,
+                  currency: 'PLN'
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Dla pozostałych lokalizacji - Draft
+        const budget2026Draft = await supabase.from("budget_plans").insert({
+          location_id: location.id,
+          year: 2026,
+          status: 'draft',
+          forecast_method: 'avg_3_years',
+          additional_expenses: 0,
+          planned_cost_reduction: 0,
+          created_by: locationProfile.id,
+          comments: 'Budżet w przygotowaniu - do uzupełnienia'
+        }).select().single();
+
+        if (!budget2026Draft.error && budget2026Draft.data) {
+          for (const account of [...incomeAccounts, ...expenseAccounts]) {
+            const variance = 0.9 + Math.random() * 0.2;
+            const plannedAmount = account.baseAmount * variance * 1.10;
+            const previousYearAmount = account.baseAmount * variance * 1.08;
+
+            await supabase.from("budget_items").insert({
+              budget_plan_id: budget2026Draft.data.id,
+              account_prefix: account.prefix,
+              account_name: account.name,
+              account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+              planned_amount: plannedAmount,
+              forecasted_amount: plannedAmount,
+              previous_year_amount: previousYearAmount
+            });
+          }
+        }
+      }
+
+      // 2027 - Zatwierdzony budżet z realizacją (tylko dla Gorzowa)
+      if (location.name === 'Gorzów') {
+        const budget2027 = await supabase.from("budget_plans").insert({
+          location_id: location.id,
+          year: 2027,
+          status: 'approved',
+          forecast_method: 'last_year',
+          additional_expenses: 20000,
+          additional_expenses_description: 'Modernizacja instalacji elektrycznej',
+          planned_cost_reduction: 12000,
+          planned_cost_reduction_description: 'Instalacja paneli fotowoltaicznych',
+          created_by: locationProfile.id,
+          approved_by: adminUserId,
+          submitted_at: new Date('2027-01-10').toISOString(),
+          submitted_by: locationProfile.id,
+          approved_at: new Date('2027-01-18').toISOString(),
+          comments: 'Budżet z uwzględnieniem modernizacji elektrycznej'
+        }).select().single();
+
+        if (!budget2027.error && budget2027.data) {
+          for (const account of [...incomeAccounts, ...expenseAccounts]) {
+            const variance = 0.9 + Math.random() * 0.2;
+            const plannedAmount = account.baseAmount * variance * 1.12;
+            const previousYearAmount = account.baseAmount * variance * 1.10;
+
+            await supabase.from("budget_items").insert({
+              budget_plan_id: budget2027.data.id,
+              account_prefix: account.prefix,
+              account_name: account.name,
+              account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+              planned_amount: plannedAmount,
+              forecasted_amount: plannedAmount,
+              previous_year_amount: previousYearAmount
+            });
+          }
+
+          // Generuj transakcje dla stycznia-grudnia 2027 (różne poziomy realizacji)
+          for (let month = 1; month <= 12; month++) {
+            let realizationFactor = 1.0;
+            if (month === 1) realizationFactor = 0.91; // Styczeń: 91% - pomarańczowy
+            else if (month === 2) realizationFactor = 0.47; // Luty: 47% - szary
+            else if (month === 3) realizationFactor = 0.83; // Marzec: 83% - pomarańczowy
+            else if (month === 4) realizationFactor = 1.09; // Kwiecień: 109% - czerwony
+            else if (month === 5) realizationFactor = 0.73; // Maj: 73% - zielony
+            else if (month === 6) realizationFactor = 0.86; // Czerwiec: 86% - pomarańczowy
+            else if (month === 7) realizationFactor = 0.77; // Lipiec: 77% - zielony
+            else if (month === 8) realizationFactor = 1.04; // Sierpień: 104% - czerwony
+            else if (month === 9) realizationFactor = 0.68; // Wrzesień: 68% - zielony
+            else if (month === 10) realizationFactor = 0.94; // Październik: 94% - pomarańczowy
+            else if (month === 11) realizationFactor = 0.44; // Listopad: 44% - szary
+            else realizationFactor = 0.80; // Grudzień: 80% - zielony
+
+            for (const account of expenseAccounts) {
+              const day = Math.floor(Math.random() * 28) + 1;
+              const date = `2027-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const amount = (account.baseAmount * 1.12 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
+              
+              const accountNumber = account.prefix.split('-')[0];
+              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const creditAccount = accounts?.find(a => a.type === 'asset');
+              
+              if (debitAccount && creditAccount) {
+                await supabase.from("transactions").insert({
+                  date: date,
+                  document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2027`,
+                  description: `Wydatek - ${account.name}`,
+                  debit_amount: amount,
+                  credit_amount: amount,
+                  debit_account_id: debitAccount.id,
+                  credit_account_id: creditAccount.id,
+                  settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                  user_id: locationProfile.id,
+                  location_id: location.id,
+                  currency: 'PLN'
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Dla pozostałych lokalizacji - Submitted (50% szans)
+        if (Math.random() > 0.5) {
+          const budget2027Submitted = await supabase.from("budget_plans").insert({
+            location_id: location.id,
+            year: 2027,
+            status: 'submitted',
+            forecast_method: 'last_year',
+            additional_expenses: 12000,
+            additional_expenses_description: 'Wymiana okien',
+            planned_cost_reduction: 6000,
+            planned_cost_reduction_description: 'Redukcja kosztów energii',
+            created_by: locationProfile.id,
+            submitted_at: new Date().toISOString(),
+            submitted_by: locationProfile.id,
+            comments: 'Budżet złożony do zatwierdzenia przez prowincjała'
+          }).select().single();
+
+          if (!budget2027Submitted.error && budget2027Submitted.data) {
+            for (const account of [...incomeAccounts, ...expenseAccounts]) {
+              const variance = 0.9 + Math.random() * 0.2;
+              const plannedAmount = account.baseAmount * variance * 1.12;
+              const previousYearAmount = account.baseAmount * variance * 1.10;
+
+              await supabase.from("budget_items").insert({
+                budget_plan_id: budget2027Submitted.data.id,
+                account_prefix: account.prefix,
+                account_name: account.name,
+                account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+                planned_amount: plannedAmount,
+                forecasted_amount: plannedAmount,
+                previous_year_amount: previousYearAmount
+              });
+            }
+          }
+        }
+      }
+
+      // 2028 - Zatwierdzony budżet z realizacją (tylko dla Gorzowa)
+      if (location.name === 'Gorzów') {
+        const budget2028 = await supabase.from("budget_plans").insert({
+          location_id: location.id,
+          year: 2028,
+          status: 'approved',
+          forecast_method: 'avg_3_years',
+          additional_expenses: 25000,
+          additional_expenses_description: 'Remont elewacji',
+          planned_cost_reduction: 15000,
+          planned_cost_reduction_description: 'Optymalizacja zużycia energii po modernizacji',
+          created_by: locationProfile.id,
+          approved_by: adminUserId,
+          submitted_at: new Date('2028-01-05').toISOString(),
+          submitted_by: locationProfile.id,
+          approved_at: new Date('2028-01-12').toISOString(),
+          comments: 'Budżet z uwzględnieniem remontu elewacji'
+        }).select().single();
+
+        if (!budget2028.error && budget2028.data) {
+          for (const account of [...incomeAccounts, ...expenseAccounts]) {
+            const variance = 0.9 + Math.random() * 0.2;
+            const plannedAmount = account.baseAmount * variance * 1.15;
+            const previousYearAmount = account.baseAmount * variance * 1.12;
+
+            await supabase.from("budget_items").insert({
+              budget_plan_id: budget2028.data.id,
+              account_prefix: account.prefix,
+              account_name: account.name,
+              account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
+              planned_amount: plannedAmount,
+              forecasted_amount: plannedAmount,
+              previous_year_amount: previousYearAmount
+            });
+          }
+
+          // Generuj transakcje dla stycznia-grudnia 2028 (różne poziomy realizacji)
+          for (let month = 1; month <= 12; month++) {
+            let realizationFactor = 1.0;
+            if (month === 1) realizationFactor = 0.76; // Styczeń: 76% - zielony
+            else if (month === 2) realizationFactor = 0.89; // Luty: 89% - pomarańczowy
+            else if (month === 3) realizationFactor = 1.07; // Marzec: 107% - czerwony
+            else if (month === 4) realizationFactor = 0.72; // Kwiecień: 72% - zielony
+            else if (month === 5) realizationFactor = 0.46; // Maj: 46% - szary
+            else if (month === 6) realizationFactor = 0.93; // Czerwiec: 93% - pomarańczowy
+            else if (month === 7) realizationFactor = 0.81; // Lipiec: 81% - pomarańczowy
+            else if (month === 8) realizationFactor = 0.69; // Sierpień: 69% - zielony
+            else if (month === 9) realizationFactor = 1.12; // Wrzesień: 112% - czerwony
+            else if (month === 10) realizationFactor = 0.87; // Październik: 87% - pomarańczowy
+            else if (month === 11) realizationFactor = 0.74; // Listopad: 74% - zielony
+            else realizationFactor = 0.49; // Grudzień: 49% - szary
+
+            for (const account of expenseAccounts) {
+              const day = Math.floor(Math.random() * 28) + 1;
+              const date = `2028-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const amount = (account.baseAmount * 1.15 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
+              
+              const accountNumber = account.prefix.split('-')[0];
+              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const creditAccount = accounts?.find(a => a.type === 'asset');
+              
+              if (debitAccount && creditAccount) {
+                await supabase.from("transactions").insert({
+                  date: date,
+                  document_number: `FV/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/2028`,
+                  description: `Wydatek - ${account.name}`,
+                  debit_amount: amount,
+                  credit_amount: amount,
+                  debit_account_id: debitAccount.id,
+                  credit_account_id: creditAccount.id,
+                  settlement_type: getRandomItem(['Gotówka', 'Bank', 'Rozrachunek']),
+                  user_id: locationProfile.id,
+                  location_id: location.id,
+                  currency: 'PLN'
+                });
+              }
+            }
           }
         }
       }
