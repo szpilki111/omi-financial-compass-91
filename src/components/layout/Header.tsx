@@ -79,7 +79,7 @@ const Header = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 justify-between">
           <div className="flex items-center">
-            <Link to="/" className="flex-shrink-0 flex items-center">
+            <Link to="/dashboard" className="flex-shrink-0 flex items-center cursor-pointer">
               <img
                 className="h-8 w-auto"
                 src="/placeholder.svg"

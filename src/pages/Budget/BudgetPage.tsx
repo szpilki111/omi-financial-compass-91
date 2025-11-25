@@ -167,7 +167,7 @@ const BudgetPage = () => {
                       <SelectTrigger id="filter-location">
                         <SelectValue placeholder="Wszystkie" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
                         <SelectItem value="all">Wszystkie</SelectItem>
                         {locations?.map(location => (
                           <SelectItem key={location.id} value={location.id}>
