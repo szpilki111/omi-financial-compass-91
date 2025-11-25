@@ -297,6 +297,157 @@ Misjonarze Oblaci Maryi Niepokalanej
 };
 
 /**
+ * Wysyła email do administratorów o nowym zgłoszeniu błędu
+ */
+export const sendNewErrorReportEmailToAdmins = async (
+  reportTitle: string,
+  reportDescription: string,
+  priority: string,
+  reportId: string,
+  reporterName: string,
+  adminEmails: string[]
+) => {
+  const priorityLabels: Record<string, string> = {
+    low: "Niski",
+    medium: "Średni", 
+    high: "Wysoki",
+    critical: "Krytyczny",
+  };
+
+  const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .header {
+            background-color: #dc2626;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+          }
+          .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+          }
+          .report-box {
+            background-color: #fff;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #dc2626;
+            border-radius: 3px;
+          }
+          .priority {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            background-color: ${priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : priority === 'medium' ? '#d97706' : '#65a30d'};
+            color: white;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 12px;
+          }
+          .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 15px 0;
+            background-color: #dc2626;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🚨 Nowe zgłoszenie błędu</h1>
+          </div>
+          <div class="content">
+            <h2>Szczęść Boże!</h2>
+            <p>Użytkownik zgłosił nowy błąd w systemie:</p>
+            
+            <div class="report-box">
+              <p><strong>Od:</strong> ${reporterName}</p>
+              <p><strong>Tytuł:</strong> ${reportTitle}</p>
+              <p><strong>Priorytet:</strong> <span class="priority">${priorityLabels[priority] || priority}</span></p>
+              <p><strong>Opis:</strong></p>
+              <p>${reportDescription.replace(/\n/g, '<br>')}</p>
+            </div>
+            
+            <p>Numer zgłoszenia: <strong>#${reportId.slice(0, 8)}</strong></p>
+            
+            <p style="margin-top: 20px;">
+              Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedzieć na zgłoszenie.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} System Finansowy OMI</p>
+            <p>Misjonarze Oblaci Maryi Niepokalanej</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `
+🚨 Nowe zgłoszenie błędu
+
+Szczęść Boże!
+
+Użytkownik zgłosił nowy błąd w systemie:
+
+Od: ${reporterName}
+Tytuł: ${reportTitle}
+Priorytet: ${priorityLabels[priority] || priority}
+
+Opis:
+${reportDescription}
+
+Numer zgłoszenia: #${reportId.slice(0, 8)}
+
+Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedzieć na zgłoszenie.
+
+---
+© ${new Date().getFullYear()} System Finansowy OMI
+Misjonarze Oblaci Maryi Niepokalanej
+  `;
+
+  const fromAddress = 'finanse@oblaci.pl';
+
+  // Send to all admin emails
+  for (const email of adminEmails) {
+    try {
+      await sendEmail({
+        to: email,
+        subject: `🚨 System Finansowy OMI - Nowe zgłoszenie błędu: ${reportTitle} [#${reportId}]`,
+        text,
+        html,
+        from: `System Finansowy OMI <${fromAddress}>`,
+        replyTo: fromAddress,
+      });
+    } catch (error) {
+      console.error(`Failed to send email to admin ${email}:`, error);
+    }
+  }
+};
+
+/**
  * Wysyła email z kodem weryfikacyjnym 2FA
  */
 export const sendVerificationCodeEmail = async (

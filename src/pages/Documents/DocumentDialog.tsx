@@ -747,6 +747,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       })),
     );
 
+    // Validate document balance
+    const totalDebit = allFinalTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
+    const totalCredit = allFinalTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
+
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      toast({
+        title: "Dokument niezbalansowany",
+        description: `Suma WN (${totalDebit.toFixed(2)}) nie równa się sumie MA (${totalCredit.toFixed(2)}). Dokument nie zostanie zapisany.`,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       let documentId = document?.id;

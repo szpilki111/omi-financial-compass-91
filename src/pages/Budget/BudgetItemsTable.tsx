@@ -51,7 +51,7 @@ const BudgetItemsTable = ({
             <CardTitle className="text-lg">Przychody (7xx)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {incomeItems.map((item, index) => (
                 <div key={item.account_prefix} className="space-y-2">
                   <Label className="text-sm font-medium">
