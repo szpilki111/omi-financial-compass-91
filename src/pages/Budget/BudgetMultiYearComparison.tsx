@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ const BudgetMultiYearComparison = ({}: BudgetMultiYearComparisonProps) => {
   const currentYear = new Date().getFullYear();
   const [startYear, setStartYear] = useState(currentYear - 2);
   const [endYear, setEndYear] = useState(currentYear);
-  const [selectedLocation, setSelectedLocation] = useState<string>(user?.location || '');
+  const [selectedLocation, setSelectedLocation] = useState<string>('');
 
   const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
 
@@ -45,6 +45,13 @@ const BudgetMultiYearComparison = ({}: BudgetMultiYearComparisonProps) => {
     },
     enabled: !!user,
   });
+
+  // Auto-select location when data is loaded
+  useEffect(() => {
+    if (locations && locations.length > 0 && !selectedLocation) {
+      setSelectedLocation(locations[0].id);
+    }
+  }, [locations, selectedLocation]);
 
   // Fetch multi-year data
   const { data: comparisonData, isLoading } = useQuery({
