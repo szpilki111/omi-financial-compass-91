@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { sendBudgetNotification } from '@/utils/budgetNotifications';
 import BudgetItemsTable from './BudgetItemsTable';
 import BudgetRealizationBar from './BudgetRealizationBar';
+import { useState } from 'react';
 
 interface BudgetViewProps {
   budgetId: string;
@@ -19,6 +20,8 @@ interface BudgetViewProps {
 
 const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
   const { user } = useAuth();
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const { data: budget, isLoading, refetch } = useQuery({
     queryKey: ['budget-view', budgetId],
@@ -42,90 +45,100 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
   });
 
   const handleApprove = async () => {
-    const { error } = await supabase
-      .from('budget_plans')
-      .update({
-        status: 'approved',
-        approved_at: new Date().toISOString(),
-        approved_by: user?.id,
-      })
-      .eq('id', budgetId);
+    setIsApproving(true);
+    try {
+      const { error } = await supabase
+        .from('budget_plans')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: user?.id,
+        })
+        .eq('id', budgetId);
 
-    if (error) {
-      console.error('[BUDGET] Error approving budget:', error);
-      
-      if (error.code === '42501' || error.message?.includes('permission')) {
-        toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do zatwierdzenia tego budżetu');
-      } else {
-        toast.error(`[BŁĄD APLIKACJI] Błąd zatwierdzania budżetu: ${error.message}`);
+      if (error) {
+        console.error('[BUDGET] Error approving budget:', error);
+        
+        if (error.code === '42501' || error.message?.includes('permission')) {
+          toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do zatwierdzenia tego budżetu');
+        } else {
+          toast.error(`[BŁĄD APLIKACJI] Błąd zatwierdzania budżetu: ${error.message}`);
+        }
+        return;
       }
-      return;
+
+      // Send approval email
+      const { data: creatorData } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', budget.created_by)
+        .single();
+
+      if (creatorData?.email && budget.locations?.name) {
+        await sendBudgetNotification({
+          type: 'budget_approved',
+          budgetId,
+          recipientEmail: creatorData.email,
+          budgetYear: budget.year,
+          locationName: budget.locations.name,
+        });
+      }
+
+      toast.success('Budżet zatwierdzony');
+      refetch();
+    } finally {
+      setIsApproving(false);
     }
-
-    // Send approval email
-    const { data: creatorData } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', budget.created_by)
-      .single();
-
-    if (creatorData?.email && budget.locations?.name) {
-      await sendBudgetNotification({
-        type: 'budget_approved',
-        budgetId,
-        recipientEmail: creatorData.email,
-        budgetYear: budget.year,
-        locationName: budget.locations.name,
-      });
-    }
-
-    toast.success('Budżet zatwierdzony');
-    refetch();
   };
 
   const handleReject = async () => {
     const reason = prompt('Podaj powód odrzucenia:');
     if (!reason) return;
 
-    const { error } = await supabase
-      .from('budget_plans')
-      .update({
-        status: 'rejected',
-        rejection_reason: reason,
-      })
-      .eq('id', budgetId);
+    setIsRejecting(true);
+    try {
+      const { error } = await supabase
+        .from('budget_plans')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason,
+        })
+        .eq('id', budgetId);
 
-    if (error) {
-      console.error('[BUDGET] Error rejecting budget:', error);
-      
-      if (error.code === '42501' || error.message?.includes('permission')) {
-        toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do odrzucenia tego budżetu');
-      } else {
-        toast.error(`[BŁĄD APLIKACJI] Błąd odrzucania budżetu: ${error.message}`);
+      if (error) {
+        console.error('[BUDGET] Error rejecting budget:', error);
+        
+        if (error.code === '42501' || error.message?.includes('permission')) {
+          toast.error('[BŁĄD UPRAWNIEŃ] Nie masz uprawnień do odrzucenia tego budżetu');
+        } else {
+          toast.error(`[BŁĄD APLIKACJI] Błąd odrzucania budżetu: ${error.message}`);
+        }
+        return;
       }
-      return;
+
+      // Send rejection email
+      const { data: creatorData } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', budget.created_by)
+        .single();
+
+      if (creatorData?.email && budget.locations?.name) {
+        await sendBudgetNotification({
+          type: 'budget_rejected',
+          budgetId,
+          recipientEmail: creatorData.email,
+          budgetYear: budget.year,
+          locationName: budget.locations.name,
+          rejectionReason: reason,
+        });
+      }
+
+      toast.success('Budżet odrzucony');
+      refetch();
+    } finally {
+      setIsRejecting(false);
     }
-
-    // Send rejection email
-    const { data: creatorData } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', budget.created_by)
-      .single();
-
-    if (creatorData?.email && budget.locations?.name) {
-      await sendBudgetNotification({
-        type: 'budget_rejected',
-        budgetId,
-        recipientEmail: creatorData.email,
-        budgetYear: budget.year,
-        locationName: budget.locations.name,
-        rejectionReason: reason,
-      });
-    }
-
-    toast.success('Budżet odrzucony');
-    refetch();
   };
 
   if (isLoading || !budget) {
@@ -277,12 +290,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
             )}
             {budget.status === 'submitted' && (user?.role === 'admin' || user?.role === 'prowincjal') && (
               <>
-                <Button onClick={handleApprove}>
-                  <Check className="mr-2 h-4 w-4" />
+                <Button onClick={handleApprove} disabled={isApproving || isRejecting}>
+                  {isApproving && <Spinner size="sm" className="mr-2" />}
+                  {!isApproving && <Check className="mr-2 h-4 w-4" />}
                   Zatwierdź
                 </Button>
-                <Button onClick={handleReject} variant="destructive">
-                  <X className="mr-2 h-4 w-4" />
+                <Button onClick={handleReject} variant="destructive" disabled={isApproving || isRejecting}>
+                  {isRejecting && <Spinner size="sm" className="mr-2" />}
+                  {!isRejecting && <X className="mr-2 h-4 w-4" />}
                   Odrzuć
                 </Button>
               </>

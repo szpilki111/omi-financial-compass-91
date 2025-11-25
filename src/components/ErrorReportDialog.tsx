@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X, Loader2, Maximize2 } from "lucide-react";
-import { sendErrorReportConfirmationEmail } from "@/utils/emailUtils";
+import { sendErrorReportConfirmationEmail, sendNewErrorReportEmailToAdmins } from "@/utils/emailUtils";
 
 interface ErrorReportDialogProps {
   open: boolean;
@@ -123,6 +123,36 @@ export const ErrorReportDialog = ({
         }));
 
         await supabase.from("notifications").insert(notifications);
+
+        // Send email to admins
+        try {
+          const { data: adminProfiles } = await supabase
+            .from("profiles")
+            .select("email, name")
+            .in("id", admins.map(a => a.id));
+
+          if (adminProfiles) {
+            const adminEmails = adminProfiles.filter(p => p.email).map(p => p.email);
+            const { data: reporterProfile } = await supabase
+              .from("profiles")
+              .select("name")
+              .eq("id", userId)
+              .single();
+
+            if (adminEmails.length > 0) {
+              await sendNewErrorReportEmailToAdmins(
+                title,
+                description,
+                priority,
+                newReport.id,
+                reporterProfile?.name || "Użytkownik",
+                adminEmails
+              );
+            }
+          }
+        } catch (emailError) {
+          console.error("Failed to send admin notification emails:", emailError);
+        }
       }
 
       // Send confirmation email to user
