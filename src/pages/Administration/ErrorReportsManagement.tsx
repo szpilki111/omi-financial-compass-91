@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye, ExternalLink, Upload, X } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -115,6 +115,7 @@ const ErrorReportsManagement = () => {
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [newResponse, setNewResponse] = useState("");
+  const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
@@ -247,12 +248,33 @@ const ErrorReportsManagement = () => {
     mutationFn: async ({
       errorReportId,
       message,
+      attachments,
     }: {
       errorReportId: string;
       message: string;
+      attachments: File[];
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+
+      const userId = user.id;
+      const now = new Date();
+      const dateTimeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+      const attachmentUrls: string[] = [];
+
+      // Upload attachments
+      for (let i = 0; i < attachments.length; i++) {
+        const file = attachments[i];
+        const filePath = `${userId}/${dateTimeString}_response_${file.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("error-reports")
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        attachmentUrls.push(filePath);
+      }
 
       const { error } = await supabase
         .from("error_report_responses")
@@ -260,7 +282,7 @@ const ErrorReportsManagement = () => {
           error_report_id: errorReportId,
           user_id: user.id,
           message,
-          attachments: null,
+          attachments: attachmentUrls.length > 0 ? attachmentUrls : null,
         });
 
       if (error) throw error;
@@ -285,6 +307,7 @@ const ErrorReportsManagement = () => {
       }
       
       setNewResponse("");
+      setResponseAttachments([]);
       toast({
         title: "Sukces",
         description: "Odpowiedź została dodana.",
@@ -338,7 +361,18 @@ const ErrorReportsManagement = () => {
     addResponseMutation.mutate({
       errorReportId: selectedReport.id,
       message: newResponse,
+      attachments: responseAttachments,
     });
+  };
+
+  const handleResponseFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setResponseAttachments([...responseAttachments, ...Array.from(e.target.files)]);
+    }
+  };
+
+  const removeResponseFile = (index: number) => {
+    setResponseAttachments(responseAttachments.filter((_, i) => i !== index));
   };
 
 
@@ -593,6 +627,50 @@ const ErrorReportsManagement = () => {
                   rows={3}
                   placeholder="Wprowadź odpowiedź..."
                 />
+
+                {/* Attachments upload */}
+                <div className="space-y-2">
+                  <Label htmlFor="response-attachments">Załączniki (opcjonalnie)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="response-attachments"
+                      type="file"
+                      multiple
+                      onChange={handleResponseFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById("response-attachments")?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Dodaj pliki
+                    </Button>
+                  </div>
+                  
+                  {responseAttachments.length > 0 && (
+                    <div className="space-y-1">
+                      {responseAttachments.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-muted rounded text-sm"
+                        >
+                          <span className="truncate flex-1">{file.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeResponseFile(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <Button 
                   onClick={handleAddResponse} 
