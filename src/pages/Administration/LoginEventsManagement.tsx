@@ -28,12 +28,28 @@ interface LoginEvent {
     name: string;
     email: string;
     role: string;
+    location_id: string | null;
   };
 }
 
 const LoginEventsManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
+
+  // Fetch locations for filter
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
 
   const { data: loginEvents, isLoading } = useQuery({
     queryKey: ['login-events'],
@@ -54,7 +70,7 @@ const LoginEventsManagement = () => {
       if (userIds.length > 0) {
         const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
-          .select('id, name, email, role')
+          .select('id, name, email, role, location_id')
           .in('id', userIds);
         
         if (profilesError) throw profilesError;
@@ -95,7 +111,11 @@ const LoginEventsManagement = () => {
       (statusFilter === 'success' && event.success) ||
       (statusFilter === 'failed' && !event.success);
     
-    return matchesSearch && matchesStatus;
+    const matchesLocation = 
+      selectedLocationId === 'all' ||
+      event.profile?.location_id === selectedLocationId;
+    
+    return matchesSearch && matchesStatus && matchesLocation;
   });
 
   // Statystyki
@@ -119,6 +139,19 @@ const LoginEventsManagement = () => {
               className="pl-10"
             />
           </div>
+          <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Placówka" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Wszystkie placówki</SelectItem>
+              {locations?.map((location) => (
+                <SelectItem key={location.id} value={location.id}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />

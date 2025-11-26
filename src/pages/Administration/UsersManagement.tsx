@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,10 +84,25 @@ const UsersManagement = () => {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<(UserProfile & { location_ids?: string[] }) | null>(null);
   const [displayedCount, setDisplayedCount] = useState(20);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
+
+  // Fetch locations for filter
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["users"],
@@ -150,13 +167,18 @@ const UsersManagement = () => {
     },
   });
 
+  // Filter users by location
+  const filteredUsers = selectedLocationId === 'all' 
+    ? users 
+    : users?.filter(u => u.location_id === selectedLocationId);
+
   // Intersection Observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const target = entries[0];
-        if (target.isIntersecting && users && displayedCount < users.length) {
-          setDisplayedCount((prev) => Math.min(prev + 20, users.length));
+        if (target.isIntersecting && filteredUsers && displayedCount < filteredUsers.length) {
+          setDisplayedCount((prev) => Math.min(prev + 20, filteredUsers.length));
         }
       },
       { threshold: 0.1 },
@@ -171,12 +193,12 @@ const UsersManagement = () => {
         observer.unobserve(loadMoreRef.current);
       }
     };
-  }, [users, displayedCount]);
+  }, [filteredUsers, displayedCount]);
 
   // Reset displayed count when users data changes
   useEffect(() => {
     setDisplayedCount(20);
-  }, [users]);
+  }, [users, selectedLocationId]);
 
   // Mutacja do usuwania użytkownika używając logiki z Login
   const deleteUserMutation = useMutation({
@@ -298,6 +320,8 @@ const UsersManagement = () => {
     );
   }
 
+  const displayedUsers = filteredUsers?.slice(0, displayedCount);
+
   return (
     <>
       <Card>
@@ -308,8 +332,25 @@ const UsersManagement = () => {
             Dodaj użytkownika
           </Button>
         </CardHeader>
-        <CardContent>
-          {!users?.length ? (
+        <CardContent className="space-y-4">
+          {/* Location Filter */}
+          <div className="flex items-center gap-2">
+            <Label className="text-sm font-medium">Placówka:</Label>
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger className="w-[300px]">
+                <SelectValue placeholder="Wybierz placówkę" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie placówki</SelectItem>
+                {locations?.map((location) => (
+                  <SelectItem key={location.id} value={location.id}>
+                    {location.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {!filteredUsers?.length ? (
             <p className="text-center text-omi-gray-500">Brak użytkowników w systemie.</p>
           ) : (
             <ScrollableTable>
@@ -333,7 +374,7 @@ const UsersManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.slice(0, displayedCount).map((user, index) => (
+                  {displayedUsers?.map((user, index) => (
                     <TableRow key={user.id} ref={index === displayedCount - 1 ? loadMoreRef : null}>
                       <TableCell className="font-medium max-w-[180px] truncate">
                         {user.login || (user.email ? user.email.split("@")[0] : "-")}
