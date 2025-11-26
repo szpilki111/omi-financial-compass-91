@@ -18,6 +18,12 @@ export const ErrorReportButton = () => {
         allowTaint: true,
         useCORS: true,
         logging: false,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        x: window.scrollX,
+        y: window.scrollY,
       });
       const dataUrl = canvas.toDataURL("image/png");
       setScreenshot(dataUrl);
