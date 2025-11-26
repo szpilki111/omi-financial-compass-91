@@ -10,6 +10,7 @@ import { ArrowLeft, Search, TrendingUp, Eye, Edit, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { useAuth } from '@/context/AuthContext';
 import AccountSelector from './AccountSelector';
 import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
@@ -43,6 +44,7 @@ interface Transaction {
 
 const AccountSearchPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -51,22 +53,110 @@ const AccountSearchPage = () => {
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<any>(null);
 
-  // Fetch accounts
-  const { data: accounts } = useQuery({
-    queryKey: ['accounts', searchTerm],
+  // Get user's location
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile', user?.id],
     queryFn: async () => {
-      if (searchTerm.length < 2) return [];
-      
       const { data, error } = await supabase
+        .from('profiles')
+        .select('location_id')
+        .eq('id', user?.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Fetch accounts filtered by location
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts', searchTerm, userProfile?.location_id],
+    queryFn: async () => {
+      if (searchTerm.length < 2 || !userProfile?.location_id) return [];
+      
+      // Get location identifier
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', userProfile.location_id)
+        .single();
+
+      if (locationError) {
+        console.error('Error fetching location:', locationError);
+        return [];
+      }
+
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+
+      // Get account restrictions for this category
+      let restrictions: any[] = [];
+      if (locationCategory) {
+        const { data: restrictionsData } = await supabase
+          .from('account_category_restrictions')
+          .select('*')
+          .eq('category_prefix', locationCategory)
+          .eq('is_restricted', true);
+
+        restrictions = restrictionsData || [];
+      }
+
+      // Get manually assigned accounts
+      const { data: locationAccountData } = await supabase
+        .from('location_accounts')
+        .select('account_id')
+        .eq('location_id', userProfile.location_id);
+
+      const accountIds = locationAccountData?.map(la => la.account_id) || [];
+
+      // Get all accounts
+      let query = supabase
         .from('accounts')
         .select('*')
         .ilike('number', `${searchTerm}%`)
         .order('number');
+
+      const { data: allAccounts, error } = await query;
       
       if (error) throw error;
-      return data as Account[];
+      
+      let filteredAccounts = allAccounts || [];
+
+      // Filter to only include:
+      // 1. Manually assigned accounts
+      // 2. Accounts matching location identifier pattern
+      if (locationData?.location_identifier) {
+        filteredAccounts = filteredAccounts.filter(account => {
+          // Check if manually assigned
+          if (accountIds.includes(account.id)) return true;
+
+          // Check if matches location identifier pattern
+          const accountParts = account.number.split('-');
+          if (accountParts.length < 2) return false;
+          
+          const suffix = accountParts.slice(1).join('-');
+          const identifier = locationData.location_identifier;
+          return suffix === identifier || suffix.startsWith(identifier + '-');
+        });
+      } else {
+        // If no identifier, only show manually assigned accounts
+        filteredAccounts = filteredAccounts.filter(account => 
+          accountIds.includes(account.id)
+        );
+      }
+
+      // Apply category restrictions
+      if (locationCategory && restrictions.length > 0) {
+        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
+        filteredAccounts = filteredAccounts.filter(account => {
+          const parts = account.number.split('-');
+          const accountPrefix = parts[0];
+          return !restrictedPrefixes.includes(accountPrefix);
+        });
+      }
+
+      return filteredAccounts as Account[];
     },
-    enabled: searchTerm.length >= 2 && !selectedAccount,
+    enabled: searchTerm.length >= 2 && !selectedAccount && !!userProfile?.location_id,
   });
 
   // Fetch transactions for selected account
