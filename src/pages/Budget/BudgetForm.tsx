@@ -78,21 +78,21 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
 
   const [isGeneratingForecast, setIsGeneratingForecast] = useState(false);
 
-  // Fetch locations for selection
+  // Fetch locations for selection (with location_identifier)
   const { data: locations } = useQuery({
     queryKey: ['locations-for-budget', user?.id],
     queryFn: async () => {
       if (user?.role === 'admin' || user?.role === 'prowincjal') {
         const { data, error } = await supabase
           .from('locations')
-          .select('id, name')
+          .select('id, name, location_identifier')
           .order('name');
         if (error) throw error;
         return data;
       } else {
         const { data, error } = await supabase
           .from('locations')
-          .select('id, name')
+          .select('id, name, location_identifier')
           .eq('id', user?.location)
           .single();
         if (error) throw error;
@@ -167,10 +167,17 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       return;
     }
 
+    // Find selected location to get location_identifier
+    const selectedLocation = locations?.find(loc => loc.id === formData.location_id);
+    if (!selectedLocation?.location_identifier) {
+      toast.error('Nie znaleziono identyfikatora lokalizacji');
+      return;
+    }
+
     if (formData.forecast_method === 'manual') {
-      // For manual mode, create empty budget items
+      // For manual mode, create empty budget items with full prefixes
       const incomeItems = INCOME_ACCOUNTS.map(account => ({
-        account_prefix: account.prefix,
+        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
         account_name: account.name,
         forecasted: 0,
         planned: 0,
@@ -178,7 +185,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       }));
 
       const expenseItems = EXPENSE_ACCOUNTS.map(account => ({
-        account_prefix: account.prefix,
+        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
         account_name: account.name,
         forecasted: 0,
         planned: 0,
@@ -197,12 +204,14 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
         formData.year,
         formData.forecast_method,
         formData.additional_expenses,
-        formData.planned_cost_reduction
+        formData.planned_cost_reduction,
+        selectedLocation.location_identifier
       );
 
       // Map forecast to budget items with account names
       const incomeItems = forecast.income.map(f => {
-        const account = INCOME_ACCOUNTS.find(a => a.prefix === f.account_prefix);
+        const basePrefix = f.account_prefix.split('-')[0];
+        const account = INCOME_ACCOUNTS.find(a => a.prefix === basePrefix);
         return {
           account_prefix: f.account_prefix,
           account_name: account?.name || f.account_prefix,
@@ -213,7 +222,8 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       });
 
       const expenseItems = forecast.expenses.map(f => {
-        const account = EXPENSE_ACCOUNTS.find(a => a.prefix === f.account_prefix);
+        const basePrefix = f.account_prefix.split('-')[0];
+        const account = EXPENSE_ACCOUNTS.find(a => a.prefix === basePrefix);
         return {
           account_prefix: f.account_prefix,
           account_name: account?.name || f.account_prefix,

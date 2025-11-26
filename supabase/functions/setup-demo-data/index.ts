@@ -296,27 +296,27 @@ serve(async (req: Request) => {
     // 6. Dodanie danych testowych dla budżetów
     console.log("Rozpoczęcie tworzenia danych budżetowych...");
     
-    // Przygotowanie struktur kont
+    // Przygotowanie struktur kont (bazowe prefiksy bez identyfikatora lokalizacji)
     const incomeAccounts = [
-      { prefix: '701-2-2', name: 'Intencje odprawione', baseAmount: 150000 },
-      { prefix: '702-2-2', name: 'Duszpasterstwo OMI', baseAmount: 50000 },
-      { prefix: '703-2-2', name: 'Duszpasterstwo parafialne', baseAmount: 35000 },
-      { prefix: '704-2-2', name: 'Kolęda', baseAmount: 25000 },
-      { prefix: '710-2-2', name: 'Odsetki i przychody finansowe', baseAmount: 5000 },
-      { prefix: '720-2-2', name: 'Ofiary', baseAmount: 40000 },
+      { prefix: '701', name: 'Intencje odprawione', baseAmount: 150000 },
+      { prefix: '702', name: 'Duszpasterstwo OMI', baseAmount: 50000 },
+      { prefix: '703', name: 'Duszpasterstwo parafialne', baseAmount: 35000 },
+      { prefix: '704', name: 'Kolęda', baseAmount: 25000 },
+      { prefix: '710', name: 'Odsetki i przychody finansowe', baseAmount: 5000 },
+      { prefix: '720', name: 'Ofiary', baseAmount: 40000 },
     ];
 
     const expenseAccounts = [
-      { prefix: '401-2-2', name: 'Biurowe', baseAmount: 11550 },
-      { prefix: '402-2-2', name: 'Poczta', baseAmount: 2500 },
-      { prefix: '403-2-2', name: 'Telefony, Internet TV', baseAmount: 8400 },
-      { prefix: '412-2-2', name: 'Utrzymanie samochodu', baseAmount: 28000 },
-      { prefix: '420-2-2', name: 'Pensje osób zatrudnionych', baseAmount: 72000 },
-      { prefix: '424-2-2', name: 'Leczenie, opieka zdrowotna', baseAmount: 15000 },
-      { prefix: '440-2-2', name: 'Kuchnia i koszty posiłków', baseAmount: 45000 },
-      { prefix: '444-2-2', name: 'Media, energia, woda, gaz', baseAmount: 38500 },
-      { prefix: '445-2-2', name: 'Podatki i opłaty urzędowe', baseAmount: 12000 },
-      { prefix: '451-2-2', name: 'Zakupy / remonty zwyczajne', baseAmount: 22000 },
+      { prefix: '401', name: 'Biurowe', baseAmount: 11550 },
+      { prefix: '402', name: 'Poczta', baseAmount: 2500 },
+      { prefix: '403', name: 'Telefony, Internet TV', baseAmount: 8400 },
+      { prefix: '412', name: 'Utrzymanie samochodu', baseAmount: 28000 },
+      { prefix: '420', name: 'Pensje osób zatrudnionych', baseAmount: 72000 },
+      { prefix: '424', name: 'Leczenie, opieka zdrowotna', baseAmount: 15000 },
+      { prefix: '440', name: 'Kuchnia i koszty posiłków', baseAmount: 45000 },
+      { prefix: '444', name: 'Media, energia, woda, gaz', baseAmount: 38500 },
+      { prefix: '445', name: 'Podatki i opłaty urzędowe', baseAmount: 12000 },
+      { prefix: '451', name: 'Zakupy / remonty zwyczajne', baseAmount: 22000 },
     ];
 
     // Dla każdej lokalizacji twórz budżety dla lat 2023-2028
@@ -376,15 +376,16 @@ serve(async (req: Request) => {
       }).select().single();
 
       if (!budget2023.error && budget2023.data) {
-        // Dodaj pozycje budżetowe dla 2023
+        // Dodaj pozycje budżetowe dla 2023 z dynamicznym prefiksem
         for (const account of [...incomeAccounts, ...expenseAccounts]) {
           const variance = 0.9 + Math.random() * 0.2; // ±10% wariancja
           const plannedAmount = account.baseAmount * variance;
           const previousYearAmount = account.baseAmount * (0.85 + Math.random() * 0.2);
+          const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
           await supabase.from("budget_items").insert({
             budget_plan_id: budget2023.data.id,
-            account_prefix: account.prefix,
+            account_prefix: fullPrefix,
             account_name: account.name,
             account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
             planned_amount: plannedAmount,
@@ -400,8 +401,8 @@ serve(async (req: Request) => {
             const date = `2023-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount / 12) * (0.8 + Math.random() * 0.4);
             
-            const accountNumber = account.prefix.split('-')[0];
-            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+            const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+            const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -446,10 +447,11 @@ serve(async (req: Request) => {
           const variance = 0.9 + Math.random() * 0.2;
           const plannedAmount = account.baseAmount * variance * 1.05; // 5% wzrost względem 2023
           const previousYearAmount = account.baseAmount * variance;
+          const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
           await supabase.from("budget_items").insert({
             budget_plan_id: budget2024.data.id,
-            account_prefix: account.prefix,
+            account_prefix: fullPrefix,
             account_name: account.name,
             account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
             planned_amount: plannedAmount,
@@ -465,8 +467,8 @@ serve(async (req: Request) => {
             const date = `2024-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount * 1.05 / 12) * (0.8 + Math.random() * 0.4);
             
-            const accountNumber = account.prefix.split('-')[0];
-            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+            const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+            const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -511,10 +513,11 @@ serve(async (req: Request) => {
           const variance = 0.9 + Math.random() * 0.2;
           const plannedAmount = account.baseAmount * variance * 1.08; // 8% wzrost
           const previousYearAmount = account.baseAmount * variance * 1.05;
+          const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
           await supabase.from("budget_items").insert({
             budget_plan_id: budget2025.data.id,
-            account_prefix: account.prefix,
+            account_prefix: fullPrefix,
             account_name: account.name,
             account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
             planned_amount: plannedAmount,
@@ -544,8 +547,8 @@ serve(async (req: Request) => {
             const date = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const amount = (account.baseAmount * 1.08 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
             
-            const accountNumber = account.prefix.split('-')[0];
-            const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+            const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+            const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
             const creditAccount = accounts?.find(a => a.type === 'asset');
             
             if (debitAccount && creditAccount) {
@@ -591,10 +594,11 @@ serve(async (req: Request) => {
             const variance = 0.9 + Math.random() * 0.2;
             const plannedAmount = account.baseAmount * variance * 1.10;
             const previousYearAmount = account.baseAmount * variance * 1.08;
+            const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
             await supabase.from("budget_items").insert({
               budget_plan_id: budget2026.data.id,
-              account_prefix: account.prefix,
+              account_prefix: fullPrefix,
               account_name: account.name,
               account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
               planned_amount: plannedAmount,
@@ -624,8 +628,8 @@ serve(async (req: Request) => {
               const date = `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const amount = (account.baseAmount * 1.10 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
               
-              const accountNumber = account.prefix.split('-')[0];
-              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+              const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
               const creditAccount = accounts?.find(a => a.type === 'asset');
               
               if (debitAccount && creditAccount) {
@@ -664,10 +668,11 @@ serve(async (req: Request) => {
             const variance = 0.9 + Math.random() * 0.2;
             const plannedAmount = account.baseAmount * variance * 1.10;
             const previousYearAmount = account.baseAmount * variance * 1.08;
+            const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
             await supabase.from("budget_items").insert({
               budget_plan_id: budget2026Draft.data.id,
-              account_prefix: account.prefix,
+              account_prefix: fullPrefix,
               account_name: account.name,
               account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
               planned_amount: plannedAmount,
@@ -702,10 +707,11 @@ serve(async (req: Request) => {
             const variance = 0.9 + Math.random() * 0.2;
             const plannedAmount = account.baseAmount * variance * 1.12;
             const previousYearAmount = account.baseAmount * variance * 1.10;
+            const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
             await supabase.from("budget_items").insert({
               budget_plan_id: budget2027.data.id,
-              account_prefix: account.prefix,
+              account_prefix: fullPrefix,
               account_name: account.name,
               account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
               planned_amount: plannedAmount,
@@ -735,8 +741,8 @@ serve(async (req: Request) => {
               const date = `2027-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const amount = (account.baseAmount * 1.12 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
               
-              const accountNumber = account.prefix.split('-')[0];
-              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+              const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
               const creditAccount = accounts?.find(a => a.type === 'asset');
               
               if (debitAccount && creditAccount) {
@@ -780,10 +786,11 @@ serve(async (req: Request) => {
               const variance = 0.9 + Math.random() * 0.2;
               const plannedAmount = account.baseAmount * variance * 1.12;
               const previousYearAmount = account.baseAmount * variance * 1.10;
+              const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
               await supabase.from("budget_items").insert({
                 budget_plan_id: budget2027Submitted.data.id,
-                account_prefix: account.prefix,
+                account_prefix: fullPrefix,
                 account_name: account.name,
                 account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
                 planned_amount: plannedAmount,
@@ -819,10 +826,11 @@ serve(async (req: Request) => {
             const variance = 0.9 + Math.random() * 0.2;
             const plannedAmount = account.baseAmount * variance * 1.15;
             const previousYearAmount = account.baseAmount * variance * 1.12;
+            const fullPrefix = `${account.prefix}-${location.location_identifier}`;
 
             await supabase.from("budget_items").insert({
               budget_plan_id: budget2028.data.id,
-              account_prefix: account.prefix,
+              account_prefix: fullPrefix,
               account_name: account.name,
               account_type: account.prefix.startsWith('7') ? 'income' : 'expense',
               planned_amount: plannedAmount,
@@ -852,8 +860,8 @@ serve(async (req: Request) => {
               const date = `2028-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const amount = (account.baseAmount * 1.15 / 12) * realizationFactor * (0.95 + Math.random() * 0.1);
               
-              const accountNumber = account.prefix.split('-')[0];
-              const debitAccount = accounts?.find(a => a.number?.startsWith(accountNumber));
+              const fullAccountNumber = `${account.prefix}-${location.location_identifier}`;
+              const debitAccount = accounts?.find(a => a.number === fullAccountNumber);
               const creditAccount = accounts?.find(a => a.type === 'asset');
               
               if (debitAccount && creditAccount) {
