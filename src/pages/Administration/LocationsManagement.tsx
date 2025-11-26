@@ -13,14 +13,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Edit, Trash2, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
 import LocationSettingsDialog from './LocationSettingsDialog';
@@ -47,6 +54,7 @@ const LocationsManagement = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
+  const [locationSelectOpen, setLocationSelectOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -216,21 +224,64 @@ const LocationsManagement = () => {
           <div className="flex justify-between items-center">
             <CardTitle>Zarządzanie placówkami</CardTitle>
             <div className="flex items-center gap-4">
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Wybierz placówkę" />
-                </SelectTrigger>
-                <SelectContent>
-                  <ScrollArea className="h-[300px]">
-                    <SelectItem value="all">Wszystkie placówki</SelectItem>
-                    {locations?.map((location) => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name}
-                      </SelectItem>
-                    ))}
-                  </ScrollArea>
-                </SelectContent>
-              </Select>
+              <Popover open={locationSelectOpen} onOpenChange={setLocationSelectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={locationSelectOpen}
+                    className="w-[300px] justify-between"
+                  >
+                    {selectedLocationId === 'all' 
+                      ? "Wszystkie placówki"
+                      : locations?.find((l) => l.id === selectedLocationId)?.name || "Wybierz placówkę"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Wyszukaj placówkę..." />
+                    <CommandList>
+                      <CommandEmpty>Nie znaleziono placówki.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="all"
+                          onSelect={() => {
+                            setSelectedLocationId('all');
+                            setLocationSelectOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedLocationId === 'all' ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          Wszystkie placówki
+                        </CommandItem>
+                        {locations?.map((location) => (
+                          <CommandItem
+                            key={location.id}
+                            value={location.name}
+                            onSelect={() => {
+                              setSelectedLocationId(location.id);
+                              setLocationSelectOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedLocationId === location.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {location.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Button onClick={handleAdd} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Dodaj placówkę
