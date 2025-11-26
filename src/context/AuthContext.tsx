@@ -382,7 +382,7 @@ const login = async (email: string, password: string): Promise<boolean> => {
   }
 };
   
-const logout = async () => {
+  const logout = async () => {
     try {
       console.log('Starting logout process');
       setIsLoading(true);
@@ -391,10 +391,16 @@ const logout = async () => {
       setUser(null);
       setSession(null);
       
-      // Wyloguj z Supabase
-      const { error } = await supabase.auth.signOut();
+      // Wyloguj z Supabase z wymuszonym czyszczeniem lokalnego storage
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
       
-      if (error) {
+      // Ignoruj błąd "session_not_found" - sesja już nie istnieje więc wylogowanie się udało
+      const isSessionNotFoundError = error && (
+        error.message?.includes('Session not found') ||
+        error.message?.includes("doesn't exist")
+      );
+      
+      if (error && !isSessionNotFoundError) {
         console.error('Logout error:', error);
         toast({
           title: "Błąd wylogowania",
