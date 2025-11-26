@@ -86,6 +86,7 @@ type ErrorReport = {
   profiles: {
     name: string;
     email: string;
+    location_id: string | null;
   } | null;
 };
 
@@ -112,10 +113,25 @@ const ErrorReportsManagement = () => {
   const [adminResponse, setAdminResponse] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "new" | "in_progress" | "resolved" | "closed" | "needs_info">("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [newResponse, setNewResponse] = useState("");
   const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
+
+  // Fetch locations for filter
+  const { data: locations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
@@ -141,7 +157,7 @@ const ErrorReportsManagement = () => {
         const userIds = [...new Set(errorReports.map(r => r.user_id))];
         const { data: profilesData } = await supabase
           .from("profiles")
-          .select("id, name, email")
+          .select("id, name, email, location_id")
           .in("id", userIds);
 
         const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
@@ -425,6 +441,11 @@ const ErrorReportsManagement = () => {
     return <Badge variant={variants[priority]}>{labels[priority]}</Badge>;
   };
 
+  // Filter by location
+  const filteredReports = selectedLocationId === 'all'
+    ? reports
+    : reports?.filter(r => r.profiles?.location_id === selectedLocationId);
+
   if (isLoading) {
     return <div className="p-8">Ładowanie zgłoszeń...</div>;
   }
@@ -464,6 +485,23 @@ const ErrorReportsManagement = () => {
             </SelectContent>
           </Select>
         </div>
+
+        <div className="flex-1">
+          <Label>Placówka</Label>
+          <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Wybierz placówkę" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Wszystkie placówki</SelectItem>
+              {locations?.map((location) => (
+                <SelectItem key={location.id} value={location.id}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <ScrollableTable className="border rounded-lg">
@@ -479,7 +517,7 @@ const ErrorReportsManagement = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {reports?.map((report) => (
+            {filteredReports?.map((report) => (
               <TableRow key={report.id}>
                 <TableCell>
                   {format(new Date(report.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}
