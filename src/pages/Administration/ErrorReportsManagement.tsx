@@ -2,23 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -38,13 +25,11 @@ const ResponseAttachments = ({ paths }: { paths: string[] }) => {
     const loadUrls = async () => {
       const signedUrls = await Promise.all(
         paths.map(async (path) => {
-          const { data } = await supabase.storage
-            .from("error-reports")
-            .createSignedUrl(path, 3600);
+          const { data } = await supabase.storage.from("error-reports").createSignedUrl(path, 3600);
           return data?.signedUrl || "";
-        })
+        }),
       );
-      setUrls(signedUrls.filter(url => url !== ""));
+      setUrls(signedUrls.filter((url) => url !== ""));
     };
     loadUrls();
   }, [paths]);
@@ -111,9 +96,11 @@ const ErrorReportsManagement = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<string>("");
   const [adminResponse, setAdminResponse] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "new" | "in_progress" | "resolved" | "closed" | "needs_info">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "new" | "in_progress" | "resolved" | "closed" | "needs_info"
+  >("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [newResponse, setNewResponse] = useState("");
@@ -121,25 +108,19 @@ const ErrorReportsManagement = () => {
 
   // Fetch locations for filter
   const { data: locations } = useQuery({
-    queryKey: ['locations'],
+    queryKey: ["locations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('locations')
-        .select('*')
-        .order('name');
-      
+      const { data, error } = await supabase.from("locations").select("*").order("name");
+
       if (error) throw error;
       return data;
-    }
+    },
   });
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
     queryFn: async () => {
-      let query = supabase
-        .from("error_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
+      let query = supabase.from("error_reports").select("*").order("created_at", { ascending: false });
 
       if (statusFilter !== "all") {
         query = query.eq("status", statusFilter);
@@ -154,15 +135,15 @@ const ErrorReportsManagement = () => {
 
       // Fetch user profiles separately
       if (errorReports && errorReports.length > 0) {
-        const userIds = [...new Set(errorReports.map(r => r.user_id))];
+        const userIds = [...new Set(errorReports.map((r) => r.user_id))];
         const { data: profilesData } = await supabase
           .from("profiles")
           .select("id, name, email, location_id")
           .in("id", userIds);
 
-        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
 
-        return errorReports.map(report => ({
+        return errorReports.map((report) => ({
           ...report,
           profiles: profilesMap.get(report.user_id) || null,
         })) as ErrorReport[];
@@ -176,7 +157,7 @@ const ErrorReportsManagement = () => {
     queryKey: ["error-report-responses", selectedReport?.id],
     queryFn: async () => {
       if (!selectedReport?.id) return [];
-      
+
       const { data: responsesData, error } = await supabase
         .from("error_report_responses")
         .select("*")
@@ -187,15 +168,12 @@ const ErrorReportsManagement = () => {
 
       // Fetch user profiles separately
       if (responsesData && responsesData.length > 0) {
-        const userIds = [...new Set(responsesData.map(r => r.user_id))];
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, name, email")
-          .in("id", userIds);
+        const userIds = [...new Set(responsesData.map((r) => r.user_id))];
+        const { data: profilesData } = await supabase.from("profiles").select("id, name, email").in("id", userIds);
 
-        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
 
-        return responsesData.map(response => ({
+        return responsesData.map((response) => ({
           ...response,
           profiles: profilesMap.get(response.user_id) || null,
         })) as ErrorReportResponse[];
@@ -224,27 +202,31 @@ const ErrorReportsManagement = () => {
       if (error) throw error;
 
       // Get current user for sending notification
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       return { reportId: id, userId: user?.id, previousStatus, newStatus: status };
     },
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-reports"] });
-      
+
       // Send email notification about status change
       if (data.userId && selectedReport?.profiles?.email) {
-        supabase.functions.invoke('send-error-response-notification', {
-          body: {
-            reportId: data.reportId,
-            responderId: data.userId,
-            previousStatus: data.previousStatus,
-            newStatus: data.newStatus,
-          },
-        }).catch((error) => {
-          console.error("Failed to queue email notification:", error);
-        });
+        supabase.functions
+          .invoke("send-error-response-notification", {
+            body: {
+              reportId: data.reportId,
+              responderId: data.userId,
+              previousStatus: data.previousStatus,
+              newStatus: data.newStatus,
+            },
+          })
+          .catch((error) => {
+            console.error("Failed to queue email notification:", error);
+          });
       }
-      
+
       toast({
         title: "Zaktualizowano",
         description: "Status zgłoszenia został zaktualizowany.",
@@ -270,36 +252,34 @@ const ErrorReportsManagement = () => {
       message: string;
       attachments: File[];
     }) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const userId = user.id;
       const now = new Date();
-      const dateTimeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+      const dateTimeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
       const attachmentUrls: string[] = [];
 
       // Upload attachments
       for (let i = 0; i < attachments.length; i++) {
         const file = attachments[i];
         const filePath = `${userId}/${dateTimeString}_response_${file.name}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from("error-reports")
-          .upload(filePath, file);
+
+        const { error: uploadError } = await supabase.storage.from("error-reports").upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
         attachmentUrls.push(filePath);
       }
 
-      const { error } = await supabase
-        .from("error_report_responses")
-        .insert({
-          error_report_id: errorReportId,
-          user_id: user.id,
-          message,
-          attachments: attachmentUrls.length > 0 ? attachmentUrls : null,
-        });
+      const { error } = await supabase.from("error_report_responses").insert({
+        error_report_id: errorReportId,
+        user_id: user.id,
+        message,
+        attachments: attachmentUrls.length > 0 ? attachmentUrls : null,
+      });
 
       if (error) throw error;
 
@@ -307,21 +287,23 @@ const ErrorReportsManagement = () => {
     },
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["error-report-responses", selectedReport?.id] });
-      
+
       // Send email notification asynchronously in background
       if (selectedReport && selectedReport.profiles?.email) {
-        supabase.functions.invoke('send-error-response-notification', {
-          body: {
-            reportId: selectedReport.id,
-            responderId: data.userId,
-            message: newResponse,
-          },
-        }).catch((error) => {
-          console.error("Failed to queue email notification:", error);
-          // Don't fail the whole operation if email queueing fails
-        });
+        supabase.functions
+          .invoke("send-error-response-notification", {
+            body: {
+              reportId: selectedReport.id,
+              responderId: data.userId,
+              message: newResponse,
+            },
+          })
+          .catch((error) => {
+            console.error("Failed to queue email notification:", error);
+            // Don't fail the whole operation if email queueing fails
+          });
       }
-      
+
       setNewResponse("");
       setResponseAttachments([]);
       toast({
@@ -343,12 +325,10 @@ const ErrorReportsManagement = () => {
     setSelectedReport(report);
     setNewStatus(report.status);
     setAdminResponse(report.admin_response || "");
-    
+
     // Generate signed URLs for screenshot and files
     if (report.screenshot_url) {
-      const { data } = await supabase.storage
-        .from("error-reports")
-        .createSignedUrl(report.screenshot_url, 3600); // 1 hour expiry
+      const { data } = await supabase.storage.from("error-reports").createSignedUrl(report.screenshot_url, 3600); // 1 hour expiry
       setScreenshotUrl(data?.signedUrl || null);
     } else {
       setScreenshotUrl(null);
@@ -357,17 +337,15 @@ const ErrorReportsManagement = () => {
     if (report.additional_files && report.additional_files.length > 0) {
       const urls = await Promise.all(
         report.additional_files.map(async (path) => {
-          const { data } = await supabase.storage
-            .from("error-reports")
-            .createSignedUrl(path, 3600);
+          const { data } = await supabase.storage.from("error-reports").createSignedUrl(path, 3600);
           return data?.signedUrl || "";
-        })
+        }),
       );
-      setFileUrls(urls.filter(url => url !== ""));
+      setFileUrls(urls.filter((url) => url !== ""));
     } else {
       setFileUrls([]);
     }
-    
+
     setDetailsOpen(true);
   };
 
@@ -391,7 +369,6 @@ const ErrorReportsManagement = () => {
     setResponseAttachments(responseAttachments.filter((_, i) => i !== index));
   };
 
-
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       new: "destructive",
@@ -407,19 +384,16 @@ const ErrorReportsManagement = () => {
       closed: "Zamknięte",
       needs_info: "Potrzebne informacje",
     };
-    
+
     let customClass = "";
     if (status === "resolved") {
       customClass = "bg-green-600 text-white hover:bg-green-700";
     } else if (status === "needs_info") {
       customClass = "bg-orange-600 text-white hover:bg-orange-700";
     }
-    
+
     return (
-      <Badge 
-        variant={variants[status]} 
-        className={customClass}
-      >
+      <Badge variant={variants[status]} className={customClass}>
         {labels[status]}
       </Badge>
     );
@@ -442,9 +416,8 @@ const ErrorReportsManagement = () => {
   };
 
   // Filter by location
-  const filteredReports = selectedLocationId === 'all'
-    ? reports
-    : reports?.filter(r => r.profiles?.location_id === selectedLocationId);
+  const filteredReports =
+    selectedLocationId === "all" ? reports : reports?.filter((r) => r.profiles?.location_id === selectedLocationId);
 
   if (isLoading) {
     return <div className="p-8">Ładowanie zgłoszeń...</div>;
@@ -485,23 +458,6 @@ const ErrorReportsManagement = () => {
             </SelectContent>
           </Select>
         </div>
-
-        <div className="flex-1">
-          <Label>Placówka</Label>
-          <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Wybierz placówkę" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Wszystkie placówki</SelectItem>
-              {locations?.map((location) => (
-                <SelectItem key={location.id} value={location.id}>
-                  {location.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       <ScrollableTable className="border rounded-lg">
@@ -519,9 +475,7 @@ const ErrorReportsManagement = () => {
           <TableBody>
             {filteredReports?.map((report) => (
               <TableRow key={report.id}>
-                <TableCell>
-                  {format(new Date(report.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}
-                </TableCell>
+                <TableCell>{format(new Date(report.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}</TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{report.profiles?.name || "Nieznany"}</div>
@@ -532,11 +486,7 @@ const ErrorReportsManagement = () => {
                 <TableCell>{getPriorityBadge(report.priority)}</TableCell>
                 <TableCell>{getStatusBadge(report.status)}</TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleViewDetails(report)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => handleViewDetails(report)}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -552,8 +502,7 @@ const ErrorReportsManagement = () => {
             <DialogTitle>Szczegóły zgłoszenia</DialogTitle>
             <DialogDescription>
               Zgłoszone przez {selectedReport?.profiles.name} dnia{" "}
-              {selectedReport &&
-                format(new Date(selectedReport.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}
+              {selectedReport && format(new Date(selectedReport.created_at), "dd.MM.yyyy HH:mm", { locale: pl })}
             </DialogDescription>
           </DialogHeader>
 
@@ -566,8 +515,8 @@ const ErrorReportsManagement = () => {
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <Select 
-                    value={newStatus} 
+                  <Select
+                    value={newStatus}
                     onValueChange={(value: "new" | "in_progress" | "resolved" | "closed" | "needs_info") => {
                       const previousStatus = selectedReport.status;
                       setNewStatus(value);
@@ -687,21 +636,13 @@ const ErrorReportsManagement = () => {
                       Dodaj pliki
                     </Button>
                   </div>
-                  
+
                   {responseAttachments.length > 0 && (
                     <div className="space-y-1">
                       {responseAttachments.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-2 bg-muted rounded text-sm"
-                        >
+                        <div key={index} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
                           <span className="truncate flex-1">{file.name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeResponseFile(index)}
-                          >
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeResponseFile(index)}>
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -710,10 +651,7 @@ const ErrorReportsManagement = () => {
                   )}
                 </div>
 
-                <Button 
-                  onClick={handleAddResponse} 
-                  disabled={addResponseMutation.isPending || !newResponse.trim()}
-                >
+                <Button onClick={handleAddResponse} disabled={addResponseMutation.isPending || !newResponse.trim()}>
                   {addResponseMutation.isPending ? "Wysyłanie..." : "Dodaj odpowiedź"}
                 </Button>
               </div>
