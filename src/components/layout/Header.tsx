@@ -1,10 +1,9 @@
-
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { useStyleSettings } from '@/hooks/useStyleSettings';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { useStyleSettings } from "@/hooks/useStyleSettings";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const location = useLocation();
@@ -24,37 +23,37 @@ const Header = () => {
     const baseItems = [];
 
     // Dokumenty - dla wszystkich zalogowanych użytkowników
-    baseItems.push({ 
-      name: 'Dokumenty', 
-      path: '/dokumenty',
-      icon: '/lovable-uploads/88a736db-1198-4c92-b31a-d8b7c4c8adb7.png'
+    baseItems.push({
+      name: "Dokumenty",
+      path: "/dokumenty",
+      icon: "/lovable-uploads/88a736db-1198-4c92-b31a-d8b7c4c8adb7.png",
     });
 
     // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
     baseItems.push(
-      { 
-        name: 'Raporty', 
-        path: '/reports',
-        icon: '/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png'
+      {
+        name: "Raporty",
+        path: "/reports",
+        icon: "/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png",
       },
-      { 
-        name: 'Budżet', 
-        path: '/budzet',
-        icon: '/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png'
+      {
+        name: "Budżet",
+        path: "/budzet",
+        icon: "/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png",
       },
-      { 
-        name: 'Ustawienia', 
-        path: '/settings',
-        icon: '/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png'
-      }
+      {
+        name: "Ustawienia",
+        path: "/settings",
+        icon: "/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png",
+      },
     );
 
     // Administracja dla prowincjała i admina
-    if (user?.role === 'prowincjal' || user?.role === 'admin') {
-      baseItems.push({ 
-        name: 'Administracja', 
-        path: '/administracja',
-        icon: '/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png' // używam tej samej ikony co dla ustawień
+    if (user?.role === "prowincjal" || user?.role === "admin") {
+      baseItems.push({
+        name: "Administracja",
+        path: "/administracja",
+        icon: "/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png", // używam tej samej ikony co dla ustawień
       });
     }
 
@@ -71,7 +70,7 @@ const Header = () => {
     if (user?.email) {
       return user.email.charAt(0).toUpperCase();
     }
-    return '?';
+    return "?";
   };
 
   return (
@@ -80,16 +79,10 @@ const Header = () => {
         <div className="flex h-16 justify-between">
           <div className="flex items-center">
             <Link to="/dashboard" className="flex-shrink-0 flex items-center cursor-pointer">
-              <img
-                className="h-8 w-auto"
-                src="/placeholder.svg"
-                alt="Logo OMI"
-              />
-              <span className="ml-2 text-lg font-semibold text-omi-500">
-                Finanse OMI
-              </span>
+              <img className="h-8 w-auto" src="/favicon.ico" alt="Logo OMI" />
+              <span className="ml-2 text-lg font-semibold text-omi-500">Finanse OMI</span>
             </Link>
-            
+
             {/* Menu nawigacyjne */}
             {user && (
               <nav className="hidden md:ml-6 md:flex md:space-x-4">
@@ -100,26 +93,18 @@ const Header = () => {
                     className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
                     ${
                       location.pathname === item.path
-                        ? 'text-omi-600 bg-gray-100'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                        ? "text-omi-600 bg-gray-100"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     }`}
                     title={item.name}
                   >
-                    {isWindows98Style ? (
-                      <img 
-                        src={item.icon} 
-                        alt={item.name}
-                        className="w-6 h-6"
-                      />
-                    ) : (
-                      item.name
-                    )}
+                    {isWindows98Style ? <img src={item.icon} alt={item.name} className="w-6 h-6" /> : item.name}
                   </Link>
                 ))}
               </nav>
             )}
           </div>
-          
+
           {/* Przyciski z prawej */}
           <div className="flex items-center">
             {user ? (
@@ -128,18 +113,14 @@ const Header = () => {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="rounded-full">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-omi-300 text-white">
-                          {getInitial()}
-                        </AvatarFallback>
+                        <AvatarFallback className="bg-omi-300 text-white">{getInitial()}</AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Moje konto</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => logout()}>
-                      Wyloguj
-                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => logout()}>Wyloguj</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
