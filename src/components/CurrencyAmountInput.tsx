@@ -45,6 +45,11 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
     setDisplayValue(inputValue);
+    // Don't call onChange immediately with 0 when user clears the field
+    // Only convert empty string to 0 on blur
+    if (inputValue === '' || inputValue === '-') {
+      return;
+    }
     const newValue = parseFloat(inputValue) || 0;
     onChange(newValue);
   };
@@ -56,12 +61,19 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(false);
-    // Format to 2 decimal places on blur
-    if (value > 0) {
+    
+    // Convert empty or invalid input to 0 on blur
+    const inputValue = displayValue.trim();
+    if (inputValue === '' || inputValue === '-') {
+      onChange(0);
+      setDisplayValue('');
+    } else if (value > 0) {
+      // Format to 2 decimal places on blur
       setDisplayValue(value.toFixed(2));
     } else {
       setDisplayValue('');
     }
+    
     onBlur?.(e);
   };
 
