@@ -26,7 +26,7 @@ const Header = () => {
     baseItems.push({
       name: "Dokumenty",
       path: "/dokumenty",
-      icon: "/lovable-uploads/88a736db-1198-4c92-b31a-d8b7c4c8adb7.png",
+      icon: "/88a736db-1198-4c92-b31a-d8b7c4c8adb7.png",
     });
 
     // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
@@ -34,17 +34,17 @@ const Header = () => {
       {
         name: "Raporty",
         path: "/reports",
-        icon: "/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png",
+        icon: "/021f933f-b354-4042-b593-acbe82f67257.png",
       },
       {
         name: "Budżet",
         path: "/budzet",
-        icon: "/lovable-uploads/021f933f-b354-4042-b593-acbe82f67257.png",
+        icon: "/021f933f-b354-4042-b593-acbe82f67257.png",
       },
       {
         name: "Ustawienia",
         path: "/settings",
-        icon: "/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png",
+        icon: "/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png",
       },
     );
 
@@ -53,7 +53,7 @@ const Header = () => {
       baseItems.push({
         name: "Administracja",
         path: "/administracja",
-        icon: "/lovable-uploads/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png", // używam tej samej ikony co dla ustawień
+        icon: "/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png", // używam tej samej ikony co dla ustawień
       });
     }
 
