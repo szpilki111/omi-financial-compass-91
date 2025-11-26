@@ -28,6 +28,8 @@ interface Transaction {
   document_number: string;
   description: string;
   amount: number;
+  debit_amount?: number;
+  credit_amount?: number;
   debit_account_id: string;
   credit_account_id: string;
   settlement_type: string;
@@ -157,7 +159,11 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                       <TableCell className="text-right font-medium">
                         <div className="flex items-center justify-end gap-1">
                           <Calculator className="h-4 w-4 text-gray-500" />
-                          {formatAmount(transaction.amount)}
+                          {formatAmount(
+                            transaction.debit_account_id === selectedAccount.id
+                              ? transaction.debit_amount || transaction.amount
+                              : transaction.credit_amount || transaction.amount
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
