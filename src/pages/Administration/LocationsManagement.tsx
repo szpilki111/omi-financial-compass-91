@@ -12,6 +12,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
@@ -38,6 +45,7 @@ const LocationsManagement = () => {
   const [selectedLocationForSettings, setSelectedLocationForSettings] = useState<Location | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -196,20 +204,39 @@ const LocationsManagement = () => {
     );
   }
 
+  const filteredLocations = selectedLocationId === 'all' 
+    ? locations 
+    : locations?.filter(location => location.id === selectedLocationId);
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Zarządzanie placówkami</CardTitle>
-            <Button onClick={handleAdd} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Dodaj placówkę
-            </Button>
+            <div className="flex items-center gap-4">
+              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Wybierz placówkę" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Wszystkie placówki</SelectItem>
+                  {locations?.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={handleAdd} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Dodaj placówkę
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {!locations?.length ? (
+          {!filteredLocations?.length ? (
             <p className="text-center text-omi-gray-500">Brak placówek w systemie.</p>
           ) : (
             <ScrollableTable>
@@ -228,7 +255,7 @@ const LocationsManagement = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {locations.map((location) => (
+                {filteredLocations.map((location) => (
                   <TableRow key={location.id}>
                     <TableCell className="font-medium">{location.name}</TableCell>
                     <TableCell>
