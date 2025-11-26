@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
@@ -220,12 +221,14 @@ const LocationsManagement = () => {
                   <SelectValue placeholder="Wybierz placówkę" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Wszystkie placówki</SelectItem>
-                  {locations?.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
+                  <ScrollArea className="h-[300px]">
+                    <SelectItem value="all">Wszystkie placówki</SelectItem>
+                    {locations?.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </ScrollArea>
                 </SelectContent>
               </Select>
               <Button onClick={handleAdd} className="flex items-center gap-2">
