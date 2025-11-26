@@ -81,7 +81,7 @@ const getRoleLabel = (role: string) => {
 const UsersManagement = () => {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<(UserProfile & { location_ids?: string[] }) | null>(null);
-  const [displayedCount, setDisplayedCount] = useState(1);
+  const [displayedCount, setDisplayedCount] = useState(20);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -156,7 +156,7 @@ const UsersManagement = () => {
       (entries) => {
         const target = entries[0];
         if (target.isIntersecting && users && displayedCount < users.length) {
-          setDisplayedCount((prev) => Math.min(prev + 1, users.length));
+          setDisplayedCount((prev) => Math.min(prev + 20, users.length));
         }
       },
       { threshold: 0.1 },
@@ -175,7 +175,7 @@ const UsersManagement = () => {
 
   // Reset displayed count when users data changes
   useEffect(() => {
-    setDisplayedCount(1);
+    setDisplayedCount(20);
   }, [users]);
 
   // Mutacja do usuwania użytkownika używając logiki z Login
