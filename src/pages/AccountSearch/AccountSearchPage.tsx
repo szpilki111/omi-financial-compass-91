@@ -29,6 +29,8 @@ interface Transaction {
   document_number: string;
   description: string;
   amount: number;
+  debit_amount?: number;
+  credit_amount?: number;
   debit_account_id: string;
   credit_account_id: string;
   settlement_type: string;
@@ -214,10 +216,10 @@ const AccountSearchPage = () => {
     
     transactions.forEach(transaction => {
       if (transaction.debit_account_id === selectedAccount.id) {
-        debitTotal += transaction.amount;
+        debitTotal += transaction.debit_amount || transaction.amount || 0;
       }
       if (transaction.credit_account_id === selectedAccount.id) {
-        creditTotal += transaction.amount;
+        creditTotal += transaction.credit_amount || transaction.amount || 0;
       }
     });
     
