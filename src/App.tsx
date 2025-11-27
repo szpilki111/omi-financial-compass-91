@@ -22,6 +22,7 @@ import { AccountSearchPage } from "./pages/AccountSearch";
 import { AdministrationPage } from "./pages/Administration";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import { BudgetPage } from "./pages/Budget";
+import { KnowledgeBasePage } from "./pages/KnowledgeBase";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -123,6 +124,13 @@ const App = () => (
               <Route path="/administracja" element={
                 <ProtectedRoute requiredRole={["prowincjal", "admin"]}>
                   <AdministrationPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Knowledge Base route */}
+              <Route path="/baza-wiedzy" element={
+                <ProtectedRoute>
+                  <KnowledgeBasePage />
                 </ProtectedRoute>
               } />
               
