@@ -340,7 +340,7 @@ const UsersManagement = () => {
               <SelectTrigger className="w-[300px]">
                 <SelectValue placeholder="Wybierz placówkę" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px] overflow-y-auto">
                 <SelectItem value="all">Wszystkie placówki</SelectItem>
                 {locations?.map((location) => (
                   <SelectItem key={location.id} value={location.id}>
