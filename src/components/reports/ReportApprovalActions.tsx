@@ -10,11 +10,17 @@ import { Spinner } from '@/components/ui/Spinner';
 
 interface ReportApprovalActionsProps {
   reportId: string;
+  reportMonth: number;
+  reportYear: number;
+  locationId: string;
   onApprovalComplete: () => void;
 }
 
 const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
   reportId,
+  reportMonth,
+  reportYear,
+  locationId,
   onApprovalComplete
 }) => {
   const [comments, setComments] = useState('');
@@ -99,8 +105,42 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
       console.log('Raport zaktualizowany pomyślnie');
 
+      // If report is approved, lock all documents for this period
+      if (action === 'approved') {
+        console.log('Blokowanie dokumentów dla okresu:', reportMonth, reportYear, locationId);
+        
+        // Get start and end dates of the report month
+        const startDate = new Date(reportYear, reportMonth - 1, 1);
+        const endDate = new Date(reportYear, reportMonth, 0); // Last day of month
+        
+        const startDateStr = startDate.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
+
+        // Mark documents as locked by adding validation info
+        const { error: lockError } = await supabase
+          .from('documents')
+          .update({ 
+            validation_errors: [{ type: 'locked_by_report', reportId, message: 'Dokument zablokowany - raport zatwierdzony' }]
+          })
+          .eq('location_id', locationId)
+          .gte('document_date', startDateStr)
+          .lte('document_date', endDateStr);
+
+        if (lockError) {
+          console.error('Błąd blokowania dokumentów:', lockError);
+          // Don't throw - report is already approved, just log the error
+          toast({
+            title: "Uwaga",
+            description: "Raport zatwierdzony, ale nie udało się zablokować dokumentów automatycznie.",
+            variant: "default",
+          });
+        } else {
+          console.log('Dokumenty zablokowane pomyślnie');
+        }
+      }
+
       const successMessage = action === 'approved' 
-        ? "Raport został zaakceptowany pomyślnie" 
+        ? "Raport został zaakceptowany pomyślnie. Dokumenty z tego okresu zostały zablokowane." 
         : "Raport został odesłany do poprawek";
 
       toast({
