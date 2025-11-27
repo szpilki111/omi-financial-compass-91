@@ -11,6 +11,7 @@ import QuickAccessCard from '@/components/dashboard/QuickAccessCard';
 import NotificationCard from '@/components/dashboard/NotificationCard';
 import ReportStatusCard from '@/components/dashboard/ReportStatusCard';
 import BudgetStatusCard from '@/components/dashboard/BudgetStatusCard';
+import ReportStatistics from '@/components/dashboard/ReportStatistics';
 import { calculateFinancialSummary } from '@/utils/financeUtils';
 import { FileText, TrendingUp, TrendingDown, Plus, BarChart, Database, BookOpen, Activity, CheckCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -286,6 +287,19 @@ const Dashboard = () => {
                     </CardContent>
                 </Card>
             </Link>
+
+            <Link to="/baza-wiedzy">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-center">Baza wiedzy</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <CardDescription className="text-center">
+                            Dokumenty i procedury
+                        </CardDescription>
+                    </CardContent>
+                </Card>
+            </Link>
         </div>
 
         {/* Budget Status Card - only for users with location */}
@@ -294,6 +308,11 @@ const Dashboard = () => {
             <BudgetStatusCard />
           </div>
         )}
+
+        {/* Report Statistics */}
+        <div className="max-w-4xl mx-auto mt-8">
+          <ReportStatistics />
+        </div>
     </div>
 </MainLayout>
 

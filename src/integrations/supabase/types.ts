@@ -109,6 +109,57 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notes: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          location_id: string | null
+          pinned: boolean | null
+          title: string
+          updated_at: string | null
+          visible_to: string[] | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          location_id?: string | null
+          pinned?: boolean | null
+          title: string
+          updated_at?: string | null
+          visible_to?: string[] | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          location_id?: string | null
+          pinned?: boolean | null
+          title?: string
+          updated_at?: string | null
+          visible_to?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_notes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytical_accounts: {
         Row: {
           created_at: string
@@ -495,6 +546,36 @@ export type Database = {
         }
         Relationships: []
       }
+      exchange_rate_history: {
+        Row: {
+          created_at: string | null
+          currency_code: string
+          effective_date: string
+          fetched_at: string | null
+          id: string
+          rate: number
+          source: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          currency_code: string
+          effective_date: string
+          fetched_at?: string | null
+          id?: string
+          rate: number
+          source?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          currency_code?: string
+          effective_date?: string
+          fetched_at?: string | null
+          id?: string
+          rate?: number
+          source?: string | null
+        }
+        Relationships: []
+      }
       failed_logins: {
         Row: {
           attempt_count: number
@@ -518,6 +599,53 @@ export type Database = {
           last_attempt?: string
         }
         Relationships: []
+      }
+      knowledge_documents: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          title: string
+          updated_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          title: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       location_accounts: {
         Row: {
@@ -784,6 +912,47 @@ export type Database = {
             columns: ["parent_feature_id"]
             isOneToOne: false
             referencedRelation: "project_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_logs: {
+        Row: {
+          created_at: string | null
+          id: string
+          location_id: string | null
+          month: number
+          recipient_email: string
+          reminder_type: string
+          sent_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          location_id?: string | null
+          month: number
+          recipient_email: string
+          reminder_type: string
+          sent_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          location_id?: string | null
+          month?: number
+          recipient_email?: string
+          reminder_type?: string
+          sent_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_logs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]

@@ -14,6 +14,7 @@ import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
 import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
+import ExportToExcel from '@/components/reports/ExportToExcel';
 import { Report } from '@/types/reports';
 
 interface ReportDetailsProps {
@@ -352,6 +353,14 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
         
         <div className="flex gap-2">
+          <ExportToExcel
+            reportId={reportId!}
+            reportTitle={report.title}
+            locationName={report.location?.name || 'Nieznana'}
+            period={report.period}
+            year={report.year}
+            month={report.month}
+          />
           {(report.status === 'draft' || canResubmit) && user?.role === 'ekonom' && (
             <Button onClick={handleSubmitReport} disabled={isSubmitting}>
               {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
