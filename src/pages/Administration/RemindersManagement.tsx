@@ -1,0 +1,167 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Spinner } from '@/components/ui/Spinner';
+import { Bell, Send, Calendar, CheckCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+const RemindersManagement: React.FC = () => {
+  const [isSending, setIsSending] = useState(false);
+  const { toast } = useToast();
+
+  const { data: reminderLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
+    queryKey: ['reminderLogs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reminder_logs')
+        .select(`
+          *,
+          locations (name)
+        `)
+        .order('sent_at', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const handleSendReminders = async () => {
+    setIsSending(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-report-reminders');
+      
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Przypomnienia wysłane",
+        description: `Wysłano ${data?.sentCount || 0} przypomnień do ekonomów.`,
+      });
+
+      refetchLogs();
+    } catch (error: any) {
+      console.error('Error sending reminders:', error);
+      toast({
+        title: "Błąd",
+        description: error.message || "Nie udało się wysłać przypomnień",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const getReminderTypeBadge = (type: string) => {
+    switch (type) {
+      case 'overdue':
+        return <Badge variant="destructive">Po terminie</Badge>;
+      case '1_day':
+        return <Badge variant="default" className="bg-orange-500">1 dzień</Badge>;
+      case '5_days':
+        return <Badge variant="secondary">5 dni</Badge>;
+      default:
+        return <Badge variant="outline">{type}</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Automatyczne przypomnienia
+          </CardTitle>
+          <CardDescription>
+            Wysyłaj przypomnienia o terminach raportów do ekonomów placówek
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+            <Calendar className="h-8 w-8 text-muted-foreground" />
+            <div className="flex-1">
+              <p className="font-medium">Przypomnienia o raportach</p>
+              <p className="text-sm text-muted-foreground">
+                System wyśle przypomnienia do ekonomów placówek, które nie złożyły jeszcze raportu za poprzedni miesiąc.
+                Przypomnienia są wysyłane 5 dni przed terminem, 1 dzień przed terminem oraz po przekroczeniu terminu.
+              </p>
+            </div>
+            <Button 
+              onClick={handleSendReminders} 
+              disabled={isSending}
+              className="flex items-center gap-2"
+            >
+              {isSending ? (
+                <>
+                  <Spinner size="sm" />
+                  Wysyłanie...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Wyślij przypomnienia
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="border-t pt-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              Historia wysłanych przypomnień
+            </h4>
+            
+            {logsLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner />
+              </div>
+            ) : reminderLogs && reminderLogs.length > 0 ? (
+              <ScrollArea className="h-[300px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data wysłania</TableHead>
+                      <TableHead>Placówka</TableHead>
+                      <TableHead>Okres</TableHead>
+                      <TableHead>Typ</TableHead>
+                      <TableHead>Odbiorca</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reminderLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          {log.sent_at ? format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : '-'}
+                        </TableCell>
+                        <TableCell>{(log.locations as any)?.name || 'Nieznana'}</TableCell>
+                        <TableCell>{log.month}/{log.year}</TableCell>
+                        <TableCell>{getReminderTypeBadge(log.reminder_type)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{log.recipient_email}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                Brak wysłanych przypomnień
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default RemindersManagement;

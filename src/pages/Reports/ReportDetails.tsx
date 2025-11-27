@@ -421,6 +421,9 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       {canApproveReports && report?.status === 'submitted' && (
         <ReportApprovalActions 
           reportId={reportId!} 
+          reportMonth={report.month}
+          reportYear={report.year}
+          locationId={report.location_id}
           onApprovalComplete={handleApprovalComplete}
         />
       )}

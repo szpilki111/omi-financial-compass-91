@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Document {
   id: string;
@@ -50,6 +51,11 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
+
+  const isDocumentLocked = (doc: Document): boolean => {
+    if (!doc.validation_errors || !Array.isArray(doc.validation_errors)) return false;
+    return doc.validation_errors.some((error: any) => error.type === 'locked_by_report');
+  };
 
   if (isLoading) {
     return (
@@ -95,89 +101,118 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
   };
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Numer dokumentu</TableHead>
-            <TableHead>Nazwa</TableHead>
-            <TableHead>Data</TableHead>
-            <TableHead className="w-24">Liczba operacji</TableHead>
-            <TableHead className="text-right">Suma</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Akcje</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {documents.map((document) => {
-            const hasErrors = document.validation_errors && Array.isArray(document.validation_errors) && document.validation_errors.length > 0;
-            // Count total missing fields instead of incomplete transactions
-            let totalMissingFields = 0;
-            if (hasErrors) {
-              document.validation_errors.forEach((error: any) => {
-                if (error.missingFields && typeof error.missingFields === 'object') {
-                  totalMissingFields += Object.keys(error.missingFields).length;
-                }
-              });
-            }
-            
-            return (
-              <TableRow 
-                key={document.id} 
-                className="hover:bg-gray-50 cursor-pointer"
-                onClick={() => onDocumentClick(document)}
-              >
-                <TableCell className="font-medium">{document.document_number}</TableCell>
-                <TableCell>{document.document_name}</TableCell>
-                <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
-                <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
-                <TableCell className="text-right font-medium">
-                  {formatAmount(document.total_amount || 0, document.currency)}
-                </TableCell>
-                <TableCell>
-                  {hasErrors && totalMissingFields > 0 ? (
-                    <Badge variant="destructive" className="flex items-center gap-1 w-fit">
-                      <AlertTriangle className="h-3 w-3" />
-                      {totalMissingFields} {totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      OK
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDocumentClick(document);
-                      }}
-                      title="Edytuj"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDocumentDelete(document.id);
-                      }}
-                      title="Usuń"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+    <TooltipProvider>
+      <div className="bg-white shadow rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Numer dokumentu</TableHead>
+              <TableHead>Nazwa</TableHead>
+              <TableHead>Data</TableHead>
+              <TableHead className="w-24">Liczba operacji</TableHead>
+              <TableHead className="text-right">Suma</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Akcje</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {documents.map((document) => {
+              const locked = isDocumentLocked(document);
+              const hasErrors = document.validation_errors && 
+                Array.isArray(document.validation_errors) && 
+                document.validation_errors.filter((e: any) => e.type !== 'locked_by_report').length > 0;
+              
+              // Count total missing fields instead of incomplete transactions
+              let totalMissingFields = 0;
+              if (hasErrors) {
+                document.validation_errors
+                  .filter((error: any) => error.type !== 'locked_by_report')
+                  .forEach((error: any) => {
+                    if (error.missingFields && typeof error.missingFields === 'object') {
+                      totalMissingFields += Object.keys(error.missingFields).length;
+                    }
+                  });
+              }
+              
+              return (
+                <TableRow 
+                  key={document.id} 
+                  className={`hover:bg-gray-50 cursor-pointer ${locked ? 'opacity-75 bg-gray-50' : ''}`}
+                  onClick={() => onDocumentClick(document)}
+                >
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      {locked && (
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Lock className="h-4 w-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Dokument zablokowany - raport zatwierdzony
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {document.document_number}
+                    </div>
+                  </TableCell>
+                  <TableCell>{document.document_name}</TableCell>
+                  <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
+                  <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatAmount(document.total_amount || 0, document.currency)}
+                  </TableCell>
+                  <TableCell>
+                    {locked ? (
+                      <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                        <Lock className="h-3 w-3" />
+                        Zablokowany
+                      </Badge>
+                    ) : hasErrors && totalMissingFields > 0 ? (
+                      <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                        <AlertTriangle className="h-3 w-3" />
+                        {totalMissingFields} {totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        OK
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDocumentClick(document);
+                        }}
+                        title={locked ? "Podgląd (tylko do odczytu)" : "Edytuj"}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {!locked && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDocumentDelete(document.id);
+                          }}
+                          title="Usuń"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
   );
 };
 
