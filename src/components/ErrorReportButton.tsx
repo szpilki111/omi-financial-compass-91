@@ -13,20 +13,43 @@ export const ErrorReportButton = () => {
 
   const captureScreenshot = async () => {
     setIsCapturing(true);
+    console.log("Starting screenshot capture...");
     try {
+      console.log("Window dimensions:", { 
+        innerWidth: window.innerWidth, 
+        innerHeight: window.innerHeight,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY
+      });
+      
       const canvas = await html2canvas(document.body, {
         allowTaint: true,
         useCORS: true,
-        logging: false,
+        logging: true, // Enable html2canvas logging for debugging
         width: window.innerWidth,
         height: window.innerHeight,
         windowWidth: window.innerWidth,
         windowHeight: window.innerHeight,
         x: window.scrollX,
         y: window.scrollY,
+        scale: 1, // Use scale 1 for better performance
+        ignoreElements: (element) => {
+          // Ignore problematic elements that might cause issues
+          return element.classList?.contains('error-report-button-ignore');
+        }
       });
+      
+      console.log("Canvas created:", { width: canvas.width, height: canvas.height });
       const dataUrl = canvas.toDataURL("image/png");
-      setScreenshot(dataUrl);
+      console.log("Screenshot data URL length:", dataUrl.length);
+      
+      if (dataUrl && dataUrl.length > 100) {
+        setScreenshot(dataUrl);
+        console.log("Screenshot captured successfully");
+      } else {
+        console.error("Screenshot data URL is too short or empty");
+        setScreenshot(null);
+      }
       setDialogOpen(true);
     } catch (error) {
       console.error("Error capturing screenshot:", error);
