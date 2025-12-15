@@ -82,9 +82,12 @@ export const isDeviceTrusted = async (
   deviceFingerprint: string,
   supabase: any
 ): Promise<boolean> => {
+  const TRUST_DAYS = 30;
+  const TRUST_MS = TRUST_DAYS * 24 * 60 * 60 * 1000;
+
   const { data, error } = await supabase
     .from('trusted_devices')
-    .select('id')
+    .select('id, created_at')
     .eq('user_id', userId)
     .eq('device_fingerprint', deviceFingerprint)
     .maybeSingle();
@@ -94,7 +97,17 @@ export const isDeviceTrusted = async (
     return false;
   }
 
-  return !!data;
+  if (!data) return false;
+
+  // Ważność zaufania: 30 dni od dodania
+  if (data.created_at) {
+    const createdAt = new Date(data.created_at).getTime();
+    if (!Number.isNaN(createdAt) && Date.now() - createdAt > TRUST_MS) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 /**

@@ -220,28 +220,40 @@ const Login = () => {
   const handleTwoFactorVerified = async (trustDevice: boolean) => {
     setShowTwoFactorDialog(false);
     setIsLoading(true);
+    setError(null);
 
     try {
-      if (trustDevice) {
-        await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
-      }
-
+      // Najpierw zaloguj użytkownika (w momencie 2FA byliśmy wylogowani lokalnie)
       const success = await Promise.race([
         login(pendingEmail, password),
-        timeout(10000)
+        timeout(10000),
       ]);
 
-      if (success) {
-        toast({
-          title: "Weryfikacja zakończona pomyślnie",
-          description: "Zostałeś zalogowany do systemu."
-        });
-        setTwoFactorInProgress(false);
-        navigate(from, { replace: true });
-      } else {
+      if (!success) {
         setError("Nie udało się zalogować po weryfikacji");
         setTwoFactorInProgress(false);
+        return;
       }
+
+      // Dopiero po zalogowaniu dodaj do zaufanych (wymaga sesji do RLS)
+      if (trustDevice) {
+        try {
+          await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
+          toast({
+            title: "Dodano do zaufanych",
+            description: "Urządzenie zapisano jako zaufane (30 dni).",
+          });
+        } catch (e: any) {
+          toast({
+            title: "Nie udało się dodać do zaufanych",
+            description: "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      setTwoFactorInProgress(false);
+      navigate(from, { replace: true });
     } catch {
       setError("Wystąpił błąd podczas logowania");
       setTwoFactorInProgress(false);

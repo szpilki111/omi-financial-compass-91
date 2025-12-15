@@ -72,8 +72,9 @@ const handler = async (req: Request): Promise<Response> => {
       content: text || '',
       html: html || undefined,
       replyTo: replyTo || undefined,
-      charset: 'UTF-8',
-      encoding: '8bit',
+      charset: 'utf-8',
+      // IMPORTANT: keep transfer encoding consistent to avoid raw "=20" artifacts
+      encoding: 'quoted-printable',
     });
 
     await client.close();
