@@ -50,6 +50,7 @@ const Login = () => {
   const [pendingUserId, setPendingUserId] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
+  const [twoFactorInProgress, setTwoFactorInProgress] = useState(false);
   
   const {
     login,
@@ -89,12 +90,10 @@ const Login = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', {
-        replace: true
-      });
+    if (isAuthenticated && !twoFactorInProgress) {
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, from, twoFactorInProgress]);
 
   // Helper function for timeouts
   const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Żądanie przekroczyło limit czasu')), ms));
@@ -114,9 +113,9 @@ const Login = () => {
 
       // Use loginField directly as email for login
       console.log("Próba logowania dla email:", loginField);
-      const userEmail = loginField;
+      const userEmail = loginField.trim().toLowerCase();
 
-      // TYMCZASOWO WYŁĄCZONE - standardowe logowanie bez 2FA
+      // Standardowe logowanie bez 2FA
       if (!ENABLE_TWO_FACTOR_AUTH) {
         const success = await Promise.race([
           login(userEmail, password),
@@ -135,26 +134,43 @@ const Login = () => {
         return;
       }
 
-      // KOD PONIŻEJ BĘDZIE UŻYWANY PO WŁĄCZENIU 2FA
+      // 2FA włączone: NIE przekierowuj automatycznie po SIGNED_IN (zapobiega "mignięciu" dashboardu)
+      setTwoFactorInProgress(true);
+
       // Wygeneruj fingerprint urządzenia
       const fingerprint = await generateDeviceFingerprint();
       setDeviceFingerprint(fingerprint);
 
-      // Najpierw spróbuj zalogować, aby uzyskać userId
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: userEmail,
-        password: password,
-      });
+      // Sprawdź czy konto nie jest zablokowane (analogicznie do AuthContext.login)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, blocked')
+        .eq('email', userEmail)
+        .maybeSingle();
 
-      if (authError) {
-        setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
-        setIsLoading(false);
+      if (profileError) {
+        console.error('Błąd podczas pobierania profilu:', profileError);
+      }
+
+      if (profileData?.blocked) {
+        toast({
+          title: "Konto zablokowane",
+          description: "Twoje konto zostało zablokowane. Skontaktuj się z administratorem.",
+          variant: "destructive",
+        });
+        setTwoFactorInProgress(false);
         return;
       }
 
-      if (!authData.user) {
-        setError("Wystąpił błąd podczas logowania.");
-        setIsLoading(false);
+      // Zaloguj się technicznie, aby uzyskać userId (nie nawigujemy dopóki nie rozstrzygniemy 2FA)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password,
+      });
+
+      if (authError || !authData.user) {
+        setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
+        setTwoFactorInProgress(false);
         return;
       }
 
@@ -164,53 +180,44 @@ const Login = () => {
       const trusted = await isDeviceTrusted(userId, fingerprint, supabase);
       
       if (trusted) {
-        // Aktualizuj datę ostatniego użycia
         await updateTrustedDeviceLastUsed(userId, fingerprint, supabase);
-        
-        // Kontynuuj standardowe logowanie przez context
-        await supabase.auth.signOut(); // Wyloguj tymczasowo
-        const success = await Promise.race([
-          login(userEmail, password),
-          timeout(10000)
-        ]);
-        
-        if (success) {
-          toast({
-            title: "Logowanie pomyślne",
-            description: "Zostałeś zalogowany do systemu."
-          });
-          navigate(from, { replace: true });
-        }
-      } else {
-        // Wyloguj tymczasowo i wyślij kod weryfikacyjny
-        await supabase.auth.signOut();
-        
-        // Wyślij kod weryfikacyjny
-        const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
-          body: {
-            user_id: userId,
-            email: userEmail,
-            device_fingerprint: fingerprint,
-            user_agent: navigator.userAgent,
-          },
+
+        toast({
+          title: "Logowanie pomyślne",
+          description: "Zostałeś zalogowany do systemu.",
         });
 
-        if (sendError) {
-          console.error('Error sending verification code:', sendError);
-          setError('Nie udało się wysłać kodu weryfikacyjnego');
-          setIsLoading(false);
-          return;
-        }
-
-        // Pokaż dialog weryfikacji dwuetapowej
-        setPendingUserId(userId);
-        setPendingEmail(userEmail);
-        setShowTwoFactorDialog(true);
-        setIsLoading(false);
+        setTwoFactorInProgress(false);
+        navigate(from, { replace: true });
+        return;
       }
+
+      // Urządzenie niezaufane → wyloguj i przejdź do weryfikacji kodem
+      await supabase.auth.signOut({ scope: 'local' });
+      
+      const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
+        body: {
+          user_id: userId,
+          email: userEmail,
+          device_fingerprint: fingerprint,
+          user_agent: navigator.userAgent,
+        },
+      });
+
+      if (sendError) {
+        console.error('Error sending verification code:', sendError);
+        setError('Nie udało się wysłać kodu weryfikacyjnego');
+        setTwoFactorInProgress(false);
+        return;
+      }
+
+      setPendingUserId(userId);
+      setPendingEmail(userEmail);
+      setShowTwoFactorDialog(true);
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
+      setTwoFactorInProgress(false);
     } finally {
       setIsLoading(false);
     }
@@ -237,13 +244,16 @@ const Login = () => {
           title: "Weryfikacja zakończona pomyślnie",
           description: "Zostałeś zalogowany do systemu."
         });
+        setTwoFactorInProgress(false);
         navigate(from, { replace: true });
       } else {
         setError("Nie udało się zalogować po weryfikacji");
+        setTwoFactorInProgress(false);
       }
     } catch (err: any) {
       console.error("Error after 2FA:", err);
       setError("Wystąpił błąd podczas logowania");
+      setTwoFactorInProgress(false);
     } finally {
       setIsLoading(false);
       setPendingUserId('');
@@ -452,6 +462,7 @@ const Login = () => {
         setShowTwoFactorDialog(false);
         setPendingUserId('');
         setPendingEmail('');
+        setTwoFactorInProgress(false);
       }}
       onVerified={handleTwoFactorVerified}
       userId={pendingUserId}
