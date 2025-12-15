@@ -37,11 +37,13 @@ export const AccountsSettingsTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editingAnalytical, setEditingAnalytical] = useState<AnalyticalAccount | null>(null);
+  const [displayedCount, setDisplayedCount] = useState(50);
 
   // Debounce - aktualizuj searchQuery po 500ms od ostatniej zmiany
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(inputValue);
+      setDisplayedCount(50); // Reset paginacji przy nowym wyszukiwaniu
     }, 500);
     
     return () => clearTimeout(timer);
@@ -195,8 +197,8 @@ export const AccountsSettingsTab: React.FC = () => {
     enabled: !!user?.location
   });
 
-  // Filtrowanie kont po stronie klienta - nie powoduje refetch przy każdej literce
-  const availableAccounts = useMemo(() => {
+  // Filtrowanie kont po stronie klienta - przeszukuje WSZYSTKIE konta z allAccounts
+  const filteredAccounts = useMemo(() => {
     if (!allAccounts) return [];
     if (!searchQuery.trim()) return allAccounts;
     
@@ -206,6 +208,15 @@ export const AccountsSettingsTab: React.FC = () => {
       account.name.toLowerCase().includes(query)
     );
   }, [allAccounts, searchQuery]);
+
+  // Paginacja - wyświetl tylko część kont
+  const availableAccounts = useMemo(() => {
+    return filteredAccounts.slice(0, displayedCount);
+  }, [filteredAccounts, displayedCount]);
+
+  const hasMoreAccounts = filteredAccounts.length > displayedCount;
+  const totalFilteredCount = filteredAccounts.length;
+  const totalAccountsCount = allAccounts?.length || 0;
 
   // Pobierz konta analityczne
   const { data: analyticalAccounts, isLoading: analyticalLoading } = useQuery({
@@ -373,7 +384,7 @@ export const AccountsSettingsTab: React.FC = () => {
   }
 
   const hasNoAccountsAtAll = !allAccounts?.length;
-  const hasNoFilteredResults = allAccounts?.length > 0 && availableAccounts?.length === 0;
+  const hasNoFilteredResults = allAccounts?.length > 0 && filteredAccounts?.length === 0;
 
   return (
     <div className="space-y-6">
@@ -383,7 +394,12 @@ export const AccountsSettingsTab: React.FC = () => {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Liczba dostępnych kont: {availableAccounts.length}
+            {searchQuery.trim() ? (
+              <>Znaleziono: {totalFilteredCount} z {totalAccountsCount} kont</>
+            ) : (
+              <>Wszystkich kont dla lokalizacji: {totalAccountsCount}</>
+            )}
+            {hasMoreAccounts && <span className="ml-2">(wyświetlono: {availableAccounts.length})</span>}
           </p>
           <div className="mb-4 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -489,6 +505,24 @@ export const AccountsSettingsTab: React.FC = () => {
             })}
             </div>
           </div>
+          )}
+          
+          {hasMoreAccounts && (
+            <div className="mt-4 text-center">
+              <Button 
+                variant="outline" 
+                onClick={() => setDisplayedCount(prev => prev + 50)}
+              >
+                Pokaż więcej ({totalFilteredCount - displayedCount} pozostało)
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="ml-2"
+                onClick={() => setDisplayedCount(totalFilteredCount)}
+              >
+                Pokaż wszystkie
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
