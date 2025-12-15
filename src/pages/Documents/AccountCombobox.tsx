@@ -269,8 +269,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       // Sort by account number
       filteredAccounts.sort((a, b) => a.number.localeCompare(b.number));
 
-      // Limit results
-      filteredAccounts = filteredAccounts.slice(0, 50);
+      // No limit - show all accounts (removed slice(0, 50))
       
       setAccounts(filteredAccounts);
       setLoading(false);
@@ -326,7 +325,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="min-w-[450px] w-auto max-w-[600px] p-0">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Szukaj (nr lub nazwa)..."
@@ -363,7 +362,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
             }}
           />
-          <CommandList>
+          <CommandList className="max-h-[400px]">
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
             {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
             {locationId && !loading && accounts.length === 0 && !searchTerm.trim() && (
@@ -389,14 +388,16 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                       }, 100);
                     }
                   }}
+                  className="flex items-center"
                 >
                   <Check
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'mr-2 h-4 w-4 shrink-0',
                       value === account.id ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {account.number} - {account.name}
+                  <span className="font-mono text-sm mr-2 shrink-0">{account.number}</span>
+                  <span className="truncate flex-1" title={account.name}>{account.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

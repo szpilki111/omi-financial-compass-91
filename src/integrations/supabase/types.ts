@@ -1510,11 +1510,11 @@ export type Database = {
         Returns: number
       }
       change_user_password:
+        | { Args: { new_password: string; user_id: number }; Returns: boolean }
         | {
             Args: { new_password: string; user_id: string }
             Returns: undefined
           }
-        | { Args: { new_password: string; user_id: number }; Returns: boolean }
       check_report_editing_blocked: {
         Args: { p_document_date: string; p_location_id: string }
         Returns: boolean
@@ -1559,6 +1559,7 @@ export type Database = {
         Returns: Json
       }
       insert_profile_admin:
+        | { Args: { profile_data: Json; user_id: number }; Returns: undefined }
         | {
             Args: {
               location_id?: string
@@ -1569,7 +1570,6 @@ export type Database = {
             }
             Returns: undefined
           }
-        | { Args: { profile_data: Json; user_id: number }; Returns: undefined }
       upsert_user_setting: {
         Args: { p_user_id: string; p_windows98_style: boolean }
         Returns: undefined

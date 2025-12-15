@@ -81,17 +81,63 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Detect and convert encoding to UTF-8
+  const detectAndConvertEncoding = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Check for UTF-8 BOM
+    if (uint8Array[0] === 0xEF && uint8Array[1] === 0xBB && uint8Array[2] === 0xBF) {
+      console.log('Detected UTF-8 with BOM');
+      return new TextDecoder('utf-8').decode(buffer);
+    }
+    
+    // Try UTF-8 first
+    try {
+      const utf8Text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      // Check if text contains typical Polish characters decoded correctly
+      if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(utf8Text) || !/[�\uFFFD]/.test(utf8Text)) {
+        console.log('Detected UTF-8');
+        return utf8Text;
+      }
+    } catch {
+      // UTF-8 decoding failed
+    }
+    
+    // Try Windows-1250 (common for Polish files)
+    try {
+      const win1250Text = new TextDecoder('windows-1250').decode(buffer);
+      console.log('Detected Windows-1250');
+      return win1250Text;
+    } catch {
+      // Windows-1250 decoding failed
+    }
+    
+    // Fallback to ISO-8859-2
+    try {
+      const isoText = new TextDecoder('iso-8859-2').decode(buffer);
+      console.log('Detected ISO-8859-2');
+      return isoText;
+    } catch {
+      // Last resort - try UTF-8 without strict mode
+      console.log('Fallback to UTF-8 non-strict');
+      return new TextDecoder('utf-8').decode(buffer);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     
     setFile(selectedFile);
     
-    // Parse CSV file with Polish character encoding
-    Papa.parse(selectedFile, {
+    // Detect and convert encoding automatically
+    const fileContent = await detectAndConvertEncoding(selectedFile);
+    
+    // Parse CSV file with converted content
+    Papa.parse(fileContent, {
       header: false,
       skipEmptyLines: true,
-      encoding: 'UTF-8',
       complete: (results) => {
         if (results.data.length > 0) {
           const firstRow = results.data[0] as string[];

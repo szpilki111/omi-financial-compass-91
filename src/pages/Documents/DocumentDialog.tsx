@@ -637,13 +637,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
     }
 
-    // Function to count missing fields in a transaction
+    // Function to count missing fields in a transaction - supports negative amounts
     const countMissingFields = (transaction: Transaction) => {
       let count = 0;
       
-      // Check if this is a split transaction (one side empty, other filled)
-      const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
-      const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+      // Check if this is a split transaction (one side empty, other filled) - use !== 0 for negative amounts
+      const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
+      const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
       const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
       
       if (!transaction.description || transaction.description.trim() === "") count++;
@@ -653,9 +653,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         if (hasDebit && !transaction.debit_account_id) count++;
         if (hasCredit && !transaction.credit_account_id) count++;
       } else {
-        // For normal transactions, both sides must be filled
-        if (!transaction.debit_amount || transaction.debit_amount <= 0) count++;
-        if (!transaction.credit_amount || transaction.credit_amount <= 0) count++;
+        // For normal transactions, both sides must be filled - use !== 0 for negative amounts
+        if (!transaction.debit_amount || transaction.debit_amount === 0) count++;
+        if (!transaction.credit_amount || transaction.credit_amount === 0) count++;
         if (!transaction.debit_account_id) count++;
         if (!transaction.credit_account_id) count++;
       }
@@ -670,9 +670,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       if (missingCount > 0) {
         const missingFields: ValidationError["missingFields"] = {};
         
-        // Check if this is a split transaction
-        const hasDebit = transaction.debit_amount && transaction.debit_amount > 0;
-        const hasCredit = transaction.credit_amount && transaction.credit_amount > 0;
+        // Check if this is a split transaction - use !== 0 for negative amounts
+        const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
+        const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
         const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
 
         if (!transaction.description || transaction.description.trim() === "") missingFields.description = true;
@@ -682,9 +682,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           if (hasDebit && !transaction.debit_account_id) missingFields.debit_account_id = true;
           if (hasCredit && !transaction.credit_account_id) missingFields.credit_account_id = true;
         } else {
-          // For normal transactions, validate both sides
-          if (!transaction.debit_amount || transaction.debit_amount <= 0) missingFields.debit_amount = true;
-          if (!transaction.credit_amount || transaction.credit_amount <= 0) missingFields.credit_amount = true;
+          // For normal transactions, validate both sides - use === 0 for negative amounts
+          if (!transaction.debit_amount || transaction.debit_amount === 0) missingFields.debit_amount = true;
+          if (!transaction.credit_amount || transaction.credit_amount === 0) missingFields.credit_amount = true;
           if (!transaction.debit_account_id) missingFields.debit_account_id = true;
           if (!transaction.credit_account_id) missingFields.credit_account_id = true;
         }
@@ -747,9 +747,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       })),
     );
 
-    // Validate document balance
-    const totalDebit = allFinalTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
-    const totalCredit = allFinalTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
+    // Validate document balance - use Math.abs() to support negative amounts
+    const totalDebit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.debit_amount || 0), 0);
+    const totalCredit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.credit_amount || 0), 0);
 
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       toast({
@@ -1477,6 +1477,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10"></TableHead>
+                        <TableHead className="w-10 text-center">Lp.</TableHead>
                         <TableHead className="w-12">
                           <Checkbox
                             checked={selectedTransactions.length === transactions.length && transactions.length > 0}
@@ -1509,6 +1510,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               key={transaction.id || `temp-${index}`}
                               id={transaction.id || `temp-${index}`}
                               index={index}
+                              orderNumber={index + 1}
                               transaction={transaction}
                               onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                               onDelete={() => removeTransaction(index)}
@@ -1537,7 +1539,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     </TableBody>
                     <TableFooter>
                       <TableRow className="bg-gray-50 font-medium">
-                        <TableCell colSpan={3} className="text-right font-bold">
+                        <TableCell colSpan={4} className="text-right font-bold">
                           RAZEM:
                         </TableCell>
                         <TableCell className="text-right font-bold text-lg">
@@ -1628,6 +1630,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10"></TableHead>
+                          <TableHead className="w-10 text-center">Lp.</TableHead>
                           <TableHead className="w-12">
                             <Checkbox
                               checked={
@@ -1639,10 +1642,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                             />
                           </TableHead>
                           <TableHead className="w-[50%] min-w-[300px]">Opis</TableHead>
-                          <TableHead>Konto Wn</TableHead>
-                          <TableHead className="text-right w-auto">Winien</TableHead>
+                          <TableHead className="text-right w-auto">Kwota Winien</TableHead>
+                          <TableHead>Konto Winien</TableHead>
+                          <TableHead className="text-right w-auto">Kwota Ma</TableHead>
                           <TableHead>Konto Ma</TableHead>
-                          <TableHead className="text-right w-auto">Ma</TableHead>
                           <TableHead>Akcje</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1663,6 +1666,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                                 key={transaction.id || `temp-${index}`}
                                 id={transaction.id || `temp-${index}`}
                                 index={index}
+                                orderNumber={index + 1}
                                 transaction={transaction}
                                 onUpdate={(updatedTransaction) =>
                                   handleUpdateParallelTransaction(index, updatedTransaction)
@@ -1693,10 +1697,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       </TableBody>
                       <TableFooter>
                         <TableRow className="bg-gray-50 font-medium">
-                          <TableCell colSpan={3} className="text-right font-bold">
+                          <TableCell colSpan={4} className="text-right font-bold">
                             RAZEM:
                           </TableCell>
-                          <TableCell></TableCell>
                           <TableCell className="text-right font-bold text-lg">
                             {formatAmount(parallelDebitSum, selectedCurrency)}
                           </TableCell>
@@ -1704,6 +1707,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                           <TableCell className="text-right font-bold text-lg">
                             {formatAmount(parallelCreditSum, selectedCurrency)}
                           </TableCell>
+                          <TableCell></TableCell>
                           <TableCell className="text-left font-bold">
                             Suma: {formatAmount(parallelDebitSum + parallelCreditSum, selectedCurrency)}
                           </TableCell>
@@ -1800,6 +1804,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 const SortableTransactionRow: React.FC<{
   id: string;
   index: number;
+  orderNumber?: number;
   transaction: Transaction;
   onUpdate: (transaction: Transaction) => void;
   onDelete: () => void;
@@ -1814,6 +1819,7 @@ const SortableTransactionRow: React.FC<{
 }> = ({
   id,
   index,
+  orderNumber,
   transaction,
   onUpdate,
   onDelete,
@@ -1839,6 +1845,7 @@ const SortableTransactionRow: React.FC<{
       ref={setNodeRef}
       style={style}
       dragHandleProps={{ ...attributes, ...listeners }}
+      orderNumber={orderNumber}
       transaction={transaction}
       onUpdate={onUpdate}
       onDelete={onDelete}
@@ -1870,6 +1877,7 @@ const EditableTransactionRow = React.forwardRef<
     missingFields?: ValidationError["missingFields"];
     style?: React.CSSProperties;
     dragHandleProps?: any;
+    orderNumber?: number;
   }
 >(
   (
@@ -1887,6 +1895,7 @@ const EditableTransactionRow = React.forwardRef<
       missingFields,
       style,
       dragHandleProps,
+      orderNumber,
     },
     ref,
   ) => {
@@ -1961,6 +1970,9 @@ const EditableTransactionRow = React.forwardRef<
           <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing">
             <GripVertical className="h-4 w-4 text-gray-400" />
           </div>
+        </TableCell>
+        <TableCell className="text-center font-mono text-sm text-muted-foreground">
+          {orderNumber}
         </TableCell>
         <TableCell>
           <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
