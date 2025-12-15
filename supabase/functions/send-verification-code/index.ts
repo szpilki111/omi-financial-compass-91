@@ -111,89 +111,9 @@ const handler = async (req: Request): Promise<Response> => {
     // Wyślij email z kodem przez własny SMTP
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #E6B325 0%, #D4A017 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .code-box { background: white; border: 2px solid #E6B325; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
-            .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #E6B325; }
-            .info { background: #fff3cd; border-left: 4px solid #E6B325; padding: 15px; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🔐 Weryfikacja dwuetapowa</h1>
-            </div>
-            <div class="content">
-              <p>Witaj,</p>
-              <p>Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p>
-              
-              <div class="code-box">
-                <p style="margin: 0; font-size: 14px; color: #666;">Twój kod weryfikacyjny:</p>
-                <div class="code">${code}</div>
-              </div>
+    const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;line-height:1.6;color:#333}.container{max-width:600px;margin:0 auto;padding:20px}.header{background:linear-gradient(135deg,#E6B325 0%,#D4A017 100%);color:white;padding:30px;text-align:center;border-radius:10px 10px 0 0}.content{background:#f9f9f9;padding:30px;border-radius:0 0 10px 10px}.code-box{background:white;border:2px solid #E6B325;border-radius:8px;padding:20px;text-align:center;margin:20px 0}.code{font-size:32px;font-weight:bold;letter-spacing:8px;color:#E6B325}.info{background:#fff3cd;border-left:4px solid #E6B325;padding:15px;margin:20px 0}.footer{text-align:center;margin-top:20px;color:#666;font-size:12px}</style></head><body><div class="container"><div class="header"><h1>🔐 Weryfikacja dwuetapowa</h1></div><div class="content"><p>Witaj,</p><p>Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p><div class="code-box"><p style="margin:0;font-size:14px;color:#666">Twój kod weryfikacyjny:</p><div class="code">${code}</div></div><p>Wprowadź ten kod, aby zakończyć proces logowania.</p><div class="info"><strong>⏱️ Ważne informacje:</strong><ul style="margin:10px 0"><li>Kod jest ważny przez <strong>15 minut</strong></li><li>Użyj go tylko raz</li><li>Możesz zaznaczyć to urządzenie jako zaufane na 30 dni</li></ul></div><p style="margin-top:20px;color:#d9534f"><strong>⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!</strong></p></div><div class="footer"><p>System Finansowy OMI<br>Misjonarze Oblaci Maryi Niepokalanej</p><p>marekglowacki.pl</p></div></div></body></html>`;
 
-              <p>Wprowadź ten kod, aby zakończyć proces logowania.</p>
-
-              <div class="info">
-                <strong>⏱️ Ważne informacje:</strong>
-                <ul style="margin: 10px 0;">
-                  <li>Kod jest ważny przez <strong>15 minut</strong></li>
-                  <li>Użyj go tylko raz</li>
-                  <li>Możesz zaznaczyć to urządzenie jako zaufane, aby nie otrzymywać kodów w przyszłości</li>
-                </ul>
-              </div>
-
-              ${user_agent ? `<p style="font-size: 12px; color: #666;"><strong>Urządzenie:</strong> ${user_agent}</p>` : ''}
-              ${ip_address ? `<p style="font-size: 12px; color: #666;"><strong>Adres IP:</strong> ${ip_address}</p>` : ''}
-
-              <p style="margin-top: 20px; color: #d9534f;">
-                <strong>⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!</strong>
-              </p>
-            </div>
-            <div class="footer">
-              <p>System Finansowy OMI<br>Misjonarze Oblaci Maryi Niepokalanej</p>
-              <p>marekglowacki.pl</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const textContent = `
-🔐 Weryfikacja dwuetapowa - System Finansowy OMI
-
-Witaj,
-
-Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.
-
-Twój kod weryfikacyjny: ${code}
-
-Wprowadź ten kod, aby zakończyć proces logowania.
-
-⏱️ Ważne informacje:
-- Kod jest ważny przez 15 minut
-- Użyj go tylko raz
-- Możesz zaznaczyć to urządzenie jako zaufane, aby nie otrzymywać kodów w przyszłości
-
-${user_agent ? `Urządzenie: ${user_agent}` : ''}
-${ip_address ? `Adres IP: ${ip_address}` : ''}
-
-⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!
-
----
-System Finansowy OMI
-Misjonarze Oblaci Maryi Niepokalanej
-marekglowacki.pl
-    `;
+    const textContent = `🔐 Weryfikacja dwuetapowa - System Finansowy OMI\n\nWitaj,\n\nWykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.\n\nTwój kod weryfikacyjny: ${code}\n\nWprowadź ten kod, aby zakończyć proces logowania.\n\n⏱️ Ważne informacje:\n- Kod jest ważny przez 15 minut\n- Użyj go tylko raz\n- Możesz zaznaczyć to urządzenie jako zaufane na 30 dni\n\n⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!\n\n---\nSystem Finansowy OMI\nMisjonarze Oblaci Maryi Niepokalanej\nmarekglowacki.pl`;
 
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
