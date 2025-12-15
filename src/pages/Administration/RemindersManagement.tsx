@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Spinner } from '@/components/ui/Spinner';
-import { Bell, Send, Calendar, CheckCircle } from 'lucide-react';
+import { Bell, Send, Calendar, CheckCircle, Building2, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -12,8 +12,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+interface PendingLocation {
+  id: string;
+  name: string;
+  economists: { email: string; name: string }[];
+}
+
 const RemindersManagement: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
+  const [sendingLocationId, setSendingLocationId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: reminderLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
@@ -33,40 +40,81 @@ const RemindersManagement: React.FC = () => {
     }
   });
 
+  const { data: pendingData, isLoading: pendingLoading, refetch: refetchPending } = useQuery({
+    queryKey: ['pendingReminders'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('send-report-reminders', {
+        body: { list_only: true }
+      });
+      
+      if (error) throw error;
+      return data as { 
+        pendingLocations: PendingLocation[]; 
+        reportMonth: number; 
+        reportYear: number;
+        reminderType: string;
+      };
+    }
+  });
+
   const handleSendReminders = async () => {
     setIsSending(true);
     
     try {
       const { data, error } = await supabase.functions.invoke('send-report-reminders');
       
-      if (error) {
-        throw error;
-      }
-
-      if (data?.success === false) {
-        throw new Error(data?.error || 'Nieznany błąd');
-      }
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
 
       const sent = data?.sent || 0;
       const remaining = data?.remaining || 0;
-      const message = data?.message || `Wysłano ${sent} przypomnień do ekonomów.`;
 
       toast({
         title: sent > 0 ? "Przypomnienia wysłane" : "Informacja",
-        description: message,
-        variant: remaining > 0 ? "default" : "default",
+        description: data?.message || `Wysłano ${sent} przypomnień.`,
       });
 
       refetchLogs();
+      refetchPending();
     } catch (error: any) {
       console.error('Error sending reminders:', error);
       toast({
         title: "Błąd",
-        description: error.message || "Nie udało się wysłać przypomnień. Spróbuj ponownie.",
+        description: error.message || "Nie udało się wysłać przypomnień.",
         variant: "destructive",
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSendSingleReminder = async (locationId: string, locationName: string) => {
+    setSendingLocationId(locationId);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-report-reminders', {
+        body: { location_id: locationId }
+      });
+      
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
+
+      toast({
+        title: "Przypomnienie wysłane",
+        description: `Wysłano przypomnienie dla: ${locationName}`,
+      });
+
+      refetchLogs();
+      refetchPending();
+    } catch (error: any) {
+      console.error('Error sending single reminder:', error);
+      toast({
+        title: "Błąd",
+        description: error.message || "Nie udało się wysłać przypomnienia.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingLocationId(null);
     }
   };
 
@@ -82,6 +130,8 @@ const RemindersManagement: React.FC = () => {
         return <Badge variant="outline">{type}</Badge>;
     }
   };
+
+  const pendingLocations = pendingData?.pendingLocations || [];
 
   return (
     <div className="space-y-6">
@@ -101,13 +151,12 @@ const RemindersManagement: React.FC = () => {
             <div className="flex-1">
               <p className="font-medium">Przypomnienia o raportach</p>
               <p className="text-sm text-muted-foreground">
-                System wyśle przypomnienia do ekonomów placówek, które nie złożyły jeszcze raportu za poprzedni miesiąc.
-                Przypomnienia są wysyłane 5 dni przed terminem, 1 dzień przed terminem oraz po przekroczeniu terminu.
+                Wyślij przypomnienia zbiorczo (max 5 na raz) lub pojedynczo dla wybranej placówki.
               </p>
             </div>
             <Button 
               onClick={handleSendReminders} 
-              disabled={isSending}
+              disabled={isSending || pendingLocations.length === 0}
               className="flex items-center gap-2"
             >
               {isSending ? (
@@ -118,12 +167,85 @@ const RemindersManagement: React.FC = () => {
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Wyślij przypomnienia
+                  Wyślij wszystkie
                 </>
               )}
             </Button>
           </div>
 
+          {/* Pending locations section */}
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-medium flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Placówki oczekujące na przypomnienie
+                {pendingData?.reportMonth && (
+                  <Badge variant="outline" className="ml-2">
+                    {pendingData.reportMonth}/{pendingData.reportYear}
+                  </Badge>
+                )}
+              </h4>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => refetchPending()}
+                disabled={pendingLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+
+            {pendingLoading ? (
+              <div className="flex justify-center py-4">
+                <Spinner />
+              </div>
+            ) : pendingLocations.length > 0 ? (
+              <ScrollArea className="h-[200px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Placówka</TableHead>
+                      <TableHead>Ekonomiści</TableHead>
+                      <TableHead className="w-[100px]">Akcja</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingLocations.map((loc) => (
+                      <TableRow key={loc.id}>
+                        <TableCell className="font-medium">{loc.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {loc.economists.length > 0 
+                            ? loc.economists.map(e => e.name || e.email).join(', ')
+                            : <span className="italic">Brak przypisanego ekonoma</span>
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendSingleReminder(loc.id, loc.name)}
+                            disabled={sendingLocationId === loc.id || loc.economists.length === 0}
+                          >
+                            {sendingLocationId === loc.id ? (
+                              <Spinner size="sm" />
+                            ) : (
+                              <Send className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                Wszystkie placówki złożyły raporty
+              </p>
+            )}
+          </div>
+
+          {/* History section */}
           <div className="border-t pt-4">
             <h4 className="font-medium mb-3 flex items-center gap-2">
               <CheckCircle className="h-4 w-4" />
