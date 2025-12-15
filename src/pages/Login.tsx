@@ -107,12 +107,9 @@ const Login = () => {
       // Check for any existing session and sign out if found
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        console.log('Znaleziono aktywną sesję, wylogowuję...', session.user.email);
         await supabase.auth.signOut();
       }
 
-      // Use loginField directly as email for login
-      console.log("Próba logowania dla email:", loginField);
       const userEmail = loginField.trim().toLowerCase();
 
       // Standardowe logowanie bez 2FA
@@ -134,23 +131,17 @@ const Login = () => {
         return;
       }
 
-      // 2FA włączone: NIE przekierowuj automatycznie po SIGNED_IN (zapobiega "mignięciu" dashboardu)
+      // 2FA włączone
       setTwoFactorInProgress(true);
 
-      // Wygeneruj fingerprint urządzenia
       const fingerprint = await generateDeviceFingerprint();
       setDeviceFingerprint(fingerprint);
 
-      // Sprawdź czy konto nie jest zablokowane (analogicznie do AuthContext.login)
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('id, blocked')
         .eq('email', userEmail)
         .maybeSingle();
-
-      if (profileError) {
-        console.error('Błąd podczas pobierania profilu:', profileError);
-      }
 
       if (profileData?.blocked) {
         toast({
@@ -162,7 +153,6 @@ const Login = () => {
         return;
       }
 
-      // Zaloguj się technicznie, aby uzyskać userId (nie nawigujemy dopóki nie rozstrzygniemy 2FA)
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password,
@@ -176,7 +166,6 @@ const Login = () => {
 
       const userId = authData.user.id;
       
-      // Sprawdź czy urządzenie jest zaufane
       const trusted = await isDeviceTrusted(userId, fingerprint, supabase);
       
       if (trusted) {
@@ -195,7 +184,7 @@ const Login = () => {
       // Urządzenie niezaufane → wyloguj i przejdź do weryfikacji kodem
       await supabase.auth.signOut({ scope: 'local' });
       
-      const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
+      const { data: sendData, error: sendError } = await supabase.functions.invoke('send-verification-code', {
         body: {
           user_id: userId,
           email: userEmail,
@@ -205,8 +194,14 @@ const Login = () => {
       });
 
       if (sendError) {
-        console.error('Error sending verification code:', sendError);
         setError('Nie udało się wysłać kodu weryfikacyjnego');
+        setTwoFactorInProgress(false);
+        return;
+      }
+
+      // Obsługa rate limiting (429)
+      if (sendData?.error === 'Too many requests') {
+        setError('Zbyt wiele prób. Poczekaj chwilę i spróbuj ponownie.');
         setTwoFactorInProgress(false);
         return;
       }
@@ -215,7 +210,6 @@ const Login = () => {
       setPendingEmail(userEmail);
       setShowTwoFactorDialog(true);
     } catch (err: any) {
-      console.error("Login error:", err);
       setError(err?.message || "Wystąpił problem podczas logowania. Spróbuj ponownie.");
       setTwoFactorInProgress(false);
     } finally {
@@ -228,12 +222,10 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Jeśli użytkownik chce dodać urządzenie do zaufanych
       if (trustDevice) {
         await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
       }
 
-      // Zaloguj użytkownika przez context
       const success = await Promise.race([
         login(pendingEmail, password),
         timeout(10000)
@@ -250,8 +242,7 @@ const Login = () => {
         setError("Nie udało się zalogować po weryfikacji");
         setTwoFactorInProgress(false);
       }
-    } catch (err: any) {
-      console.error("Error after 2FA:", err);
+    } catch {
       setError("Wystąpił błąd podczas logowania");
       setTwoFactorInProgress(false);
     } finally {
