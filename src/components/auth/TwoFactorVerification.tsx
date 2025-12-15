@@ -66,32 +66,23 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
     setError('');
 
     try {
-      // Sprawdź kod w bazie danych
-      const { data: verificationData, error: fetchError } = await supabase
-        .from('verification_codes')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('device_fingerprint', deviceFingerprint)
-        .eq('code', code)
-        .is('used_at', null)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const codeNormalized = code.replace(/\D/g, '').slice(0, 6);
 
-      if (fetchError || !verificationData) {
+      const { data, error: verifyError } = await supabase.functions.invoke(
+        'verify-verification-code',
+        {
+          body: {
+            user_id: userId,
+            device_fingerprint: deviceFingerprint,
+            code: codeNormalized,
+          },
+        }
+      );
+
+      if (verifyError || !data?.valid) {
         setError('Nieprawidłowy lub wygasły kod weryfikacyjny');
-        setIsVerifying(false);
         return;
       }
-
-      // Oznacz kod jako użyty
-      const { error: updateError } = await supabase
-        .from('verification_codes')
-        .update({ used_at: new Date().toISOString() })
-        .eq('id', verificationData.id);
-
-      if (updateError) throw updateError;
 
       toast({
         title: "Weryfikacja zakończona pomyślnie",
