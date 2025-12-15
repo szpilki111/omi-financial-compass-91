@@ -42,8 +42,8 @@ const Header = () => {
         icon: "/021f933f-b354-4042-b593-acbe82f67257.png",
       },
       {
-        name: "Kalendarz",
-        path: "/kalendarz",
+        name: "Baza wiedzy",
+        path: "/baza-wiedzy",
         icon: "/021f933f-b354-4042-b593-acbe82f67257.png",
       },
       {
