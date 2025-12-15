@@ -101,8 +101,6 @@ const handler = async (req: Request): Promise<Response> => {
         code,
         device_fingerprint: normalizedFingerprint,
         expires_at: expiresAt.toISOString(),
-        user_agent: user_agent ?? null,
-        ip_address: ip_address ?? null,
       });
 
     if (insertError) {
