@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -33,9 +33,19 @@ export const AccountsSettingsTab: React.FC = () => {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [inputValue, setInputValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editingAnalytical, setEditingAnalytical] = useState<AnalyticalAccount | null>(null);
+
+  // Debounce - aktualizuj searchQuery po 500ms od ostatniej zmiany
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(inputValue);
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [inputValue]);
 
   // Pobierz restrykcje kont dla tej lokalizacji
   const { data: accountRestrictions } = useQuery({
@@ -362,18 +372,8 @@ export const AccountsSettingsTab: React.FC = () => {
     return <Spinner />;
   }
 
-  if (!availableAccounts?.length) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Dostępne konta</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Brak dostępnych kont dla tej lokalizacji.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const hasNoAccountsAtAll = !allAccounts?.length;
+  const hasNoFilteredResults = allAccounts?.length > 0 && availableAccounts?.length === 0;
 
   return (
     <div className="space-y-6">
@@ -389,11 +389,21 @@ export const AccountsSettingsTab: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Szukaj konta po numerze lub nazwie..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
               className="pl-9"
+              autoFocus
             />
           </div>
+          
+          {hasNoAccountsAtAll && (
+            <p className="text-muted-foreground text-center py-8">Brak dostępnych kont dla tej lokalizacji.</p>
+          )}
+          
+          {hasNoFilteredResults && (
+            <p className="text-muted-foreground text-center py-8">Brak wyników dla "{searchQuery}"</p>
+          )}
+          {availableAccounts && availableAccounts.length > 0 && (
           <div className="max-h-[600px] overflow-y-auto border rounded-lg p-2">
             <div className="space-y-2">
               {availableAccounts.map((account) => {
@@ -479,6 +489,7 @@ export const AccountsSettingsTab: React.FC = () => {
             })}
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 
