@@ -215,11 +215,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     return () => subscription.unsubscribe();
   }, [form]);
 
-  useEffect(() => {
-    if (transactions.length > 0 || parallelTransactions.length > 0) {
-      setHasUnsavedChanges(true);
-    }
-  }, [transactions, parallelTransactions]);
+  // NOTE: Removed useEffect that set hasUnsavedChanges on transactions change,
+  // as it caused false "unsaved changes" alerts when loading existing documents.
+  // hasUnsavedChanges is now tracked only by form.watch() and explicit user edits.
 
   useEffect(() => {
     if (isOpen && !document) {
