@@ -154,30 +154,19 @@ export const AccountsSettingsTab: React.FC = () => {
         }
       }
 
-      // If location has an identifier, also include accounts that match the identifier pattern
+      // If location has an identifier, fetch accounts matching the pattern directly from database
       if (locationData?.location_identifier) {
         const identifier = locationData.location_identifier;
         
-        // Get ALL accounts that match the location identifier - no limit
-        const { data: fetchedAccounts, error: allAccountsError } = await supabase
+        // Use server-side filtering with LIKE to avoid Supabase's 1000 row default limit
+        // Match accounts like "xxx-2-3" or "xxx-2-3-x" for identifier "2-3"
+        const { data: matchingAccounts, error: matchError } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
+          .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
           .order('number');
 
-        if (!allAccountsError && fetchedAccounts) {
-
-          const matchingAccounts = fetchedAccounts.filter(account => {
-            // Check if account number starts with the location identifier after the first dash
-            // Also match accounts with additional suffixes like "100-5-3-1" when identifier is "5-3"
-            const accountParts = account.number.split('-');
-            if (accountParts.length < 2) return false;
-            
-            // Get the suffix (everything after the first dash)
-            const suffix = accountParts.slice(1).join('-');
-            // Match exact identifier or identifier with additional parts
-            return suffix === identifier || suffix.startsWith(identifier + '-');
-          });
-
+        if (!matchError && matchingAccounts) {
           // Merge with existing accounts, avoiding duplicates
           const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
           const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
