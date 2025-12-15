@@ -408,7 +408,7 @@ export const AccountsSettingsTab: React.FC = () => {
               className="pl-9"
             />
           </div>
-          <ScrollArea className="h-[calc(100vh-380px)] max-h-[800px]">
+          <ScrollArea className="h-[500px]">
             <div className="space-y-2 pr-4">
               {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
