@@ -49,6 +49,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   const [displayedAccountName, setDisplayedAccountName] = useState('');
   const [shouldAutoOpen, setShouldAutoOpen] = useState(true); // Track if we should auto-open
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   // Load all accounts for location once on mount or when locationId changes
   useEffect(() => {
@@ -268,6 +269,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     }}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -308,10 +310,28 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
             }}
             onKeyDown={(e) => {
               if (e.key === 'Tab') {
-                // Zamknij popover i pozwól na normalną nawigację Tab
+                // Zamknij popover i przenieś fokus na trigger, który pozwoli na naturalną nawigację Tab
+                e.preventDefault();
                 setOpen(false);
                 setSearchTerm('');
-                // Nie blokuj domyślnego zachowania - Tab przejdzie do następnego pola
+                
+                // Po zamknięciu popovera, przenieś fokus na następny element
+                setTimeout(() => {
+                  if (triggerRef.current) {
+                    // Znajdź wszystkie focusowalne elementy
+                    const focusableElements = document.querySelectorAll<HTMLElement>(
+                      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                    );
+                    const elements = Array.from(focusableElements);
+                    const currentIndex = elements.indexOf(triggerRef.current);
+                    
+                    // Przejdź do następnego (lub poprzedniego jeśli Shift+Tab)
+                    const nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
+                    if (nextIndex >= 0 && nextIndex < elements.length) {
+                      elements[nextIndex].focus();
+                    }
+                  }
+                }, 0);
               } else if (e.key === 'Enter') {
                 e.preventDefault();
                 // Znajdź pierwsze pasujące konto
