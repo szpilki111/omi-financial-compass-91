@@ -88,7 +88,13 @@ const AccountSearchPage = () => {
         return [];
       }
 
-      const locationCategory = locationData?.location_identifier?.split('-')[0];
+      const identifier = locationData?.location_identifier;
+      if (!identifier) {
+        console.error('No location identifier found');
+        return [];
+      }
+
+      const locationCategory = identifier.split('-')[0];
 
       // Get account restrictions for this category
       let restrictions: any[] = [];
@@ -110,41 +116,38 @@ const AccountSearchPage = () => {
 
       const accountIds = locationAccountData?.map(la => la.account_id) || [];
 
-      // Get all accounts - search by number OR name
-      let query = supabase
+      // Server-side filter: accounts matching location identifier pattern
+      // Pattern: %-{identifier} (exact) or %-{identifier}-% (with suffix)
+      const { data: locationAccounts, error } = await supabase
         .from('accounts')
         .select('*')
-        .or(`number.ilike.${searchTerm}%,name.ilike.%${searchTerm}%`)
+        .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
         .order('number');
 
-      const { data: allAccounts, error } = await query;
-      
       if (error) throw error;
-      
-      let filteredAccounts = allAccounts || [];
 
-      // Filter to only include:
-      // 1. Manually assigned accounts
-      // 2. Accounts matching location identifier pattern
-      if (locationData?.location_identifier) {
-        filteredAccounts = filteredAccounts.filter(account => {
-          // Check if manually assigned
-          if (accountIds.includes(account.id)) return true;
-
-          // Check if matches location identifier pattern
-          const accountParts = account.number.split('-');
-          if (accountParts.length < 2) return false;
-          
-          const suffix = accountParts.slice(1).join('-');
-          const identifier = locationData.location_identifier;
-          return suffix === identifier || suffix.startsWith(identifier + '-');
-        });
-      } else {
-        // If no identifier, only show manually assigned accounts
-        filteredAccounts = filteredAccounts.filter(account => 
-          accountIds.includes(account.id)
-        );
+      // Get manually assigned accounts separately
+      let manualAccounts: any[] = [];
+      if (accountIds.length > 0) {
+        const { data: manualData } = await supabase
+          .from('accounts')
+          .select('*')
+          .in('id', accountIds);
+        manualAccounts = manualData || [];
       }
+
+      // Combine and deduplicate
+      const allLocationAccounts = [...(locationAccounts || []), ...manualAccounts];
+      const uniqueAccounts = Array.from(
+        new Map(allLocationAccounts.map(a => [a.id, a])).values()
+      );
+
+      // Now filter by search term (number prefix OR name contains)
+      const searchLower = searchTerm.toLowerCase();
+      let filteredAccounts = uniqueAccounts.filter(account => 
+        account.number.toLowerCase().startsWith(searchLower) ||
+        account.name.toLowerCase().includes(searchLower)
+      );
 
       // Apply category restrictions
       if (locationCategory && restrictions.length > 0) {
