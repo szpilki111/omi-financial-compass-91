@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
   FileText, 
@@ -26,26 +28,40 @@ import {
   Filter,
   BookOpen,
   FileQuestion,
-  Loader2
+  Loader2,
+  Home,
+  DollarSign,
+  BarChart3,
+  Settings,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+  Files,
+  Calculator,
+  Users
 } from 'lucide-react';
 import PageTitle from '@/components/ui/PageTitle';
 
-// Simple markdown renderer component
+// Enhanced Markdown renderer with tables, code blocks, alerts, and horizontal rules
 const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
   const renderMarkdown = (text: string) => {
-    // Split by lines to process each line
     const lines = text.split('\n');
     const elements: React.ReactNode[] = [];
     let currentList: string[] = [];
     let listType: 'ul' | 'ol' | null = null;
+    let tableData: string[][] = [];
+    let inTable = false;
+    let inCodeBlock = false;
+    let codeBlockContent: string[] = [];
     
     const flushList = () => {
       if (currentList.length > 0 && listType) {
         const ListTag = listType;
         elements.push(
-          <ListTag key={elements.length} className={listType === 'ul' ? 'list-disc pl-5 my-2' : 'list-decimal pl-5 my-2'}>
+          <ListTag key={elements.length} className={listType === 'ul' ? 'list-disc pl-5 my-2 space-y-1' : 'list-decimal pl-5 my-2 space-y-1'}>
             {currentList.map((item, i) => (
-              <li key={i} className="my-1">{renderInline(item)}</li>
+              <li key={i} className="text-sm">{renderInline(item)}</li>
             ))}
           </ListTag>
         );
@@ -54,30 +70,147 @@ const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
       }
     };
 
+    const flushTable = () => {
+      if (tableData.length > 0) {
+        const headers = tableData[0];
+        const rows = tableData.slice(2); // Skip header separator row
+        elements.push(
+          <div key={elements.length} className="my-4 overflow-x-auto">
+            <table className="w-full text-sm border-collapse border border-border rounded-lg">
+              <thead className="bg-muted/50">
+                <tr>
+                  {headers.map((cell, i) => (
+                    <th key={i} className="border border-border px-3 py-2 text-left font-semibold">
+                      {renderInline(cell.trim())}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, rowIndex) => (
+                  <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={cellIndex} className="border border-border px-3 py-2">
+                        {renderInline(cell.trim())}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        tableData = [];
+        inTable = false;
+      }
+    };
+
     const renderInline = (text: string): React.ReactNode => {
       // Bold: **text** or __text__
-      let result = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      result = result.replace(/__(.+?)__/g, '<strong>$1</strong>');
+      let result = text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+      result = result.replace(/__(.+?)__/g, '<strong class="font-semibold">$1</strong>');
       // Italic: *text* or _text_
-      result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-      result = result.replace(/_([^_]+)_/g, '<em>$1</em>');
+      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+      result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
       // Code: `text`
-      result = result.replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs">$1</code>');
+      result = result.replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
+      // Links: [text](url)
+      result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary underline hover:no-underline">$1</a>');
       
       return <span dangerouslySetInnerHTML={{ __html: result }} />;
     };
 
     lines.forEach((line, index) => {
-      // Headers
-      if (line.startsWith('### ')) {
+      // Code block handling
+      if (line.startsWith('```')) {
+        if (inCodeBlock) {
+          // End code block
+          elements.push(
+            <pre key={elements.length} className="my-3 p-4 bg-muted/50 rounded-lg overflow-x-auto border border-border">
+              <code className="text-xs font-mono">{codeBlockContent.join('\n')}</code>
+            </pre>
+          );
+          codeBlockContent = [];
+          inCodeBlock = false;
+        } else {
+          // Start code block
+          flushList();
+          flushTable();
+          inCodeBlock = true;
+        }
+        return;
+      }
+
+      if (inCodeBlock) {
+        codeBlockContent.push(line);
+        return;
+      }
+
+      // Table handling
+      if (line.includes('|') && line.trim().startsWith('|')) {
         flushList();
-        elements.push(<h3 key={index} className="font-semibold text-base mt-4 mb-2">{renderInline(line.slice(4))}</h3>);
+        if (!inTable) inTable = true;
+        const cells = line.split('|').filter((_, i, arr) => i > 0 && i < arr.length - 1);
+        if (!line.includes('---')) {
+          tableData.push(cells);
+        } else {
+          tableData.push([]); // Separator placeholder
+        }
+        return;
+      } else if (inTable) {
+        flushTable();
+      }
+
+      // Horizontal rule
+      if (line.match(/^[-*_]{3,}$/)) {
+        flushList();
+        elements.push(<hr key={index} className="my-6 border-border" />);
+        return;
+      }
+
+      // Blockquote / Alert
+      if (line.startsWith('> ')) {
+        flushList();
+        const content = line.slice(2);
+        let alertType = 'info';
+        let alertIcon = '💡';
+        if (content.includes('**Wskazówka**') || content.includes('💡')) {
+          alertType = 'tip';
+          alertIcon = '💡';
+        } else if (content.includes('**Uwaga**') || content.includes('⚠️')) {
+          alertType = 'warning';
+          alertIcon = '⚠️';
+        } else if (content.includes('❌') || content.includes('**Błąd**')) {
+          alertType = 'error';
+          alertIcon = '❌';
+        }
+        
+        const bgColor = alertType === 'tip' ? 'bg-green-500/10 border-green-500/30' :
+                       alertType === 'warning' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                       alertType === 'error' ? 'bg-red-500/10 border-red-500/30' :
+                       'bg-blue-500/10 border-blue-500/30';
+        
+        elements.push(
+          <div key={index} className={`my-3 p-3 rounded-lg border-l-4 ${bgColor}`}>
+            <p className="text-sm">{renderInline(content)}</p>
+          </div>
+        );
+        return;
+      }
+
+      // Headers
+      if (line.startsWith('#### ')) {
+        flushList();
+        elements.push(<h4 key={index} className="font-semibold text-sm mt-4 mb-2 text-muted-foreground">{renderInline(line.slice(5))}</h4>);
+      } else if (line.startsWith('### ')) {
+        flushList();
+        elements.push(<h3 key={index} className="font-semibold text-base mt-5 mb-2 text-foreground">{renderInline(line.slice(4))}</h3>);
       } else if (line.startsWith('## ')) {
         flushList();
-        elements.push(<h2 key={index} className="font-bold text-lg mt-4 mb-2">{renderInline(line.slice(3))}</h2>);
+        elements.push(<h2 key={index} className="font-bold text-lg mt-6 mb-3 text-foreground border-b border-border pb-2">{renderInline(line.slice(3))}</h2>);
       } else if (line.startsWith('# ')) {
         flushList();
-        elements.push(<h1 key={index} className="font-bold text-xl mt-4 mb-2">{renderInline(line.slice(2))}</h1>);
+        elements.push(<h1 key={index} className="font-bold text-xl mt-6 mb-3 text-foreground">{renderInline(line.slice(2))}</h1>);
       }
       // Unordered list items
       else if (line.match(/^[-*]\s/) || line.match(/^- \[[ x]\]/)) {
@@ -102,20 +235,20 @@ const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
       // Empty line
       else if (line.trim() === '') {
         flushList();
-        elements.push(<br key={index} />);
       }
       // Regular paragraph
       else {
         flushList();
-        elements.push(<p key={index} className="my-1">{renderInline(line)}</p>);
+        elements.push(<p key={index} className="my-2 text-sm leading-relaxed">{renderInline(line)}</p>);
       }
     });
     
     flushList();
+    flushTable();
     return elements;
   };
 
-  return <>{renderMarkdown(content)}</>;
+  return <div className="prose-content">{renderMarkdown(content)}</div>;
 };
 
 interface KnowledgeDocument {
@@ -134,6 +267,7 @@ interface AdminNote {
   id: string;
   title: string;
   content: string | null;
+  category?: string | null;
   location_id: string | null;
   created_by: string | null;
   visible_to: string[];
@@ -142,12 +276,28 @@ interface AdminNote {
   updated_at: string;
 }
 
-const CATEGORIES = [
+const DOCUMENT_CATEGORIES = [
   { value: 'procedures', label: 'Procedury', icon: FileText },
-  { value: 'templates', label: 'Szablony', icon: FileText },
+  { value: 'templates', label: 'Szablony', icon: Files },
   { value: 'guides', label: 'Poradniki', icon: BookOpen },
   { value: 'other', label: 'Inne', icon: FileQuestion }
 ];
+
+const NOTE_CATEGORIES = [
+  { value: 'all', label: 'Wszystkie', icon: Folder, color: 'bg-gray-500' },
+  { value: 'wprowadzenie', label: 'Wprowadzenie', icon: Home, color: 'bg-blue-500' },
+  { value: 'dokumenty', label: 'Dokumenty', icon: FileText, color: 'bg-green-500' },
+  { value: 'raporty', label: 'Raporty', icon: BarChart3, color: 'bg-purple-500' },
+  { value: 'budzet', label: 'Budżet', icon: DollarSign, color: 'bg-yellow-500' },
+  { value: 'konta', label: 'Konta', icon: Calculator, color: 'bg-cyan-500' },
+  { value: 'administracja', label: 'Administracja', icon: Settings, color: 'bg-orange-500' },
+  { value: 'faq', label: 'FAQ i Słownik', icon: HelpCircle, color: 'bg-pink-500' },
+];
+
+const getCategoryInfo = (category: string | null | undefined) => {
+  const cat = NOTE_CATEGORIES.find(c => c.value === category);
+  return cat || NOTE_CATEGORIES[0];
+};
 
 const KnowledgeBasePage: React.FC = () => {
   const { user } = useAuth();
@@ -155,9 +305,11 @@ const KnowledgeBasePage: React.FC = () => {
   const isAdmin = user?.role === 'admin' || user?.role === 'prowincjal';
 
   // State
-  const [activeTab, setActiveTab] = useState('documents');
+  const [activeTab, setActiveTab] = useState('notes'); // Start with notes since that's where the content is
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [noteCategoryFilter, setNoteCategoryFilter] = useState<string>('all');
+  const [expandedNotes, setExpandedNotes] = useState<string[]>([]);
   
   // Document upload state
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -171,6 +323,7 @@ const KnowledgeBasePage: React.FC = () => {
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
+  const [noteCategory, setNoteCategory] = useState('inne');
   const [noteLocationId, setNoteLocationId] = useState<string | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
 
@@ -224,7 +377,6 @@ const KnowledgeBasePage: React.FC = () => {
 
       setIsUploading(true);
 
-      // Upload file to storage
       const fileExt = uploadFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `documents/${fileName}`;
@@ -235,7 +387,6 @@ const KnowledgeBasePage: React.FC = () => {
 
       if (uploadError) throw uploadError;
 
-      // Create document record
       const { error: insertError } = await supabase
         .from('knowledge_documents')
         .insert({
@@ -249,7 +400,6 @@ const KnowledgeBasePage: React.FC = () => {
         });
 
       if (insertError) {
-        // Cleanup uploaded file on error
         await supabase.storage.from('knowledge-base').remove([filePath]);
         throw insertError;
       }
@@ -271,14 +421,12 @@ const KnowledgeBasePage: React.FC = () => {
   // Delete document mutation
   const deleteDocumentMutation = useMutation({
     mutationFn: async (doc: KnowledgeDocument) => {
-      // Delete from storage
       const { error: storageError } = await supabase.storage
         .from('knowledge-base')
         .remove([doc.file_path]);
 
       if (storageError) console.error('Storage delete error:', storageError);
 
-      // Delete record
       const { error } = await supabase
         .from('knowledge_documents')
         .delete()
@@ -307,6 +455,7 @@ const KnowledgeBasePage: React.FC = () => {
         .insert({
           title: noteTitle,
           content: noteContent || null,
+          category: noteCategory,
           location_id: noteLocationId,
           created_by: user?.id,
           visible_to: ['ekonom', 'proboszcz', 'prowincjal', 'admin']
@@ -369,6 +518,7 @@ const KnowledgeBasePage: React.FC = () => {
   const resetNoteForm = () => {
     setNoteTitle('');
     setNoteContent('');
+    setNoteCategory('inne');
     setNoteLocationId(null);
   };
 
@@ -400,8 +550,12 @@ const KnowledgeBasePage: React.FC = () => {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const getCategoryLabel = (category: string) => {
-    return CATEGORIES.find(c => c.value === category)?.label || category;
+  const toggleNoteExpanded = (noteId: string) => {
+    setExpandedNotes(prev => 
+      prev.includes(noteId) 
+        ? prev.filter(id => id !== noteId)
+        : [...prev, noteId]
+    );
   };
 
   // Filter documents
@@ -414,55 +568,49 @@ const KnowledgeBasePage: React.FC = () => {
 
   // Filter notes
   const filteredNotes = notes?.filter(note => {
-    return note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           note.content?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         note.content?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = noteCategoryFilter === 'all' || note.category === noteCategoryFilter;
+    return matchesSearch && matchesCategory;
   });
+
+  // Group notes by category for sidebar count
+  const noteCountByCategory = notes?.reduce((acc, note) => {
+    const cat = note.category || 'inne';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>) || {};
 
   return (
     <div className="container mx-auto py-6 space-y-6">
       <PageTitle 
         title="Baza wiedzy" 
-        subtitle="Dokumenty, procedury i notatki administracyjne"
+        subtitle="Kompletna dokumentacja systemu finansowego OMI"
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <TabsList>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <TabsList className="grid grid-cols-2 w-full lg:w-auto">
+            <TabsTrigger value="notes" className="gap-2">
+              <BookOpen className="h-4 w-4" />
+              Artykuły ({notes?.length || 0})
+            </TabsTrigger>
             <TabsTrigger value="documents" className="gap-2">
               <FileText className="h-4 w-4" />
-              Dokumenty
-            </TabsTrigger>
-            <TabsTrigger value="notes" className="gap-2">
-              <StickyNote className="h-4 w-4" />
-              Notatki
+              Dokumenty ({documents?.length || 0})
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex gap-2">
-            <div className="relative">
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <div className="relative flex-1 lg:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Szukaj..."
+                placeholder="Szukaj w treści..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-[200px]"
+                className="pl-10 w-full lg:w-[250px]"
               />
             </div>
-
-            {activeTab === 'documents' && (
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Wszystkie</SelectItem>
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
 
             {isAdmin && activeTab === 'documents' && (
               <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
@@ -524,7 +672,7 @@ const KnowledgeBasePage: React.FC = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {CATEGORIES.map(cat => (
+                          {DOCUMENT_CATEGORIES.map(cat => (
                             <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                           ))}
                         </SelectContent>
@@ -559,34 +707,55 @@ const KnowledgeBasePage: React.FC = () => {
                 <DialogTrigger asChild>
                   <Button className="gap-2">
                     <Plus className="h-4 w-4" />
-                    Nowa notatka
+                    Nowy artykuł
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle>Nowa notatka</DialogTitle>
+                    <DialogTitle>Nowy artykuł</DialogTitle>
                     <DialogDescription>
-                      Utwórz notatkę dla użytkowników systemu
+                      Utwórz nowy artykuł w bazie wiedzy (obsługuje format Markdown)
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className="space-y-4">
-                    <div>
-                      <Label>Tytuł</Label>
-                      <Input
-                        value={noteTitle}
-                        onChange={(e) => setNoteTitle(e.target.value)}
-                        placeholder="Tytuł notatki"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Tytuł</Label>
+                        <Input
+                          value={noteTitle}
+                          onChange={(e) => setNoteTitle(e.target.value)}
+                          placeholder="Tytuł artykułu"
+                        />
+                      </div>
+                      <div>
+                        <Label>Kategoria</Label>
+                        <Select value={noteCategory} onValueChange={setNoteCategory}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NOTE_CATEGORIES.filter(c => c.value !== 'all').map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>
+                                <span className="flex items-center gap-2">
+                                  <cat.icon className="h-4 w-4" />
+                                  {cat.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div>
-                      <Label>Treść</Label>
+                      <Label>Treść (Markdown)</Label>
                       <Textarea
                         value={noteContent}
                         onChange={(e) => setNoteContent(e.target.value)}
-                        placeholder="Treść notatki..."
-                        rows={6}
+                        placeholder="## Nagłówek&#10;&#10;Treść artykułu...&#10;&#10;- Lista&#10;- Punktów&#10;&#10;> 💡 **Wskazówka**: Ważna informacja"
+                        rows={12}
+                        className="font-mono text-sm"
                       />
                     </div>
 
@@ -633,7 +802,198 @@ const KnowledgeBasePage: React.FC = () => {
           </div>
         </div>
 
+        <TabsContent value="notes">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Category Sidebar */}
+            <div className="w-full lg:w-64 flex-shrink-0">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    Kategorie
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-1">
+                    {NOTE_CATEGORIES.map(cat => {
+                      const count = cat.value === 'all' 
+                        ? notes?.length || 0 
+                        : noteCountByCategory[cat.value] || 0;
+                      const isActive = noteCategoryFilter === cat.value;
+                      
+                      return (
+                        <button
+                          key={cat.value}
+                          onClick={() => setNoteCategoryFilter(cat.value)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                            isActive 
+                              ? 'bg-primary text-primary-foreground' 
+                              : 'hover:bg-muted'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <cat.icon className="h-4 w-4" />
+                            {cat.label}
+                          </span>
+                          <Badge variant={isActive ? "secondary" : "outline"} className="text-xs">
+                            {count}
+                          </Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Articles List */}
+            <div className="flex-1 min-w-0">
+              {notesLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredNotes?.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Brak artykułów do wyświetlenia</p>
+                    {searchTerm && <p className="text-sm mt-2">Spróbuj zmienić kryteria wyszukiwania</p>}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {filteredNotes?.map(note => {
+                    const categoryInfo = getCategoryInfo(note.category);
+                    const isExpanded = expandedNotes.includes(note.id);
+                    const hasLongContent = (note.content?.length || 0) > 500;
+                    
+                    return (
+                      <Card 
+                        key={note.id} 
+                        className={`transition-all duration-200 ${
+                          note.pinned ? 'border-primary/50 bg-primary/5 shadow-md' : 'hover:shadow-md'
+                        }`}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                {note.pinned && (
+                                  <Badge variant="default" className="gap-1">
+                                    <Pin className="h-3 w-3" />
+                                    Przypięty
+                                  </Badge>
+                                )}
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`gap-1 ${categoryInfo.color} text-white`}
+                                >
+                                  <categoryInfo.icon className="h-3 w-3" />
+                                  {categoryInfo.label}
+                                </Badge>
+                              </div>
+                              <CardTitle className="text-lg leading-tight">{note.title}</CardTitle>
+                              <CardDescription className="mt-1">
+                                {new Date(note.created_at).toLocaleDateString('pl-PL', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })}
+                                {note.location_id && locations && (
+                                  <span className="ml-2">
+                                    • {locations.find(l => l.id === note.location_id)?.name || 'Placówka'}
+                                  </span>
+                                )}
+                              </CardDescription>
+                            </div>
+                            {isAdmin && (
+                              <div className="flex gap-1 flex-shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => togglePinMutation.mutate(note)}
+                                  title={note.pinned ? 'Odepnij' : 'Przypnij'}
+                                >
+                                  {note.pinned ? (
+                                    <PinOff className="h-4 w-4" />
+                                  ) : (
+                                    <Pin className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => deleteNoteMutation.mutate(note.id)}
+                                  title="Usuń"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </CardHeader>
+                        {note.content && (
+                          <CardContent className="pt-0">
+                            <Collapsible open={isExpanded || !hasLongContent}>
+                              <CollapsibleContent forceMount className={!isExpanded && hasLongContent ? 'max-h-[300px] overflow-hidden relative' : ''}>
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                  <MarkdownRenderer content={note.content} />
+                                </div>
+                                {!isExpanded && hasLongContent && (
+                                  <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent" />
+                                )}
+                              </CollapsibleContent>
+                              {hasLongContent && (
+                                <CollapsibleTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    className="w-full mt-2 gap-2"
+                                    onClick={() => toggleNoteExpanded(note.id)}
+                                  >
+                                    {isExpanded ? (
+                                      <>
+                                        <ChevronUp className="h-4 w-4" />
+                                        Zwiń artykuł
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="h-4 w-4" />
+                                        Rozwiń artykuł
+                                      </>
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                              )}
+                            </Collapsible>
+                          </CardContent>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
         <TabsContent value="documents">
+          <div className="mb-4">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie kategorie</SelectItem>
+                {DOCUMENT_CATEGORIES.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {documentsLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -643,6 +1003,7 @@ const KnowledgeBasePage: React.FC = () => {
               <CardContent className="py-12 text-center text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Brak dokumentów do wyświetlenia</p>
+                <p className="text-sm mt-2">Dokumenty PDF, Word i Excel można dodać klikając "Dodaj dokument"</p>
               </CardContent>
             </Card>
           ) : (
@@ -651,7 +1012,9 @@ const KnowledgeBasePage: React.FC = () => {
                 <Card key={doc.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
-                      <Badge variant="secondary">{getCategoryLabel(doc.category)}</Badge>
+                      <Badge variant="secondary">
+                        {DOCUMENT_CATEGORIES.find(c => c.value === doc.category)?.label || doc.category}
+                      </Badge>
                       {isAdmin && (
                         <Button
                           variant="ghost"
@@ -670,8 +1033,8 @@ const KnowledgeBasePage: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                      <span>{doc.file_name}</span>
-                      <span>{formatFileSize(doc.file_size)}</span>
+                      <span className="truncate">{doc.file_name}</span>
+                      <span className="flex-shrink-0 ml-2">{formatFileSize(doc.file_size)}</span>
                     </div>
                     <Button 
                       variant="outline" 
@@ -682,79 +1045,6 @@ const KnowledgeBasePage: React.FC = () => {
                       Pobierz
                     </Button>
                   </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="notes">
-          {notesLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredNotes?.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <StickyNote className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Brak notatek do wyświetlenia</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {filteredNotes?.map(note => (
-                <Card key={note.id} className={note.pinned ? 'border-primary/50 bg-primary/5' : ''}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        {note.pinned && <Pin className="h-4 w-4 text-primary" />}
-                        <CardTitle className="text-lg">{note.title}</CardTitle>
-                      </div>
-                      {isAdmin && (
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => togglePinMutation.mutate(note)}
-                          >
-                            {note.pinned ? (
-                              <PinOff className="h-4 w-4" />
-                            ) : (
-                              <Pin className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => deleteNoteMutation.mutate(note.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <CardDescription>
-                      {new Date(note.created_at).toLocaleDateString('pl-PL', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
-                      {note.location_id && locations && (
-                        <span className="ml-2">
-                          • {locations.find(l => l.id === note.location_id)?.name || 'Placówka'}
-                        </span>
-                      )}
-                    </CardDescription>
-                  </CardHeader>
-                  {note.content && (
-                    <CardContent>
-                      <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                        <MarkdownRenderer content={note.content} />
-                      </div>
-                    </CardContent>
-                  )}
                 </Card>
               ))}
             </div>
