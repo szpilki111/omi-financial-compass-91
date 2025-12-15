@@ -6,19 +6,22 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, Smartphone, Monitor, Info } from 'lucide-react';
-import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { Trash2, Smartphone, Monitor, Info, Clock, AlertTriangle } from 'lucide-react';
+import { format, differenceInDays, addDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
 interface TrustedDevice {
   id: string;
   device_fingerprint: string;
-  device_name: string;
-  user_agent: string;
-  ip_address: string;
-  last_used_at: string;
-  created_at: string;
+  device_name: string | null;
+  user_agent: string | null;
+  ip_address: string | null;
+  last_used_at: string | null;
+  created_at: string | null;
 }
+
+const TRUST_PERIOD_DAYS = 30;
 
 const TrustedDevicesTab = () => {
   const { user } = useAuth();
@@ -65,11 +68,30 @@ const TrustedDevicesTab = () => {
     },
   });
 
-  const getDeviceIcon = (userAgent: string) => {
+  const getDeviceIcon = (userAgent: string | null) => {
+    if (!userAgent) return <Monitor className="w-5 h-5 text-primary" />;
     if (userAgent.toLowerCase().includes('mobile') || userAgent.toLowerCase().includes('android') || userAgent.toLowerCase().includes('iphone')) {
       return <Smartphone className="w-5 h-5 text-primary" />;
     }
     return <Monitor className="w-5 h-5 text-primary" />;
+  };
+
+  const getDaysRemaining = (createdAt: string | null) => {
+    if (!createdAt) return 0;
+    const expiryDate = addDays(new Date(createdAt), TRUST_PERIOD_DAYS);
+    return Math.max(0, differenceInDays(expiryDate, new Date()));
+  };
+
+  const getExpiryBadge = (createdAt: string | null) => {
+    const daysRemaining = getDaysRemaining(createdAt);
+    
+    if (daysRemaining <= 0) {
+      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />Wygasło</Badge>;
+    }
+    if (daysRemaining <= 7) {
+      return <Badge variant="secondary" className="gap-1 bg-orange-100 text-orange-700"><Clock className="w-3 h-3" />Zostało {daysRemaining} dni</Badge>;
+    }
+    return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Zostało {daysRemaining} dni</Badge>;
   };
 
   if (isLoading) {
@@ -77,9 +99,7 @@ const TrustedDevicesTab = () => {
       <Card>
         <CardHeader>
           <CardTitle>Zaufane urządzenia</CardTitle>
-          <CardDescription>
-            Ładowanie...
-          </CardDescription>
+          <CardDescription>Ładowanie...</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -103,6 +123,14 @@ const TrustedDevicesTab = () => {
             </AlertDescription>
           </Alert>
 
+          <Alert variant="default" className="border-orange-200 bg-orange-50">
+            <Clock className="w-4 h-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              Zaufane urządzenia wygasają automatycznie po <strong>{TRUST_PERIOD_DAYS} dniach</strong>. 
+              Po wygaśnięciu usuń urządzenie z listy, aby przy następnym logowaniu zweryfikować je ponownie kodem.
+            </AlertDescription>
+          </Alert>
+
           {!trustedDevices || trustedDevices.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -123,25 +151,32 @@ const TrustedDevicesTab = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium truncate">
                         {device.device_name || 'Nieznane urządzenie'}
                       </p>
+                      {getExpiryBadge(device.created_at)}
                     </div>
                     
                     <div className="mt-1 space-y-1 text-sm text-muted-foreground">
-                      <p className="truncate" title={device.user_agent}>
-                        {device.user_agent}
-                      </p>
+                      {device.user_agent && (
+                        <p className="truncate" title={device.user_agent}>
+                          {device.user_agent}
+                        </p>
+                      )}
                       {device.ip_address && (
                         <p>IP: {device.ip_address}</p>
                       )}
-                      <p>
-                        Ostatnio użyte: {format(new Date(device.last_used_at), 'PPp', { locale: pl })}
-                      </p>
-                      <p className="text-xs">
-                        Dodane: {format(new Date(device.created_at), 'PPp', { locale: pl })}
-                      </p>
+                      {device.last_used_at && (
+                        <p>
+                          Ostatnio użyte: {format(new Date(device.last_used_at), 'PPp', { locale: pl })}
+                        </p>
+                      )}
+                      {device.created_at && (
+                        <p className="text-xs">
+                          Dodane: {format(new Date(device.created_at), 'PPp', { locale: pl })}
+                        </p>
+                      )}
                     </div>
                   </div>
 
