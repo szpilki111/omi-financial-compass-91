@@ -84,14 +84,22 @@ const TrustedDevicesTab = () => {
 
   const getExpiryBadge = (createdAt: string | null) => {
     const daysRemaining = getDaysRemaining(createdAt);
-    
+
     if (daysRemaining <= 0) {
-      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />Wygasło</Badge>;
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <AlertTriangle className="w-3 h-3" />
+          Wygasło
+        </Badge>
+      );
     }
-    if (daysRemaining <= 7) {
-      return <Badge variant="secondary" className="gap-1 bg-orange-100 text-orange-700"><Clock className="w-3 h-3" />Zostało {daysRemaining} dni</Badge>;
-    }
-    return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Zostało {daysRemaining} dni</Badge>;
+
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <Clock className="w-3 h-3" />
+        Zostało {daysRemaining} dni
+      </Badge>
+    );
   };
 
   if (isLoading) {
@@ -123,9 +131,9 @@ const TrustedDevicesTab = () => {
             </AlertDescription>
           </Alert>
 
-          <Alert variant="default" className="border-orange-200 bg-orange-50">
-            <Clock className="w-4 h-4 text-orange-600" />
-            <AlertDescription className="text-orange-800">
+          <Alert>
+            <Clock className="w-4 h-4" />
+            <AlertDescription>
               Zaufane urządzenia wygasają automatycznie po <strong>{TRUST_PERIOD_DAYS} dniach</strong>. 
               Po wygaśnięciu usuń urządzenie z listy, aby przy następnym logowaniu zweryfikować je ponownie kodem.
             </AlertDescription>
