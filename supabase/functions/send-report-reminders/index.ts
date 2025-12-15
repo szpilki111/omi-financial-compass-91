@@ -6,15 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface LocationWithEconomist {
-  id: string;
-  name: string;
-  economists: { email: string; name: string }[];
-}
-
-// Helper function to create SMTP client
-function createSMTPClient(smtpHost: string, smtpPort: string, smtpUser: string, smtpPassword: string) {
-  return new SMTPClient({
+// Helper function to send email with new connection each time
+async function sendEmailWithSMTP(
+  smtpHost: string, 
+  smtpPort: string, 
+  smtpUser: string, 
+  smtpPassword: string,
+  emailData: { from: string; to: string; subject: string; html: string }
+): Promise<void> {
+  const client = new SMTPClient({
     connection: {
       hostname: smtpHost,
       port: parseInt(smtpPort),
@@ -25,45 +25,20 @@ function createSMTPClient(smtpHost: string, smtpPort: string, smtpUser: string, 
       },
     },
   });
-}
 
-// Helper function to send email with retry
-async function sendEmailWithRetry(
-  smtpHost: string, 
-  smtpPort: string, 
-  smtpUser: string, 
-  smtpPassword: string,
-  emailData: { from: string; to: string; subject: string; html: string },
-  maxRetries: number = 2
-): Promise<boolean> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let client: SMTPClient | null = null;
+  try {
+    await client.send({
+      ...emailData,
+      charset: 'UTF-8',
+      encoding: '8bit',
+    });
+  } finally {
     try {
-      client = createSMTPClient(smtpHost, smtpPort, smtpUser, smtpPassword);
-      await client.send({
-        ...emailData,
-        charset: 'UTF-8',
-        encoding: '8bit',
-      });
       await client.close();
-      return true;
-    } catch (error: any) {
-      console.error(`Email send attempt ${attempt + 1} failed:`, error.message);
-      if (client) {
-        try {
-          await client.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-      }
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (e) {
+      // Ignore close errors
     }
   }
-  return false;
 }
 
 Deno.serve(async (req) => {
@@ -110,7 +85,7 @@ Deno.serve(async (req) => {
     if (!shouldSendReminder) {
       console.log('No reminders needed today');
       return new Response(
-        JSON.stringify({ success: true, message: 'No reminders needed today', daysUntilDeadline }),
+        JSON.stringify({ success: true, message: 'Przypomnienia nie są wymagane dzisiaj (brak zbliżających się terminów).', daysUntilDeadline }),
         { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
@@ -152,7 +127,7 @@ Deno.serve(async (req) => {
 
     if (locationsNeedingReminder.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'All reports submitted', sent: 0 }),
+        JSON.stringify({ success: true, message: 'Wszystkie raporty zostały złożone. Brak przypomnień do wysłania.', sent: 0 }),
         { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
@@ -239,6 +214,37 @@ Deno.serve(async (req) => {
       sentReminders?.map(r => `${r.location_id}-${r.recipient_email}`) || []
     );
 
+    // Build list of emails to send (not yet sent)
+    const emailsToSend: { location: any; economist: { email: string; name: string } }[] = [];
+    
+    for (const location of locationsNeedingReminder) {
+      const locationEconomists = locationEconomistsMap.get(location.id) || [];
+      
+      for (const economist of locationEconomists) {
+        const key = `${location.id}-${economist.email}`;
+        if (!sentSet.has(key)) {
+          emailsToSend.push({ location, economist });
+        } else {
+          console.log(`Reminder already sent to ${economist.email} for ${location.name}`);
+        }
+      }
+    }
+
+    console.log(`Emails to send: ${emailsToSend.length}`);
+
+    // If all reminders already sent, return early
+    if (emailsToSend.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Wszystkie przypomnienia typu "${reminderType === 'overdue' ? 'po terminie' : reminderType === '1_day' ? '1 dzień' : '5 dni'}" zostały już wysłane dla okresu ${reportMonth}/${reportYear}.`,
+          sent: 0,
+          reminderType
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
     // Get SMTP configuration
     const smtpHost = Deno.env.get('SMTP_HOST');
     const smtpPort = Deno.env.get('SMTP_PORT');
@@ -247,50 +253,34 @@ Deno.serve(async (req) => {
 
     if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
       console.error('Missing SMTP configuration');
-      throw new Error('SMTP configuration is incomplete');
+      throw new Error('Brakuje konfiguracji SMTP. Skontaktuj się z administratorem.');
     }
 
     let sentCount = 0;
     const errors: string[] = [];
-    const maxEmailsPerRun = 10; // Limit emails per invocation to avoid timeout
+    const maxEmailsPerRun = 5; // Lower limit for better reliability
 
-    // Send reminders
-    for (const location of locationsNeedingReminder) {
-      if (sentCount >= maxEmailsPerRun) {
-        console.log(`Reached max emails per run (${maxEmailsPerRun}), stopping`);
-        break;
-      }
+    const monthNames = [
+      'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+      'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'
+    ];
 
-      const locationEconomists = locationEconomistsMap.get(location.id) || [];
+    // Send emails
+    for (let i = 0; i < Math.min(emailsToSend.length, maxEmailsPerRun); i++) {
+      const { location, economist } = emailsToSend[i];
+
+      const subject = reminderType === 'overdue'
+        ? `⚠️ Termin złożenia raportu minął - ${location.name}`
+        : `📋 Przypomnienie o raporcie - ${daysUntilDeadline} dni do terminu`;
+
+      const urgencyColor = reminderType === 'overdue' ? '#dc2626' : 
+                          reminderType === '1_day' ? '#f59e0b' : '#3b82f6';
       
-      for (const economist of locationEconomists) {
-        if (sentCount >= maxEmailsPerRun) {
-          break;
-        }
+      const urgencyText = reminderType === 'overdue' 
+        ? 'Termin złożenia raportu minął!'
+        : `Do terminu pozostało ${daysUntilDeadline} dni`;
 
-        const key = `${location.id}-${economist.email}`;
-        if (sentSet.has(key)) {
-          console.log(`Reminder already sent to ${economist.email} for ${location.name}`);
-          continue;
-        }
-
-        const monthNames = [
-          'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
-          'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'
-        ];
-
-        const subject = reminderType === 'overdue'
-          ? `⚠️ Termin złożenia raportu minął - ${location.name}`
-          : `📋 Przypomnienie o raporcie - ${daysUntilDeadline} dni do terminu`;
-
-        const urgencyColor = reminderType === 'overdue' ? '#dc2626' : 
-                            reminderType === '1_day' ? '#f59e0b' : '#3b82f6';
-        
-        const urgencyText = reminderType === 'overdue' 
-          ? 'Termin złożenia raportu minął!'
-          : `Do terminu pozostało ${daysUntilDeadline} dni`;
-
-        const html = `
+      const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -302,7 +292,6 @@ Deno.serve(async (req) => {
     <tr>
       <td align="center" style="padding: 40px 20px;">
         <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-          <!-- Header -->
           <tr>
             <td style="padding: 32px 40px; background: linear-gradient(135deg, ${urgencyColor}, ${urgencyColor}dd); border-radius: 12px 12px 0 0;">
               <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
@@ -313,8 +302,6 @@ Deno.serve(async (req) => {
               </p>
             </td>
           </tr>
-          
-          <!-- Content -->
           <tr>
             <td style="padding: 32px 40px;">
               <p style="margin: 0 0 16px 0; color: #334155; font-size: 16px;">
@@ -347,8 +334,6 @@ Deno.serve(async (req) => {
               </table>
             </td>
           </tr>
-          
-          <!-- Footer -->
           <tr>
             <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
               <p style="margin: 0; color: #64748b; font-size: 13px; text-align: center;">
@@ -363,57 +348,53 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-        try {
-          await sendEmailWithRetry(smtpHost, smtpPort, smtpUser, smtpPassword, {
-            from: 'System Finansowy OMI <finanse@oblaci.pl>',
-            to: economist.email,
-            subject: subject,
-            html: html,
-          });
+      try {
+        console.log(`Sending email to ${economist.email}...`);
+        
+        await sendEmailWithSMTP(smtpHost, smtpPort, smtpUser, smtpPassword, {
+          from: 'System Finansowy OMI <finanse@oblaci.pl>',
+          to: economist.email,
+          subject: subject,
+          html: html,
+        });
 
-          // Log the reminder
-          await supabase.from('reminder_logs').insert({
-            location_id: location.id,
-            reminder_type: reminderType,
-            recipient_email: economist.email,
-            month: reportMonth,
-            year: reportYear,
-          });
+        // Log the reminder
+        await supabase.from('reminder_logs').insert({
+          location_id: location.id,
+          reminder_type: reminderType,
+          recipient_email: economist.email,
+          month: reportMonth,
+          year: reportYear,
+        });
 
-          sentCount++;
-          console.log(`Reminder sent to ${economist.email} for ${location.name}`);
-        } catch (emailError: any) {
-          console.error(`Failed to send email to ${economist.email}:`, emailError.message);
-          errors.push(`${economist.email}: ${emailError.message}`);
-        }
+        sentCount++;
+        console.log(`Reminder sent to ${economist.email} for ${location.name}`);
+        
+        // Small delay between emails
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (emailError: any) {
+        console.error(`Failed to send email to ${economist.email}:`, emailError.message);
+        errors.push(`${economist.email}: ${emailError.message}`);
       }
     }
 
     console.log(`Reminders sent: ${sentCount}`);
 
-    // Calculate remaining
-    let totalRemaining = 0;
-    for (const location of locationsNeedingReminder) {
-      const locationEconomists = locationEconomistsMap.get(location.id) || [];
-      for (const economist of locationEconomists) {
-        const key = `${location.id}-${economist.email}`;
-        if (!sentSet.has(key)) {
-          totalRemaining++;
-        }
-      }
-    }
-    totalRemaining = Math.max(0, totalRemaining - sentCount);
+    const remaining = emailsToSend.length - sentCount;
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         sent: sentCount,
-        remaining: totalRemaining,
+        remaining: remaining,
         reminderType,
         errors: errors.length > 0 ? errors : undefined,
-        message: totalRemaining > 0 
-          ? `Wysłano ${sentCount} przypomnień. Pozostało ${totalRemaining} do wysłania - kliknij ponownie.`
-          : `Wysłano ${sentCount} przypomnień.`
+        message: remaining > 0 
+          ? `Wysłano ${sentCount} przypomnień. Pozostało ${remaining} do wysłania - kliknij ponownie.`
+          : sentCount > 0 
+            ? `Wysłano ${sentCount} przypomnień.`
+            : 'Nie udało się wysłać żadnych przypomnień.'
       }),
       { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
