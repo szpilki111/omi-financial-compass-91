@@ -147,7 +147,20 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Parse request body for optional location_id (single reminder)
+    let singleLocationId: string | null = null;
+    let listOnly = false;
+    try {
+      const body = await req.json();
+      singleLocationId = body?.location_id || null;
+      listOnly = body?.list_only === true;
+    } catch {
+      // No body or invalid JSON - continue with batch mode
+    }
+
     console.log('Starting report reminders check...');
+    if (singleLocationId) console.log(`Single location mode: ${singleLocationId}`);
+    if (listOnly) console.log('List only mode');
 
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -169,27 +182,16 @@ Deno.serve(async (req) => {
     console.log(`Report period: ${reportMonth}/${reportYear}`);
     console.log(`Days until deadline: ${daysUntilDeadline}`);
 
-    const shouldSendReminder = daysUntilDeadline === 5 || daysUntilDeadline === 1 || daysUntilDeadline < 0;
-    if (!shouldSendReminder) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          sent: 0,
-          remaining: 0,
-          daysUntilDeadline,
-          message: 'Przypomnienia nie są wymagane dzisiaj (brak zbliżających się terminów).',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
-
+    // For single location, always allow sending (admin override)
     const reminderType: ReminderType = daysUntilDeadline === 5 ? '5_days' : daysUntilDeadline === 1 ? '1_day' : 'overdue';
     console.log(`Reminder type: ${reminderType}`);
 
-    // Get all locations
-    const { data: locations, error: locationsError } = await supabase
-      .from('locations')
-      .select('id, name');
+    // Get locations (single or all)
+    let locationsQuery = supabase.from('locations').select('id, name');
+    if (singleLocationId) {
+      locationsQuery = locationsQuery.eq('id', singleLocationId);
+    }
+    const { data: locations, error: locationsError } = await locationsQuery;
 
     if (locationsError) throw locationsError;
 
@@ -213,7 +215,16 @@ Deno.serve(async (req) => {
 
     if (locationsNeedingReminder.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, sent: 0, remaining: 0, reminderType, message: 'Wszystkie raporty zostały złożone. Brak przypomnień do wysłania.' }),
+        JSON.stringify({ 
+          success: true, 
+          sent: 0, 
+          remaining: 0, 
+          reminderType, 
+          pendingLocations: [],
+          message: singleLocationId 
+            ? 'Ta placówka już złożyła raport.' 
+            : 'Wszystkie raporty zostały złożone. Brak przypomnień do wysłania.' 
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
@@ -293,6 +304,33 @@ Deno.serve(async (req) => {
 
     console.log(`Emails to send: ${emailsToSend.length}`);
 
+    // Build pending locations list for UI
+    const pendingLocations = locationsNeedingReminder.map((loc) => {
+      const economists = economistsByLocation.get(loc.id) ?? [];
+      return {
+        id: loc.id,
+        name: loc.name,
+        economists: economists.map((e) => ({ email: e.email, name: e.name })),
+      };
+    });
+
+    // If list_only mode, just return the pending list without sending
+    if (listOnly) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          sent: 0,
+          remaining: emailsToSend.length,
+          reminderType,
+          pendingLocations,
+          reportMonth,
+          reportYear,
+          message: `${locationsNeedingReminder.length} placówek wymaga przypomnienia.`,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      );
+    }
+
     if (emailsToSend.length === 0) {
       return new Response(
         JSON.stringify({
@@ -300,14 +338,17 @@ Deno.serve(async (req) => {
           sent: 0,
           remaining: 0,
           reminderType,
-          message: `Wszystkie przypomnienia (${reminderTypeLabel(reminderType)}) zostały już wysłane dla okresu ${reportMonth}/${reportYear}.`,
+          pendingLocations: [],
+          message: singleLocationId
+            ? 'Przypomnienie dla tej placówki zostało już wysłane.'
+            : `Wszystkie przypomnienia (${reminderTypeLabel(reminderType)}) zostały już wysłane dla okresu ${reportMonth}/${reportYear}.`,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
 
-    // Send max N per run
-    const maxEmailsPerRun = 5;
+    // Send max N per run (or all for single location)
+    const maxEmailsPerRun = singleLocationId ? emailsToSend.length : 5;
     const batch = emailsToSend.slice(0, maxEmailsPerRun);
 
     let sent = 0;
