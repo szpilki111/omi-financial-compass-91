@@ -110,11 +110,11 @@ const AccountSearchPage = () => {
 
       const accountIds = locationAccountData?.map(la => la.account_id) || [];
 
-      // Get all accounts
+      // Get all accounts - search by number OR name
       let query = supabase
         .from('accounts')
         .select('*')
-        .ilike('number', `${searchTerm}%`)
+        .or(`number.ilike.${searchTerm}%,name.ilike.%${searchTerm}%`)
         .order('number');
 
       const { data: allAccounts, error } = await query;
@@ -345,10 +345,10 @@ const AccountSearchPage = () => {
           <CardContent className="space-y-4">
             <div className="flex gap-4 items-end">
               <div className="flex-1">
-                <label className="block text-sm font-medium mb-2">Numer konta</label>
+                <label className="block text-sm font-medium mb-2">Numer lub nazwa konta</label>
                 <div className="relative">
                   <Input
-                    placeholder="Wpisz co najmniej 2 cyfry..."
+                    placeholder="Wpisz co najmniej 2 znaki (numer lub nazwa)..."
                     value={searchTerm}
                     onChange={handleSearchChange}
                   />
