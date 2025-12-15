@@ -40,9 +40,16 @@ import {
   Folder,
   Files,
   Calculator,
-  Users
+  Users,
+  Calendar,
+  Building2
 } from 'lucide-react';
 import PageTitle from '@/components/ui/PageTitle';
+import ContactsDirectory from './ContactsDirectory';
+import { CalendarView } from '@/pages/Calendar/CalendarView';
+import { UpcomingEvents } from '@/pages/Calendar/UpcomingEvents';
+import { EventsList } from '@/pages/Calendar/EventsList';
+import { CalendarEvent } from '@/pages/Calendar/types';
 
 // Enhanced Markdown renderer with tables, code blocks, alerts, and horizontal rules
 const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
@@ -592,14 +599,22 @@ const KnowledgeBasePage: React.FC = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <TabsList className="grid grid-cols-2 w-full lg:w-auto">
+          <TabsList className="grid grid-cols-4 w-full lg:w-auto">
             <TabsTrigger value="notes" className="gap-2">
               <BookOpen className="h-4 w-4" />
-              Artykuły ({notes?.length || 0})
+              <span className="hidden sm:inline">Artykuły</span>
             </TabsTrigger>
             <TabsTrigger value="documents" className="gap-2">
               <FileText className="h-4 w-4" />
-              Dokumenty ({documents?.length || 0})
+              <span className="hidden sm:inline">Dokumenty</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Kalendarz</span>
+            </TabsTrigger>
+            <TabsTrigger value="contacts" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Kontakty</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1055,9 +1070,109 @@ const KnowledgeBasePage: React.FC = () => {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="calendar">
+          <CalendarTabContent />
+        </TabsContent>
+
+        <TabsContent value="contacts">
+          <ContactsDirectory />
+        </TabsContent>
       </Tabs>
       </div>
     </MainLayout>
+  );
+};
+
+// Calendar tab component with state management
+const CalendarTabContent: React.FC = () => {
+  const { user } = useAuth();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+
+  // Fetch events for calendar
+  const { data: events = [], isLoading } = useQuery({
+    queryKey: ['calendar-events-knowledge'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .order('event_date', { ascending: true });
+
+      if (error) throw error;
+      return data as CalendarEvent[];
+    }
+  });
+
+  // Filter events for selected date
+  const selectedDateEvents = events.filter(event => {
+    if (!selectedDate) return false;
+    const eventDate = new Date(event.event_date);
+    return eventDate.toDateString() === selectedDate.toDateString();
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Kalendarz wydarzeń
+            </CardTitle>
+            <CardDescription>
+              Terminy raportów, przypomnienia i ważne daty
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CalendarView
+              events={events}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+            />
+          </CardContent>
+        </Card>
+
+        {selectedDate && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                Wydarzenia: {selectedDate.toLocaleDateString('pl-PL', { 
+                  weekday: 'long', 
+                  day: 'numeric', 
+                  month: 'long',
+                  year: 'numeric'
+                })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedDateEvents.length > 0 ? (
+                <EventsList 
+                  events={selectedDateEvents}
+                  onEventClick={setSelectedEvent}
+                />
+              ) : (
+                <p className="text-muted-foreground text-sm text-center py-4">
+                  Brak wydarzeń w tym dniu
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div>
+        <UpcomingEvents events={events} onEventClick={setSelectedEvent} />
+      </div>
+    </div>
   );
 };
 
