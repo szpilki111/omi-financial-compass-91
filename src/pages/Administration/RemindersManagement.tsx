@@ -43,9 +43,18 @@ const RemindersManagement: React.FC = () => {
         throw error;
       }
 
+      if (data?.success === false) {
+        throw new Error(data?.error || 'Nieznany błąd');
+      }
+
+      const sent = data?.sent || 0;
+      const remaining = data?.remaining || 0;
+      const message = data?.message || `Wysłano ${sent} przypomnień do ekonomów.`;
+
       toast({
-        title: "Przypomnienia wysłane",
-        description: `Wysłano ${data?.sentCount || 0} przypomnień do ekonomów.`,
+        title: sent > 0 ? "Przypomnienia wysłane" : "Informacja",
+        description: message,
+        variant: remaining > 0 ? "default" : "default",
       });
 
       refetchLogs();
@@ -53,7 +62,7 @@ const RemindersManagement: React.FC = () => {
       console.error('Error sending reminders:', error);
       toast({
         title: "Błąd",
-        description: error.message || "Nie udało się wysłać przypomnień",
+        description: error.message || "Nie udało się wysłać przypomnień. Spróbuj ponownie.",
         variant: "destructive",
       });
     } finally {

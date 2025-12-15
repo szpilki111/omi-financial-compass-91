@@ -12,6 +12,60 @@ interface LocationWithEconomist {
   economists: { email: string; name: string }[];
 }
 
+// Helper function to create SMTP client
+function createSMTPClient(smtpHost: string, smtpPort: string, smtpUser: string, smtpPassword: string) {
+  return new SMTPClient({
+    connection: {
+      hostname: smtpHost,
+      port: parseInt(smtpPort),
+      tls: true,
+      auth: {
+        username: smtpUser,
+        password: smtpPassword,
+      },
+    },
+  });
+}
+
+// Helper function to send email with retry
+async function sendEmailWithRetry(
+  smtpHost: string, 
+  smtpPort: string, 
+  smtpUser: string, 
+  smtpPassword: string,
+  emailData: { from: string; to: string; subject: string; html: string },
+  maxRetries: number = 2
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let client: SMTPClient | null = null;
+    try {
+      client = createSMTPClient(smtpHost, smtpPort, smtpUser, smtpPassword);
+      await client.send({
+        ...emailData,
+        charset: 'UTF-8',
+        encoding: '8bit',
+      });
+      await client.close();
+      return true;
+    } catch (error: any) {
+      console.error(`Email send attempt ${attempt + 1} failed:`, error.message);
+      if (client) {
+        try {
+          await client.close();
+        } catch (e) {
+          // Ignore close errors
+        }
+      }
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  return false;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -103,17 +157,71 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get economists for each location
-    const { data: profiles, error: profilesError } = await supabase
+    // Get economists for each location (including from user_locations table)
+    const locationIds = locationsNeedingReminder.map(l => l.id);
+    
+    // Get economists directly assigned to locations via profiles.location_id
+    const { data: directProfiles, error: directProfilesError } = await supabase
       .from('profiles')
       .select('id, email, name, location_id, role')
       .eq('role', 'ekonom')
-      .in('location_id', locationsNeedingReminder.map(l => l.id));
+      .in('location_id', locationIds);
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      throw profilesError;
+    if (directProfilesError) {
+      console.error('Error fetching direct profiles:', directProfilesError);
     }
+
+    // Get economists assigned via user_locations table
+    const { data: userLocations, error: userLocationsError } = await supabase
+      .from('user_locations')
+      .select('user_id, location_id')
+      .in('location_id', locationIds);
+
+    if (userLocationsError) {
+      console.error('Error fetching user_locations:', userLocationsError);
+    }
+
+    // Get profiles for users in user_locations
+    const userIdsFromUserLocations = userLocations?.map(ul => ul.user_id) || [];
+    let userLocationProfiles: any[] = [];
+    
+    if (userIdsFromUserLocations.length > 0) {
+      const { data: ulProfiles, error: ulProfilesError } = await supabase
+        .from('profiles')
+        .select('id, email, name, role')
+        .eq('role', 'ekonom')
+        .in('id', userIdsFromUserLocations);
+      
+      if (!ulProfilesError && ulProfiles) {
+        userLocationProfiles = ulProfiles;
+      }
+    }
+
+    // Merge profiles - create a map of location_id -> economists
+    const locationEconomistsMap = new Map<string, { email: string; name: string }[]>();
+    
+    // Add direct profiles
+    directProfiles?.forEach(p => {
+      if (p.location_id) {
+        const existing = locationEconomistsMap.get(p.location_id) || [];
+        if (!existing.find(e => e.email === p.email)) {
+          existing.push({ email: p.email, name: p.name });
+          locationEconomistsMap.set(p.location_id, existing);
+        }
+      }
+    });
+    
+    // Add user_locations profiles
+    userLocations?.forEach(ul => {
+      const profile = userLocationProfiles.find(p => p.id === ul.user_id);
+      if (profile) {
+        const existing = locationEconomistsMap.get(ul.location_id) || [];
+        if (!existing.find(e => e.email === profile.email)) {
+          existing.push({ email: profile.email, name: profile.name });
+          locationEconomistsMap.set(ul.location_id, existing);
+        }
+      }
+    });
 
     // Check which reminders were already sent
     const { data: sentReminders, error: sentError } = await supabase
@@ -142,26 +250,24 @@ Deno.serve(async (req) => {
       throw new Error('SMTP configuration is incomplete');
     }
 
-    const client = new SMTPClient({
-      connection: {
-        hostname: smtpHost,
-        port: parseInt(smtpPort),
-        tls: true,
-        auth: {
-          username: smtpUser,
-          password: smtpPassword,
-        },
-      },
-    });
-
     let sentCount = 0;
     const errors: string[] = [];
+    const maxEmailsPerRun = 10; // Limit emails per invocation to avoid timeout
 
     // Send reminders
     for (const location of locationsNeedingReminder) {
-      const locationEconomists = profiles?.filter(p => p.location_id === location.id) || [];
+      if (sentCount >= maxEmailsPerRun) {
+        console.log(`Reached max emails per run (${maxEmailsPerRun}), stopping`);
+        break;
+      }
+
+      const locationEconomists = locationEconomistsMap.get(location.id) || [];
       
       for (const economist of locationEconomists) {
+        if (sentCount >= maxEmailsPerRun) {
+          break;
+        }
+
         const key = `${location.id}-${economist.email}`;
         if (sentSet.has(key)) {
           console.log(`Reminder already sent to ${economist.email} for ${location.name}`);
@@ -258,13 +364,11 @@ Deno.serve(async (req) => {
 </html>`;
 
         try {
-          await client.send({
+          await sendEmailWithRetry(smtpHost, smtpPort, smtpUser, smtpPassword, {
             from: 'System Finansowy OMI <finanse@oblaci.pl>',
             to: economist.email,
             subject: subject,
             html: html,
-            charset: 'UTF-8',
-            encoding: '8bit',
           });
 
           // Log the reminder
@@ -279,22 +383,37 @@ Deno.serve(async (req) => {
           sentCount++;
           console.log(`Reminder sent to ${economist.email} for ${location.name}`);
         } catch (emailError: any) {
-          console.error(`Failed to send email to ${economist.email}:`, emailError);
+          console.error(`Failed to send email to ${economist.email}:`, emailError.message);
           errors.push(`${economist.email}: ${emailError.message}`);
         }
       }
     }
 
-    await client.close();
-
     console.log(`Reminders sent: ${sentCount}`);
+
+    // Calculate remaining
+    let totalRemaining = 0;
+    for (const location of locationsNeedingReminder) {
+      const locationEconomists = locationEconomistsMap.get(location.id) || [];
+      for (const economist of locationEconomists) {
+        const key = `${location.id}-${economist.email}`;
+        if (!sentSet.has(key)) {
+          totalRemaining++;
+        }
+      }
+    }
+    totalRemaining = Math.max(0, totalRemaining - sentCount);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         sent: sentCount,
+        remaining: totalRemaining,
         reminderType,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
+        message: totalRemaining > 0 
+          ? `Wysłano ${sentCount} przypomnień. Pozostało ${totalRemaining} do wysłania - kliknij ponownie.`
+          : `Wysłano ${sentCount} przypomnień.`
       }),
       { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
