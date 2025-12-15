@@ -111,6 +111,7 @@ export type Database = {
       }
       admin_notes: {
         Row: {
+          category: string | null
           content: string | null
           created_at: string | null
           created_by: string | null
@@ -122,6 +123,7 @@ export type Database = {
           visible_to: string[] | null
         }
         Insert: {
+          category?: string | null
           content?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -133,6 +135,7 @@ export type Database = {
           visible_to?: string[] | null
         }
         Update: {
+          category?: string | null
           content?: string | null
           created_at?: string | null
           created_by?: string | null
