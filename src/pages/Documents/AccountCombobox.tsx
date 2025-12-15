@@ -307,7 +307,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Tab') {
+                // Zamknij popover i pozwól na normalną nawigację Tab
+                setOpen(false);
+                setSearchTerm('');
+                // Nie blokuj domyślnego zachowania - Tab przejdzie do następnego pola
+              } else if (e.key === 'Enter') {
                 e.preventDefault();
                 // Znajdź pierwsze pasujące konto
                 const firstAccount = filteredAccounts[0];
