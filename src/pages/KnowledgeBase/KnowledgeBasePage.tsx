@@ -30,6 +30,94 @@ import {
 } from 'lucide-react';
 import PageTitle from '@/components/ui/PageTitle';
 
+// Simple markdown renderer component
+const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
+  const renderMarkdown = (text: string) => {
+    // Split by lines to process each line
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let currentList: string[] = [];
+    let listType: 'ul' | 'ol' | null = null;
+    
+    const flushList = () => {
+      if (currentList.length > 0 && listType) {
+        const ListTag = listType;
+        elements.push(
+          <ListTag key={elements.length} className={listType === 'ul' ? 'list-disc pl-5 my-2' : 'list-decimal pl-5 my-2'}>
+            {currentList.map((item, i) => (
+              <li key={i} className="my-1">{renderInline(item)}</li>
+            ))}
+          </ListTag>
+        );
+        currentList = [];
+        listType = null;
+      }
+    };
+
+    const renderInline = (text: string): React.ReactNode => {
+      // Bold: **text** or __text__
+      let result = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      result = result.replace(/__(.+?)__/g, '<strong>$1</strong>');
+      // Italic: *text* or _text_
+      result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      result = result.replace(/_([^_]+)_/g, '<em>$1</em>');
+      // Code: `text`
+      result = result.replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs">$1</code>');
+      
+      return <span dangerouslySetInnerHTML={{ __html: result }} />;
+    };
+
+    lines.forEach((line, index) => {
+      // Headers
+      if (line.startsWith('### ')) {
+        flushList();
+        elements.push(<h3 key={index} className="font-semibold text-base mt-4 mb-2">{renderInline(line.slice(4))}</h3>);
+      } else if (line.startsWith('## ')) {
+        flushList();
+        elements.push(<h2 key={index} className="font-bold text-lg mt-4 mb-2">{renderInline(line.slice(3))}</h2>);
+      } else if (line.startsWith('# ')) {
+        flushList();
+        elements.push(<h1 key={index} className="font-bold text-xl mt-4 mb-2">{renderInline(line.slice(2))}</h1>);
+      }
+      // Unordered list items
+      else if (line.match(/^[-*]\s/) || line.match(/^- \[[ x]\]/)) {
+        if (listType !== 'ul') {
+          flushList();
+          listType = 'ul';
+        }
+        const itemText = line.replace(/^[-*]\s/, '').replace(/^- \[[ x]\]\s?/, (match) => {
+          const checked = match.includes('[x]');
+          return checked ? '✅ ' : '☐ ';
+        });
+        currentList.push(itemText);
+      }
+      // Ordered list items
+      else if (line.match(/^\d+\.\s/)) {
+        if (listType !== 'ol') {
+          flushList();
+          listType = 'ol';
+        }
+        currentList.push(line.replace(/^\d+\.\s/, ''));
+      }
+      // Empty line
+      else if (line.trim() === '') {
+        flushList();
+        elements.push(<br key={index} />);
+      }
+      // Regular paragraph
+      else {
+        flushList();
+        elements.push(<p key={index} className="my-1">{renderInline(line)}</p>);
+      }
+    });
+    
+    flushList();
+    return elements;
+  };
+
+  return <>{renderMarkdown(content)}</>;
+};
+
 interface KnowledgeDocument {
   id: string;
   title: string;
@@ -662,7 +750,9 @@ const KnowledgeBasePage: React.FC = () => {
                   </CardHeader>
                   {note.content && (
                     <CardContent>
-                      <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                      <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                        <MarkdownRenderer content={note.content} />
+                      </div>
                     </CardContent>
                   )}
                 </Card>
