@@ -192,18 +192,8 @@ export const AccountsSettingsTab: React.FC = () => {
         }
       }
 
-      // Apply category restrictions - remove accounts that are restricted for this category
-      if (locationCategory && restrictions.length > 0) {
-        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
-        
-        allAccountsData = allAccountsData.filter(account => {
-          // Extract account prefix (only first part before first hyphen)
-          const parts = account.number.split('-');
-          const accountPrefix = parts[0];
-          const isRestricted = restrictedPrefixes.includes(accountPrefix);
-          return !isRestricted;
-        });
-      }
+      // Note: In Settings page, show ALL accounts for the location without applying
+      // category restrictions - economists need to see all accounts to manage analytical sub-accounts
 
       // Sort by account number
       allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
