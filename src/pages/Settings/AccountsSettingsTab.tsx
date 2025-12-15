@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, ChevronDown, ChevronRight, Search, Pencil } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { toast } from 'sonner';
 
 interface Account {
@@ -389,6 +389,9 @@ export const AccountsSettingsTab: React.FC = () => {
           <CardTitle>Dostępne konta</CardTitle>
         </CardHeader>
         <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Liczba dostępnych kont: {availableAccounts.length}
+          </p>
           <div className="mb-4 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -398,8 +401,8 @@ export const AccountsSettingsTab: React.FC = () => {
               className="pl-9"
             />
           </div>
-          <ScrollArea className="h-[500px]">
-            <div className="space-y-2 pr-4">
+          <div className="max-h-[600px] overflow-y-auto border rounded-lg p-2">
+            <div className="space-y-2">
               {availableAccounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
               const accountAnalytical = getAccountAnalytical(account.id);
@@ -482,7 +485,7 @@ export const AccountsSettingsTab: React.FC = () => {
               );
             })}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 
