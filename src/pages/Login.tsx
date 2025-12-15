@@ -17,8 +17,8 @@ import {
   updateTrustedDeviceLastUsed 
 } from '@/utils/deviceFingerprint';
 
-// TYMCZASOWO WYŁĄCZONE - do włączenia po skonfigurowaniu domeny i emaili
-const ENABLE_TWO_FACTOR_AUTH = false;
+// Weryfikacja dwuetapowa - WŁĄCZONA
+const ENABLE_TWO_FACTOR_AUTH = true;
 
 // Ograniczamy role do ekonoma
 type Role = 'ekonom';
