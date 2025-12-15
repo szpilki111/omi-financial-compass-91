@@ -31,7 +31,61 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { user_id, email, device_fingerprint, user_agent, ip_address }: VerificationRequest = await req.json();
 
+    const normalizedEmail = (email ?? '').trim().toLowerCase();
+    const normalizedFingerprint = (device_fingerprint ?? '').trim();
+
+    if (!user_id || !normalizedEmail || !normalizedFingerprint) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields' }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    }
+
     console.log('Sending verification code for user:', user_id);
+
+    // Zabezpieczenie: sprawdź czy user_id faktycznie należy do tego emaila
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user_id)
+      .maybeSingle();
+
+    if (profileError || !profile?.email || profile.email.trim().toLowerCase() !== normalizedEmail) {
+      console.warn('send-verification-code: email mismatch for user_id', { user_id });
+      return new Response(
+        JSON.stringify({ error: 'Invalid user/email pair' }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    }
+
+    // Zabezpieczenie: cooldown 60s (anty-spam)
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+    const { data: recentCode, error: recentError } = await supabase
+      .from('verification_codes')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('device_fingerprint', normalizedFingerprint)
+      .is('used_at', null)
+      .gt('created_at', oneMinuteAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!recentError && recentCode) {
+      return new Response(
+        JSON.stringify({ error: 'Too many requests' }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    }
 
     // Wygeneruj 6-cyfrowy kod
     const code = generateVerificationCode();
@@ -45,8 +99,10 @@ const handler = async (req: Request): Promise<Response> => {
       .insert({
         user_id,
         code,
-        device_fingerprint,
+        device_fingerprint: normalizedFingerprint,
         expires_at: expiresAt.toISOString(),
+        user_agent: user_agent ?? null,
+        ip_address: ip_address ?? null,
       });
 
     if (insertError) {
