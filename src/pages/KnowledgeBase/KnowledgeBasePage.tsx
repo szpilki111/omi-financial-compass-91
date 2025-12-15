@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import MainLayout from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -582,7 +583,8 @@ const KnowledgeBasePage: React.FC = () => {
   }, {} as Record<string, number>) || {};
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <MainLayout>
+      <div className="space-y-6">
       <PageTitle 
         title="Baza wiedzy" 
         subtitle="Kompletna dokumentacja systemu finansowego OMI"
@@ -1051,7 +1053,8 @@ const KnowledgeBasePage: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </MainLayout>
   );
 };
 
