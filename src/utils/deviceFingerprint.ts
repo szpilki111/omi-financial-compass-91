@@ -87,9 +87,14 @@ export const isDeviceTrusted = async (
     .select('id')
     .eq('user_id', userId)
     .eq('device_fingerprint', deviceFingerprint)
-    .single();
+    .maybeSingle();
 
-  return !error && !!data;
+  if (error) {
+    console.error('Error checking trusted device:', error);
+    return false;
+  }
+
+  return !!data;
 };
 
 /**
