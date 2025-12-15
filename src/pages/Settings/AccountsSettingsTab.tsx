@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -68,25 +68,19 @@ export const AccountsSettingsTab: React.FC = () => {
     enabled: !!user?.location
   });
 
-  // Pobierz konta dostępne dla użytkownika
-  const { data: availableAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['available-accounts', user?.location, searchQuery],
+  // Pobierz konta dostępne dla użytkownika - bez searchQuery w queryKey, filtrowanie po stronie klienta
+  const { data: allAccounts, isLoading: accountsLoading } = useQuery({
+    queryKey: ['available-accounts', user?.location],
     queryFn: async () => {
       if (!user?.location) return [];
 
       // For admin/prowincjal - show all accounts without limit
       if (user.role === 'admin' || user.role === 'prowincjal') {
-        let query = supabase
+        const { data, error } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .order('number');
 
-        // Add search filtering
-        if (searchQuery.trim()) {
-          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
-        }
-
-        const { data, error } = await query;
         if (error) throw error;
         return data || [];
       }
@@ -137,18 +131,11 @@ export const AccountsSettingsTab: React.FC = () => {
 
       // Get manually assigned accounts - fetch ALL without limit
       if (accountIds.length > 0) {
-        let query = supabase
+        const { data: manualAccounts, error } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .in('id', accountIds)
           .order('number');
-
-        // Add search filtering
-        if (searchQuery.trim()) {
-          query = query.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
-        }
-
-        const { data: manualAccounts, error } = await query;
 
         if (!error && manualAccounts) {
           allAccountsData = [...manualAccounts];
@@ -160,20 +147,14 @@ export const AccountsSettingsTab: React.FC = () => {
         const identifier = locationData.location_identifier;
         
         // Get ALL accounts that match the location identifier - no limit
-        let autoQuery = supabase
+        const { data: fetchedAccounts, error: allAccountsError } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .order('number');
 
-        // Add search filtering
-        if (searchQuery.trim()) {
-          autoQuery = autoQuery.or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
-        }
+        if (!allAccountsError && fetchedAccounts) {
 
-        const { data: allAccounts, error: allAccountsError } = await autoQuery;
-
-        if (!allAccountsError && allAccounts) {
-          const matchingAccounts = allAccounts.filter(account => {
+          const matchingAccounts = fetchedAccounts.filter(account => {
             // Check if account number starts with the location identifier after the first dash
             // Also match accounts with additional suffixes like "100-5-3-1" when identifier is "5-3"
             const accountParts = account.number.split('-');
@@ -203,6 +184,18 @@ export const AccountsSettingsTab: React.FC = () => {
     },
     enabled: !!user?.location
   });
+
+  // Filtrowanie kont po stronie klienta - nie powoduje refetch przy każdej literce
+  const availableAccounts = useMemo(() => {
+    if (!allAccounts) return [];
+    if (!searchQuery.trim()) return allAccounts;
+    
+    const query = searchQuery.toLowerCase();
+    return allAccounts.filter(account => 
+      account.number.toLowerCase().includes(query) || 
+      account.name.toLowerCase().includes(query)
+    );
+  }, [allAccounts, searchQuery]);
 
   // Pobierz konta analityczne
   const { data: analyticalAccounts, isLoading: analyticalLoading } = useQuery({
