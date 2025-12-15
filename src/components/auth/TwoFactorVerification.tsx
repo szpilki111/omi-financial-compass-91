@@ -79,8 +79,21 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
         }
       );
 
-      if (verifyError || !data?.valid) {
-        setError('Nieprawidłowy lub wygasły kod weryfikacyjny');
+      if (verifyError) {
+        setError('Wystąpił błąd podczas weryfikacji. Spróbuj ponownie.');
+        return;
+      }
+
+      if (!data?.valid) {
+        // Rozróżnij powód błędu
+        const reason = data?.reason;
+        if (reason === 'expired') {
+          setError('Kod weryfikacyjny wygasł. Wyślij nowy kod.');
+        } else if (reason === 'already_used') {
+          setError('Ten kod został już użyty. Wyślij nowy kod.');
+        } else {
+          setError('Nieprawidłowy kod weryfikacyjny. Sprawdź i spróbuj ponownie.');
+        }
         return;
       }
 
@@ -91,7 +104,6 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
 
       onVerified(trustDevice);
     } catch (error: any) {
-      console.error('Verification error:', error);
       setError('Wystąpił błąd podczas weryfikacji');
     } finally {
       setIsVerifying(false);
@@ -104,7 +116,7 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
     setTimeLeft(15 * 60);
 
     try {
-      const { error } = await supabase.functions.invoke('send-verification-code', {
+      const { data, error } = await supabase.functions.invoke('send-verification-code', {
         body: {
           user_id: userId,
           email,
@@ -115,12 +127,17 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
 
       if (error) throw error;
 
+      // Obsługa rate limiting (429)
+      if (data?.error === 'Too many requests') {
+        setError('Zbyt wiele prób. Poczekaj minutę i spróbuj ponownie.');
+        return;
+      }
+
       toast({
         title: "Kod wysłany ponownie",
         description: "Sprawdź swoją skrzynkę email",
       });
-    } catch (error: any) {
-      console.error('Resend error:', error);
+    } catch {
       setError('Nie udało się wysłać kodu ponownie');
     } finally {
       setIsResending(false);
