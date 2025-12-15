@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -7,9 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Smartphone, Monitor, Info, Clock, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Trash2, Smartphone, Monitor, Info, Clock, AlertTriangle, ShieldOff } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { cleanupExpiredTrustedDevices, removeAllTrustedDevices } from '@/utils/deviceFingerprint';
 
 interface TrustedDevice {
   id: string;
@@ -27,6 +38,9 @@ const TrustedDevicesTab = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showRemoveAllDialog, setShowRemoveAllDialog] = useState(false);
+  const [isRemovingAll, setIsRemovingAll] = useState(false);
+  const [isCleaningExpired, setIsCleaningExpired] = useState(false);
 
   const { data: trustedDevices, isLoading } = useQuery({
     queryKey: ['trustedDevices', user?.id],
@@ -42,6 +56,19 @@ const TrustedDevicesTab = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Auto-cleanup wygasłych urządzeń przy montowaniu komponentu
+  useEffect(() => {
+    const autoCleanup = async () => {
+      if (user?.id) {
+        const removed = await cleanupExpiredTrustedDevices(user.id, supabase);
+        if (removed > 0) {
+          queryClient.invalidateQueries({ queryKey: ['trustedDevices'] });
+        }
+      }
+    };
+    autoCleanup();
+  }, [user?.id, queryClient]);
 
   const deleteMutation = useMutation({
     mutationFn: async (deviceId: string) => {
@@ -67,6 +94,49 @@ const TrustedDevicesTab = () => {
       });
     },
   });
+
+  const handleRemoveExpired = async () => {
+    if (!user?.id) return;
+    setIsCleaningExpired(true);
+    try {
+      const removed = await cleanupExpiredTrustedDevices(user.id, supabase);
+      queryClient.invalidateQueries({ queryKey: ['trustedDevices'] });
+      toast({
+        title: removed > 0 ? "Usunięto wygasłe urządzenia" : "Brak wygasłych urządzeń",
+        description: removed > 0 ? `Usunięto ${removed} wygasłych urządzeń.` : "Nie znaleziono wygasłych urządzeń do usunięcia.",
+      });
+    } catch {
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć wygasłych urządzeń.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCleaningExpired(false);
+    }
+  };
+
+  const handleRemoveAll = async () => {
+    if (!user?.id) return;
+    setIsRemovingAll(true);
+    try {
+      const removed = await removeAllTrustedDevices(user.id, supabase);
+      queryClient.invalidateQueries({ queryKey: ['trustedDevices'] });
+      setShowRemoveAllDialog(false);
+      toast({
+        title: "Wszystkie urządzenia usunięte",
+        description: `Usunięto ${removed} zaufanych urządzeń. Przy następnym logowaniu otrzymasz kod weryfikacyjny.`,
+      });
+    } catch {
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć urządzeń.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRemovingAll(false);
+    }
+  };
 
   const getDeviceIcon = (userAgent: string | null) => {
     if (!userAgent) return <Monitor className="w-5 h-5 text-primary" />;
@@ -94,6 +164,15 @@ const TrustedDevicesTab = () => {
       );
     }
 
+    if (daysRemaining <= 7) {
+      return (
+        <Badge variant="secondary" className="gap-1 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+          <Clock className="w-3 h-3" />
+          Zostało {daysRemaining} dni
+        </Badge>
+      );
+    }
+
     return (
       <Badge variant="secondary" className="gap-1">
         <Clock className="w-3 h-3" />
@@ -101,6 +180,8 @@ const TrustedDevicesTab = () => {
       </Badge>
     );
   };
+
+  const expiredCount = trustedDevices?.filter(d => getDaysRemaining(d.created_at) <= 0).length || 0;
 
   if (isLoading) {
     return (
@@ -115,6 +196,28 @@ const TrustedDevicesTab = () => {
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={showRemoveAllDialog} onOpenChange={setShowRemoveAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć wszystkie zaufane urządzenia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta operacja usunie wszystkie zaufane urządzenia z Twojego konta. 
+              Przy następnym logowaniu z każdego urządzenia będziesz musiał wprowadzić kod weryfikacyjny wysłany na email.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemovingAll}>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveAll}
+              disabled={isRemovingAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRemovingAll ? 'Usuwanie...' : 'Usuń wszystkie'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Card>
         <CardHeader>
           <CardTitle>Zaufane urządzenia</CardTitle>
@@ -138,6 +241,31 @@ const TrustedDevicesTab = () => {
               Po wygaśnięciu usuń urządzenie z listy, aby przy następnym logowaniu zweryfikować je ponownie kodem.
             </AlertDescription>
           </Alert>
+
+          {trustedDevices && trustedDevices.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {expiredCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveExpired}
+                  disabled={isCleaningExpired}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {isCleaningExpired ? 'Usuwanie...' : `Usuń wygasłe (${expiredCount})`}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRemoveAllDialog(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <ShieldOff className="w-4 h-4 mr-2" />
+                Usuń wszystkie urządzenia
+              </Button>
+            </div>
+          )}
 
           {!trustedDevices || trustedDevices.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

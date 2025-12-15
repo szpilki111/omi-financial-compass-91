@@ -153,3 +153,49 @@ export const updateTrustedDeviceLastUsed = async (
     console.error('Error updating trusted device:', error);
   }
 };
+
+/**
+ * Usuwa wygasłe zaufane urządzenia (starsze niż 30 dni)
+ */
+export const cleanupExpiredTrustedDevices = async (
+  userId: string,
+  supabase: any
+): Promise<number> => {
+  const TRUST_DAYS = 30;
+  const expiryDate = new Date(Date.now() - TRUST_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('trusted_devices')
+    .delete()
+    .eq('user_id', userId)
+    .lt('created_at', expiryDate)
+    .select('id');
+
+  if (error) {
+    console.error('Error cleaning up expired devices:', error);
+    return 0;
+  }
+
+  return data?.length || 0;
+};
+
+/**
+ * Usuwa wszystkie zaufane urządzenia użytkownika
+ */
+export const removeAllTrustedDevices = async (
+  userId: string,
+  supabase: any
+): Promise<number> => {
+  const { data, error } = await supabase
+    .from('trusted_devices')
+    .delete()
+    .eq('user_id', userId)
+    .select('id');
+
+  if (error) {
+    console.error('Error removing all trusted devices:', error);
+    throw error;
+  }
+
+  return data?.length || 0;
+};

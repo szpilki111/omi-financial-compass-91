@@ -14,7 +14,8 @@ import {
   generateDeviceFingerprint, 
   isDeviceTrusted, 
   addTrustedDevice,
-  updateTrustedDeviceLastUsed 
+  updateTrustedDeviceLastUsed,
+  cleanupExpiredTrustedDevices
 } from '@/utils/deviceFingerprint';
 
 // Weryfikacja dwuetapowa - WŁĄCZONA
@@ -170,6 +171,8 @@ const Login = () => {
       
       if (trusted) {
         await updateTrustedDeviceLastUsed(userId, fingerprint, supabase);
+        // Automatyczne sprzątanie wygasłych urządzeń przy logowaniu
+        cleanupExpiredTrustedDevices(userId, supabase).catch(() => {});
 
         toast({
           title: "Logowanie pomyślne",
