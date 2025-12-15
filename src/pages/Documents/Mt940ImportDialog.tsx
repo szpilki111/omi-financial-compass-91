@@ -246,32 +246,71 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
     };
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Detect and convert encoding to UTF-8
+  const detectAndConvertEncoding = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Check for UTF-8 BOM
+    if (uint8Array[0] === 0xEF && uint8Array[1] === 0xBB && uint8Array[2] === 0xBF) {
+      console.log('Detected UTF-8 with BOM');
+      return new TextDecoder('utf-8').decode(buffer);
+    }
+    
+    // Try UTF-8 first
+    try {
+      const utf8Text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      // Check if text contains typical Polish characters decoded correctly
+      if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(utf8Text) || !/[�\uFFFD]/.test(utf8Text)) {
+        console.log('Detected UTF-8');
+        return utf8Text;
+      }
+    } catch {
+      // UTF-8 decoding failed
+    }
+    
+    // Try Windows-1250 (common for Polish files)
+    try {
+      const win1250Text = new TextDecoder('windows-1250').decode(buffer);
+      console.log('Detected Windows-1250');
+      return win1250Text;
+    } catch {
+      // Windows-1250 decoding failed
+    }
+    
+    // Fallback to ISO-8859-2
+    try {
+      const isoText = new TextDecoder('iso-8859-2').decode(buffer);
+      console.log('Detected ISO-8859-2');
+      return isoText;
+    } catch {
+      // Last resort - try UTF-8 without strict mode
+      console.log('Fallback to UTF-8 non-strict');
+      return new TextDecoder('utf-8').decode(buffer);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     
     setFile(selectedFile);
     
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        console.log('File content:', content);
-        const parsedData = parseMt940File(content);
-        setPreviewData(parsedData);
-        console.log('Parsed MT940 data:', parsedData);
-      } catch (error) {
-        console.error('Error parsing MT940 file:', error);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się przetworzyć pliku MT940",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    // Try UTF-8 first, fallback to windows-1250 for Polish characters
-    reader.readAsText(selectedFile, 'UTF-8');
+    try {
+      // Detect and convert encoding automatically
+      const content = await detectAndConvertEncoding(selectedFile);
+      console.log('File content:', content);
+      const parsedData = parseMt940File(content);
+      setPreviewData(parsedData);
+      console.log('Parsed MT940 data:', parsedData);
+    } catch (error) {
+      console.error('Error parsing MT940 file:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się przetworzyć pliku MT940",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleImport = async () => {

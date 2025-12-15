@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
+import { AlertTriangle } from 'lucide-react';
 import { calculateAndSaveReportSummary, getOpeningBalance, calculateFinancialSummary } from '@/utils/financeUtils';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import YearToDateAccountsBreakdown from '@/components/reports/YearToDateAccountsBreakdown';
@@ -56,6 +58,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isCalculatingYearToDate, setIsCalculatingYearToDate] = useState(false);
+  const [showIncompleteDocsDialog, setShowIncompleteDocsDialog] = useState(false);
+  const [incompleteDocsList, setIncompleteDocsList] = useState<Array<{ id: string; document_number: string; document_name: string }>>([]);
 
   const [availableLocations, setAvailableLocations] = useState<Array<{ id: string, name: string }>>([]);
 
@@ -231,6 +235,27 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     calculateYearToDate();
   }, [showFromYearStart, selectedYear, selectedMonth, user?.location, form]);
 
+  // Function to check for incomplete documents in the selected period
+  const checkIncompleteDocuments = async (locationId: string, month: number, year: number) => {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // Last day of month
+    
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id, document_number, document_name, validation_errors')
+      .eq('location_id', locationId)
+      .gte('document_date', startDate.toISOString().split('T')[0])
+      .lte('document_date', endDate.toISOString().split('T')[0])
+      .not('validation_errors', 'is', null);
+    
+    if (error) {
+      console.error('Error checking incomplete documents:', error);
+      return [];
+    }
+    
+    return data || [];
+  };
+
   const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
     if (!user?.location) {
       toast({
@@ -248,6 +273,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     try {
       const month = parseInt(values.month);
       const year = parseInt(values.year);
+      
+      // Check for incomplete documents before creating report
+      const incompleteDocuments = await checkIncompleteDocuments(user.location, month, year);
+      
+      if (incompleteDocuments.length > 0) {
+        setIncompleteDocsList(incompleteDocuments);
+        setShowIncompleteDocsDialog(true);
+        setIsSubmitting(false);
+        return;
+      }
       
       // Sprawdź czy raport już istnieje
       console.log('🔍 Sprawdzanie czy raport już istnieje...');
@@ -712,6 +747,37 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           </>
         )}
       </form>
+
+      {/* Dialog for incomplete documents */}
+      <Dialog open={showIncompleteDocsDialog} onOpenChange={setShowIncompleteDocsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Nie można utworzyć raportu
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Następujące dokumenty z tego miesiąca mają niekompletne operacje:</p>
+            <ul className="list-disc pl-5 space-y-1 max-h-60 overflow-y-auto">
+              {incompleteDocsList.map(doc => (
+                <li key={doc.id}>
+                  <span className="font-medium">{doc.document_number}</span>
+                  {doc.document_name && ` - ${doc.document_name}`}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-muted-foreground">
+              Uzupełnij brakujące pola w dokumentach przed utworzeniem raportu.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowIncompleteDocsDialog(false)}>
+              Rozumiem
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   );
 };

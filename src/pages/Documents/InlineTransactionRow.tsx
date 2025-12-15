@@ -94,21 +94,21 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
     enabled: !!user?.id,
   });
 
-  // Check basic form validity (relaxed for balancing transactions)
+  // Check basic form validity (relaxed for balancing transactions) - supports negative amounts
   const isBasicFormValid = () => {
-    return formData.description.trim() && formData.debit_amount > 0 && formData.credit_amount > 0;
+    return formData.description.trim() && formData.debit_amount !== 0 && formData.credit_amount !== 0;
   };
 
-  // Check if all fields are filled (for equal amounts)
+  // Check if all fields are filled (for equal amounts) - supports negative amounts
   const isFormValid =
     formData.description.trim() &&
     formData.debit_account_id &&
     formData.credit_account_id &&
-    formData.debit_amount > 0 &&
-    formData.credit_amount > 0;
+    formData.debit_amount !== 0 &&
+    formData.credit_amount !== 0;
 
   // Check if amounts are equal (with tolerance for floating point precision)
-  const amountsEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
+  const amountsEqual = Math.abs(Math.abs(formData.debit_amount) - Math.abs(formData.credit_amount)) <= 0.01;
 
   // Handle losing focus from the row - only save when amounts are equal
   const handleRowBlur = (event: React.FocusEvent) => {
@@ -312,24 +312,24 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
 
   const handleSaveWithBalancing = () => {
     if (!formData.description.trim() || !formData.debit_account_id || !formData.credit_account_id) return;
-    if (formData.debit_amount <= 0 || formData.credit_amount <= 0) return;
+    if (formData.debit_amount === 0 || formData.credit_amount === 0) return;
 
-    const amountsAreEqual = Math.abs(formData.debit_amount - formData.credit_amount) <= 0.01;
+    const amountsAreEqual = Math.abs(Math.abs(formData.debit_amount) - Math.abs(formData.credit_amount)) <= 0.01;
     const transaction: Transaction = {
       description: formData.description,
       debit_account_id: formData.debit_account_id,
       credit_account_id: formData.credit_account_id,
       debit_amount: formData.debit_amount,
       credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
+      amount: Math.max(Math.abs(formData.debit_amount), Math.abs(formData.credit_amount)),
       settlement_type: formData.settlement_type,
       currency: currency,
     };
     onSave(transaction);
 
     if (!amountsAreEqual) {
-      const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-      const isDebitLarger = formData.debit_amount > formData.credit_amount;
+      const difference = Math.abs(Math.abs(formData.debit_amount) - Math.abs(formData.credit_amount));
+      const isDebitLarger = Math.abs(formData.debit_amount) > Math.abs(formData.credit_amount);
       const balancingTransaction: Transaction = {
         description: formData.description,
         debit_account_id: isDebitLarger ? "" : formData.credit_account_id,
@@ -354,6 +354,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
       onBlur={handleRowBlur}
     >
       <TableCell>{/* Empty cell for drag handle */}</TableCell>
+      <TableCell className="text-center font-mono text-sm text-muted-foreground">-</TableCell>
       <TableCell>{/* Empty cell for checkbox */}</TableCell>
       <TableCell>
         <Textarea
