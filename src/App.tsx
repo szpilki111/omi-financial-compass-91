@@ -23,6 +23,7 @@ import { AdministrationPage } from "./pages/Administration";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import { BudgetPage } from "./pages/Budget";
 import { KnowledgeBasePage } from "./pages/KnowledgeBase";
+import { CalendarPage } from "./pages/Calendar";
 
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -131,6 +132,13 @@ const App = () => (
               <Route path="/baza-wiedzy" element={
                 <ProtectedRoute>
                   <KnowledgeBasePage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Calendar route */}
+              <Route path="/kalendarz" element={
+                <ProtectedRoute>
+                  <CalendarPage />
                 </ProtectedRoute>
               } />
               
