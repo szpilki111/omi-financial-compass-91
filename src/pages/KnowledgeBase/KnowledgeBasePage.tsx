@@ -941,7 +941,10 @@ const KnowledgeBasePage: React.FC = () => {
                             <Collapsible open={isExpanded || !hasLongContent}>
                               <CollapsibleContent forceMount className={!isExpanded && hasLongContent ? 'max-h-[300px] overflow-hidden relative' : ''}>
                                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                                  <MarkdownRenderer content={note.content} />
+                                  <MarkdownRenderer content={
+                                    // Strip first heading line if it matches the title
+                                    note.content.replace(/^##?\s*[^\n]+\n+/, '')
+                                  } />
                                 </div>
                                 {!isExpanded && hasLongContent && (
                                   <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent" />
