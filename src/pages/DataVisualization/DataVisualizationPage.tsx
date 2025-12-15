@@ -40,6 +40,8 @@ import {
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Calendar, TrendingUp, Building2, DollarSign, TrendingDown, BarChart3 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MultiYearTrends from './MultiYearTrends';
 
 interface ReportFinancialData {
   location_id: string;
@@ -97,8 +99,10 @@ const DataVisualizationPage = () => {
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedComparison, setSelectedComparison] = useState<'year_over_year' | 'month_over_month'>('month_over_month');
   const [selectedMetric, setSelectedMetric] = useState<'income' | 'expense' | 'balance'>('expense');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trends'>('overview');
+  const [trendLocation, setTrendLocation] = useState<string>('all');
 
-  const years = ['2024', '2025', '2026'];
+  const years = ['2022', '2023', '2024', '2025', '2026', '2027'];
 
   // Sprawdź czy użytkownik to ekonom (widzi tylko swoją placówkę)
   const isEkonom = user?.role === 'ekonom';
@@ -449,237 +453,256 @@ const DataVisualizationPage = () => {
           subtitle={isEkonom ? "Analiza finansowa na podstawie raportów z porównaniami między miesiącami" : "Analiza finansowa na podstawie raportów z porównaniami między placówkami"}
         />
 
-        {/* Karty podsumowujące */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <FinancialCard
-            title="Przychody (raporty)"
-            amount={totalIncome}
-            subtitle="Suma wszystkich przychodów z zatwierdzonych raportów"
-            icon={<DollarSign className="h-6 w-6" />}
-            trend="up"
-            trendColor="green"
-          />
-          <FinancialCard
-            title="Rozchody (raporty)"
-            amount={totalExpense}
-            subtitle="Suma wszystkich kosztów z zatwierdzonych raportów"
-            icon={<TrendingDown className="h-6 w-6" />}
-            trend="down"
-            trendColor="red"
-          />
-          <FinancialCard
-            title="Bilans (raporty)"
-            amount={totalBalance}
-            subtitle="Przychody - Rozchody z raportów"
-            icon={<BarChart3 className="h-6 w-6" />}
-            trend={totalBalance >= 0 ? "up" : "down"}
-            trendColor={totalBalance >= 0 ? "green" : "red"}
-          />
-        </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'overview' | 'trends')}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="overview">Przegląd</TabsTrigger>
+            <TabsTrigger value="trends">Trendy wieloletnie</TabsTrigger>
+          </TabsList>
 
-        {/* Filtry */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="h-4 w-4 inline mr-1" />
-                Okres
-              </label>
-              <Select value={selectedPeriod} onValueChange={(value: 'month' | 'quarter' | 'year') => setSelectedPeriod(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">Miesiąc</SelectItem>
-                  <SelectItem value="quarter">Kwartał</SelectItem>
-                  <SelectItem value="year">Rok</SelectItem>
-                </SelectContent>
-              </Select>
+          <TabsContent value="overview" className="space-y-6 mt-6">
+            {/* Karty podsumowujące */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FinancialCard
+                title="Przychody (raporty)"
+                amount={totalIncome}
+                subtitle="Suma wszystkich przychodów z zatwierdzonych raportów"
+                icon={<DollarSign className="h-6 w-6" />}
+                trend="up"
+                trendColor="green"
+              />
+              <FinancialCard
+                title="Rozchody (raporty)"
+                amount={totalExpense}
+                subtitle="Suma wszystkich kosztów z zatwierdzonych raportów"
+                icon={<TrendingDown className="h-6 w-6" />}
+                trend="down"
+                trendColor="red"
+              />
+              <FinancialCard
+                title="Bilans (raporty)"
+                amount={totalBalance}
+                subtitle="Przychody - Rozchody z raportów"
+                icon={<BarChart3 className="h-6 w-6" />}
+                trend={totalBalance >= 0 ? "up" : "down"}
+                trendColor={totalBalance >= 0 ? "green" : "red"}
+              />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Rok</label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map(year => (
-                    <SelectItem key={year} value={year}>{year}</SelectItem>
+            {/* Filtry */}
+            <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    <Calendar className="h-4 w-4 inline mr-1" />
+                    Okres
+                  </label>
+                  <Select value={selectedPeriod} onValueChange={(value: 'month' | 'quarter' | 'year') => setSelectedPeriod(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="month">Miesiąc</SelectItem>
+                      <SelectItem value="quarter">Kwartał</SelectItem>
+                      <SelectItem value="year">Rok</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Rok</label>
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map(year => (
+                        <SelectItem key={year} value={year}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    <TrendingUp className="h-4 w-4 inline mr-1" />
+                    Typ porównania
+                  </label>
+                  <Select value={selectedComparison} onValueChange={(value: 'year_over_year' | 'month_over_month') => setSelectedComparison(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="month_over_month">Miesiąc do miesiąca</SelectItem>
+                      <SelectItem value="year_over_year">Rok do roku</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Metryka</label>
+                  <Select value={selectedMetric} onValueChange={(value: 'income' | 'expense' | 'balance') => setSelectedMetric(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="income">Dochody</SelectItem>
+                      <SelectItem value="expense">Wydatki</SelectItem>
+                      <SelectItem value="balance">Bilans</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabela porównawcza */}
+            <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+              <h2 className="text-xl font-semibold mb-4 flex items-center">
+                {isEkonom ? (
+                  <>
+                    <Calendar className="h-5 w-5 mr-2" />
+                    Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między miesiącami (na podstawie raportów)
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="h-5 w-5 mr-2" />
+                    Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami (na podstawie raportów)
+                  </>
+                )}
+              </h2>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{isEkonom ? 'Miesiąc' : 'Placówka'}</TableHead>
+                    <TableHead className="text-right">Okres bieżący</TableHead>
+                    <TableHead className="text-right">Okres poprzedni</TableHead>
+                    <TableHead className="text-right">Zmiana</TableHead>
+                    <TableHead className="text-right">Zmiana %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {comparisonData.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.location}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.current_period)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.previous_period)}</TableCell>
+                      <TableCell className={`text-right font-medium ${getChangeColor(item.change, selectedMetric)}`}>
+                        {item.change > 0 ? '+' : ''}{formatCurrency(item.change)}
+                      </TableCell>
+                      <TableCell className={`text-right font-medium ${getChangeColor(item.change, selectedMetric)}`}>
+                        {item.change_percent > 0 ? '+' : ''}{item.change_percent.toFixed(1)}%
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </SelectContent>
-              </Select>
+                </TableBody>
+              </Table>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <TrendingUp className="h-4 w-4 inline mr-1" />
-                Typ porównania
-              </label>
-              <Select value={selectedComparison} onValueChange={(value: 'year_over_year' | 'month_over_month') => setSelectedComparison(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month_over_month">Miesiąc do miesiąca</SelectItem>
-                  <SelectItem value="year_over_year">Rok do roku</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Metryka</label>
-              <Select value={selectedMetric} onValueChange={(value: 'income' | 'expense' | 'balance') => setSelectedMetric(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="income">Dochody</SelectItem>
-                  <SelectItem value="expense">Wydatki</SelectItem>
-                  <SelectItem value="balance">Bilans</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabela porównawcza */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            {isEkonom ? (
-              <>
-                <Calendar className="h-5 w-5 mr-2" />
-                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między miesiącami (na podstawie raportów)
-              </>
-            ) : (
-              <>
-                <Building2 className="h-5 w-5 mr-2" />
-                Porównanie {getMetricLabel(selectedMetric).toLowerCase()} między placówkami (na podstawie raportów)
-              </>
-            )}
-          </h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{isEkonom ? 'Miesiąc' : 'Placówka'}</TableHead>
-                <TableHead className="text-right">Okres bieżący</TableHead>
-                <TableHead className="text-right">Okres poprzedni</TableHead>
-                <TableHead className="text-right">Zmiana</TableHead>
-                <TableHead className="text-right">Zmiana %</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {comparisonData.map((item, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{item.location}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.current_period)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.previous_period)}</TableCell>
-                  <TableCell className={`text-right font-medium ${getChangeColor(item.change, selectedMetric)}`}>
-                    {item.change > 0 ? '+' : ''}{formatCurrency(item.change)}
-                  </TableCell>
-                  <TableCell className={`text-right font-medium ${getChangeColor(item.change, selectedMetric)}`}>
-                    {item.change_percent > 0 ? '+' : ''}{item.change_percent.toFixed(1)}%
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Wykres liniowy - Trendy czasowe dla wydatków */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">
-            {isEkonom ? 'Trendy wydatków w czasie (z raportów)' : 'Trendy wydatków w czasie według placówek (z raportów)'}
-          </h2>
-          <ChartContainer config={chartConfig} className="h-96 w-full">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="period" 
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                fontSize={12}
-              />
-              <YAxis 
-                tickFormatter={formatYAxisCurrency}
-                fontSize={12}
-                domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
-                ticks={expenseYAxisTicks}
-                type="number"
-              />
-              <ChartTooltip 
-                content={<ChartTooltipContent 
-                  formatter={(value: number, name: string) => [
-                    formatCurrency(value), 
-                    name.replace(/([A-Z])/g, ' $1').replace('Expense', ' (wydatki)')
-                  ]}
-                />} 
-              />
-              <Legend />
-              {uniqueLocations.map((location, index) => {
-                const expenseKey = getSafeKey(location, 'expense');
-                return (
-                  <Line 
-                    key={location}
-                    type="monotone" 
-                    dataKey={expenseKey}
-                    stroke={colors[index % colors.length]} 
-                    strokeWidth={3}
-                    name={location}
-                    dot={{ r: 4 }}
+            {/* Wykres liniowy - Trendy czasowe dla wydatków */}
+            <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+              <h2 className="text-xl font-semibold mb-4">
+                {isEkonom ? 'Trendy wydatków w czasie (z raportów)' : 'Trendy wydatków w czasie według placówek (z raportów)'}
+              </h2>
+              <ChartContainer config={chartConfig} className="h-96 w-full">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="period" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    fontSize={12}
                   />
-                );
-              })}
-            </LineChart>
-          </ChartContainer>
-        </div>
-
-        {/* Wykres słupkowy - Porównanie dochodów */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">
-            {isEkonom ? 'Porównanie dochodów między miesiącami (z raportów)' : 'Porównanie dochodów między placówkami (z raportów)'}
-          </h2>
-          <ChartContainer config={chartConfig} className="h-96 w-full">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="period" 
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                fontSize={12}
-              />
-              <YAxis 
-                tickFormatter={formatYAxisCurrency}
-                fontSize={12}
-                domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
-                ticks={incomeYAxisTicks}
-                type="number"
-              />
-              <ChartTooltip 
-                content={<ChartTooltipContent 
-                  formatter={(value: number, name: string) => [
-                    formatCurrency(value), 
-                    name.replace(/([A-Z])/g, ' $1').replace('Income', ' (dochody)')
-                  ]}
-                />} 
-              />
-              <Legend />
-              {uniqueLocations.map((location, index) => {
-                const incomeKey = getSafeKey(location, 'income');
-                return (
-                  <Bar 
-                    key={location}
-                    dataKey={incomeKey}
-                    fill={colors[index % colors.length]} 
-                    name={location}
+                  <YAxis 
+                    tickFormatter={formatYAxisCurrency}
+                    fontSize={12}
+                    domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
+                    ticks={expenseYAxisTicks}
+                    type="number"
                   />
-                );
-              })}
-            </BarChart>
-          </ChartContainer>
-        </div>
+                  <ChartTooltip 
+                    content={<ChartTooltipContent 
+                      formatter={(value: number, name: string) => [
+                        formatCurrency(value), 
+                        name.replace(/([A-Z])/g, ' $1').replace('Expense', ' (wydatki)')
+                      ]}
+                    />} 
+                  />
+                  <Legend />
+                  {uniqueLocations.map((location, index) => {
+                    const expenseKey = getSafeKey(location, 'expense');
+                    return (
+                      <Line 
+                        key={location}
+                        type="monotone" 
+                        dataKey={expenseKey}
+                        stroke={colors[index % colors.length]} 
+                        strokeWidth={3}
+                        name={location}
+                        dot={{ r: 4 }}
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ChartContainer>
+            </div>
+
+            {/* Wykres słupkowy - Porównanie dochodów */}
+            <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+              <h2 className="text-xl font-semibold mb-4">
+                {isEkonom ? 'Porównanie dochodów między miesiącami (z raportów)' : 'Porównanie dochodów między placówkami (z raportów)'}
+              </h2>
+              <ChartContainer config={chartConfig} className="h-96 w-full">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="period" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    tickFormatter={formatYAxisCurrency}
+                    fontSize={12}
+                    domain={['dataMin - dataMin*0.1', 'dataMax + dataMax*0.1']}
+                    ticks={incomeYAxisTicks}
+                    type="number"
+                  />
+                  <ChartTooltip 
+                    content={<ChartTooltipContent 
+                      formatter={(value: number, name: string) => [
+                        formatCurrency(value), 
+                        name.replace(/([A-Z])/g, ' $1').replace('Income', ' (dochody)')
+                      ]}
+                    />} 
+                  />
+                  <Legend />
+                  {uniqueLocations.map((location, index) => {
+                    const incomeKey = getSafeKey(location, 'income');
+                    return (
+                      <Bar 
+                        key={location}
+                        dataKey={incomeKey}
+                        fill={colors[index % colors.length]} 
+                        name={location}
+                      />
+                    );
+                  })}
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="trends" className="mt-6">
+            <MultiYearTrends
+              reportData={reportData}
+              locations={uniqueLocations}
+              selectedLocation={trendLocation}
+              onLocationChange={setTrendLocation}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );
