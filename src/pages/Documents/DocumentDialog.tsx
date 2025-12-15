@@ -1045,7 +1045,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
-  const handleSplitTransaction = (transaction: Transaction, isParallel: boolean = false, transactionIndex?: number) => {
+  const handleSplitTransaction = (transactionIndex: number, isParallel: boolean = false) => {
+    // Pobierz AKTUALNĄ transakcję ze stanu, nie z closure - naprawia problem "stale closure"
+    const transactionList = isParallel ? parallelTransactions : transactions;
+    const transaction = transactionList[transactionIndex];
+    
+    if (!transaction) {
+      toast({
+        title: "Błąd",
+        description: "Nie znaleziono transakcji do rozdzielenia",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const debitAmount = transaction.debit_amount || 0;
     const creditAmount = transaction.credit_amount || 0;
 
@@ -1515,7 +1528,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               onUpdate={(updatedTransaction) => handleUpdateTransaction(index, updatedTransaction)}
                               onDelete={() => removeTransaction(index)}
                               onCopy={() => handleCopyTransaction(transaction, false)}
-                              onSplit={() => handleSplitTransaction(transaction, false, index)}
+                              onSplit={() => handleSplitTransaction(index, false)}
                               currency={selectedCurrency}
                               isEditingBlocked={isEditingBlocked}
                               isSelected={selectedTransactions.includes(index)}
@@ -1673,7 +1686,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                                 }
                                 onDelete={() => removeParallelTransaction(index)}
                                 onCopy={() => handleCopyTransaction(transaction, true)}
-                                onSplit={() => handleSplitTransaction(transaction, true, index)}
+                                onSplit={() => handleSplitTransaction(index, true)}
                                 currency={selectedCurrency}
                                 isEditingBlocked={isEditingBlocked}
                                 isSelected={selectedParallelTransactions.includes(index)}

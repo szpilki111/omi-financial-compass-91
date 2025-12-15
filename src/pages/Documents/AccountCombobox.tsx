@@ -328,19 +328,27 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       <PopoverContent className="min-w-[450px] w-auto max-w-[600px] p-0">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Szukaj (nr lub nazwa)..."
+            placeholder="Szukaj po numerze lub nazwie..."
             value={searchTerm}
             onValueChange={(value) => {
-              // Automatyczne formatowanie: dodaj myślnik po każdych 3 cyfrach
-              const digitsOnly = value.replace(/\D/g, '');
-              let formatted = '';
-              for (let i = 0; i < digitsOnly.length; i++) {
-                if (i > 0 && i % 3 === 0) {
-                  formatted += '-';
+              // Sprawdź czy użytkownik wpisuje cyfry czy tekst
+              const startsWithDigit = /^\d/.test(value.replace(/-/g, ''));
+              
+              if (startsWithDigit) {
+                // Automatyczne formatowanie: dodaj myślnik po każdych 3 cyfrach
+                const digitsOnly = value.replace(/\D/g, '');
+                let formatted = '';
+                for (let i = 0; i < digitsOnly.length; i++) {
+                  if (i > 0 && i % 3 === 0) {
+                    formatted += '-';
+                  }
+                  formatted += digitsOnly[i];
                 }
-                formatted += digitsOnly[i];
+                setSearchTerm(formatted);
+              } else {
+                // Dla tekstu - przepuść bez zmian (wyszukiwanie po nazwie)
+                setSearchTerm(value);
               }
-              setSearchTerm(formatted);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

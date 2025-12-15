@@ -270,7 +270,8 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
   const handleDebitAmountChange = (value: number) => {
     setFormData((prev) => {
       const newData = { ...prev, debit_amount: value };
-      if (!creditTouched && value > 0) {
+      // Auto-fill credit if not touched and value is not zero (supports negative amounts)
+      if (!creditTouched && value !== 0) {
         newData.credit_amount = value;
       }
       return newData;
@@ -281,7 +282,8 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
   const handleCreditAmountChange = (value: number) => {
     setFormData((prev) => {
       const newData = { ...prev, credit_amount: value };
-      if (!debitTouched && value > 0) {
+      // Auto-fill debit if not touched and value is not zero (supports negative amounts)
+      if (!debitTouched && value !== 0) {
         newData.debit_amount = value;
       }
       return newData;
