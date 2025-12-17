@@ -13,16 +13,42 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Edit, Save, X, Upload, Trash2, Plus } from 'lucide-react';
+import { Edit, Save, X, Upload, Trash2, Plus, Archive, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { ScrollableTable } from '@/components/ui/ScrollableTable';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Account {
   id: string;
   number: string;
   name: string;
   type: string;
+  is_active: boolean;
+  deactivated_at?: string | null;
+  deactivated_by?: string | null;
+  deactivation_reason?: string | null;
 }
 
 interface EditingAccount {
@@ -40,6 +66,16 @@ const AccountsManagement = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newAccount, setNewAccount] = useState({ number: '', name: '', type: 'Aktywny' });
+  const [showInactive, setShowInactive] = useState(false);
+  
+  // Dialog states
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [deactivationReason, setDeactivationReason] = useState('');
+  const [hasRelatedTransactions, setHasRelatedTransactions] = useState(false);
+  const [checkingTransactions, setCheckingTransactions] = useState(false);
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -56,6 +92,11 @@ const AccountsManagement = () => {
     };
   }, [searchQuery]);
 
+  // Check if user can manage accounts (admin/prowincjał)
+  const canManageAccounts = useMemo(() => {
+    return user?.role === 'admin' || user?.role === 'prowincjal';
+  }, [user?.role]);
+
   // Check if user can import accounts (exclude prowincjał role)
   const canImportAccounts = useMemo(() => {
     return user?.role !== 'prowincjal';
@@ -63,12 +104,17 @@ const AccountsManagement = () => {
 
   // Fetch accounts
   const { data: accounts, isLoading } = useQuery({
-    queryKey: ['accounts', debouncedSearchQuery],
+    queryKey: ['accounts', debouncedSearchQuery, showInactive],
     queryFn: async () => {
       let query = supabase
         .from('accounts')
-        .select('id, number, name, type')
+        .select('id, number, name, type, is_active, deactivated_at, deactivated_by, deactivation_reason')
         .order('number');
+      
+      // Filter by active status unless showing inactive
+      if (!showInactive) {
+        query = query.eq('is_active', true);
+      }
       
       if (debouncedSearchQuery.trim()) {
         query = query.or(`number.ilike.%${debouncedSearchQuery}%,name.ilike.%${debouncedSearchQuery}%`);
@@ -77,26 +123,41 @@ const AccountsManagement = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      return data;
+      return data as Account[];
     }
   });
 
   // Preserve focus after query updates
   useEffect(() => {
     if (searchInputRef.current && document.activeElement !== searchInputRef.current) {
-      // Only refocus if the user was typing (searchQuery is not empty)
       if (searchQuery && !isImporting && !editingAccountId) {
         searchInputRef.current.focus();
       }
     }
   }, [accounts, searchQuery, isImporting, editingAccountId]);
 
+  // Check if account has related transactions
+  const checkRelatedTransactions = async (accountId: string): Promise<boolean> => {
+    const { count, error } = await supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .or(`debit_account_id.eq.${accountId},credit_account_id.eq.${accountId}`)
+      .limit(1);
+    
+    if (error) {
+      console.error('Error checking transactions:', error);
+      return true; // Assume there are transactions on error
+    }
+    
+    return (count || 0) > 0;
+  };
+
   // Add account mutation
   const addAccountMutation = useMutation({
     mutationFn: async (account: { number: string; name: string; type: string }) => {
       const { error } = await supabase
         .from('accounts')
-        .insert([account]);
+        .insert([{ ...account, is_active: true }]);
 
       if (error) throw error;
     },
@@ -146,10 +207,102 @@ const AccountsManagement = () => {
     }
   });
 
+  // Deactivate account mutation
+  const deactivateAccountMutation = useMutation({
+    mutationFn: async ({ accountId, reason }: { accountId: string; reason?: string }) => {
+      const { error } = await supabase
+        .from('accounts')
+        .update({
+          is_active: false,
+          deactivated_at: new Date().toISOString(),
+          deactivated_by: user?.id,
+          deactivation_reason: reason || null,
+        })
+        .eq('id', accountId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setDeactivateDialogOpen(false);
+      setSelectedAccount(null);
+      setDeactivationReason('');
+      toast({
+        title: "Sukces",
+        description: "Konto zostało dezaktywowane.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Reactivate account mutation
+  const reactivateAccountMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { error } = await supabase
+        .from('accounts')
+        .update({
+          is_active: true,
+          deactivated_at: null,
+          deactivated_by: null,
+          deactivation_reason: null,
+        })
+        .eq('id', accountId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast({
+        title: "Sukces",
+        description: "Konto zostało reaktywowane.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Delete account mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { error } = await supabase
+        .from('accounts')
+        .delete()
+        .eq('id', accountId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setDeleteDialogOpen(false);
+      setSelectedAccount(null);
+      toast({
+        title: "Sukces",
+        description: "Konto zostało trwale usunięte.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Błąd",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   // Import accounts from CSV
   const importAccountsMutation = useMutation({
     mutationFn: async (accounts: { number: string; name: string }[]) => {
-      // Pobierz istniejące konta z bazy danych
       const { data: existingAccounts, error: fetchError } = await supabase
         .from('accounts')
         .select('number');
@@ -158,13 +311,13 @@ const AccountsManagement = () => {
 
       const existingNumbers = new Set(existingAccounts?.map(acc => acc.number) || []);
 
-      // Filtruj konta - dodaj tylko te, które nie istnieją w bazie
       const accountsToInsert = accounts
         .filter(account => !existingNumbers.has(account.number))
         .map(account => ({
           number: account.number,
           name: account.name,
-          type: 'Aktywny' // Domyślny typ
+          type: 'Aktywny',
+          is_active: true
         }));
 
       if (accountsToInsert.length === 0) {
@@ -228,7 +381,6 @@ const AccountsManagement = () => {
       return;
     }
 
-    // Walidacja - sprawdź czy wszystkie pola są wypełnione
     if (!editingAccount.number.trim() || !editingAccount.name.trim() || !editingAccount.type.trim()) {
       toast({
         title: "Błąd",
@@ -279,24 +431,49 @@ const AccountsManagement = () => {
     setNewAccount({ number: '', name: '', type: 'Aktywny' });
   };
 
+  const handleDeactivateClick = async (account: Account) => {
+    setSelectedAccount(account);
+    setCheckingTransactions(true);
+    
+    const hasTransactions = await checkRelatedTransactions(account.id);
+    setHasRelatedTransactions(hasTransactions);
+    setCheckingTransactions(false);
+    setDeactivateDialogOpen(true);
+  };
+
+  const handleDeleteClick = async (account: Account) => {
+    setSelectedAccount(account);
+    setCheckingTransactions(true);
+    
+    const hasTransactions = await checkRelatedTransactions(account.id);
+    setHasRelatedTransactions(hasTransactions);
+    setCheckingTransactions(false);
+    
+    if (hasTransactions) {
+      toast({
+        title: "Nie można usunąć",
+        description: "To konto ma powiązane operacje. Możesz je tylko dezaktywować.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setDeleteDialogOpen(true);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const processFileContent = (content: string, encoding: string) => {
       console.log(`Próbuję odczytać plik w kodowaniu: ${encoding}`);
-      console.log('Pierwsze 200 znaków:', content.substring(0, 200));
       
-      // Sprawdź czy są problemy z kodowaniem
       const hasEncodingIssues = content.includes('�') || content.includes('Ã') || content.includes('Å');
-      console.log('Problemy z kodowaniem:', hasEncodingIssues);
       
       let processedContent = content;
       
-      // Jeśli to Windows-1250, napraw polskie znaki
       if (encoding === 'windows-1250' || hasEncodingIssues) {
         processedContent = content
-          // Mapowanie z Windows-1250/ISO-8859-2
           .replace(/¹/g, 'ą')
           .replace(/ê/g, 'ę') 
           .replace(/³/g, 'ł')
@@ -305,7 +482,6 @@ const AccountsManagement = () => {
           .replace(/¶/g, 'ś')
           .replace(/Ÿ/g, 'ź')
           .replace(/ó/g, 'ó')
-          // Mapowanie z UTF-8 błędnie interpretowanego jako Windows-1250
           .replace(/Ä…/g, 'ą')
           .replace(/Ä™/g, 'ę')
           .replace(/Å‚/g, 'ł')
@@ -314,12 +490,9 @@ const AccountsManagement = () => {
           .replace(/Å›/g, 'ś')
           .replace(/Åº/g, 'ź')
           .replace(/Ã³/g, 'ó')
-          // Dodatkowe mapowania
           .replace(/â€ž/g, '„')
           .replace(/â€œ/g, '"')
           .replace(/â€/g, '–');
-        
-        console.log('Po naprawie znaków:', processedContent.substring(0, 200));
       }
       
       const lines = processedContent.split(/\r?\n/).filter(line => line.trim());
@@ -335,18 +508,12 @@ const AccountsManagement = () => {
           const number = match[1].trim();
           const name = match[2].trim();
           
-          console.log(`Parsed: ${number} -> ${name}`);
-          
           if (number && name && !usedNumbers.has(number)) {
             accounts.push({ number, name });
             usedNumbers.add(number);
           }
-        } else {
-          console.log('Nie można sparsować linii:', trimmedLine);
         }
       }
-      
-      console.log(`Znaleziono ${accounts.length} kont`);
       
       if (accounts.length === 0) {
         toast({
@@ -362,33 +529,26 @@ const AccountsManagement = () => {
       return true;
     };
 
-    // Pierwsza próba: UTF-8
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
         
-        // Sprawdź czy UTF-8 dało dobre rezultaty
         if (!content.includes('�') && !content.includes('Ã')) {
           if (processFileContent(content, 'UTF-8')) return;
         }
         
-        // Jeśli UTF-8 nie zadziałało, spróbuj Windows-1250
-        console.log('UTF-8 nie zadziałało, próbuję Windows-1250...');
         const fallbackReader = new FileReader();
         fallbackReader.onload = (e2) => {
           try {
             const fallbackContent = e2.target?.result as string;
             if (!processFileContent(fallbackContent, 'windows-1250')) {
-              // Ostatnia próba: ISO-8859-2
-              console.log('Windows-1250 nie zadziałało, próbuję ISO-8859-2...');
               const iso88592Reader = new FileReader();
               iso88592Reader.onload = (e3) => {
                 try {
                   const isoContent = e3.target?.result as string;
                   processFileContent(isoContent, 'ISO-8859-2');
                 } catch (error) {
-                  console.error('Błąd ISO-8859-2:', error);
                   toast({
                     title: "Błąd",
                     description: "Nie udało się odczytać pliku w żadnym kodowaniu",
@@ -399,7 +559,6 @@ const AccountsManagement = () => {
               iso88592Reader.readAsText(file, 'ISO-8859-2');
             }
           } catch (error) {
-            console.error('Błąd Windows-1250:', error);
             toast({
               title: "Błąd",
               description: "Nie udało się odczytać pliku",
@@ -410,7 +569,6 @@ const AccountsManagement = () => {
         fallbackReader.readAsText(file, 'windows-1250');
         
       } catch (error) {
-        console.error('Błąd UTF-8:', error);
         toast({
           title: "Błąd",
           description: "Nie udało się odczytać pliku",
@@ -420,8 +578,12 @@ const AccountsManagement = () => {
     };
     
     reader.readAsText(file, 'UTF-8');
-    event.target.value = ''; // Reset input
+    event.target.value = '';
   };
+
+  // Count active and inactive accounts
+  const activeCount = accounts?.filter(a => a.is_active).length || 0;
+  const inactiveCount = accounts?.filter(a => !a.is_active).length || 0;
 
   if (isLoading) {
     return (
@@ -437,17 +599,37 @@ const AccountsManagement = () => {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Zarządzanie kontami</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Zarządzanie kontami</span>
+            <span className="text-sm font-normal text-muted-foreground">
+              Aktywnych: {activeCount} {showInactive && `| Nieaktywnych: ${inactiveCount}`}
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between">
-            <Input
-              ref={searchInputRef}
-              placeholder="Wyszukaj konto po numerze lub nazwie..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-md"
-            />
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <Input
+                ref={searchInputRef}
+                placeholder="Wyszukaj konto po numerze lub nazwie..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-md"
+              />
+              
+              {canManageAccounts && (
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="show-inactive"
+                    checked={showInactive}
+                    onCheckedChange={setShowInactive}
+                  />
+                  <Label htmlFor="show-inactive" className="text-sm whitespace-nowrap">
+                    Pokaż nieaktywne
+                  </Label>
+                </div>
+              )}
+            </div>
             
             <div className="flex gap-2">
               <Button
@@ -507,6 +689,7 @@ const AccountsManagement = () => {
                   <TableRow>
                     <TableHead>Numer konta</TableHead>
                     <TableHead>Nazwa konta</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Typ</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
@@ -536,6 +719,9 @@ const AccountsManagement = () => {
                             }
                           }}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="default">Aktywny</Badge>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -572,7 +758,7 @@ const AccountsManagement = () => {
                     </TableRow>
                   )}
                   {accounts.map((account) => (
-                    <TableRow key={account.id}>
+                    <TableRow key={account.id} className={!account.is_active ? 'opacity-60' : ''}>
                       <TableCell className="font-medium">
                         {editingAccountId === account.id ? (
                           <Input
@@ -601,7 +787,21 @@ const AccountsManagement = () => {
                             }}
                           />
                         ) : (
-                          account.name
+                          <div>
+                            <span>{account.name}</span>
+                            {!account.is_active && account.deactivation_reason && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Powód: {account.deactivation_reason}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {account.is_active ? (
+                          <Badge variant="default" className="bg-green-600">Aktywny</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-orange-200 text-orange-800">Nieaktywny</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -641,15 +841,53 @@ const AccountsManagement = () => {
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditStart(account)}
-                            className="flex items-center gap-1"
-                          >
-                            <Edit className="h-3 w-3" />
-                            Edytuj
-                          </Button>
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditStart(account)}
+                              title="Edytuj"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            
+                            {canManageAccounts && (
+                              <>
+                                {account.is_active ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeactivateClick(account)}
+                                    disabled={deactivateAccountMutation.isPending}
+                                    title="Dezaktywuj"
+                                  >
+                                    <Archive className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => reactivateAccountMutation.mutate(account.id)}
+                                    disabled={reactivateAccountMutation.isPending}
+                                    title="Reaktywuj"
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(account)}
+                                  disabled={deleteAccountMutation.isPending || checkingTransactions}
+                                  title="Usuń trwale"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -660,6 +898,86 @@ const AccountsManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Deactivation Dialog */}
+      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dezaktywuj konto</DialogTitle>
+            <DialogDescription>
+              Czy na pewno chcesz dezaktywować konto <strong>{selectedAccount?.number}</strong> ({selectedAccount?.name})?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {hasRelatedTransactions && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800">
+                To konto ma powiązane operacje. Po dezaktywacji operacje historyczne pozostaną nienaruszone, 
+                ale nie będzie można dodawać nowych operacji na tym koncie.
+              </p>
+            </div>
+          )}
+          
+          <div className="space-y-2">
+            <Label htmlFor="reason">Powód dezaktywacji (opcjonalnie)</Label>
+            <Textarea
+              id="reason"
+              value={deactivationReason}
+              onChange={(e) => setDeactivationReason(e.target.value)}
+              placeholder="Podaj powód dezaktywacji..."
+              rows={3}
+            />
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (selectedAccount) {
+                  deactivateAccountMutation.mutate({
+                    accountId: selectedAccount.id,
+                    reason: deactivationReason.trim() || undefined,
+                  });
+                }
+              }}
+              disabled={deactivateAccountMutation.isPending}
+            >
+              {deactivateAccountMutation.isPending ? 'Dezaktywowanie...' : 'Dezaktywuj'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usuń konto trwale</AlertDialogTitle>
+            <AlertDialogDescription>
+              Czy na pewno chcesz trwale usunąć konto <strong>{selectedAccount?.number}</strong> ({selectedAccount?.name})?
+              <br /><br />
+              <strong className="text-destructive">Ta operacja jest nieodwracalna!</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedAccount) {
+                  deleteAccountMutation.mutate(selectedAccount.id);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteAccountMutation.isPending ? 'Usuwanie...' : 'Usuń trwale'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
