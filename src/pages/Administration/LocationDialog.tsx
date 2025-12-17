@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -210,11 +211,14 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose(false)}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Edytuj placówkę' : 'Dodaj nową placówkę'}
           </DialogTitle>
+          <DialogDescription>
+            {isEditing ? 'Zmień dane placówki.' : 'Wprowadź dane nowej placówki.'}
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
