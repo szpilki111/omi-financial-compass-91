@@ -198,36 +198,46 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         },
       });
 
-      if (fnError) {
-        console.error("create-user-admin error:", fnError);
-        
-        // Parsuj błąd z Edge Function - fnData zawiera body odpowiedzi nawet przy błędzie
-        const errorBody = fnData as { error?: string; code?: string } | null;
-        const errorMessage = errorBody?.error || fnError.message;
-        const errorCode = errorBody?.code;
-        
-        // Tłumacz specyficzne kody błędów
-        if (errorCode === 'email_exists' || errorMessage?.includes('already been registered')) {
+      const fnBody = fnData as { user_id?: string; error?: string; code?: string } | null;
+      const newUserId = fnBody?.user_id;
+
+      // Jeśli funkcja zwróciła błąd w body (HTTP 200) – pokaż go użytkownikowi
+      if (fnBody?.error) {
+        const errorMessage = String(fnBody.error || '');
+        const errorCode = fnBody.code;
+        const msg = errorMessage.toLowerCase();
+
+        if (errorCode === 'email_exists' || msg.includes('already been registered')) {
           throw new Error('Użytkownik z tym adresem email już istnieje');
         }
-        if (errorMessage?.includes('invalid email')) {
+        if (msg.includes('invalid email')) {
           throw new Error('Nieprawidłowy adres email');
         }
-        
+        if (msg.includes('weak password') || msg.includes('at least 6')) {
+          throw new Error('Hasło jest zbyt słabe (min. 6 znaków)');
+        }
+
         throw new Error(errorMessage || 'Nie udało się utworzyć użytkownika');
       }
-      if (!fnData?.user_id) {
+
+      // Twarde błędy HTTP (np. 401/403/500)
+      if (fnError) {
+        console.error("create-user-admin error:", fnError);
+        throw new Error(fnError.message || 'Nie udało się utworzyć użytkownika');
+      }
+
+      if (!newUserId) {
         throw new Error("Nie udało się utworzyć użytkownika");
       }
 
-      console.log("Nowy użytkownik utworzony:", fnData.user_id);
+      console.log("Nowy użytkownik utworzony:", newUserId);
 
       // Dodaj lokalizacje do tabeli user_locations
       if (selectedLocationIds.length > 0) {
         const { error: locError } = await supabase
           .from('user_locations')
           .insert(selectedLocationIds.map(locId => ({
-            user_id: fnData.user_id,
+            user_id: newUserId,
             location_id: locId
           })));
         
@@ -236,7 +246,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
         }
       }
 
-      return fnData;
+      return { user_id: newUserId };
     },
     onSuccess: () => {
       console.log("Użytkownik utworzony pomyślnie, sprawdzam obecną sesję...");
