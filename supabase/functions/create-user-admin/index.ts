@@ -141,6 +141,8 @@ serve(async (req) => {
       );
     }
 
+    const newUserId = created.user.id;
+
     // Insert profile
     const { error: insertErr } = await supabaseAdmin.from("profiles").insert({
       id: newUserId,
