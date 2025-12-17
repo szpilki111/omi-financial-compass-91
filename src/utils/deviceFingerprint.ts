@@ -137,7 +137,8 @@ const getDeviceName = (): string => {
 };
 
 /**
- * Dodaje urządzenie do listy zaufanych
+ * Dodaje urządzenie do listy zaufanych (lub odświeża istniejące - UPSERT)
+ * Jeśli urządzenie już istnieje (nawet wygasłe), aktualizuje je zamiast tworzyć duplikat
  */
 export const addTrustedDevice = async (
   userId: string,
@@ -145,19 +146,49 @@ export const addTrustedDevice = async (
   supabase: any
 ): Promise<void> => {
   const deviceName = getDeviceName();
+  const now = new Date().toISOString();
   
-  const { error } = await supabase
+  // Najpierw sprawdź czy urządzenie już istnieje
+  const { data: existing } = await supabase
     .from('trusted_devices')
-    .insert({
-      user_id: userId,
-      device_fingerprint: deviceFingerprint,
-      device_name: deviceName,
-      user_agent: navigator.userAgent,
-    });
+    .select('id')
+    .eq('user_id', userId)
+    .eq('device_fingerprint', deviceFingerprint)
+    .maybeSingle();
 
-  if (error) {
-    console.error('Error adding trusted device:', error);
-    throw error;
+  if (existing) {
+    // Urządzenie istnieje (może być wygasłe) - aktualizuj je (reset 30 dni)
+    const { error } = await supabase
+      .from('trusted_devices')
+      .update({
+        device_name: deviceName,
+        user_agent: navigator.userAgent,
+        created_at: now,  // Reset daty utworzenia = reset 30-dniowego okresu
+        last_used_at: now,
+      })
+      .eq('id', existing.id);
+
+    if (error) {
+      console.error('Error updating trusted device:', error);
+      throw error;
+    }
+  } else {
+    // Nowe urządzenie - utwórz wpis
+    const { error } = await supabase
+      .from('trusted_devices')
+      .insert({
+        user_id: userId,
+        device_fingerprint: deviceFingerprint,
+        device_name: deviceName,
+        user_agent: navigator.userAgent,
+        created_at: now,
+        last_used_at: now,
+      });
+
+    if (error) {
+      console.error('Error adding trusted device:', error);
+      throw error;
+    }
   }
 };
 
