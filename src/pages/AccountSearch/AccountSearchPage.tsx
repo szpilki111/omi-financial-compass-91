@@ -116,23 +116,25 @@ const AccountSearchPage = () => {
 
       const accountIds = locationAccountData?.map(la => la.account_id) || [];
 
-      // Server-side filter: accounts matching location identifier pattern
+      // Server-side filter: accounts matching location identifier pattern (only active)
       // Pattern: %-{identifier} (exact) or %-{identifier}-% (with suffix)
       const { data: locationAccounts, error } = await supabase
         .from('accounts')
         .select('*')
+        .eq('is_active', true)
         .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
         .order('number');
 
       if (error) throw error;
 
-      // Get manually assigned accounts separately
+      // Get manually assigned accounts separately (only active)
       let manualAccounts: any[] = [];
       if (accountIds.length > 0) {
         const { data: manualData } = await supabase
           .from('accounts')
           .select('*')
-          .in('id', accountIds);
+          .in('id', accountIds)
+          .eq('is_active', true);
         manualAccounts = manualData || [];
       }
 

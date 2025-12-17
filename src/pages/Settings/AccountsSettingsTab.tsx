@@ -86,11 +86,12 @@ export const AccountsSettingsTab: React.FC = () => {
     queryFn: async () => {
       if (!user?.location) return [];
 
-      // For admin/prowincjal - show all accounts without limit
+      // For admin/prowincjal - show all accounts without limit (only active)
       if (user.role === 'admin' || user.role === 'prowincjal') {
         const { data, error } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
+          .eq('is_active', true)
           .order('number');
 
         if (error) throw error;
@@ -141,12 +142,13 @@ export const AccountsSettingsTab: React.FC = () => {
       let accountIds = locationAccountData?.map(la => la.account_id) || [];
       let allAccountsData: any[] = [];
 
-      // Get manually assigned accounts - fetch ALL without limit
+      // Get manually assigned accounts - fetch ALL without limit (only active)
       if (accountIds.length > 0) {
         const { data: manualAccounts, error } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
           .in('id', accountIds)
+          .eq('is_active', true)
           .order('number');
 
         if (!error && manualAccounts) {
@@ -154,7 +156,7 @@ export const AccountsSettingsTab: React.FC = () => {
         }
       }
 
-      // If location has an identifier, fetch accounts matching the pattern directly from database
+      // If location has an identifier, fetch accounts matching the pattern directly from database (only active)
       if (locationData?.location_identifier) {
         const identifier = locationData.location_identifier;
         
@@ -163,6 +165,7 @@ export const AccountsSettingsTab: React.FC = () => {
         const { data: matchingAccounts, error: matchError } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
+          .eq('is_active', true)
           .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
           .order('number');
 

@@ -111,12 +111,13 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       let accountIds = locationAccountData.map(la => la.account_id);
       let allAccountsData: any[] = [];
 
-      // Get manually assigned accounts
+      // Get manually assigned accounts (only active ones)
       if (accountIds.length > 0) {
         const { data: manualAccounts, error } = await supabase
           .from('accounts')
           .select('id, number, name, type')
           .in('id', accountIds)
+          .eq('is_active', true)
           .order('number', { ascending: true });
 
         if (!error && manualAccounts) {
@@ -128,10 +129,11 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       if (locationData?.location_identifier) {
         const identifier = locationData.location_identifier;
         
-        // Use server-side LIKE filtering for better performance
+        // Use server-side LIKE filtering for better performance (only active accounts)
         const { data: matchingAccounts, error: matchError } = await supabase
           .from('accounts')
           .select('id, number, name, type')
+          .eq('is_active', true)
           .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
           .order('number', { ascending: true });
 

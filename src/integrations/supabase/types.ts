@@ -83,7 +83,11 @@ export type Database = {
         Row: {
           analytical: boolean
           created_at: string
+          deactivated_at: string | null
+          deactivated_by: string | null
+          deactivation_reason: string | null
           id: string
+          is_active: boolean
           name: string
           number: string
           type: string
@@ -92,7 +96,11 @@ export type Database = {
         Insert: {
           analytical?: boolean
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
           id?: string
+          is_active?: boolean
           name: string
           number: string
           type: string
@@ -101,7 +109,11 @@ export type Database = {
         Update: {
           analytical?: boolean
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
           id?: string
+          is_active?: boolean
           name?: string
           number?: string
           type?: string
