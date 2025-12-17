@@ -111,6 +111,32 @@ export const isDeviceTrusted = async (
 };
 
 /**
+ * Generuje czytelną nazwę urządzenia na podstawie user agent
+ */
+const getDeviceName = (): string => {
+  const ua = navigator.userAgent;
+  let browser = 'Przeglądarka';
+  let os = 'System';
+  
+  // Wykryj przeglądarkę
+  if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Edg')) browser = 'Edge';
+  else if (ua.includes('Chrome')) browser = 'Chrome';
+  else if (ua.includes('Safari')) browser = 'Safari';
+  else if (ua.includes('Opera')) browser = 'Opera';
+  
+  // Wykryj system operacyjny
+  if (ua.includes('Windows NT 10')) os = 'Windows 10/11';
+  else if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Mac OS X')) os = 'macOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+  
+  return `${browser} na ${os}`;
+};
+
+/**
  * Dodaje urządzenie do listy zaufanych
  */
 export const addTrustedDevice = async (
@@ -118,7 +144,7 @@ export const addTrustedDevice = async (
   deviceFingerprint: string,
   supabase: any
 ): Promise<void> => {
-  const deviceName = `${navigator.platform} - ${new Date().toLocaleDateString()}`;
+  const deviceName = getDeviceName();
   
   const { error } = await supabase
     .from('trusted_devices')
