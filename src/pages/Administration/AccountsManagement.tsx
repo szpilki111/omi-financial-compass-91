@@ -602,7 +602,7 @@ const AccountsManagement = () => {
           <CardTitle className="flex items-center justify-between">
             <span>Zarządzanie kontami</span>
             <span className="text-sm font-normal text-muted-foreground">
-              Aktywnych: {activeCount} {showInactive && `| Nieaktywnych: ${inactiveCount}`}
+              Dostępnych: {activeCount} {showInactive && `| Zdezaktywowanych: ${inactiveCount}`}
             </span>
           </CardTitle>
         </CardHeader>
@@ -625,7 +625,7 @@ const AccountsManagement = () => {
                     onCheckedChange={setShowInactive}
                   />
                   <Label htmlFor="show-inactive" className="text-sm whitespace-nowrap">
-                    Pokaż nieaktywne
+                    Pokaż zdezaktywowane
                   </Label>
                 </div>
               )}
@@ -721,7 +721,7 @@ const AccountsManagement = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Badge variant="default">Aktywny</Badge>
+                        <Badge variant="default">Dostępny</Badge>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -799,9 +799,9 @@ const AccountsManagement = () => {
                       </TableCell>
                       <TableCell>
                         {account.is_active ? (
-                          <Badge variant="default" className="bg-green-600">Aktywny</Badge>
+                          <Badge variant="default" className="bg-green-600">Dostępny</Badge>
                         ) : (
-                          <Badge variant="secondary" className="bg-orange-200 text-orange-800">Nieaktywny</Badge>
+                          <Badge variant="secondary" className="bg-orange-200 text-orange-800">Zdezaktywowany</Badge>
                         )}
                       </TableCell>
                       <TableCell>
