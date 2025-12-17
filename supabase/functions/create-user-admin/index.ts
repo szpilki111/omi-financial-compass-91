@@ -127,7 +127,10 @@ serve(async (req) => {
 
     if (createErr || !created?.user) {
       console.error("createUser error:", createErr);
-      return new Response(JSON.stringify({ error: createErr?.message || "Create failed" }), {
+      return new Response(JSON.stringify({ 
+        error: createErr?.message || "Create failed",
+        code: (createErr as any)?.code || "create_failed"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

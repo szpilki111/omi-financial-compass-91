@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -199,7 +200,21 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
 
       if (fnError) {
         console.error("create-user-admin error:", fnError);
-        throw new Error(fnError.message || 'Nie udało się utworzyć użytkownika');
+        
+        // Parsuj błąd z Edge Function - fnData zawiera body odpowiedzi nawet przy błędzie
+        const errorBody = fnData as { error?: string; code?: string } | null;
+        const errorMessage = errorBody?.error || fnError.message;
+        const errorCode = errorBody?.code;
+        
+        // Tłumacz specyficzne kody błędów
+        if (errorCode === 'email_exists' || errorMessage?.includes('already been registered')) {
+          throw new Error('Użytkownik z tym adresem email już istnieje');
+        }
+        if (errorMessage?.includes('invalid email')) {
+          throw new Error('Nieprawidłowy adres email');
+        }
+        
+        throw new Error(errorMessage || 'Nie udało się utworzyć użytkownika');
       }
       if (!fnData?.user_id) {
         throw new Error("Nie udało się utworzyć użytkownika");
@@ -242,22 +257,9 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
     },
     onError: (error: any) => {
       console.error('Error creating user:', error);
-      let errorMessage = 'Nie udało się utworzyć użytkownika';
-
-      const msg = String(error.message || '').toLowerCase();
-      if (msg.includes('user already registered')) {
-        errorMessage = 'Użytkownik z tym adresem email już istnieje';
-      } else if (msg.includes('invalid email')) {
-        errorMessage = 'Nieprawidłowy adres email';
-      } else if (msg.includes('at least 6') || msg.includes('weak password')) {
-        errorMessage = 'Hasło jest zbyt słabe (min. 6 znaków)';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
       toast({
         title: 'Błąd',
-        description: errorMessage,
+        description: error?.message || 'Nie udało się utworzyć użytkownika',
         variant: 'destructive',
       });
     },
@@ -376,6 +378,9 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
           <DialogTitle>
             {editingUser ? 'Edytuj użytkownika' : 'Dodaj nowego użytkownika'}
           </DialogTitle>
+          <DialogDescription>
+            {editingUser ? 'Zmień dane użytkownika systemu.' : 'Wprowadź dane nowego użytkownika systemu.'}
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
