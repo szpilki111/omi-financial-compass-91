@@ -106,8 +106,8 @@ serve(async (req) => {
     };
 
     if (!email || !newProfile?.name || !newProfile?.role) {
-      return new Response(JSON.stringify({ error: "Invalid payload" }), {
-        status: 400,
+      return new Response(JSON.stringify({ error: "Invalid payload", code: "invalid_payload" }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -127,16 +127,19 @@ serve(async (req) => {
 
     if (createErr || !created?.user) {
       console.error("createUser error:", createErr);
-      return new Response(JSON.stringify({ 
-        error: createErr?.message || "Create failed",
-        code: (createErr as any)?.code || "create_failed"
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: createErr?.message || "Create failed",
+          code: (createErr as any)?.code || "create_failed",
+        }),
+        {
+          // supabase-js nie przekazuje body dla non-2xx do klienta (FunctionsHttpError),
+          // więc dla błędów walidacyjnych zwracamy 200 + {error, code}
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
-
-    const newUserId = created.user.id;
 
     // Insert profile
     const { error: insertErr } = await supabaseAdmin.from("profiles").insert({
@@ -154,8 +157,8 @@ serve(async (req) => {
 
     if (insertErr) {
       console.error("Insert profile error:", insertErr);
-      return new Response(JSON.stringify({ error: insertErr.message }), {
-        status: 400,
+      return new Response(JSON.stringify({ error: insertErr.message, code: "profile_insert_failed" }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
