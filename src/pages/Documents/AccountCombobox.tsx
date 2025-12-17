@@ -285,7 +285,17 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="min-w-[450px] w-auto max-w-[600px] p-0">
+      <PopoverContent 
+        className="min-w-[450px] w-auto max-w-[600px] p-0"
+        onWheel={(e) => {
+          // Przechwytuj scroll na poziomie PopoverContent i przekaż do listy
+          const list = e.currentTarget.querySelector('[cmdk-list]') as HTMLElement;
+          if (list) {
+            e.stopPropagation();
+            list.scrollTop += e.deltaY;
+          }
+        }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Szukaj po numerze lub nazwie..."
@@ -353,15 +363,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
             }}
           />
-          <CommandList
-            className="max-h-[400px] overflow-y-auto overscroll-contain"
-            onWheel={(e) => {
-              // Wymuś przewijanie listy kółkiem (w dialogach Radix scroll-lock czasem blokuje domyślne scrollowanie)
-              e.stopPropagation();
-              e.preventDefault();
-              e.currentTarget.scrollTop += e.deltaY;
-            }}
-          >
+          <CommandList className="max-h-[400px] overflow-y-auto">
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
             {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
             {locationId && !loading && filteredAccounts.length === 0 && !searchTerm.trim() && (
