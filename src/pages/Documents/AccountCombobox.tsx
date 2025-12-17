@@ -353,7 +353,15 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
             }}
           />
-          <CommandList className="max-h-[400px] overflow-y-auto">
+          <CommandList
+            className="max-h-[400px] overflow-y-auto overscroll-contain"
+            onWheel={(e) => {
+              // Wymuś przewijanie listy kółkiem (w dialogach Radix scroll-lock czasem blokuje domyślne scrollowanie)
+              e.stopPropagation();
+              e.preventDefault();
+              e.currentTarget.scrollTop += e.deltaY;
+            }}
+          >
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
             {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
             {locationId && !loading && filteredAccounts.length === 0 && !searchTerm.trim() && (
