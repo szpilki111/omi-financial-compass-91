@@ -353,7 +353,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               }
             }}
           />
-          <CommandList className="max-h-[400px]">
+          <CommandList className="max-h-[400px] overflow-y-auto">
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
             {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
             {locationId && !loading && filteredAccounts.length === 0 && !searchTerm.trim() && (
