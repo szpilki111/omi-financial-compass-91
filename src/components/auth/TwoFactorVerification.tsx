@@ -27,7 +27,8 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
   deviceFingerprint,
 }) => {
   const [code, setCode] = useState('');
-  const [trustDevice, setTrustDevice] = useState(false);
+  // Domyślnie ufamy urządzeniu po poprawnym wpisaniu kodu (user może odznaczyć)
+  const [trustDevice, setTrustDevice] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState('');

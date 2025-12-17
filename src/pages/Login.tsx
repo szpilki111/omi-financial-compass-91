@@ -249,7 +249,9 @@ const Login = () => {
         } catch (e: any) {
           toast({
             title: "Nie udało się dodać do zaufanych",
-            description: "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
+            description: e?.message
+              ? `Zalogowano, ale nie zapisano urządzenia jako zaufanego. (${e.message})`
+              : "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
             variant: "destructive",
           });
         }
