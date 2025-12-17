@@ -141,10 +141,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         const day = parseInt(dateStr.substring(4, 6));
         const transactionDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 
-        const typeMatch = transactionLine.match(/[CD]N/);
-        const type = typeMatch ? typeMatch[0][0] as 'C' | 'D' : 'D';
+        // Improved regex to handle various MT940 formats (PKO BP, Pekao, mBank, etc.)
+        // Matches: CDN, CN, DN followed by amount with comma or dot
+        const typeMatch = transactionLine.match(/([CD])N?/);
+        const type = typeMatch ? typeMatch[1] as 'C' | 'D' : 'D';
 
-        const amountMatch = transactionLine.match(/[CD]N(\d+,\d+)/);
+        // More flexible regex for amount - handles formats like: CN1234,56 / CDN1234.56 / C1234,56
+        const amountMatch = transactionLine.match(/[CD]N?(\d+[.,]\d+)/);
         const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
 
         const refMatch = transactionLine.match(/\/\/([^/]+)$/);
@@ -434,7 +437,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
               <input
                 type="file"
                 id="mt940-file"
-                accept=".mt940,.txt"
+                accept=".mt940,.txt,.sta,.STA,.exp,.EXP"
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -452,7 +455,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
               )}
             </div>
             <p className="text-xs text-gray-500">
-              Obsługiwane formaty: .mt940, .txt
+              Obsługiwane formaty: .mt940, .txt, .sta, .exp (Pekao 24)
             </p>
           </div>
 
@@ -513,21 +516,25 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-4 py-2 text-xs text-gray-700">{transaction.date}</td>
                           <td className="px-4 py-2 text-xs">
-                            <span className={`px-2 py-1 rounded text-xs ${
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
                               transaction.type === 'C' 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {transaction.type === 'C' ? 'Wpływ' : 'Wypływ'}
+                              {transaction.type === 'C' ? '+ Wpływ' : '− Wypływ'}
                             </span>
                           </td>
-                          <td className="px-4 py-2 text-xs text-right text-gray-700">
-                            {formatAmount(transaction.amount)}
+                          <td className={`px-4 py-2 text-xs text-right font-medium ${
+                            transaction.type === 'C' 
+                              ? 'text-green-700' 
+                              : 'text-red-700'
+                          }`}>
+                            {transaction.type === 'C' ? '+' : '−'} {formatAmount(transaction.amount)}
                           </td>
-                          <td className="px-4 py-2 text-xs text-gray-700 max-w-xs truncate">
+                          <td className="px-4 py-2 text-xs text-gray-700 max-w-xs" title={transaction.description}>
                             {transaction.description}
                           </td>
-                          <td className="px-4 py-2 text-xs text-gray-700 max-w-xs truncate">
+                          <td className="px-4 py-2 text-xs text-gray-700 max-w-xs" title={transaction.counterparty || '-'}>
                             {transaction.counterparty || '-'}
                           </td>
                         </tr>

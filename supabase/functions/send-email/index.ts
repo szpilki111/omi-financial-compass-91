@@ -64,7 +64,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Send email with UTF-8 charset
+    // Send email with UTF-8 charset and base64 encoding to avoid =20 artifacts
     await client.send({
       from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
       to: recipients.join(','),
@@ -73,8 +73,8 @@ const handler = async (req: Request): Promise<Response> => {
       html: html || undefined,
       replyTo: replyTo || undefined,
       charset: 'utf-8',
-      // IMPORTANT: keep transfer encoding consistent to avoid raw "=20" artifacts
-      encoding: 'quoted-printable',
+      // Use base64 encoding to properly handle Polish characters
+      encoding: 'base64',
     });
 
     await client.close();
