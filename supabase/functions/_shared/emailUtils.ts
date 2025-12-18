@@ -23,17 +23,23 @@ export const sendErrorReportUpdateEmail = async (
     ? `Status zmieniony z "${statusLabels[previousStatus] || previousStatus}" na "${statusLabels[newStatus] || newStatus}"`
     : "Nastąpiła aktualizacja Twojego zgłoszenia.";
 
+  const infoItems: { label: string; value: string }[] = [
+    { label: 'Tytuł zgłoszenia', value: reportTitle },
+  ];
+  if (previousStatus) {
+    infoItems.push({ label: 'Poprzedni status', value: statusLabels[previousStatus] || previousStatus });
+  }
+  if (newStatus) {
+    infoItems.push({ label: 'Nowy status', value: statusLabels[newStatus] || newStatus });
+  }
+
   const { html, text } = buildEmailTemplate({
-    title: '🔔 Zmiana statusu zgłoszenia',
+    title: 'Zmiana statusu zgłoszenia',
     subtitle: 'System Finansowy OMI',
-    content: '<p>Nastąpiła aktualizacja Twojego zgłoszenia błędu w systemie.</p>',
-    infoItems: [
-      { label: 'Tytuł zgłoszenia', value: reportTitle },
-      ...(previousStatus ? [{ label: 'Poprzedni status', value: statusLabels[previousStatus] || previousStatus }] : []),
-      ...(newStatus ? [{ label: 'Nowy status', value: statusLabels[newStatus] || newStatus }] : []),
-    ],
+    content: '<p style="margin:0;">Nastąpiła aktualizacja Twojego zgłoszenia błędu w systemie.</p>',
+    infoItems,
     alertBox: { text: alertText, color: 'blue' },
-    buttonText: 'Zobacz szczegóły →',
+    buttonText: 'Zobacz szczegóły',
     buttonUrl: `${APP_URL}/administracja`,
     color: 'blue',
   });
@@ -73,14 +79,14 @@ export const sendErrorReportResponseEmail = async (
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
   const { html, text } = buildEmailTemplate({
-    title: '💬 Nowa odpowiedź w zgłoszeniu',
+    title: 'Nowa odpowiedź w zgłoszeniu',
     subtitle: 'System Finansowy OMI',
-    content: `<p>Otrzymałeś nową odpowiedź w zgłoszeniu błędu.</p><div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;"><p style="margin: 0; font-style: italic;">"${message}"</p></div>`,
+    content: `<p style="margin:0 0 12px 0;">Otrzymałeś nową odpowiedź w zgłoszeniu błędu.</p><div style="background-color:#f1f5f9;padding:16px;border-radius:8px;margin:16px 0;"><p style="margin:0;font-style:italic;">"${message}"</p></div>`,
     infoItems: [
       { label: 'Tytuł zgłoszenia', value: reportTitle },
       { label: 'Odpowiedział', value: responderName },
     ],
-    buttonText: 'Zobacz szczegóły →',
+    buttonText: 'Zobacz szczegóły',
     buttonUrl: `${APP_URL}/administracja`,
     color: 'blue',
   });

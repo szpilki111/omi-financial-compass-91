@@ -41,18 +41,12 @@ function buildEmail(params: {
     : `Do terminu pozostało ${daysUntilDeadline} dni`;
 
   const { html, text } = buildEmailTemplate({
-    title: '📋 System Finansowy OMI',
+    title: 'System Finansowy OMI',
     subtitle: 'Przypomnienie o raporcie miesięcznym',
     greeting: `Dzień dobry, <strong>${economistName}</strong>!`,
-    content: `
-      <p>Raport miesięczny za <strong>${monthNames[reportMonth - 1]} ${reportYear}</strong> dla placówki <strong>${locationName}</strong> nie został jeszcze złożony.</p>
-      <p>Termin składania raportów upływa <strong>${deadlineDay} ${monthNames[currentMonth - 1]}</strong>.</p>
-    `,
-    alertBox: {
-      text: urgencyText,
-      color: color as any,
-    },
-    buttonText: 'Przejdź do raportów →',
+    content: `<p style="margin:0 0 12px 0;">Raport miesięczny za <strong>${monthNames[reportMonth - 1]} ${reportYear}</strong> dla placówki <strong>${locationName}</strong> nie został jeszcze złożony.</p><p style="margin:0;">Termin składania raportów upływa <strong>${deadlineDay} ${monthNames[currentMonth - 1]}</strong>.</p>`,
+    alertBox: { text: urgencyText, color: color as any },
+    buttonText: 'Przejdź do raportów',
     buttonUrl: `${APP_URL}/raporty`,
     color: color as any,
   });
