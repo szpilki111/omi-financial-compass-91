@@ -103,7 +103,7 @@ const RemindersManagement: React.FC = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("send-report-reminders", {
-        body: { location_id: locationId },
+        body: { location_id: locationId, force_send: true },
       });
 
       if (error) throw error;
