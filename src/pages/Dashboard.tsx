@@ -248,7 +248,7 @@ const Dashboard = () => {
         </h1>
 
         {/* Cards section */}
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mt-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mt-8">
             <Link to="/dokumenty">
                 <Card>
                     <CardHeader>
