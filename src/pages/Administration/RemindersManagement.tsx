@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { Spinner } from '@/components/ui/Spinner';
-import { Bell, Send, Calendar, CheckCircle, Building2, RefreshCw } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import React, { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Spinner } from "@/components/ui/Spinner";
+import { Bell, Send, Calendar, CheckCircle, Building2, RefreshCw } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { pl } from "date-fns/locale";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface PendingLocation {
   id: string;
@@ -23,48 +23,58 @@ const RemindersManagement: React.FC = () => {
   const [sendingLocationId, setSendingLocationId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const { data: reminderLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
-    queryKey: ['reminderLogs'],
+  const {
+    data: reminderLogs,
+    isLoading: logsLoading,
+    refetch: refetchLogs,
+  } = useQuery({
+    queryKey: ["reminderLogs"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('reminder_logs')
-        .select(`
+        .from("reminder_logs")
+        .select(
+          `
           *,
           locations (name)
-        `)
-        .order('sent_at', { ascending: false })
+        `,
+        )
+        .order("sent_at", { ascending: false })
         .limit(50);
-      
+
       if (error) throw error;
       return data;
-    }
+    },
   });
 
-  const { data: pendingData, isLoading: pendingLoading, refetch: refetchPending } = useQuery({
-    queryKey: ['pendingReminders'],
+  const {
+    data: pendingData,
+    isLoading: pendingLoading,
+    refetch: refetchPending,
+  } = useQuery({
+    queryKey: ["pendingReminders"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('send-report-reminders', {
-        body: { list_only: true }
+      const { data, error } = await supabase.functions.invoke("send-report-reminders", {
+        body: { list_only: true },
       });
-      
+
       if (error) throw error;
-      return data as { 
-        pendingLocations: PendingLocation[]; 
-        reportMonth: number; 
+      return data as {
+        pendingLocations: PendingLocation[];
+        reportMonth: number;
         reportYear: number;
         reminderType: string;
       };
-    }
+    },
   });
 
   const handleSendReminders = async () => {
     setIsSending(true);
-    
+
     try {
-      const { data, error } = await supabase.functions.invoke('send-report-reminders');
-      
+      const { data, error } = await supabase.functions.invoke("send-report-reminders");
+
       if (error) throw error;
-      if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
+      if (data?.success === false) throw new Error(data?.error || "Nieznany błąd");
 
       const sent = data?.sent || 0;
       const remaining = data?.remaining || 0;
@@ -77,7 +87,7 @@ const RemindersManagement: React.FC = () => {
       refetchLogs();
       refetchPending();
     } catch (error: any) {
-      console.error('Error sending reminders:', error);
+      console.error("Error sending reminders:", error);
       toast({
         title: "Błąd",
         description: error.message || "Nie udało się wysłać przypomnień.",
@@ -90,24 +100,33 @@ const RemindersManagement: React.FC = () => {
 
   const handleSendSingleReminder = async (locationId: string, locationName: string) => {
     setSendingLocationId(locationId);
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('send-report-reminders', {
-        body: { location_id: locationId, force_send: true }
-      });
-      
-      if (error) throw error;
-      if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
 
-      toast({
-        title: "Przypomnienie wysłane",
-        description: data?.message || `Wysłano przypomnienie dla: ${locationName}`,
+    try {
+      const { data, error } = await supabase.functions.invoke("send-report-reminders", {
+        body: { location_id: locationId },
       });
+
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data?.error || "Nieznany błąd");
+
+      const sent = data?.sent || 0;
+
+      if (sent > 0) {
+        toast({
+          title: "Przypomnienie wysłane",
+          description: data?.message || `Wysłano przypomnienie dla: ${locationName}`,
+        });
+      } else {
+        toast({
+          title: "Informacja",
+          description: data?.message || "Przypomnienie dla tej placówki zostało już wysłane wcześniej.",
+        });
+      }
 
       refetchLogs();
       refetchPending();
     } catch (error: any) {
-      console.error('Error sending single reminder:', error);
+      console.error("Error sending single reminder:", error);
       toast({
         title: "Błąd",
         description: error.message || "Nie udało się wysłać przypomnienia.",
@@ -120,11 +139,15 @@ const RemindersManagement: React.FC = () => {
 
   const getReminderTypeBadge = (type: string) => {
     switch (type) {
-      case 'overdue':
+      case "overdue":
         return <Badge variant="destructive">Po terminie</Badge>;
-      case '1_day':
-        return <Badge variant="default" className="bg-orange-500">1 dzień</Badge>;
-      case '5_days':
+      case "1_day":
+        return (
+          <Badge variant="default" className="bg-orange-500">
+            1 dzień
+          </Badge>
+        );
+      case "5_days":
         return <Badge variant="secondary">5 dni</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
@@ -141,9 +164,7 @@ const RemindersManagement: React.FC = () => {
             <Bell className="h-5 w-5" />
             Automatyczne przypomnienia
           </CardTitle>
-          <CardDescription>
-            Wysyłaj przypomnienia o terminach raportów do ekonomów placówek
-          </CardDescription>
+          <CardDescription>Wysyłaj przypomnienia o terminach raportów do ekonomów placówek</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
@@ -154,8 +175,8 @@ const RemindersManagement: React.FC = () => {
                 Wyślij przypomnienia zbiorczo (max 5 na raz) lub pojedynczo dla wybranej placówki.
               </p>
             </div>
-            <Button 
-              onClick={handleSendReminders} 
+            <Button
+              onClick={handleSendReminders}
               disabled={isSending || pendingLocations.length === 0}
               className="flex items-center gap-2"
             >
@@ -185,13 +206,8 @@ const RemindersManagement: React.FC = () => {
                   </Badge>
                 )}
               </h4>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => refetchPending()}
-                disabled={pendingLoading}
-              >
-                <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
+              <Button variant="ghost" size="sm" onClick={() => refetchPending()} disabled={pendingLoading}>
+                <RefreshCw className={`h-4 w-4 ${pendingLoading ? "animate-spin" : ""}`} />
               </Button>
             </div>
 
@@ -205,7 +221,7 @@ const RemindersManagement: React.FC = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Placówka</TableHead>
-                      <TableHead>Ekonomiści</TableHead>
+                      <TableHead>Ekonomowie</TableHead>
                       <TableHead className="w-[100px]">Akcja</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -214,10 +230,11 @@ const RemindersManagement: React.FC = () => {
                       <TableRow key={loc.id}>
                         <TableCell className="font-medium">{loc.name}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {loc.economists.length > 0 
-                            ? loc.economists.map(e => e.name || e.email).join(', ')
-                            : <span className="italic">Brak przypisanego ekonoma</span>
-                          }
+                          {loc.economists.length > 0 ? (
+                            loc.economists.map((e) => e.name || e.email).join(", ")
+                          ) : (
+                            <span className="italic">Brak przypisanego ekonoma</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -226,11 +243,7 @@ const RemindersManagement: React.FC = () => {
                             onClick={() => handleSendSingleReminder(loc.id, loc.name)}
                             disabled={sendingLocationId === loc.id || loc.economists.length === 0}
                           >
-                            {sendingLocationId === loc.id ? (
-                              <Spinner size="sm" />
-                            ) : (
-                              <Send className="h-3 w-3" />
-                            )}
+                            {sendingLocationId === loc.id ? <Spinner size="sm" /> : <Send className="h-3 w-3" />}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -239,9 +252,7 @@ const RemindersManagement: React.FC = () => {
                 </Table>
               </ScrollArea>
             ) : (
-              <p className="text-center text-muted-foreground py-4">
-                Wszystkie placówki złożyły raporty
-              </p>
+              <p className="text-center text-muted-foreground py-4">Wszystkie placówki złożyły raporty</p>
             )}
           </div>
 
@@ -251,7 +262,7 @@ const RemindersManagement: React.FC = () => {
               <CheckCircle className="h-4 w-4" />
               Historia wysłanych przypomnień
             </h4>
-            
+
             {logsLoading ? (
               <div className="flex justify-center py-8">
                 <Spinner />
@@ -272,10 +283,12 @@ const RemindersManagement: React.FC = () => {
                     {reminderLogs.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell>
-                          {log.sent_at ? format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : '-'}
+                          {log.sent_at ? format(new Date(log.sent_at), "dd.MM.yyyy HH:mm", { locale: pl }) : "-"}
                         </TableCell>
-                        <TableCell>{(log.locations as any)?.name || 'Nieznana'}</TableCell>
-                        <TableCell>{log.month}/{log.year}</TableCell>
+                        <TableCell>{(log.locations as any)?.name || "Nieznana"}</TableCell>
+                        <TableCell>
+                          {log.month}/{log.year}
+                        </TableCell>
                         <TableCell>{getReminderTypeBadge(log.reminder_type)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{log.recipient_email}</TableCell>
                       </TableRow>
@@ -284,9 +297,7 @@ const RemindersManagement: React.FC = () => {
                 </Table>
               </ScrollArea>
             ) : (
-              <p className="text-center text-muted-foreground py-8">
-                Brak wysłanych przypomnień
-              </p>
+              <p className="text-center text-muted-foreground py-8">Brak wysłanych przypomnień</p>
             )}
           </div>
         </CardContent>
