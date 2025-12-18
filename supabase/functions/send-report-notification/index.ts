@@ -69,8 +69,6 @@ const handler = async (req: Request): Promise<Response> => {
           { label: 'Placówka', value: locationName },
           { label: 'Złożony przez', value: submittedBy },
         ],
-        buttonText: 'Przejdź do raportów →',
-        buttonUrl: `${APP_URL}/raporty`,
         color: 'blue',
       });
 
