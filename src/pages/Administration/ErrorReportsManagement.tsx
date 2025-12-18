@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Eye, ExternalLink, Upload, X } from "lucide-react";
+import { Eye, ExternalLink, Upload, X, Search } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -101,6 +101,7 @@ const ErrorReportsManagement = () => {
   >("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [newResponse, setNewResponse] = useState("");
@@ -415,9 +416,24 @@ const ErrorReportsManagement = () => {
     return <Badge variant={variants[priority]}>{labels[priority]}</Badge>;
   };
 
-  // Filter by location
-  const filteredReports =
-    selectedLocationId === "all" ? reports : reports?.filter((r) => r.profiles?.location_id === selectedLocationId);
+  // Filter by location and search query
+  const filteredReports = reports?.filter((r) => {
+    // Location filter
+    if (selectedLocationId !== "all" && r.profiles?.location_id !== selectedLocationId) {
+      return false;
+    }
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesTitle = r.title.toLowerCase().includes(query);
+      const matchesDescription = r.description.toLowerCase().includes(query);
+      const matchesUser = r.profiles?.name?.toLowerCase().includes(query) || false;
+      const matchesEmail = r.profiles?.email?.toLowerCase().includes(query) || false;
+      const matchesId = r.id.toLowerCase().includes(query);
+      return matchesTitle || matchesDescription || matchesUser || matchesEmail || matchesId;
+    }
+    return true;
+  });
 
   if (isLoading) {
     return <div className="p-8">Ładowanie zgłoszeń...</div>;
@@ -425,6 +441,17 @@ const ErrorReportsManagement = () => {
 
   return (
     <div className="space-y-4">
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Szukaj po tytule, opisie, użytkowniku lub ID zgłoszenia..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <div className="flex gap-4">
         <div className="flex-1">
           <Label>Status</Label>
