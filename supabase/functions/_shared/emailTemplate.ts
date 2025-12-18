@@ -46,91 +46,75 @@ export function buildEmailTemplate(params: EmailTemplateParams): { html: string;
   const colors = colorMap[color];
   const alertColors = alertBox ? colorMap[alertBox.color] : null;
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse;">
-    <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-          <tr>
-            <td style="padding: 32px 40px; background: ${colors.gradient}; border-radius: 12px 12px 0 0;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
-                ${title}
-              </h1>
-              ${subtitle ? `<p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">${subtitle}</p>` : ''}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 32px 40px;">
-              ${greeting ? `<p style="margin: 0 0 16px 0; color: #334155; font-size: 16px;">${greeting}</p>` : ''}
-              
-              ${alertBox ? `
-              <div style="background-color: ${alertColors?.light}; border-left: 4px solid ${alertColors?.primary}; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0;">
-                <p style="margin: 0; color: ${alertColors?.primary}; font-weight: 600; font-size: 16px;">
-                  ${alertBox.text}
-                </p>
-              </div>` : ''}
-              
-              <div style="margin: 0 0 16px 0; color: #334155; font-size: 15px; line-height: 1.6;">
-                ${content}
-              </div>
-              
-              ${infoItems && infoItems.length > 0 ? `
-              <div style="background-color: #f8fafc; border-left: 4px solid ${colors.primary}; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0;">
-                ${infoItems.map(item => `<p style="margin: 0 0 8px 0; color: #334155; font-size: 15px;"><strong>${item.label}:</strong> ${item.value}</p>`).join('')}
-              </div>` : ''}
-              
-              ${buttonText && buttonUrl ? `
-              <table role="presentation" style="width: 100%; margin-top: 24px;">
-                <tr>
-                  <td align="center">
-                    <a href="${buttonUrl}" 
-                       style="display: inline-block; padding: 14px 32px; background: ${colors.gradient}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-                      ${buttonText}
-                    </a>
-                  </td>
-                </tr>
-              </table>` : ''}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0; color: #64748b; font-size: 13px; text-align: center;">
-                ${footerText}
-              </p>
-              <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 12px; text-align: center;">
-                System Finansowy OMI • Misjonarze Oblaci Maryi Niepokalanej
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  // Build HTML without extra whitespace to avoid =20 encoding issues
+  let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>';
+  html += '<body style="margin:0;padding:0;font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;background-color:#f8fafc;">';
+  html += '<table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td align="center" style="padding:40px 20px;">';
+  html += '<table role="presentation" style="width:100%;max-width:600px;border-collapse:collapse;background-color:#ffffff;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">';
+  
+  // Header
+  html += `<tr><td style="padding:32px 40px;background:${colors.gradient};border-radius:12px 12px 0 0;">`;
+  html += `<h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:600;">${title}</h1>`;
+  if (subtitle) {
+    html += `<p style="margin:8px 0 0 0;color:rgba(255,255,255,0.9);font-size:14px;">${subtitle}</p>`;
+  }
+  html += '</td></tr>';
+  
+  // Content
+  html += '<tr><td style="padding:32px 40px;">';
+  
+  if (greeting) {
+    html += `<p style="margin:0 0 16px 0;color:#334155;font-size:16px;">${greeting}</p>`;
+  }
+  
+  if (alertBox && alertColors) {
+    html += `<div style="background-color:${alertColors.light};border-left:4px solid ${alertColors.primary};padding:16px 20px;margin:24px 0;border-radius:0 8px 8px 0;">`;
+    html += `<p style="margin:0;color:${alertColors.primary};font-weight:600;font-size:16px;">${alertBox.text}</p></div>`;
+  }
+  
+  html += `<div style="margin:0 0 16px 0;color:#334155;font-size:15px;line-height:1.6;">${content}</div>`;
+  
+  if (infoItems && infoItems.length > 0) {
+    html += `<div style="background-color:#f8fafc;border-left:4px solid ${colors.primary};padding:16px 20px;margin:24px 0;border-radius:0 8px 8px 0;">`;
+    for (const item of infoItems) {
+      html += `<p style="margin:0 0 8px 0;color:#334155;font-size:15px;"><strong>${item.label}:</strong> ${item.value}</p>`;
+    }
+    html += '</div>';
+  }
+  
+  if (buttonText && buttonUrl) {
+    html += '<table role="presentation" style="width:100%;margin-top:24px;"><tr><td align="center">';
+    html += `<a href="${buttonUrl}" style="display:inline-block;padding:14px 32px;background:${colors.gradient};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">${buttonText}</a>`;
+    html += '</td></tr></table>';
+  }
+  
+  html += '</td></tr>';
+  
+  // Footer
+  html += '<tr><td style="padding:24px 40px;background-color:#f8fafc;border-radius:0 0 12px 12px;border-top:1px solid #e2e8f0;">';
+  html += `<p style="margin:0;color:#64748b;font-size:13px;text-align:center;">${footerText}</p>`;
+  html += '<p style="margin:8px 0 0 0;color:#94a3b8;font-size:12px;text-align:center;">System Finansowy OMI</p>';
+  html += '</td></tr>';
+  
+  html += '</table></td></tr></table></body></html>';
 
   // Build plain text version
   const textParts: string[] = [];
   textParts.push(title);
   if (subtitle) textParts.push(subtitle);
   textParts.push('');
-  if (greeting) textParts.push(greeting);
+  if (greeting) textParts.push(greeting.replace(/<[^>]*>/g, ''));
   if (alertBox) {
     textParts.push('');
-    textParts.push(`⚠️ ${alertBox.text}`);
+    textParts.push(alertBox.text);
   }
   textParts.push('');
-  // Strip HTML tags for text version
   textParts.push(content.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ''));
   if (infoItems && infoItems.length > 0) {
     textParts.push('');
-    infoItems.forEach(item => textParts.push(`${item.label}: ${item.value}`));
+    for (const item of infoItems) {
+      textParts.push(`${item.label}: ${item.value}`);
+    }
   }
   if (buttonText && buttonUrl) {
     textParts.push('');
@@ -139,7 +123,7 @@ export function buildEmailTemplate(params: EmailTemplateParams): { html: string;
   textParts.push('');
   textParts.push('---');
   textParts.push(footerText);
-  textParts.push('System Finansowy OMI • Misjonarze Oblaci Maryi Niepokalanej');
+  textParts.push('System Finansowy OMI');
 
   const text = textParts.join('\n');
 

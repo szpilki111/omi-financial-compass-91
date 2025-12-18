@@ -97,20 +97,10 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const { html, text } = buildEmailTemplate({
-      title: '🔐 Weryfikacja dwuetapowa',
+      title: 'Weryfikacja dwuetapowa',
       subtitle: 'System Finansowy OMI',
-      content: `
-        <p>Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p>
-        <div style="background-color: #fef9e7; border: 2px solid #E6B325; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
-          <p style="margin: 0 0 8px 0; font-size: 14px; color: #666;">Twój kod weryfikacyjny:</p>
-          <p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #E6B325;">${code}</p>
-        </div>
-        <p>Wprowadź ten kod, aby zakończyć proces logowania.</p>
-      `,
-      alertBox: {
-        text: 'Kod jest ważny przez 15 minut. Możesz zaznaczyć urządzenie jako zaufane na 30 dni.',
-        color: 'gold',
-      },
+      content: `<p style="margin:0 0 12px 0;">Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p><div style="background-color:#fef9e7;border:2px solid #E6B325;border-radius:12px;padding:24px;text-align:center;margin:24px 0;"><p style="margin:0 0 8px 0;font-size:14px;color:#666;">Twój kod weryfikacyjny:</p><p style="margin:0;font-size:36px;font-weight:bold;letter-spacing:8px;color:#E6B325;">${code}</p></div><p style="margin:0;">Wprowadź ten kod, aby zakończyć proces logowania.</p>`,
+      alertBox: { text: 'Kod jest ważny przez 15 minut. Możesz zaznaczyć urządzenie jako zaufane na 30 dni.', color: 'gold' },
       footerText: 'Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!',
       color: 'gold',
     });
