@@ -295,7 +295,7 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                         <CardDescription className="text-center">
-                            Dokumenty i procedury
+                            Dokumenty, procedury, kalendarz i kontakty
                         </CardDescription>
                     </CardContent>
                 </Card>
