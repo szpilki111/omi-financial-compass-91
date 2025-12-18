@@ -45,28 +45,28 @@ const AdministrationPage = () => {
         </div>
 
       <Tabs defaultValue="locations" className="w-full">
-        <TabsList className="grid w-full grid-cols-10">
-          <TabsTrigger value="locations">Placówki</TabsTrigger>
-          <TabsTrigger value="accounts">Konta placówek</TabsTrigger>
-          <TabsTrigger value="manage-accounts">Zarządzanie kontami</TabsTrigger>
-          <TabsTrigger value="account-restrictions">Ograniczenia kont</TabsTrigger>
+        <TabsList className="flex flex-wrap h-auto gap-1 p-1 justify-start">
+          <TabsTrigger value="locations" className="flex-shrink-0">Placówki</TabsTrigger>
+          <TabsTrigger value="accounts" className="flex-shrink-0">Konta placówek</TabsTrigger>
+          <TabsTrigger value="manage-accounts" className="flex-shrink-0">Zarządzanie kontami</TabsTrigger>
+          <TabsTrigger value="account-restrictions" className="flex-shrink-0">Ograniczenia kont</TabsTrigger>
           {(user.role === 'admin' || user.role === 'prowincjal') && (
-            <TabsTrigger value="users">Użytkownicy</TabsTrigger>
+            <TabsTrigger value="users" className="flex-shrink-0">Użytkownicy</TabsTrigger>
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
-            <TabsTrigger value="login-events">Logowania</TabsTrigger>
+            <TabsTrigger value="login-events" className="flex-shrink-0">Logowania</TabsTrigger>
           )}
           {user.role === 'admin' && (
-            <TabsTrigger value="database">Baza danych</TabsTrigger>
+            <TabsTrigger value="database" className="flex-shrink-0">Baza danych</TabsTrigger>
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
-            <TabsTrigger value="reminders">Przypomnienia</TabsTrigger>
+            <TabsTrigger value="reminders" className="flex-shrink-0">Przypomnienia</TabsTrigger>
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
-            <TabsTrigger value="error-reports">Zgłoszenia błędów</TabsTrigger>
+            <TabsTrigger value="error-reports" className="flex-shrink-0">Zgłoszenia błędów</TabsTrigger>
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
-            <TabsTrigger value="project-features">Postęp projektu</TabsTrigger>
+            <TabsTrigger value="project-features" className="flex-shrink-0">Postęp projektu</TabsTrigger>
           )}
         </TabsList>
 
