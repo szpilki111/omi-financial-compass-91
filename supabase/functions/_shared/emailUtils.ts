@@ -1,3 +1,5 @@
+import { buildEmailTemplate, APP_URL } from './emailTemplate.ts';
+
 // Send status change notification
 export const sendErrorReportUpdateEmail = async (
   to: string,
@@ -6,16 +8,8 @@ export const sendErrorReportUpdateEmail = async (
   previousStatus?: string,
   newStatus?: string,
 ) => {
-  const smtpHost = Deno.env.get("SMTP_HOST");
-  const smtpPort = Deno.env.get("SMTP_PORT");
-  const smtpUser = Deno.env.get("SMTP_USER");
-  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-    console.error("Missing SMTP configuration");
-    return;
-  }
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
   const statusLabels: Record<string, string> = {
     new: "Nowe",
@@ -25,69 +19,37 @@ export const sendErrorReportUpdateEmail = async (
     needs_info: "Wymaga informacji",
   };
 
-  const statusText =
-    previousStatus && newStatus
-      ? `<p><strong>Poprzedni status:</strong> ${statusLabels[previousStatus] || previousStatus}</p>
-       <p><strong>Nowy status:</strong> ${statusLabels[newStatus] || newStatus}</p>`
-      : "<p>Nastąpiła aktualizacja Twojego zgłoszenia.</p>";
+  const alertText = previousStatus && newStatus
+    ? `Status zmieniony z "${statusLabels[previousStatus] || previousStatus}" na "${statusLabels[newStatus] || newStatus}"`
+    : "Nastąpiła aktualizacja Twojego zgłoszenia.";
 
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .status-box { background-color: white; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; }
-        .button { display: inline-block; padding: 10px 20px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Zmiana statusu zgłoszenia</h1>
-        </div>
-        <div class="content">
-          <p><strong>Tytuł zgłoszenia:</strong> ${reportTitle}</p>
-          <div class="status-box">
-            ${statusText}
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const statusTextPlain =
-    previousStatus && newStatus
-      ? `Poprzedni status: ${statusLabels[previousStatus] || previousStatus}\nNowy status: ${statusLabels[newStatus] || newStatus}`
-      : "Nastąpiła aktualizacja Twojego zgłoszenia.";
-
-  const textContent = `
-Zmiana statusu zgłoszenia
-
-Tytuł zgłoszenia: ${reportTitle}
-
-${statusTextPlain}
-
-Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
-  `;
+  const { html, text } = buildEmailTemplate({
+    title: '🔔 Zmiana statusu zgłoszenia',
+    subtitle: 'System Finansowy OMI',
+    content: '<p>Nastąpiła aktualizacja Twojego zgłoszenia błędu w systemie.</p>',
+    infoItems: [
+      { label: 'Tytuł zgłoszenia', value: reportTitle },
+      ...(previousStatus ? [{ label: 'Poprzedni status', value: statusLabels[previousStatus] || previousStatus }] : []),
+      ...(newStatus ? [{ label: 'Nowy status', value: statusLabels[newStatus] || newStatus }] : []),
+    ],
+    alertBox: { text: alertText, color: 'blue' },
+    buttonText: 'Zobacz szczegóły →',
+    buttonUrl: `${APP_URL}/administracja`,
+    color: 'blue',
+  });
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        Authorization: `Bearer ${supabaseAnonKey}`,
       },
       body: JSON.stringify({
         to,
-        subject: "Zmiana statusu zgłoszenia błędu",
-        html: htmlContent,
-        text: textContent,
+        subject: "Zmiana statusu zgloszenia bledu",
+        html,
+        text,
       }),
     });
 
@@ -107,72 +69,34 @@ export const sendErrorReportResponseEmail = async (
   message: string,
   reportId: string,
 ) => {
-  const smtpHost = Deno.env.get("SMTP_HOST");
-  const smtpPort = Deno.env.get("SMTP_PORT");
-  const smtpUser = Deno.env.get("SMTP_USER");
-  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-    console.error("Missing SMTP configuration");
-    return;
-  }
-
-  const emailHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .message-box { background-color: white; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; }
-        .button { display: inline-block; padding: 10px 20px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Nowa odpowiedź w zgłoszeniu</h1>
-        </div>
-        <div class="content">
-          <p><strong>Tytuł zgłoszenia:</strong> ${reportTitle}</p>
-          <p><strong>Odpowiedział:</strong> ${responderName}</p>
-          <div class="message-box">
-            <p>${message}</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const emailText = `
-Nowa odpowiedź w zgłoszeniu
-
-Tytuł zgłoszenia: ${reportTitle}
-Odpowiedział: ${responderName}
-
-Wiadomość:
-${message}
-
-Zobacz szczegóły w panelu administracyjnym: ${supabaseUrl}/administracja
-  `;
+  const { html, text } = buildEmailTemplate({
+    title: '💬 Nowa odpowiedź w zgłoszeniu',
+    subtitle: 'System Finansowy OMI',
+    content: `<p>Otrzymałeś nową odpowiedź w zgłoszeniu błędu.</p><div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;"><p style="margin: 0; font-style: italic;">"${message}"</p></div>`,
+    infoItems: [
+      { label: 'Tytuł zgłoszenia', value: reportTitle },
+      { label: 'Odpowiedział', value: responderName },
+    ],
+    buttonText: 'Zobacz szczegóły →',
+    buttonUrl: `${APP_URL}/administracja`,
+    color: 'blue',
+  });
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        Authorization: `Bearer ${supabaseAnonKey}`,
       },
       body: JSON.stringify({
         to,
-        subject: "Nowa odpowiedź w zgłoszeniu błędu",
-        html: emailHtml,
-        text: emailText,
+        subject: "Nowa odpowiedz w zgloszeniu bledu",
+        html,
+        text,
       }),
     });
 
