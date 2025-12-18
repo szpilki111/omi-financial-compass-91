@@ -282,7 +282,7 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                         <CardDescription className="text-center">
-                            Planowanie i realizacja budżetu
+                            Planowanie i realizacja rocznego budżetu
                         </CardDescription>
                     </CardContent>
                 </Card>
