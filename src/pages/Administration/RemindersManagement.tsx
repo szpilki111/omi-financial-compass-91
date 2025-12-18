@@ -99,10 +99,19 @@ const RemindersManagement: React.FC = () => {
       if (error) throw error;
       if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
 
-      toast({
-        title: "Przypomnienie wysłane",
-        description: `Wysłano przypomnienie dla: ${locationName}`,
-      });
+      const sent = data?.sent || 0;
+      
+      if (sent > 0) {
+        toast({
+          title: "Przypomnienie wysłane",
+          description: data?.message || `Wysłano przypomnienie dla: ${locationName}`,
+        });
+      } else {
+        toast({
+          title: "Informacja",
+          description: data?.message || "Przypomnienie dla tej placówki zostało już wysłane wcześniej.",
+        });
+      }
 
       refetchLogs();
       refetchPending();
