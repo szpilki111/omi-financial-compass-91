@@ -66,10 +66,12 @@ Deno.serve(async (req) => {
 
     let singleLocationId: string | null = null;
     let listOnly = false;
+    let forceSend = false;
     try {
       const body = await req.json();
       singleLocationId = body?.location_id || null;
       listOnly = body?.list_only === true;
+      forceSend = body?.force_send === true;
     } catch {
       // No body or invalid JSON - continue with batch mode
     }
@@ -77,6 +79,7 @@ Deno.serve(async (req) => {
     console.log('Starting report reminders check...');
     if (singleLocationId) console.log(`Single location mode: ${singleLocationId}`);
     if (listOnly) console.log('List only mode');
+    if (forceSend) console.log('Force send mode - skipping sent check');
 
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -189,7 +192,7 @@ Deno.serve(async (req) => {
       const economists = economistsByLocation.get(loc.id) ?? [];
       for (const eco of economists) {
         const key = `${loc.id}-${eco.email}`;
-        if (!sentSet.has(key)) {
+        if (forceSend || !sentSet.has(key)) {
           emailsToSend.push({ locationId: loc.id, locationName: loc.name, to: eco.email, name: eco.name });
         }
       }
