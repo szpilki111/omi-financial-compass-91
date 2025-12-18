@@ -93,25 +93,16 @@ const RemindersManagement: React.FC = () => {
     
     try {
       const { data, error } = await supabase.functions.invoke('send-report-reminders', {
-        body: { location_id: locationId }
+        body: { location_id: locationId, force_send: true }
       });
       
       if (error) throw error;
       if (data?.success === false) throw new Error(data?.error || 'Nieznany błąd');
 
-      const sent = data?.sent || 0;
-      
-      if (sent > 0) {
-        toast({
-          title: "Przypomnienie wysłane",
-          description: data?.message || `Wysłano przypomnienie dla: ${locationName}`,
-        });
-      } else {
-        toast({
-          title: "Informacja",
-          description: data?.message || "Przypomnienie dla tej placówki zostało już wysłane wcześniej.",
-        });
-      }
+      toast({
+        title: "Przypomnienie wysłane",
+        description: data?.message || `Wysłano przypomnienie dla: ${locationName}`,
+      });
 
       refetchLogs();
       refetchPending();
