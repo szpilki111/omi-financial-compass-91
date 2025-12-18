@@ -39,8 +39,6 @@ export const sendErrorReportUpdateEmail = async (
     content: '<p style="margin:0;">Nastąpiła aktualizacja Twojego zgłoszenia błędu w systemie.</p>',
     infoItems,
     alertBox: { text: alertText, color: 'blue' },
-    buttonText: 'Zobacz szczegóły',
-    buttonUrl: `${APP_URL}/administracja`,
     color: 'blue',
   });
 
@@ -86,8 +84,6 @@ export const sendErrorReportResponseEmail = async (
       { label: 'Tytuł zgłoszenia', value: reportTitle },
       { label: 'Odpowiedział', value: responderName },
     ],
-    buttonText: 'Zobacz szczegóły',
-    buttonUrl: `${APP_URL}/administracja`,
     color: 'blue',
   });
 
