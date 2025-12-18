@@ -15,19 +15,6 @@ interface EmailRequest {
   replyTo?: string;
 }
 
-// Encode subject according to RFC 2047 for proper Polish character display
-function encodeSubject(subject: string): string {
-  // Check if subject contains non-ASCII characters
-  if (!/[^\x00-\x7F]/.test(subject)) {
-    return subject; // No encoding needed for ASCII-only
-  }
-  // Encode as base64 UTF-8 per RFC 2047
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(subject);
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return `=?UTF-8?B?${base64}?=`;
-}
-
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -77,15 +64,15 @@ const handler = async (req: Request): Promise<Response> => {
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Encode subject for proper Polish character display
-    const encodedSubject = encodeSubject(subject);
-    console.log('Encoded subject:', encodedSubject);
+    // Subject should already be ASCII (Polish chars converted by caller)
+    // Let SMTP library handle any remaining encoding
+    console.log('Sending with subject:', subject);
 
-    // Send email with UTF-8 charset
+    // Send email with UTF-8 charset for body content
     await client.send({
       from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
       to: recipients.join(','),
-      subject: encodedSubject,
+      subject: subject,
       content: text || '',
       html: html || undefined,
       replyTo: replyTo || undefined,

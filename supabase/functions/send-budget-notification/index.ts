@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { buildEmailTemplate, APP_URL } from '../_shared/emailTemplate.ts';
+import { buildEmailTemplate, APP_URL, toAscii } from '../_shared/emailTemplate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,9 +39,12 @@ const handler = async (req: Request): Promise<Response> => {
     let html = '';
     let text = '';
 
+    // Use toAscii for locationName in subjects to avoid encoding issues
+    const asciiLocationName = toAscii(locationName);
+
     switch (type) {
       case 'budget_submitted': {
-        subject = `Nowy budzet do zatwierdzenia - ${locationName} ${budgetYear}`;
+        subject = `Nowy budzet do zatwierdzenia - ${asciiLocationName} ${budgetYear}`;
         const template = buildEmailTemplate({
           title: '📊 Nowy budżet do zatwierdzenia',
           subtitle: 'System Finansowy OMI',
@@ -60,7 +63,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       case 'budget_approved': {
-        subject = `Budzet zatwierdzony - ${locationName} ${budgetYear}`;
+        subject = `Budzet zatwierdzony - ${asciiLocationName} ${budgetYear}`;
         const template = buildEmailTemplate({
           title: '✓ Budżet zatwierdzony',
           subtitle: 'System Finansowy OMI',
@@ -80,7 +83,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       case 'budget_rejected': {
-        subject = `Budzet odrzucony - ${locationName} ${budgetYear}`;
+        subject = `Budzet odrzucony - ${asciiLocationName} ${budgetYear}`;
         const template = buildEmailTemplate({
           title: '✗ Budżet odrzucony',
           subtitle: 'System Finansowy OMI',
@@ -101,7 +104,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       case 'budget_exceeded': {
-        subject = `Budzet przekroczony - ${locationName} ${month} ${budgetYear}`;
+        subject = `Budzet przekroczony - ${asciiLocationName} ${month} ${budgetYear}`;
         const template = buildEmailTemplate({
           title: '⚠️ Budżet przekroczony',
           subtitle: 'System Finansowy OMI',

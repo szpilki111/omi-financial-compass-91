@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { buildEmailTemplate, APP_URL } from '../_shared/emailTemplate.ts';
+import { buildEmailTemplate, APP_URL, toAscii } from '../_shared/emailTemplate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,8 +31,9 @@ function buildEmail(params: {
 }) {
   const { reminderType, daysUntilDeadline, deadlineDay, currentMonth, reportMonth, reportYear, locationName, economistName } = params;
 
+  // Use toAscii for subject to avoid encoding issues with Polish characters
   const subject = reminderType === 'overdue'
-    ? `Termin zlozenia raportu minal - ${locationName}`
+    ? `Termin zlozenia raportu minal - ${toAscii(locationName)}`
     : `Przypomnienie o raporcie - ${daysUntilDeadline} dni do terminu`;
 
   const color = reminderType === 'overdue' ? 'red' : reminderType === '1_day' ? 'orange' : 'blue';

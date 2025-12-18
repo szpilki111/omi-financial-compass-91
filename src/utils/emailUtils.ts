@@ -11,6 +11,17 @@ export interface SendEmailParams {
 
 const APP_URL = 'https://vzalrnwnpzbpzvcrjitt.lovable.app';
 
+// Convert Polish characters to ASCII for email subjects to avoid encoding issues
+function toAscii(str: string): string {
+  const polishMap: Record<string, string> = {
+    'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n',
+    'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+    'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N',
+    'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z',
+  };
+  return str.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => polishMap[char] || char);
+}
+
 // Build HTML without extra whitespace to avoid =20 encoding issues
 function buildEmailHtml(params: {
   title: string;
@@ -134,7 +145,7 @@ export const sendErrorReportResponseEmail = async (
 
   return sendEmail({
     to: recipientEmail,
-    subject: `Nowa odpowiedz w zgloszeniu: ${reportTitle}`,
+    subject: `Nowa odpowiedz w zgloszeniu: ${toAscii(reportTitle)}`,
     text,
     html,
     from: `System Finansowy OMI <finanse@oblaci.pl>`,
@@ -173,7 +184,7 @@ export const sendErrorReportConfirmationEmail = async (
 
   return sendEmail({
     to: recipientEmail,
-    subject: `Potwierdzenie zgloszenia: ${reportTitle}`,
+    subject: `Potwierdzenie zgloszenia: ${toAscii(reportTitle)}`,
     text,
     html,
     from: `System Finansowy OMI <finanse@oblaci.pl>`,
@@ -219,7 +230,7 @@ export const sendNewErrorReportEmailToAdmins = async (
     try {
       await sendEmail({
         to: email,
-        subject: `Nowe zgloszenie bledu: ${reportTitle}`,
+        subject: `Nowe zgloszenie bledu: ${toAscii(reportTitle)}`,
         text,
         html,
         from: `System Finansowy OMI <finanse@oblaci.pl>`,
