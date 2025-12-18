@@ -47,8 +47,6 @@ function buildEmail(params: {
     greeting: `Dzień dobry, <strong>${economistName}</strong>!`,
     content: `<p style="margin:0 0 12px 0;">Raport miesięczny za <strong>${monthNames[reportMonth - 1]} ${reportYear}</strong> dla placówki <strong>${locationName}</strong> nie został jeszcze złożony.</p><p style="margin:0;">Termin składania raportów upływa <strong>${deadlineDay} ${monthNames[currentMonth - 1]}</strong>.</p>`,
     alertBox: { text: urgencyText, color: color as any },
-    buttonText: 'Przejdź do raportów',
-    buttonUrl: `${APP_URL}/raporty`,
     color: color as any,
   });
 

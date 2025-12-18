@@ -53,8 +53,6 @@ const handler = async (req: Request): Promise<Response> => {
             { label: 'Lokalizacja', value: locationName },
             { label: 'Rok', value: String(budgetYear) },
           ],
-          buttonText: 'Przejdź do budżetu →',
-          buttonUrl: budgetLink,
           color: 'blue',
         });
         html = template.html;
@@ -73,8 +71,6 @@ const handler = async (req: Request): Promise<Response> => {
             { label: 'Rok', value: String(budgetYear) },
             { label: 'Status', value: 'Zatwierdzony' },
           ],
-          buttonText: 'Zobacz budżet →',
-          buttonUrl: budgetLink,
           color: 'green',
         });
         html = template.html;
@@ -94,8 +90,6 @@ const handler = async (req: Request): Promise<Response> => {
             { label: 'Status', value: 'Odrzucony' },
           ],
           alertBox: rejectionReason ? { text: rejectionReason, color: 'red' } : undefined,
-          buttonText: 'Edytuj budżet →',
-          buttonUrl: budgetLink,
           color: 'red',
         });
         html = template.html;
@@ -115,8 +109,6 @@ const handler = async (req: Request): Promise<Response> => {
             { label: 'Realizacja', value: `${exceededPercentage}%` },
           ],
           alertBox: { text: `Przekroczono budżet: ${exceededPercentage}%`, color: 'orange' },
-          buttonText: 'Zobacz szczegóły →',
-          buttonUrl: budgetLink,
           color: 'orange',
         });
         html = template.html;

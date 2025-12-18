@@ -136,8 +136,6 @@ export const sendErrorReportResponseEmail = async (
       { label: 'Tytuł zgłoszenia', value: reportTitle },
       { label: 'Odpowiedział', value: responderName },
     ],
-    buttonText: 'Zobacz szczegóły',
-    buttonUrl: `${APP_URL}/administracja`,
     primaryColor: '#4F46E5',
   });
 
@@ -175,8 +173,6 @@ export const sendErrorReportConfirmationEmail = async (
       { label: 'Priorytet', value: priorityLabels[priority] || priority },
       { label: 'Numer zgłoszenia', value: `#${reportId.slice(0, 8)}` },
     ],
-    buttonText: 'Zobacz szczegóły',
-    buttonUrl: `${APP_URL}/administracja`,
     primaryColor: '#10B981',
   });
 
@@ -219,8 +215,6 @@ export const sendNewErrorReportEmailToAdmins = async (
       { label: 'Numer zgłoszenia', value: `#${reportId.slice(0, 8)}` },
     ],
     alertBox,
-    buttonText: 'Zobacz szczegóły',
-    buttonUrl: `${APP_URL}/administracja`,
     primaryColor: '#EF4444',
   });
 
