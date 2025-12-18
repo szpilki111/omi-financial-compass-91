@@ -1,11 +1,10 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildEmailTemplate, APP_URL } from '../_shared/emailTemplate.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface ReportNotificationRequest {
@@ -17,7 +16,6 @@ interface ReportNotificationRequest {
 }
 
 const handler = async (req: Request): Promise<Response> => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -34,7 +32,6 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log("Notification data:", { reportId, reportTitle, submittedBy, locationName, period });
 
-    // Get all provincial administrators (prowincjal role)
     const { data: provincialAdmins, error: adminsError } = await supabase
       .from('profiles')
       .select('email, name')
@@ -55,70 +52,27 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found ${provincialAdmins.length} provincial administrators to notify`);
 
-    // Send email to each provincial administrator
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     
     for (const admin of provincialAdmins) {
       console.log(`Sending notification to: ${admin.email}`);
       
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-            .report-box { background-color: #f5f5f5; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>📊 Nowy raport do sprawdzenia</h1>
-            </div>
-            <div class="content">
-              <p>Szanowny/a ${admin.name},</p>
-              <p>Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie:</p>
-              
-              <div class="report-box">
-                <p><strong>Tytuł raportu:</strong> ${reportTitle}</p>
-                <p><strong>Okres:</strong> ${period}</p>
-                <p><strong>Placówka:</strong> ${locationName}</p>
-                <p><strong>Złożony przez:</strong> ${submittedBy}</p>
-              </div>
-              
-              <p>Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.</p>
-              
-              <div class="footer">
-                <p>System Raportowania OMI</p>
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      const textContent = `
-Nowy raport do sprawdzenia
-
-Szanowny/a ${admin.name},
-
-Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie:
-
-Tytuł raportu: ${reportTitle}
-Okres: ${period}
-Placówka: ${locationName}
-Złożony przez: ${submittedBy}
-
-Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.
-
-System Raportowania OMI
-      `;
+      const { html, text } = buildEmailTemplate({
+        title: '📊 Nowy raport do sprawdzenia',
+        subtitle: 'System Finansowy OMI',
+        greeting: `Szanowny/a ${admin.name},`,
+        content: '<p>Informujemy, że nowy raport został złożony i oczekuje na Państwa sprawdzenie.</p><p>Aby sprawdzić i zatwierdzić raport, zaloguj się do systemu raportowania.</p>',
+        infoItems: [
+          { label: 'Tytuł raportu', value: reportTitle },
+          { label: 'Okres', value: period },
+          { label: 'Placówka', value: locationName },
+          { label: 'Złożony przez', value: submittedBy },
+        ],
+        buttonText: 'Przejdź do raportów →',
+        buttonUrl: `${APP_URL}/raporty`,
+        color: 'blue',
+      });
 
       try {
         const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -130,8 +84,8 @@ System Raportowania OMI
           body: JSON.stringify({
             to: admin.email,
             subject: `Nowy raport do sprawdzenia: ${reportTitle}`,
-            html: htmlContent,
-            text: textContent,
+            html,
+            text,
           }),
         });
 
@@ -153,19 +107,13 @@ System Raportowania OMI
       message: `Notifications sent to ${provincialAdmins.length} provincial administrators` 
     }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
     console.error("Error in send-report-notification function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 };

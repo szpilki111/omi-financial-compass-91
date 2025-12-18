@@ -1,10 +1,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9';
+import { buildEmailTemplate } from '../_shared/emailTemplate.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface VerificationRequest {
@@ -27,6 +27,7 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { user_id, email, device_fingerprint, user_agent, ip_address }: VerificationRequest = await req.json();
@@ -37,16 +38,12 @@ const handler = async (req: Request): Promise<Response> => {
     if (!user_id || !normalizedEmail || !normalizedFingerprint) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
     console.log('Sending verification code for user:', user_id);
 
-    // Zabezpieczenie: sprawdź czy user_id faktycznie należy do tego emaila
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('email')
@@ -57,14 +54,10 @@ const handler = async (req: Request): Promise<Response> => {
       console.warn('send-verification-code: email mismatch for user_id', { user_id });
       return new Response(
         JSON.stringify({ error: 'Invalid user/email pair' }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    // Zabezpieczenie: cooldown 60s (anty-spam)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
     const { data: recentCode, error: recentError } = await supabase
       .from('verification_codes')
@@ -80,17 +73,12 @@ const handler = async (req: Request): Promise<Response> => {
     if (!recentError && recentCode) {
       return new Response(
         JSON.stringify({ error: 'Too many requests' }),
-        {
-          status: 429,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    // Wygeneruj 6-cyfrowy kod
     const code = generateVerificationCode();
     
-    // Zapisz kod w bazie danych (ważny 15 minut)
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
 
@@ -108,12 +96,24 @@ const handler = async (req: Request): Promise<Response> => {
       throw insertError;
     }
 
-    // Wyślij email z kodem przez własny SMTP
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-    const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;line-height:1.6;color:#333}.container{max-width:600px;margin:0 auto;padding:20px}.header{background:linear-gradient(135deg,#E6B325 0%,#D4A017 100%);color:white;padding:30px;text-align:center;border-radius:10px 10px 0 0}.content{background:#f9f9f9;padding:30px;border-radius:0 0 10px 10px}.code-box{background:white;border:2px solid #E6B325;border-radius:8px;padding:20px;text-align:center;margin:20px 0}.code{font-size:32px;font-weight:bold;letter-spacing:8px;color:#E6B325}.info{background:#fff3cd;border-left:4px solid #E6B325;padding:15px;margin:20px 0}.footer{text-align:center;margin-top:20px;color:#666;font-size:12px}</style></head><body><div class="container"><div class="header"><h1>🔐 Weryfikacja dwuetapowa</h1></div><div class="content"><p>Witaj,</p><p>Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p><div class="code-box"><p style="margin:0;font-size:14px;color:#666">Twój kod weryfikacyjny:</p><div class="code">${code}</div></div><p>Wprowadź ten kod, aby zakończyć proces logowania.</p><div class="info"><strong>⏱️ Ważne informacje:</strong><ul style="margin:10px 0"><li>Kod jest ważny przez <strong>15 minut</strong></li><li>Użyj go tylko raz</li><li>Możesz zaznaczyć to urządzenie jako zaufane na 30 dni</li></ul></div><p style="margin-top:20px;color:#d9534f"><strong>⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!</strong></p></div><div class="footer"><p>System Finansowy OMI<br>Misjonarze Oblaci Maryi Niepokalanej</p><p>marekglowacki.pl</p></div></div></body></html>`;
-
-    const textContent = `🔐 Weryfikacja dwuetapowa - System Finansowy OMI\n\nWitaj,\n\nWykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.\n\nTwój kod weryfikacyjny: ${code}\n\nWprowadź ten kod, aby zakończyć proces logowania.\n\n⏱️ Ważne informacje:\n- Kod jest ważny przez 15 minut\n- Użyj go tylko raz\n- Możesz zaznaczyć to urządzenie jako zaufane na 30 dni\n\n⚠️ Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!\n\n---\nSystem Finansowy OMI\nMisjonarze Oblaci Maryi Niepokalanej\nmarekglowacki.pl`;
+    const { html, text } = buildEmailTemplate({
+      title: '🔐 Weryfikacja dwuetapowa',
+      subtitle: 'System Finansowy OMI',
+      content: `
+        <p>Wykryliśmy logowanie z nowego urządzenia do Twojego konta w Systemie Finansowym OMI.</p>
+        <div style="background-color: #fef9e7; border: 2px solid #E6B325; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+          <p style="margin: 0 0 8px 0; font-size: 14px; color: #666;">Twój kod weryfikacyjny:</p>
+          <p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #E6B325;">${code}</p>
+        </div>
+        <p>Wprowadź ten kod, aby zakończyć proces logowania.</p>
+      `,
+      alertBox: {
+        text: 'Kod jest ważny przez 15 minut. Możesz zaznaczyć urządzenie jako zaufane na 30 dni.',
+        color: 'gold',
+      },
+      footerText: 'Jeśli to nie Ty próbujesz się zalogować, natychmiast zmień hasło i skontaktuj się z administratorem!',
+      color: 'gold',
+    });
 
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -125,8 +125,8 @@ const handler = async (req: Request): Promise<Response> => {
         body: JSON.stringify({
           to: email,
           subject: 'Kod weryfikacyjny logowania - System Finansowy OMI',
-          html: htmlContent,
-          text: textContent,
+          html,
+          text,
         }),
       });
 
@@ -143,26 +143,14 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: "Kod weryfikacyjny został wysłany na email"
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders,
-        },
-      }
+      JSON.stringify({ success: true, message: "Kod weryfikacyjny został wysłany na email" }),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
     console.error("Error in send-verification-code function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 };

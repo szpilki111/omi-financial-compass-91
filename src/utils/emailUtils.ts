@@ -9,11 +9,74 @@ export interface SendEmailParams {
   replyTo?: string;
 }
 
-/**
- * Wysyła email przez serwer SMTP organizacji
- * @param params Parametry emaila (to, subject, text lub html)
- * @returns Promise z wynikiem wysyłania
- */
+const APP_URL = 'https://vzalrnwnpzbpzvcrjitt.lovable.app';
+
+// Shared email template builder for frontend
+function buildEmailHtml(params: {
+  title: string;
+  subtitle?: string;
+  greeting?: string;
+  content: string;
+  alertBox?: { text: string; color: string };
+  infoItems?: { label: string; value: string }[];
+  buttonText?: string;
+  buttonUrl?: string;
+  footerText?: string;
+  primaryColor?: string;
+}): string {
+  const {
+    title,
+    subtitle,
+    greeting,
+    content,
+    alertBox,
+    infoItems,
+    buttonText,
+    buttonUrl,
+    footerText = 'Ta wiadomość została wygenerowana automatycznie przez System Finansowy OMI.',
+    primaryColor = '#3b82f6',
+  } = params;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="padding: 32px 40px; background: linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd); border-radius: 12px 12px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">${title}</h1>
+              ${subtitle ? `<p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">${subtitle}</p>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 40px;">
+              ${greeting ? `<p style="margin: 0 0 16px 0; color: #334155; font-size: 16px;">${greeting}</p>` : ''}
+              ${alertBox ? `<div style="background-color: ${alertBox.color}15; border-left: 4px solid ${alertBox.color}; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0;"><p style="margin: 0; color: ${alertBox.color}; font-weight: 600; font-size: 16px;">${alertBox.text}</p></div>` : ''}
+              <div style="margin: 0 0 16px 0; color: #334155; font-size: 15px; line-height: 1.6;">${content}</div>
+              ${infoItems && infoItems.length > 0 ? `<div style="background-color: #f8fafc; border-left: 4px solid ${primaryColor}; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0;">${infoItems.map(item => `<p style="margin: 0 0 8px 0; color: #334155; font-size: 15px;"><strong>${item.label}:</strong> ${item.value}</p>`).join('')}</div>` : ''}
+              ${buttonText && buttonUrl ? `<table role="presentation" style="width: 100%; margin-top: 24px;"><tr><td align="center"><a href="${buttonUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd); color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">${buttonText}</a></td></tr></table>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #64748b; font-size: 13px; text-align: center;">${footerText}</p>
+              <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 12px; text-align: center;">System Finansowy OMI • Misjonarze Oblaci Maryi Niepokalanej</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export const sendEmail = async (params: SendEmailParams) => {
   try {
     console.log('Sending email via edge function:', params.subject);
@@ -35,10 +98,6 @@ export const sendEmail = async (params: SendEmailParams) => {
   }
 };
 
-
-/**
- * Wysyła email z powiadomieniem o nowej odpowiedzi na zgłoszenie błędu
- */
 export const sendErrorReportResponseEmail = async (
   recipientEmail: string,
   reportTitle: string,
@@ -46,68 +105,32 @@ export const sendErrorReportResponseEmail = async (
   responseMessage: string,
   reportId: string
 ) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .message-box { background-color: white; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Nowa odpowiedź w zgłoszeniu</h1>
-        </div>
-        <div class="content">
-          <p>Szczęść Boże!</p>
-          <p><strong>Tytuł zgłoszenia:</strong> ${reportTitle}</p>
-          <p><strong>Odpowiedział:</strong> ${responderName}</p>
-          <div class="message-box">
-            <p>${responseMessage.replace(/\n/g, '<br>')}</p>
-          </div>
-          <p style="margin-top: 20px;">
-            Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  const html = buildEmailHtml({
+    title: '💬 Nowa odpowiedź w zgłoszeniu',
+    subtitle: 'System Finansowy OMI',
+    greeting: 'Szczęść Boże!',
+    content: `<p>Otrzymałeś nową odpowiedź w zgłoszeniu błędu.</p><div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;"><p style="margin: 0; font-style: italic;">"${responseMessage.replace(/\n/g, '<br>')}"</p></div><p>Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.</p>`,
+    infoItems: [
+      { label: 'Tytuł zgłoszenia', value: reportTitle },
+      { label: 'Odpowiedział', value: responderName },
+    ],
+    buttonText: 'Zobacz szczegóły →',
+    buttonUrl: `${APP_URL}/administracja`,
+    primaryColor: '#4F46E5',
+  });
 
-  const text = `
-Nowa odpowiedź w zgłoszeniu
-
-Tytuł zgłoszenia: ${reportTitle}
-Odpowiedział: ${responderName}
-
-Wiadomość:
-${responseMessage}
-
-Możesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.
-  `;
-
-  const fromAddress = 'finanse@oblaci.pl';
-  const replyToAddress = `finanse@oblaci.pl`;
+  const text = `Nowa odpowiedź w zgłoszeniu\n\nTytuł zgłoszenia: ${reportTitle}\nOdpowiedział: ${responderName}\n\nWiadomość:\n${responseMessage}\n\nMożesz odpowiedzieć na tę wiadomość, aby dodać swoją odpowiedź do zgłoszenia.`;
 
   return sendEmail({
     to: recipientEmail,
-    subject: `Nowa odpowiedź w zgłoszeniu: ${reportTitle}`,
+    subject: `Nowa odpowiedz w zgloszeniu: ${reportTitle}`,
     text,
     html,
-    from: `System Finansowy OMI <${fromAddress}>`,
-    replyTo: replyToAddress,
+    from: `System Finansowy OMI <finanse@oblaci.pl>`,
+    replyTo: 'finanse@oblaci.pl',
   });
 };
 
-/**
- * Wysyła potwierdzenie zgłoszenia błędu do użytkownika
- */
 export const sendErrorReportConfirmationEmail = async (
   recipientEmail: string,
   userName: string,
@@ -117,89 +140,39 @@ export const sendErrorReportConfirmationEmail = async (
   reportId: string
 ) => {
   const priorityLabels: Record<string, string> = {
-    low: "Niski",
-    medium: "Średni", 
-    high: "Wysoki",
-    critical: "Krytyczny",
+    low: "Niski", medium: "Średni", high: "Wysoki", critical: "Krytyczny",
+  };
+  const priorityColors: Record<string, string> = {
+    low: '#65a30d', medium: '#d97706', high: '#ea580c', critical: '#dc2626',
   };
 
-  const priorityColor = priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : priority === 'medium' ? '#d97706' : '#65a30d';
+  const html = buildEmailHtml({
+    title: '✓ Potwierdzenie zgłoszenia',
+    subtitle: 'System Finansowy OMI',
+    greeting: `Szczęść Boże ${userName}!`,
+    content: `<p>Potwierdzamy otrzymanie Twojego zgłoszenia błędu.</p><p><strong>Opis:</strong></p><p>${reportDescription.replace(/\n/g, '<br>')}</p><p style="margin-top: 16px;">Administrator zostanie powiadomiony o zgłoszeniu i skontaktuje się z Tobą w sprawie rozwiązania problemu.</p>`,
+    infoItems: [
+      { label: 'Tytuł', value: reportTitle },
+      { label: 'Priorytet', value: priorityLabels[priority] || priority },
+      { label: 'Numer zgłoszenia', value: `#${reportId.slice(0, 8)}` },
+    ],
+    buttonText: 'Zobacz szczegóły →',
+    buttonUrl: `${APP_URL}/administracja`,
+    primaryColor: '#10B981',
+  });
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #10B981; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .report-box { background-color: white; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; }
-        .priority { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; background-color: ${priorityColor}; color: white; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Potwierdzenie zgłoszenia</h1>
-        </div>
-        <div class="content">
-          <p>Szczęść Boże ${userName}!</p>
-          <p>Potwierdzamy otrzymanie Twojego zgłoszenia błędu.</p>
-          <div class="report-box">
-            <p><strong>Tytuł:</strong> ${reportTitle}</p>
-            <p><strong>Priorytet:</strong> <span class="priority">${priorityLabels[priority] || priority}</span></p>
-            <p><strong>Opis:</strong></p>
-            <p>${reportDescription.replace(/\n/g, '<br>')}</p>
-          </div>
-          <p>Numer zgłoszenia: <strong>#${reportId.slice(0, 8)}</strong></p>
-          <p style="margin-top: 20px;">
-            Administrator zostanie powiadomiony o zgłoszeniu i skontaktuje się z Tobą w sprawie rozwiązania problemu.
-          </p>
-          <p style="color: #666; font-size: 14px; margin-top: 20px;">
-            Możesz odpowiedzieć na tę wiadomość, aby dodać dodatkowe informacje do zgłoszenia.
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const text = `
-Szczęść Boże ${userName}!
-
-Potwierdzamy otrzymanie Twojego zgłoszenia błędu.
-
-Tytuł: ${reportTitle}
-Priorytet: ${priorityLabels[priority] || priority}
-
-Opis:
-${reportDescription}
-
-Numer zgłoszenia: #${reportId.slice(0, 8)}
-
-Administrator zostanie powiadomiony o zgłoszeniu i skontaktuje się z Tobą w sprawie rozwiązania problemu.
-
-Możesz odpowiedzieć na tę wiadomość, aby dodać dodatkowe informacje do zgłoszenia.
-  `;
-
-  const fromAddress = 'finanse@oblaci.pl';
-  const replyToAddress = `finanse@oblaci.pl`;
+  const text = `Szczęść Boże ${userName}!\n\nPotwierdzamy otrzymanie Twojego zgłoszenia błędu.\n\nTytuł: ${reportTitle}\nPriorytet: ${priorityLabels[priority] || priority}\nOpis: ${reportDescription}\nNumer zgłoszenia: #${reportId.slice(0, 8)}\n\nAdministrator zostanie powiadomiony o zgłoszeniu.`;
 
   return sendEmail({
     to: recipientEmail,
-    subject: `Potwierdzenie zgłoszenia: ${reportTitle}`,
+    subject: `Potwierdzenie zgloszenia: ${reportTitle}`,
     text,
     html,
-    from: `System Finansowy OMI <${fromAddress}>`,
-    replyTo: replyToAddress,
+    from: `System Finansowy OMI <finanse@oblaci.pl>`,
+    replyTo: 'finanse@oblaci.pl',
   });
 };
 
-/**
- * Wysyła email do administratorów o nowym zgłoszeniu błędu
- */
 export const sendNewErrorReportEmailToAdmins = async (
   reportTitle: string,
   reportDescription: string,
@@ -209,81 +182,38 @@ export const sendNewErrorReportEmailToAdmins = async (
   adminEmails: string[]
 ) => {
   const priorityLabels: Record<string, string> = {
-    low: "Niski",
-    medium: "Średni", 
-    high: "Wysoki",
-    critical: "Krytyczny",
+    low: "Niski", medium: "Średni", high: "Wysoki", critical: "Krytyczny",
   };
 
-  const priorityColor = priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : priority === 'medium' ? '#d97706' : '#65a30d';
+  const html = buildEmailHtml({
+    title: '🚨 Nowe zgłoszenie błędu',
+    subtitle: 'System Finansowy OMI',
+    content: `<p>Użytkownik zgłosił nowy błąd w systemie.</p><p><strong>Opis:</strong></p><p>${reportDescription.replace(/\n/g, '<br>')}</p><p style="margin-top: 16px;">Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedzieć na zgłoszenie.</p>`,
+    infoItems: [
+      { label: 'Od', value: reporterName },
+      { label: 'Tytuł', value: reportTitle },
+      { label: 'Priorytet', value: priorityLabels[priority] || priority },
+      { label: 'Numer zgłoszenia', value: `#${reportId.slice(0, 8)}` },
+    ],
+    alertBox: priority === 'critical' || priority === 'high' 
+      ? { text: `Priorytet: ${priorityLabels[priority]}`, color: priority === 'critical' ? '#dc2626' : '#ea580c' }
+      : undefined,
+    buttonText: 'Zobacz szczegóły →',
+    buttonUrl: `${APP_URL}/administracja`,
+    primaryColor: '#EF4444',
+  });
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #EF4444; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .report-box { background-color: white; border-left: 4px solid #EF4444; padding: 15px; margin: 20px 0; }
-        .priority { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; background-color: ${priorityColor}; color: white; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Nowe zgłoszenie błędu</h1>
-        </div>
-        <div class="content">
-          <p>Użytkownik zgłosił nowy błąd w systemie:</p>
-          <div class="report-box">
-            <p><strong>Od:</strong> ${reporterName}</p>
-            <p><strong>Tytuł:</strong> ${reportTitle}</p>
-            <p><strong>Priorytet:</strong> <span class="priority">${priorityLabels[priority] || priority}</span></p>
-            <p><strong>Opis:</strong></p>
-            <p>${reportDescription.replace(/\n/g, '<br>')}</p>
-          </div>
-          <p>Numer zgłoszenia: <strong>#${reportId.slice(0, 8)}</strong></p>
-          <p style="margin-top: 20px;">
-            Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedzieć na zgłoszenie.
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  const text = `Nowe zgłoszenie błędu\n\nOd: ${reporterName}\nTytuł: ${reportTitle}\nPriorytet: ${priorityLabels[priority] || priority}\nOpis: ${reportDescription}\nNumer zgłoszenia: #${reportId.slice(0, 8)}\n\nZaloguj się do panelu administracyjnego.`;
 
-  const text = `
-Nowe zgłoszenie błędu
-
-Użytkownik zgłosił nowy błąd w systemie:
-
-Od: ${reporterName}
-Tytuł: ${reportTitle}
-Priorytet: ${priorityLabels[priority] || priority}
-
-Opis:
-${reportDescription}
-
-Numer zgłoszenia: #${reportId.slice(0, 8)}
-
-Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedzieć na zgłoszenie.
-  `;
-
-  const fromAddress = 'finanse@oblaci.pl';
-
-  // Send to all admin emails
   for (const email of adminEmails) {
     try {
       await sendEmail({
         to: email,
-        subject: `Nowe zgłoszenie błędu: ${reportTitle}`,
+        subject: `Nowe zgloszenie bledu: ${reportTitle}`,
         text,
         html,
-        from: `System Finansowy OMI <${fromAddress}>`,
-        replyTo: fromAddress,
+        from: `System Finansowy OMI <finanse@oblaci.pl>`,
+        replyTo: 'finanse@oblaci.pl',
       });
     } catch (error) {
       console.error(`Failed to send email to admin ${email}:`, error);
@@ -291,58 +221,24 @@ Zaloguj się do panelu administracyjnego, aby przejrzeć szczegóły i odpowiedz
   }
 };
 
-/**
- * Wysyła email z kodem weryfikacyjnym 2FA
- */
 export const sendVerificationCodeEmail = async (
   recipientEmail: string,
   code: string,
   userName: string
 ) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-        .content { background-color: #f9fafb; padding: 20px; margin-top: 20px; }
-        .code { background-color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; margin: 20px 0; border: 2px dashed #4F46E5; border-radius: 5px; letter-spacing: 5px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Kod weryfikacyjny</h1>
-        </div>
-        <div class="content">
-          <p>Szczęść Boże ${userName}!</p>
-          <p>Twój kod weryfikacyjny do logowania:</p>
-          <div class="code">${code}</div>
-          <p>Kod jest ważny przez 10 minut.</p>
-          <p>Jeśli nie próbowałeś się logować, zignoruj tę wiadomość.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  const html = buildEmailHtml({
+    title: '🔐 Kod weryfikacyjny',
+    subtitle: 'System Finansowy OMI',
+    greeting: `Szczęść Boże ${userName}!`,
+    content: `<p>Twój kod weryfikacyjny do logowania:</p><div style="background-color: #fef9e7; border: 2px solid #E6B325; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;"><p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #E6B325;">${code}</p></div><p>Kod jest ważny przez 10 minut.</p><p>Jeśli nie próbowałeś się logować, zignoruj tę wiadomość.</p>`,
+    primaryColor: '#E6B325',
+  });
 
-  const text = `
-Szczęść Boże ${userName}!
-
-Twój kod weryfikacyjny do logowania:
-
-${code}
-
-Kod jest ważny przez 10 minut.
-Jeśli nie próbowałeś się logować, zignoruj tę wiadomość.
-  `;
+  const text = `Szczęść Boże ${userName}!\n\nTwój kod weryfikacyjny do logowania:\n\n${code}\n\nKod jest ważny przez 10 minut.\nJeśli nie próbowałeś się logować, zignoruj tę wiadomość.`;
 
   return sendEmail({
     to: recipientEmail,
-    subject: 'Kod weryfikacyjny',
+    subject: 'Kod weryfikacyjny - System Finansowy OMI',
     text,
     html,
   });
