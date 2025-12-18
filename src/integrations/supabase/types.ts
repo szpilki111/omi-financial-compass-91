@@ -1631,6 +1631,14 @@ export type Database = {
         Args: { p_location_id: string; p_month: number; p_year: number }
         Returns: string
       }
+      get_admin_emails: {
+        Args: never
+        Returns: {
+          email: string
+          id: string
+          name: string
+        }[]
+      }
       get_current_user_id: { Args: never; Returns: string }
       get_current_user_id_fixed: { Args: never; Returns: string }
       get_user_location_id: { Args: never; Returns: string }

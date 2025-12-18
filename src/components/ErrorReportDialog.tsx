@@ -106,14 +106,11 @@ export const ErrorReportDialog = ({
 
       if (insertError) throw insertError;
 
-      // Create notification for admins
-      const { data: admins } = await supabase
-        .from("profiles")
-        .select("id")
-        .in("role", ["admin", "prowincjal"]);
+      // Create notification for admins - use RPC to bypass RLS
+      const { data: admins } = await supabase.rpc('get_admin_emails');
 
       if (admins && admins.length > 0) {
-        const notifications = admins.map((admin) => ({
+        const notifications = admins.map((admin: { id: string; email: string; name: string }) => ({
           user_id: admin.id,
           title: "Nowe zgłoszenie błędu",
           message: `${title} (priorytet: ${priority})`,
@@ -126,29 +123,24 @@ export const ErrorReportDialog = ({
 
         // Send email to admins
         try {
-          const { data: adminProfiles } = await supabase
+          const adminEmails = admins.filter((a: { email: string }) => a.email).map((a: { email: string }) => a.email);
+          
+          // Get reporter name
+          const { data: reporterProfile } = await supabase
             .from("profiles")
-            .select("email, name")
-            .in("id", admins.map(a => a.id));
+            .select("name")
+            .eq("id", userId)
+            .single();
 
-          if (adminProfiles) {
-            const adminEmails = adminProfiles.filter(p => p.email).map(p => p.email);
-            const { data: reporterProfile } = await supabase
-              .from("profiles")
-              .select("name")
-              .eq("id", userId)
-              .single();
-
-            if (adminEmails.length > 0) {
-              await sendNewErrorReportEmailToAdmins(
-                title,
-                description,
-                priority,
-                newReport.id,
-                reporterProfile?.name || "Użytkownik",
-                adminEmails
-              );
-            }
+          if (adminEmails.length > 0) {
+            await sendNewErrorReportEmailToAdmins(
+              title,
+              description,
+              priority,
+              newReport.id,
+              reporterProfile?.name || "Użytkownik",
+              adminEmails
+            );
           }
         } catch (emailError) {
           console.error("Failed to send admin notification emails:", emailError);
