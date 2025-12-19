@@ -15,13 +15,100 @@ interface EmailRequest {
   replyTo?: string;
 }
 
+type Attempt = {
+  label: string;
+  tls: boolean;
+  // When tls=false, denomailer may upgrade via STARTTLS unless disabled.
+  noStartTLS?: boolean;
+};
+
+function getSmtpConfig() {
+  const smtpHost = Deno.env.get("SMTP_HOST");
+  const smtpPortRaw = Deno.env.get("SMTP_PORT");
+  const smtpUser = Deno.env.get("SMTP_USER");
+  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+
+  if (!smtpHost || !smtpPortRaw || !smtpUser || !smtpPassword) {
+    throw new Error("SMTP configuration is incomplete");
+  }
+
+  const smtpPort = Number.parseInt(smtpPortRaw, 10);
+  if (!Number.isFinite(smtpPort)) {
+    throw new Error("SMTP_PORT is not a valid number");
+  }
+
+  return { smtpHost, smtpPort, smtpUser, smtpPassword };
+}
+
+async function trySendViaSmtp(params: {
+  attempt: Attempt;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPassword: string;
+  mail: {
+    recipients: string[];
+    subject: string;
+    text?: string;
+    html?: string;
+    from: string;
+    replyTo?: string;
+  };
+}) {
+  const { attempt, smtpHost, smtpPort, smtpUser, smtpPassword, mail } = params;
+
+  console.log(
+    `[send-email] SMTP attempt: ${attempt.label} host=${smtpHost} port=${smtpPort} tls=${attempt.tls} starttls=${!attempt.noStartTLS}`,
+  );
+
+  const client = new SMTPClient({
+    connection: {
+      hostname: smtpHost,
+      port: smtpPort,
+      tls: attempt.tls,
+      auth: {
+        username: smtpUser,
+        password: smtpPassword,
+      },
+    },
+    debug: {
+      allowUnsecure: false,
+      ...(attempt.noStartTLS ? { noStartTLS: true } : {}),
+    },
+  });
+
+  try {
+    await client.send({
+      from: mail.from,
+      to: mail.recipients.join(","),
+      subject: mail.subject,
+      content: mail.text || "",
+      html: mail.html || undefined,
+      replyTo: mail.replyTo || undefined,
+    });
+  } finally {
+    try {
+      await client.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+}
+
+function isRetryableNetworkError(err: unknown) {
+  const e = err as any;
+  return (
+    e?.name === "ConnectionReset" ||
+    e?.code === "ECONNRESET" ||
+    String(e?.message || "").toLowerCase().includes("connection reset")
+  );
+}
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
-  let client: SMTPClient | null = null;
 
   try {
     const { to, subject, text, html, from, replyTo }: EmailRequest = await req.json();
@@ -29,91 +116,83 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Attempting to send email to:", to);
     console.log("Subject:", subject);
 
-    // Validate required fields
     if (!to || !subject) {
       throw new Error("Missing required fields: to and subject are required");
     }
-
     if (!text && !html) {
       throw new Error("Either text or html content is required");
     }
 
-    // Get SMTP configuration from environment
-    const smtpHost = Deno.env.get("SMTP_HOST");
-    const smtpPortRaw = Deno.env.get("SMTP_PORT");
-    const smtpUser = Deno.env.get("SMTP_USER");
-    const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+    const { smtpHost, smtpPort, smtpUser, smtpPassword } = getSmtpConfig();
 
-    if (!smtpHost || !smtpPortRaw || !smtpUser || !smtpPassword) {
-      console.error("Missing SMTP configuration");
-      throw new Error("SMTP configuration is incomplete");
-    }
-
-    const smtpPort = Number.parseInt(smtpPortRaw, 10);
-    if (!Number.isFinite(smtpPort)) {
-      throw new Error("SMTP_PORT is not a valid number");
-    }
-
-    // Port 465 = implicit TLS. For 587/25 we connect plain and denomailer upgrades via STARTTLS.
-    const implicitTls = smtpPort === 465;
-
-    client = new SMTPClient({
-      connection: {
-        hostname: smtpHost,
-        port: smtpPort,
-        tls: implicitTls,
-        auth: {
-          username: smtpUser,
-          password: smtpPassword,
-        },
-      },
-      // Require encryption (either implicit TLS or STARTTLS)
-      debug: {
-        allowUnsecure: false,
-      },
-    });
-
-    // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
+    const mailFrom = from || "System Finansowy OMI <finanse@oblaci.pl>";
 
-    // Send email (denomailer accepts comma-separated recipients)
-    await client.send({
-      from: from || "System Finansowy OMI <finanse@oblaci.pl>",
-      to: recipients.join(","),
-      subject,
-      content: text || "",
-      html: html || undefined,
-      replyTo: replyTo || undefined,
-    });
+    // Strategy: prefer best-practice per port, but retry once with the opposite mode.
+    // - 465: implicit TLS first, then STARTTLS
+    // - 587/25: STARTTLS first, then implicit TLS
+    const attempts: Attempt[] =
+      smtpPort === 465
+        ? [
+            { label: "IMPLICIT_TLS", tls: true },
+            { label: "STARTTLS", tls: false },
+          ]
+        : [
+            { label: "STARTTLS", tls: false },
+            { label: "IMPLICIT_TLS", tls: true },
+          ];
 
-    await client.close();
-    client = null;
+    let lastError: unknown = null;
 
-    console.log("Email sent successfully to:", recipients);
+    for (let i = 0; i < attempts.length; i++) {
+      const attempt = attempts[i];
+      try {
+        await trySendViaSmtp({
+          attempt,
+          smtpHost,
+          smtpPort,
+          smtpUser,
+          smtpPassword,
+          mail: {
+            recipients,
+            subject,
+            text,
+            html,
+            from: mailFrom,
+            replyTo,
+          },
+        });
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Email sent successfully",
-        recipients,
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders,
-        },
-      },
-    );
+        console.log("Email sent successfully to:", recipients);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Email sent successfully",
+            recipients,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          },
+        );
+      } catch (err) {
+        lastError = err;
+        console.error(`[send-email] Attempt failed: ${attempt.label}`, err);
+
+        // If not retryable or this was last attempt, break.
+        if (!isRetryableNetworkError(err) || i === attempts.length - 1) {
+          break;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   } catch (error: any) {
     console.error("Error in send-email function:", error);
-
-    try {
-      await client?.close();
-    } catch {
-      // ignore
-    }
-
     return new Response(
       JSON.stringify({
         success: false,
