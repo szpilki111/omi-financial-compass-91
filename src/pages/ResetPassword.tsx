@@ -36,6 +36,8 @@ const ResetPassword = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+
     // Set up auth state listener for PASSWORD_RECOVERY event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -43,10 +45,12 @@ const ResetPassword = () => {
         
         if (event === 'PASSWORD_RECOVERY') {
           console.log('Password recovery event detected');
-          setIsValidToken(true);
-          setIsCheckingToken(false);
-          if (session?.user?.email) {
-            setUserEmail(session.user.email);
+          if (isMounted) {
+            setIsValidToken(true);
+            setIsCheckingToken(false);
+            if (session?.user?.email) {
+              setUserEmail(session.user.email);
+            }
           }
         } else if (event === 'SIGNED_IN' && session) {
           // Check if this is a recovery session by looking at the URL hash
@@ -55,10 +59,12 @@ const ResetPassword = () => {
           
           if (type === 'recovery') {
             console.log('Recovery session from URL hash');
-            setIsValidToken(true);
-            setIsCheckingToken(false);
-            if (session.user?.email) {
-              setUserEmail(session.user.email);
+            if (isMounted) {
+              setIsValidToken(true);
+              setIsCheckingToken(false);
+              if (session.user?.email) {
+                setUserEmail(session.user.email);
+              }
             }
           }
         }
@@ -77,11 +83,11 @@ const ResetPassword = () => {
       if (type === 'recovery' && accessToken) {
         // Token is in URL, Supabase will process it
         console.log('Recovery token found in URL, waiting for Supabase to process...');
-        // Give Supabase a moment to process the token
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Give Supabase more time to process the token
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        if (session?.user && isMounted) {
           console.log('Session established after token processing');
           setIsValidToken(true);
           setUserEmail(session.user.email || '');
@@ -94,37 +100,29 @@ const ResetPassword = () => {
       const { data: { session } } = await supabase.auth.getSession();
       console.log('Current session:', session?.user?.email);
       
-      if (session?.user) {
-        // Check if this might be a recovery session
-        const urlType = hashParams.get('type');
-        if (urlType === 'recovery' || window.location.hash.includes('type=recovery')) {
-          setIsValidToken(true);
-          setUserEmail(session.user.email || '');
-          setIsCheckingToken(false);
-          return;
-        }
+      if (session?.user && isMounted) {
+        // If user has a session on reset-password page, allow them to change password
+        setIsValidToken(true);
+        setUserEmail(session.user.email || '');
+        setIsCheckingToken(false);
+        return;
       }
 
-      // No valid recovery token found after waiting
+      // No valid recovery token found after waiting - but don't redirect, let user see the error
       setTimeout(() => {
-        if (!isValidToken) {
+        if (isMounted && !isValidToken) {
           setIsCheckingToken(false);
-          toast({
-            title: 'Nieprawidłowy link',
-            description: 'Link do resetowania hasła jest nieprawidłowy lub wygasł. Poproś administratora o ponowne wysłanie.',
-            variant: 'destructive',
-          });
-          setTimeout(() => navigate('/login'), 3000);
         }
-      }, 2000);
+      }, 3000);
     };
 
     checkSession();
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate, toast]);
+  }, []);
 
   useEffect(() => {
     // Waliduj hasło w czasie rzeczywistym
@@ -254,8 +252,19 @@ const ResetPassword = () => {
           <CardHeader className="text-center">
             <XCircle className="h-8 w-8 mx-auto mb-4 text-destructive" />
             <CardTitle>Nieprawidłowy link</CardTitle>
-            <CardDescription>Link do resetowania hasła jest nieprawidłowy lub wygasł. Za chwilę zostaniesz przekierowany do strony logowania.</CardDescription>
+            <CardDescription>
+              Link do resetowania hasła jest nieprawidłowy lub wygasł. 
+              Poproś administratora o ponowne wysłanie linku resetowania hasła.
+            </CardDescription>
           </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={() => navigate('/login')} 
+              className="w-full"
+            >
+              Wróć do logowania
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
