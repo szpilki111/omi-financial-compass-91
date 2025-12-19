@@ -24,9 +24,9 @@ import SettingsPage from "./pages/Settings/SettingsPage";
 import { BudgetPage } from "./pages/Budget";
 import { KnowledgeBasePage } from "./pages/KnowledgeBase";
 import { CalendarPage } from "./pages/Calendar";
-
 // Protected Route Component
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import RecoveryFlowRedirect from "@/components/auth/RecoveryFlowRedirect";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +46,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <StyleProvider>
+            <RecoveryFlowRedirect />
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
