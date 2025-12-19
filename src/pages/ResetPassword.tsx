@@ -38,82 +38,61 @@ const ResetPassword = () => {
   useEffect(() => {
     let isMounted = true;
 
-    // Set up auth state listener for PASSWORD_RECOVERY event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event, 'Session:', session?.user?.email);
-        
-        if (event === 'PASSWORD_RECOVERY') {
-          console.log('Password recovery event detected');
-          if (isMounted) {
-            setIsValidToken(true);
-            setIsCheckingToken(false);
-            if (session?.user?.email) {
-              setUserEmail(session.user.email);
-            }
-          }
-        } else if (event === 'SIGNED_IN' && session) {
-          // Check if this is a recovery session by looking at the URL hash
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const type = hashParams.get('type');
-          
-          if (type === 'recovery') {
-            console.log('Recovery session from URL hash');
-            if (isMounted) {
-              setIsValidToken(true);
-              setIsCheckingToken(false);
-              if (session.user?.email) {
-                setUserEmail(session.user.email);
-              }
-            }
-          }
-        }
-      }
-    );
-
-    // Also check current session and URL hash
-    const checkSession = async () => {
-      // Check URL hash for recovery token
+    const getRecoveryType = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
+      const searchParams = new URLSearchParams(window.location.search);
+      return hashParams.get('type') ?? searchParams.get('type');
+    };
 
-      console.log('Checking URL hash - type:', type, 'has token:', !!accessToken);
+    // Listener: tylko synchroniczne setState (bez awaitów) – unikamy deadlocków.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
 
-      if (type === 'recovery' && accessToken) {
-        // Token is in URL, Supabase will process it
-        console.log('Recovery token found in URL, waiting for Supabase to process...');
-        // Give Supabase more time to process the token
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user && isMounted) {
-          console.log('Session established after token processing');
-          setIsValidToken(true);
-          setUserEmail(session.user.email || '');
-          setIsCheckingToken(false);
-          return;
-        }
-      }
+      const type = getRecoveryType();
+      const isRecovery = event === 'PASSWORD_RECOVERY' || type === 'recovery';
 
-      // Check if there's already a valid session
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('Current session:', session?.user?.email);
-      
-      if (session?.user && isMounted) {
-        // If user has a session on reset-password page, allow them to change password
+      if (isRecovery && session?.user) {
         setIsValidToken(true);
-        setUserEmail(session.user.email || '');
         setIsCheckingToken(false);
+        setUserEmail(session.user.email ?? '');
+      }
+    });
+
+    const checkSession = async () => {
+      const type = getRecoveryType();
+
+      // Jeśli ktoś wejdzie tu bez linku recovery, od razu pokaż błąd.
+      if (type !== 'recovery') {
+        if (isMounted) {
+          setIsValidToken(false);
+          setIsCheckingToken(false);
+        }
         return;
       }
 
-      // No valid recovery token found after waiting - but don't redirect, let user see the error
-      setTimeout(() => {
-        if (isMounted && !isValidToken) {
+      // Dajemy Supabase chwilę na przetworzenie tokena z URL.
+      for (let i = 0; i < 10; i++) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user && isMounted) {
+          setIsValidToken(true);
+          setUserEmail(session.user.email ?? '');
           setIsCheckingToken(false);
+          return;
         }
-      }, 3000);
+
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      // Nie udało się utworzyć sesji (link wygasł / zły / token zgubiony).
+      if (isMounted) {
+        setIsValidToken(false);
+        setIsCheckingToken(false);
+      }
     };
 
     checkSession();
