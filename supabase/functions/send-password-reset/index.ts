@@ -88,7 +88,7 @@ serve(async (req: Request): Promise<Response> => {
     const emailText = buildPasswordResetText(profile.name, resetUrl);
 
     // Send email via send-email function
-    const { error: emailError } = await supabase.functions.invoke('send-email', {
+    const { data: emailData, error: emailError } = await supabase.functions.invoke('send-email', {
       body: {
         to: email,
         subject: 'Reset hasla - System Finansowy OMI',
@@ -98,7 +98,17 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     if (emailError) {
-      console.error('Error sending email:', emailError);
+      let emailErrorBody: string | null = null;
+      try {
+        const ctx = (emailError as any)?.context;
+        if (ctx && typeof ctx.text === 'function') {
+          emailErrorBody = await ctx.text();
+        }
+      } catch {
+        // ignore
+      }
+
+      console.error('Error sending email:', emailError, { emailData, emailErrorBody });
       throw new Error('Błąd podczas wysyłania emaila');
     }
 
