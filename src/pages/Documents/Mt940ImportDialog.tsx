@@ -249,8 +249,44 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
     };
   };
 
+  // CP852 (DOS Latin 2) to UTF-8 character mapping for Polish characters
+  const cp852ToUtf8Map: { [key: number]: string } = {
+    // Polish characters in CP852
+    0x86: 'ć', 0x87: 'ç', 0x88: 'ł', 0x89: 'ë', 0x8C: 'î', 0x8D: 'ź', 0x8F: 'Ą',
+    0x91: 'ź', 0x92: 'ł', 0x97: 'Ś', 0x98: 'ś', 0x9C: 'ś', 0x9D: 'Ł', 0x9E: 'ś', 0x9F: 'ć',
+    0xA0: 'á', 0xA1: 'í', 0xA2: 'ó', 0xA3: 'ú', 0xA4: 'ą', 0xA5: 'ą',
+    0xA6: 'ź', 0xA7: 'Ź', 0xA8: 'ę', 0xAB: 'ź', 0xAC: 'ż',
+    0xBD: 'Ż', 0xBE: 'ż',
+    0xD3: 'Ó', 0xE0: 'Ó', 0xE3: 'Ń', 0xE4: 'ń', 0xE5: 'ń', 0xE6: 'ń', 0xE7: 'ń',
+    0xEA: 'Ę', 0xEB: 'ę', 0xF3: 'ó',
+  };
+
+  // Mazovia encoding (Polish DOS variant) mapping
+  const mazoviaToUtf8Map: { [key: number]: string } = {
+    0x86: 'ą', 0x8D: 'ć', 0x8F: 'ę', 0x92: 'ł', 0x9E: 'ń', 0x98: 'ó',
+    0x9C: 'ś', 0xA0: 'ź', 0xA1: 'ż', 0x8E: 'Ą', 0x95: 'Ć', 0x90: 'Ę',
+    0x9D: 'Ł', 0xA5: 'Ń', 0xA3: 'Ó', 0x97: 'Ś', 0xA6: 'Ź', 0xA7: 'Ż',
+  };
+
+  // Convert bytes using custom mapping
+  const convertWithMap = (uint8Array: Uint8Array, charMap: { [key: number]: string }): string => {
+    let result = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      const byte = uint8Array[i];
+      if (charMap[byte]) {
+        result += charMap[byte];
+      } else if (byte < 128) {
+        result += String.fromCharCode(byte);
+      } else {
+        // Try to use the byte as-is for extended ASCII
+        result += String.fromCharCode(byte);
+      }
+    }
+    return result;
+  };
+
   // Detect and convert encoding to UTF-8
-  // Polish bank files often use Windows-1250 or ISO-8859-2 (ANSI)
+  // Polish bank files often use Windows-1250, ISO-8859-2, CP852, or Mazovia
   const detectAndConvertEncoding = async (file: File): Promise<string> => {
     const buffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(buffer);
@@ -270,13 +306,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
     // Function to count broken/garbled characters
     const countBrokenChars = (text: string): number => {
       // Common broken character patterns from wrong encoding
-      const brokenPatterns = text.match(/[˘¤—Ťťŕ°±˛˝˙ţŢŚśťŤ¨©®ŹźŻż]/g);
+      const brokenPatterns = text.match(/[˘¤—Ťťŕ°±˛˝˙ţŢ¨©®]/g);
       const replacementChars = text.match(/[\uFFFD�]/g);
       return (brokenPatterns ? brokenPatterns.length : 0) + (replacementChars ? replacementChars.length : 0);
     };
 
-    // Try all encodings and pick the best one
-    const encodings = ['utf-8', 'windows-1250', 'iso-8859-2', 'iso-8859-1'];
+    // Try standard encodings first
+    const encodings = ['utf-8', 'windows-1250', 'iso-8859-2'];
     let bestResult = { text: '', encoding: 'utf-8', score: -Infinity };
 
     for (const encoding of encodings) {
@@ -284,7 +320,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         const decoder = new TextDecoder(encoding, { fatal: false });
         const text = decoder.decode(buffer);
         
-        // Calculate score: more Polish chars = better, more broken chars = worse
         const polishCount = countPolishChars(text);
         const brokenCount = countBrokenChars(text);
         const score = polishCount * 10 - brokenCount * 5;
@@ -295,7 +330,6 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
           bestResult = { text, encoding, score };
         }
         
-        // If UTF-8 has Polish chars and no broken chars, prefer it
         if (encoding === 'utf-8' && polishCount > 0 && brokenCount === 0) {
           console.log('Perfect UTF-8 detected');
           return text;
@@ -305,29 +339,63 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
       }
     }
 
-    // If no Polish characters were found, try a manual mapping for common ANSI issues
-    // This handles cases where the broken characters in the file follow Windows-1250 patterns
+    // If standard encodings didn't work well, try CP852 and Mazovia (manual conversion)
     if (bestResult.score <= 0) {
-      // Try Windows-1250 again but with additional manual fixes for common bank file issues
-      try {
-        const win1250Text = new TextDecoder('windows-1250', { fatal: false }).decode(buffer);
-        
-        // Manual character replacements for common bank file encoding issues
-        // Some banks use non-standard ANSI variants
-        const fixedText = win1250Text
-          // Fix common broken Polish characters from various encodings
-          .replace(/\u0098/g, 'ś')  // Windows-1250 private use
-          .replace(/\u009C/g, 'ś')
-          .replace(/\u0152/g, 'Ś')
-          .replace(/\u0154/g, 'Ś')
-          .replace(/\u0160/g, 'Ś')
-          .replace(/¬/g, 'ź')
-          .replace(/¦/g, 'Ś');
-        
-        console.log('Applied Windows-1250 with manual fixes');
-        return fixedText;
-      } catch {
-        // Continue with best result
+      console.log('Trying CP852/Mazovia manual conversion...');
+      
+      // Try CP852 first
+      const cp852Text = convertWithMap(uint8Array, cp852ToUtf8Map);
+      const cp852Polish = countPolishChars(cp852Text);
+      const cp852Broken = countBrokenChars(cp852Text);
+      const cp852Score = cp852Polish * 10 - cp852Broken * 5;
+      console.log(`CP852 manual: Polish=${cp852Polish}, Broken=${cp852Broken}, Score=${cp852Score}`);
+      
+      if (cp852Score > bestResult.score) {
+        bestResult = { text: cp852Text, encoding: 'cp852', score: cp852Score };
+      }
+
+      // Try Mazovia
+      const mazoviaText = convertWithMap(uint8Array, mazoviaToUtf8Map);
+      const mazoviaPolish = countPolishChars(mazoviaText);
+      const mazoviaBroken = countBrokenChars(mazoviaText);
+      const mazoviaScore = mazoviaPolish * 10 - mazoviaBroken * 5;
+      console.log(`Mazovia manual: Polish=${mazoviaPolish}, Broken=${mazoviaBroken}, Score=${mazoviaScore}`);
+      
+      if (mazoviaScore > bestResult.score) {
+        bestResult = { text: mazoviaText, encoding: 'mazovia', score: mazoviaScore };
+      }
+    }
+
+    // Final fallback: apply character fixes to Windows-1250 result
+    if (bestResult.score <= 0) {
+      const win1250Text = new TextDecoder('windows-1250', { fatal: false }).decode(buffer);
+      
+      // Apply manual character replacements for common bank file issues
+      const fixedText = win1250Text
+        .replace(/˘/g, 'ó')   // breve -> ó
+        .replace(/—/g, 'Ś')   // em dash -> Ś
+        .replace(/¨/g, 'Ę')   // diaeresis -> Ę
+        .replace(/˝/g, 'Ż')   // double acute -> Ż
+        .replace(/Ť/g, 'Ś')
+        .replace(/ť/g, 'ś')
+        .replace(/ŕ/g, 'ą')
+        .replace(/Ľ/g, 'Ł')
+        .replace(/ľ/g, 'ł')
+        .replace(/¤/g, 'ń')
+        .replace(/©/g, 'ę')
+        .replace(/®/g, 'ż')
+        .replace(/°/g, 'ó')
+        .replace(/±/g, 'ą')
+        .replace(/˛/g, 'ę')
+        .replace(/ţ/g, 'ź')
+        .replace(/Ţ/g, 'Ź');
+      
+      const fixedPolish = countPolishChars(fixedText);
+      const fixedBroken = countBrokenChars(fixedText);
+      console.log(`Manual fixes: Polish=${fixedPolish}, Broken=${fixedBroken}`);
+      
+      if (fixedPolish > 0 || fixedBroken < countBrokenChars(bestResult.text)) {
+        bestResult = { text: fixedText, encoding: 'windows-1250-fixed', score: fixedPolish * 10 };
       }
     }
 
@@ -359,10 +427,28 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
   };
 
   const handleImport = async () => {
-    if (!previewData || !user?.location || !documentDate) {
+    if (!previewData || previewData.transactions.length === 0) {
       toast({
         title: "Błąd",
-        description: "Brak danych do importu",
+        description: "Brak transakcji do importu",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!user?.location) {
+      toast({
+        title: "Błąd",
+        description: "Nie można określić lokalizacji użytkownika. Spróbuj odświeżyć stronę.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!documentDate) {
+      toast({
+        title: "Błąd",
+        description: "Wybierz datę dokumentu",
         variant: "destructive",
       });
       return;
