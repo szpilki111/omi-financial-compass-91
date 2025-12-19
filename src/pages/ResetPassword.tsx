@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const passwordSchema = z.string()
@@ -22,6 +22,7 @@ const ResetPassword = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
   const [userEmail, setUserEmail] = useState<string>('');
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
@@ -35,27 +36,94 @@ const ResetPassword = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Sprawdź czy w URL jest token resetowania hasła
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
-
-    if (type === 'recovery' && accessToken) {
-      setIsValidToken(true);
-      // Pobierz email użytkownika z sesji
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user?.email) {
-          setUserEmail(user.email);
+    // Set up auth state listener for PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'Session:', session?.user?.email);
+        
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('Password recovery event detected');
+          setIsValidToken(true);
+          setIsCheckingToken(false);
+          if (session?.user?.email) {
+            setUserEmail(session.user.email);
+          }
+        } else if (event === 'SIGNED_IN' && session) {
+          // Check if this is a recovery session by looking at the URL hash
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const type = hashParams.get('type');
+          
+          if (type === 'recovery') {
+            console.log('Recovery session from URL hash');
+            setIsValidToken(true);
+            setIsCheckingToken(false);
+            if (session.user?.email) {
+              setUserEmail(session.user.email);
+            }
+          }
         }
-      });
-    } else {
-      toast({
-        title: 'Nieprawidłowy link',
-        description: 'Link do resetowania hasła jest nieprawidłowy lub wygasł.',
-        variant: 'destructive',
-      });
-      setTimeout(() => navigate('/login'), 3000);
-    }
+      }
+    );
+
+    // Also check current session and URL hash
+    const checkSession = async () => {
+      // Check URL hash for recovery token
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+
+      console.log('Checking URL hash - type:', type, 'has token:', !!accessToken);
+
+      if (type === 'recovery' && accessToken) {
+        // Token is in URL, Supabase will process it
+        console.log('Recovery token found in URL, waiting for Supabase to process...');
+        // Give Supabase a moment to process the token
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          console.log('Session established after token processing');
+          setIsValidToken(true);
+          setUserEmail(session.user.email || '');
+          setIsCheckingToken(false);
+          return;
+        }
+      }
+
+      // Check if there's already a valid session
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current session:', session?.user?.email);
+      
+      if (session?.user) {
+        // Check if this might be a recovery session
+        const urlType = hashParams.get('type');
+        if (urlType === 'recovery' || window.location.hash.includes('type=recovery')) {
+          setIsValidToken(true);
+          setUserEmail(session.user.email || '');
+          setIsCheckingToken(false);
+          return;
+        }
+      }
+
+      // No valid recovery token found after waiting
+      setTimeout(() => {
+        if (!isValidToken) {
+          setIsCheckingToken(false);
+          toast({
+            title: 'Nieprawidłowy link',
+            description: 'Link do resetowania hasła jest nieprawidłowy lub wygasł. Poproś administratora o ponowne wysłanie.',
+            variant: 'destructive',
+          });
+          setTimeout(() => navigate('/login'), 3000);
+        }
+      }, 2000);
+    };
+
+    checkSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate, toast]);
 
   useEffect(() => {
@@ -165,13 +233,28 @@ const ResetPassword = () => {
     }
   };
 
+  if (isCheckingToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <CardTitle>Weryfikacja linku...</CardTitle>
+            <CardDescription>Sprawdzanie ważności linku resetowania hasła</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isValidToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Weryfikacja linku...</CardTitle>
-            <CardDescription>Sprawdzanie ważności linku resetowania hasła</CardDescription>
+          <CardHeader className="text-center">
+            <XCircle className="h-8 w-8 mx-auto mb-4 text-destructive" />
+            <CardTitle>Nieprawidłowy link</CardTitle>
+            <CardDescription>Link do resetowania hasła jest nieprawidłowy lub wygasł. Za chwilę zostaniesz przekierowany do strony logowania.</CardDescription>
           </CardHeader>
         </Card>
       </div>
