@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import StyleProvider from "@/components/layout/StyleProvider";
 
@@ -37,6 +37,157 @@ const queryClient = new QueryClient({
   },
 });
 
+const RouterContent = () => {
+  const location = useLocation();
+  const token = new URLSearchParams(location.search).get('token');
+
+  // Hosting bez SPA rewrites: email prowadzi na /?token=..., więc renderujemy reset hasła w miejscu.
+  if (location.pathname === '/' && token) {
+    return <ResetPassword />;
+  }
+
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/dostep-zabroniony" element={<AccessDenied />} />
+
+      {/* Routing index */}
+      <Route path="/" element={<Index />} />
+
+      {/* Protected routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Documents route - dla wszystkich zalogowanych użytkowników */}
+      <Route
+        path="/dokumenty"
+        element={
+          <ProtectedRoute>
+            <DocumentsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Account search route - dla wszystkich zalogowanych użytkowników */}
+      <Route
+        path="/wyszukaj-konta"
+        element={
+          <ProtectedRoute>
+            <AccountSearchPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* KPIR routes - TYLKO dla ekonomów */}
+      <Route
+        path="/kpir"
+        element={
+          <ProtectedRoute requiredRole="ekonom">
+            <KpirPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/kpir/nowy"
+        element={
+          <ProtectedRoute requiredRole="ekonom">
+            <KpirPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Reports routes */}
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Budget routes */}
+      <Route
+        path="/budzet"
+        element={
+          <ProtectedRoute>
+            <BudgetPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:reportId"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Data Visualization routes */}
+      <Route
+        path="/wizualizacja"
+        element={
+          <ProtectedRoute>
+            <DataVisualization />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Settings route */}
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Administration routes - dla prowincjała i admina */}
+      <Route
+        path="/administracja"
+        element={
+          <ProtectedRoute requiredRole={["prowincjal", "admin"]}>
+            <AdministrationPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Knowledge Base route */}
+      <Route
+        path="/baza-wiedzy"
+        element={
+          <ProtectedRoute>
+            <KnowledgeBasePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Calendar route */}
+      <Route
+        path="/kalendarz"
+        element={
+          <ProtectedRoute>
+            <CalendarPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Not found */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -45,105 +196,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <StyleProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/dostep-zabroniony" element={<AccessDenied />} />
-              
-              {/* Routing index */}
-              <Route path="/" element={<Index />} />
-              
-              {/* Protected routes */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              
-              {/* Documents route - dla wszystkich zalogowanych użytkowników */}
-              <Route path="/dokumenty" element={
-                <ProtectedRoute>
-                  <DocumentsPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Account search route - dla wszystkich zalogowanych użytkowników */}
-              <Route path="/wyszukaj-konta" element={
-                <ProtectedRoute>
-                  <AccountSearchPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* KPIR routes - TYLKO dla ekonomów */}
-              <Route path="/kpir" element={
-                <ProtectedRoute requiredRole="ekonom">
-                  <KpirPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/kpir/nowy" element={
-                <ProtectedRoute requiredRole="ekonom">
-                  <KpirPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Reports routes */}
-              <Route path="/reports" element={
-                <ProtectedRoute>
-                  <Reports />
-                </ProtectedRoute>
-              } />
-              
-              {/* Budget routes */}
-              <Route path="/budzet" element={
-                <ProtectedRoute>
-                  <BudgetPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/reports/:reportId" element={
-                <ProtectedRoute>
-                  <Reports />
-                </ProtectedRoute>
-              } />
-              
-              {/* Data Visualization routes */}
-              <Route path="/wizualizacja" element={
-                <ProtectedRoute>
-                  <DataVisualization />
-                </ProtectedRoute>
-              } />
-              
-              {/* Settings route */}
-              <Route path="/settings" element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Administration routes - dla prowincjała i admina */}
-              <Route path="/administracja" element={
-                <ProtectedRoute requiredRole={["prowincjal", "admin"]}>
-                  <AdministrationPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Knowledge Base route */}
-              <Route path="/baza-wiedzy" element={
-                <ProtectedRoute>
-                  <KnowledgeBasePage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Calendar route */}
-              <Route path="/kalendarz" element={
-                <ProtectedRoute>
-                  <CalendarPage />
-                </ProtectedRoute>
-              } />
-              
-              {/* Not found */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <RouterContent />
           </StyleProvider>
         </AuthProvider>
       </BrowserRouter>
