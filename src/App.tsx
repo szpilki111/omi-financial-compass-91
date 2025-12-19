@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import StyleProvider from "@/components/layout/StyleProvider";
 
@@ -38,14 +38,6 @@ const queryClient = new QueryClient({
 });
 
 const RouterContent = () => {
-  const location = useLocation();
-  const token = new URLSearchParams(location.search).get('token');
-
-  // Hosting bez SPA rewrites: email prowadzi na /?token=..., więc renderujemy reset hasła w miejscu.
-  if (location.pathname === '/' && token) {
-    return <ResetPassword />;
-  }
-
   return (
     <Routes>
       {/* Public routes */}
