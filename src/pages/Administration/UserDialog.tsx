@@ -31,6 +31,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import { KeyRound } from 'lucide-react';
 
 const userSchema = z.object({
   login: z.string().min(3, 'Login musi mieć co najmniej 3 znaki')
@@ -76,6 +77,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreatingNewLocation, setIsCreatingNewLocation] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -365,6 +367,41 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
 
   const isSubmitting = createUserMutation.isPending || updateUserMutation.isPending;
 
+  const handlePasswordReset = async () => {
+    if (!editingUser?.email) {
+      toast({
+        title: 'Błąd',
+        description: 'Brak adresu email użytkownika',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Sukces',
+        description: `Email z linkiem do resetu hasła został wysłany na adres ${editingUser.email}`,
+      });
+    } catch (error: any) {
+      console.error('Error sending password reset email:', error);
+      toast({
+        title: 'Błąd',
+        description: error?.message || 'Nie udało się wysłać emaila z resetem hasła',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
 
   const onSubmit = (data: UserFormData) => {
     console.log("Dane formularza:", data);
@@ -489,18 +526,17 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
               )}
             />
 
+            {!editingUser && (
               <FormField
                 control={form.control}
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      {editingUser ? 'Nowe hasło (zostaw puste aby nie zmieniać)' : 'Hasło'}
-                    </FormLabel>
+                    <FormLabel>Hasło</FormLabel>
                     <FormControl>
                       <Input 
                         type="password" 
-                        placeholder={editingUser ? "Zostaw puste aby nie zmieniać" : "Wprowadź hasło (min. 6 znaków)"} 
+                        placeholder="Wprowadź hasło (min. 6 znaków)" 
                         {...field} 
                       />
                     </FormControl>
@@ -508,6 +544,26 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                   </FormItem>
                 )}
               />
+            )}
+
+            {editingUser && (
+              <div className="space-y-2">
+                <FormLabel>Hasło</FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handlePasswordReset}
+                  disabled={isResettingPassword}
+                >
+                  <KeyRound className="w-4 h-4 mr-2" />
+                  {isResettingPassword ? 'Wysyłanie...' : 'Wyślij email z resetem hasła'}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Użytkownik otrzyma email z linkiem do ustawienia nowego hasła
+                </p>
+              </div>
+            )}
 
             <FormField
               control={form.control}
