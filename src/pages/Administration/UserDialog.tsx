@@ -379,14 +379,17 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
 
     setIsResettingPassword(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
-        // Używamy "/" żeby link działał także na hostingach bez deep-linkingu (SPA rewrite).
-        // RecoveryFlowRedirect przeniesie użytkownika na /reset-password po wejściu z linku.
-        redirectTo: `${window.location.origin}/`,
+      // Use our custom password reset edge function
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: { email: editingUser.email },
       });
 
       if (error) {
         throw error;
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
       toast({
