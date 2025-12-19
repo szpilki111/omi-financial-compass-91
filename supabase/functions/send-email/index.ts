@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +26,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Attempting to send email to:', to);
     console.log('Subject:', subject);
-    console.log('Reply-To:', replyTo);
 
     // Validate required fields
     if (!to || !subject) {
@@ -37,57 +36,34 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Either text or html content is required');
     }
 
-    // Get SMTP configuration from environment
-    const smtpHost = Deno.env.get('SMTP_HOST');
-    const smtpPort = Deno.env.get('SMTP_PORT');
-    const smtpUser = Deno.env.get('SMTP_USER');
-    const smtpPassword = Deno.env.get('SMTP_PASSWORD');
-
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-      console.error('Missing SMTP configuration');
-      throw new Error('SMTP configuration is incomplete');
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      throw new Error('RESEND_API_KEY is not configured');
     }
 
-    // Initialize SMTP client
-    const client = new SMTPClient({
-      connection: {
-        hostname: smtpHost,
-        port: parseInt(smtpPort),
-        tls: true,
-        auth: {
-          username: smtpUser,
-          password: smtpPassword,
-        },
-      },
-    });
+    const resend = new Resend(resendApiKey);
 
     // Prepare recipients
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Subject should already be ASCII (Polish chars converted by caller)
-    // Let SMTP library handle any remaining encoding
-    console.log('Sending with subject:', subject);
-
-    // Send email with UTF-8 charset for body content
-    await client.send({
+    // Send email via Resend
+    const emailResponse = await resend.emails.send({
       from: from || 'System Finansowy OMI <finanse@oblaci.pl>',
-      to: recipients.join(','),
+      to: recipients,
       subject: subject,
-      content: text || '',
+      text: text || undefined,
       html: html || undefined,
-      replyTo: replyTo || undefined,
-      charset: 'utf-8',
+      reply_to: replyTo || undefined,
     });
 
-    await client.close();
-
-    console.log('Email sent successfully to:', recipients);
+    console.log('Email sent successfully:', emailResponse);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Email sent successfully',
-        recipients: recipients 
+        recipients: recipients,
+        id: emailResponse.data?.id
       }),
       {
         status: 200,
