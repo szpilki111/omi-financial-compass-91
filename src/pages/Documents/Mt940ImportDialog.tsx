@@ -250,6 +250,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
   };
 
   // Detect and convert encoding to UTF-8
+  // Polish bank files often use Windows-1250 or ISO-8859-2 (ANSI)
   const detectAndConvertEncoding = async (file: File): Promise<string> => {
     const buffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(buffer);
@@ -259,38 +260,79 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
       console.log('Detected UTF-8 with BOM');
       return new TextDecoder('utf-8').decode(buffer);
     }
-    
-    // Try UTF-8 first
-    try {
-      const utf8Text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-      // Check if text contains typical Polish characters decoded correctly
-      if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(utf8Text) || !/[�\uFFFD]/.test(utf8Text)) {
-        console.log('Detected UTF-8');
-        return utf8Text;
+
+    // Function to count Polish characters in decoded text
+    const countPolishChars = (text: string): number => {
+      const polishChars = text.match(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g);
+      return polishChars ? polishChars.length : 0;
+    };
+
+    // Function to count broken/garbled characters
+    const countBrokenChars = (text: string): number => {
+      // Common broken character patterns from wrong encoding
+      const brokenPatterns = text.match(/[˘¤—Ťťŕ°±˛˝˙ţŢŚśťŤ¨©®ŹźŻż]/g);
+      const replacementChars = text.match(/[\uFFFD�]/g);
+      return (brokenPatterns ? brokenPatterns.length : 0) + (replacementChars ? replacementChars.length : 0);
+    };
+
+    // Try all encodings and pick the best one
+    const encodings = ['utf-8', 'windows-1250', 'iso-8859-2', 'iso-8859-1'];
+    let bestResult = { text: '', encoding: 'utf-8', score: -Infinity };
+
+    for (const encoding of encodings) {
+      try {
+        const decoder = new TextDecoder(encoding, { fatal: false });
+        const text = decoder.decode(buffer);
+        
+        // Calculate score: more Polish chars = better, more broken chars = worse
+        const polishCount = countPolishChars(text);
+        const brokenCount = countBrokenChars(text);
+        const score = polishCount * 10 - brokenCount * 5;
+        
+        console.log(`Encoding ${encoding}: Polish chars=${polishCount}, Broken chars=${brokenCount}, Score=${score}`);
+        
+        if (score > bestResult.score) {
+          bestResult = { text, encoding, score };
+        }
+        
+        // If UTF-8 has Polish chars and no broken chars, prefer it
+        if (encoding === 'utf-8' && polishCount > 0 && brokenCount === 0) {
+          console.log('Perfect UTF-8 detected');
+          return text;
+        }
+      } catch (e) {
+        console.log(`Failed to decode with ${encoding}:`, e);
       }
-    } catch {
-      // UTF-8 decoding failed
     }
-    
-    // Try Windows-1250 (common for Polish files)
-    try {
-      const win1250Text = new TextDecoder('windows-1250').decode(buffer);
-      console.log('Detected Windows-1250');
-      return win1250Text;
-    } catch {
-      // Windows-1250 decoding failed
+
+    // If no Polish characters were found, try a manual mapping for common ANSI issues
+    // This handles cases where the broken characters in the file follow Windows-1250 patterns
+    if (bestResult.score <= 0) {
+      // Try Windows-1250 again but with additional manual fixes for common bank file issues
+      try {
+        const win1250Text = new TextDecoder('windows-1250', { fatal: false }).decode(buffer);
+        
+        // Manual character replacements for common bank file encoding issues
+        // Some banks use non-standard ANSI variants
+        const fixedText = win1250Text
+          // Fix common broken Polish characters from various encodings
+          .replace(/\u0098/g, 'ś')  // Windows-1250 private use
+          .replace(/\u009C/g, 'ś')
+          .replace(/\u0152/g, 'Ś')
+          .replace(/\u0154/g, 'Ś')
+          .replace(/\u0160/g, 'Ś')
+          .replace(/¬/g, 'ź')
+          .replace(/¦/g, 'Ś');
+        
+        console.log('Applied Windows-1250 with manual fixes');
+        return fixedText;
+      } catch {
+        // Continue with best result
+      }
     }
-    
-    // Fallback to ISO-8859-2
-    try {
-      const isoText = new TextDecoder('iso-8859-2').decode(buffer);
-      console.log('Detected ISO-8859-2');
-      return isoText;
-    } catch {
-      // Last resort - try UTF-8 without strict mode
-      console.log('Fallback to UTF-8 non-strict');
-      return new TextDecoder('utf-8').decode(buffer);
-    }
+
+    console.log(`Selected encoding: ${bestResult.encoding} with score ${bestResult.score}`);
+    return bestResult.text;
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
