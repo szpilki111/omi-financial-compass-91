@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/hooks/use-toast';
@@ -17,9 +18,6 @@ import {
   updateTrustedDeviceLastUsed,
   cleanupExpiredTrustedDevices
 } from '@/utils/deviceFingerprint';
-
-// Weryfikacja dwuetapowa - WŁĄCZONA
-const ENABLE_TWO_FACTOR_AUTH = true;
 
 // Ograniczamy role do ekonoma
 type Role = 'ekonom';
@@ -52,6 +50,22 @@ const Login = () => {
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
   const [twoFactorInProgress, setTwoFactorInProgress] = useState(false);
+
+  // Fetch 2FA setting from database
+  const { data: twoFactorEnabled = true } = useQuery({
+    queryKey: ['app-settings', 'two_factor_auth_enabled'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'two_factor_auth_enabled')
+        .maybeSingle();
+
+      if (error) return true; // Default to enabled on error
+      return data?.value === true || data?.value === 'true';
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
   
   const {
     login,
@@ -114,7 +128,7 @@ const Login = () => {
       const userEmail = loginField.trim().toLowerCase();
 
       // Standardowe logowanie bez 2FA
-      if (!ENABLE_TWO_FACTOR_AUTH) {
+      if (!twoFactorEnabled) {
         const success = await Promise.race([
           login(userEmail, password),
           timeout(10000)

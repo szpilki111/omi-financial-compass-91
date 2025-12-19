@@ -13,6 +13,7 @@ import ErrorReportsManagement from './ErrorReportsManagement';
 import LoginEventsManagement from './LoginEventsManagement';
 import ProjectFeaturesManagement from './ProjectFeaturesManagement';
 import RemindersManagement from './RemindersManagement';
+import SecuritySettingsManagement from './SecuritySettingsManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -56,6 +57,9 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="login-events" className="flex-shrink-0">Logowania</TabsTrigger>
           )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="security" className="flex-shrink-0">Bezpieczeństwo</TabsTrigger>
+          )}
           {user.role === 'admin' && (
             <TabsTrigger value="database" className="flex-shrink-0">Baza danych</TabsTrigger>
           )}
@@ -95,6 +99,12 @@ const AdministrationPage = () => {
         {(user.role === 'admin' || user.role === 'prowincjal') && (
           <TabsContent value="login-events" className="space-y-4">
             <LoginEventsManagement />
+          </TabsContent>
+        )}
+
+        {(user.role === 'admin' || user.role === 'prowincjal') && (
+          <TabsContent value="security" className="space-y-4">
+            <SecuritySettingsManagement />
           </TabsContent>
         )}
 
