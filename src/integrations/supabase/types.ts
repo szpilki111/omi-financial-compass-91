@@ -889,6 +889,41 @@ export type Database = {
           },
         ]
       }
+      password_reset_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          token: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          token: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "password_reset_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           blocked: boolean
@@ -1607,6 +1642,7 @@ export type Database = {
         Args: { p_document_date: string; p_location_id: string }
         Returns: boolean
       }
+      cleanup_expired_password_reset_tokens: { Args: never; Returns: undefined }
       cleanup_expired_verification_codes: { Args: never; Returns: undefined }
       create_user_admin: {
         Args: {

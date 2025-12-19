@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ const passwordSchema = z.string()
   .regex(/[^a-zA-Z0-9]/, 'Hasło musi zawierać znak specjalny');
 
 const ResetPassword = () => {
+  const [searchParams] = useSearchParams();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,101 +24,39 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
   const [isCheckingToken, setIsCheckingToken] = useState(true);
-  const [userEmail, setUserEmail] = useState<string>('');
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasLowercase: false,
     hasUppercase: false,
     hasNumber: false,
     hasSpecialChar: false,
-    noEmailParts: true,
   });
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Get token from URL
+  const token = searchParams.get('token');
+
   useEffect(() => {
-    let isMounted = true;
-
-    const getRecoveryType = () => {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const searchParams = new URLSearchParams(window.location.search);
-      return hashParams.get('type') ?? searchParams.get('type');
-    };
-
-    // Listener: tylko synchroniczne setState (bez awaitów) – unikamy deadlocków.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
-
-      const type = getRecoveryType();
-      const isRecovery = event === 'PASSWORD_RECOVERY' || type === 'recovery';
-
-      if (isRecovery && session?.user) {
-        setIsValidToken(true);
-        setIsCheckingToken(false);
-        setUserEmail(session.user.email ?? '');
-      }
-    });
-
-    const checkSession = async () => {
-      const type = getRecoveryType();
-
-      // Jeśli ktoś wejdzie tu bez linku recovery, od razu pokaż błąd.
-      if (type !== 'recovery') {
-        if (isMounted) {
-          setIsValidToken(false);
-          setIsCheckingToken(false);
-        }
-        return;
-      }
-
-      // Dajemy Supabase chwilę na przetworzenie tokena z URL.
-      for (let i = 0; i < 10; i++) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user && isMounted) {
-          setIsValidToken(true);
-          setUserEmail(session.user.email ?? '');
-          setIsCheckingToken(false);
-          return;
-        }
-
-        await new Promise((r) => setTimeout(r, 500));
-      }
-
-      // Nie udało się utworzyć sesji (link wygasł / zły / token zgubiony).
-      if (isMounted) {
-        setIsValidToken(false);
-        setIsCheckingToken(false);
-      }
-    };
-
-    checkSession();
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+    // If we have a custom token, it's valid (verification happens on submit)
+    if (token) {
+      setIsValidToken(true);
+      setIsCheckingToken(false);
+    } else {
+      setIsValidToken(false);
+      setIsCheckingToken(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     // Waliduj hasło w czasie rzeczywistym
     if (newPassword) {
-      const emailParts = userEmail.split('@')[0].toLowerCase().split(/[._-]/);
-      const passwordLower = newPassword.toLowerCase();
-      
       setPasswordValidation({
         minLength: newPassword.length >= 8,
         hasLowercase: /[a-z]/.test(newPassword),
         hasUppercase: /[A-Z]/.test(newPassword),
         hasNumber: /[0-9]/.test(newPassword),
         hasSpecialChar: /[^a-zA-Z0-9]/.test(newPassword),
-        noEmailParts: !emailParts.some(part => 
-          part.length >= 3 && passwordLower.includes(part)
-        ),
       });
     } else {
       setPasswordValidation({
@@ -126,13 +65,21 @@ const ResetPassword = () => {
         hasUppercase: false,
         hasNumber: false,
         hasSpecialChar: false,
-        noEmailParts: true,
       });
     }
-  }, [newPassword, userEmail]);
+  }, [newPassword]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!token) {
+      toast({
+        title: 'Błąd',
+        description: 'Brak tokena resetowania hasła',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (newPassword !== confirmPassword) {
       toast({
@@ -154,22 +101,6 @@ const ResetPassword = () => {
       return;
     }
 
-    // Sprawdź czy hasło nie zawiera fragmentów loginu
-    const emailParts = userEmail.split('@')[0].toLowerCase().split(/[._-]/);
-    const passwordLower = newPassword.toLowerCase();
-    const containsEmailPart = emailParts.some(part => 
-      part.length >= 3 && passwordLower.includes(part)
-    );
-
-    if (containsEmailPart) {
-      toast({
-        title: 'Nieprawidłowe hasło',
-        description: 'Hasło nie może zawierać fragmentów Twojego adresu email.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // Sprawdź czy wszystkie wymagania są spełnione
     const allValid = Object.values(passwordValidation).every(v => v === true);
     if (!allValid) {
@@ -184,11 +115,21 @@ const ResetPassword = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
+      // Call our custom edge function
+      const { data, error } = await supabase.functions.invoke('verify-password-reset', {
+        body: {
+          token,
+          newPassword,
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || 'Nie udało się zmienić hasła');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       toast({
         title: 'Hasło zmienione!',
@@ -275,7 +216,7 @@ const ResetPassword = () => {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Wprowadź nowe hasło"
                   required
-                  minLength={6}
+                  minLength={8}
                   className="pr-10"
                 />
                 <button
@@ -300,7 +241,7 @@ const ResetPassword = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Potwierdź nowe hasło"
                   required
-                  minLength={6}
+                  minLength={8}
                   className="pr-10"
                 />
                 <button
@@ -366,22 +307,6 @@ const ResetPassword = () => {
                     Co najmniej jeden znak specjalny (!@#$%^&*...)
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {passwordValidation.noEmailParts ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span className={passwordValidation.noEmailParts ? 'text-green-600' : 'text-muted-foreground'}>
-                    Nie zawiera fragmentów adresu email
-                  </span>
-                </div>
-              </div>
-              <div className="pt-2 mt-2 border-t border-border">
-                <p className="text-xs text-amber-600 flex items-start gap-1">
-                  <span className="font-bold">!</span>
-                  <span>Hasło nie może być jednym z 3 ostatnich użytych haseł</span>
-                </p>
               </div>
             </div>
 
@@ -392,7 +317,7 @@ const ResetPassword = () => {
             >
               {isLoading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
                   Zmieniam hasło...
                 </>
               ) : (
