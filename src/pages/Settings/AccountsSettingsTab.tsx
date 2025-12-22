@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +13,7 @@ import { AnalyticalAccountDialog } from '@/components/AnalyticalAccountDialog';
 
 import { toast } from 'sonner';
 
-interface Account {
-  id: string;
-  number: string;
-  name: string;
-  type: string;
-  analytical: boolean;
-}
+// Use FilteredAccount from hook instead of local interface
 
 interface AnalyticalAccount {
   id: string;
@@ -33,7 +28,7 @@ export const AccountsSettingsTab: React.FC = () => {
   const queryClient = useQueryClient();
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<FilteredAccount | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [editMode, setEditMode] = useState(false);
@@ -343,14 +338,14 @@ export const AccountsSettingsTab: React.FC = () => {
     );
   };
 
-  const handleAddAnalytical = (account: Account) => {
+  const handleAddAnalytical = (account: FilteredAccount) => {
     setEditMode(false);
     setEditingAnalytical(null);
     setSelectedAccount(account);
     setDialogOpen(true);
   };
 
-  const handleEditAnalytical = (account: Account, analytical: AnalyticalAccount) => {
+  const handleEditAnalytical = (account: FilteredAccount, analytical: AnalyticalAccount) => {
     setEditMode(true);
     setEditingAnalytical(analytical);
     setSelectedAccount(account);
