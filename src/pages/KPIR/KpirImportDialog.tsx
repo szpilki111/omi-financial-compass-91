@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Account, ImportRow } from '@/types/kpir';
+import { ImportRow } from '@/types/kpir';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Papa from 'papaparse';
@@ -27,7 +28,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<ImportRow[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: accounts = [] } = useFilteredAccounts();
   const [mappings, setMappings] = useState({
     dateColumn: '',
     descriptionColumn: '',
@@ -74,9 +75,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
         }
       }
     });
-    
-    // Pobierz konta z bazy danych
-    fetchAccounts();
+    // Accounts are already fetched via useFilteredAccounts hook
   };
 
   const findBestMatchingColumn = (columns: string[], possibleMatches: string[]): string => {
@@ -92,19 +91,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
     return '';
   };
 
-  const fetchAccounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, number, name, type');
-        
-      if (error) throw error;
-      
-      setAccounts(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania kont:', error);
-    }
-  };
+  // Accounts are now fetched via useFilteredAccounts hook
 
   const handleMappingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;

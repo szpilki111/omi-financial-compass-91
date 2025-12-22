@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 import {
   Dialog,
   DialogContent,
@@ -54,24 +54,16 @@ interface SplitFormData {
   splitItems: SplitItem[];
 }
 
-interface Account {
-  id: string;
-  number: string;
-  name: string;
-  type: string;
-}
-
 const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSide }: TransactionSplitDialogProps) => {
   // Add null check for transaction BEFORE any hooks
   if (!transaction) {
     return null;
   }
 
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: allAccounts = [] } = useFilteredAccounts();
   const [searchQueries, setSearchQueries] = useState<string[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [filteredAccounts, setFilteredAccounts] = useState<FilteredAccount[]>([]);
 
   const form = useForm<SplitFormData>({
     defaultValues: {
@@ -93,70 +85,36 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
     ? transaction.credit_account_id 
     : transaction.debit_account_id;
 
-  // Search accounts function
-  const searchAccounts = async (query: string) => {
+  // Filter accounts based on search query using the pre-fetched filtered accounts
+  const searchAccounts = useMemo(() => (query: string) => {
     if (!query || query.length < 2) {
-      setAccounts([]);
+      setFilteredAccounts([]);
       return;
     }
 
-    if (!user?.location) {
-      console.warn('Brak informacji o lokalizacji użytkownika');
-      return;
+    const lowerQuery = query.toLowerCase();
+    let filtered = allAccounts.filter(account =>
+      account.number.toLowerCase().includes(lowerQuery) ||
+      account.name.toLowerCase().includes(lowerQuery)
+    );
+
+    // Filter accounts based on split side
+    if (splitSide === 'debit') {
+      // When splitting debit side, exclude accounts in 700-799 range (credit accounts)
+      filtered = filtered.filter(account => {
+        const accountNumber = parseInt(account.number.split('-')[0]);
+        return !(accountNumber >= 700 && accountNumber <= 799);
+      });
+    } else {
+      // When splitting credit side, exclude accounts in 400-499 range (debit accounts)
+      filtered = filtered.filter(account => {
+        const accountNumber = parseInt(account.number.split('-')[0]);
+        return !(accountNumber >= 400 && accountNumber <= 499);
+      });
     }
-
-    try {
-      setIsSearching(true);
-      
-      // Get location account assignments
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('location_accounts')
-        .select('account_id')
-        .eq('location_id', user.location);
-        
-      if (assignmentsError) throw assignmentsError;
-      
-      if (!assignments || assignments.length === 0) {
-        setAccounts([]);
-        return;
-      }
-
-      const accountIds = assignments.map(a => a.account_id);
-
-      // Get accounts that match the search query
-      const { data: accountsData, error: accountsError } = await supabase
-        .from('accounts')
-        .select('*')
-        .in('id', accountIds)
-        .or(`number.ilike.%${query}%,name.ilike.%${query}%`)
-        .order('number');
-        
-      if (accountsError) throw accountsError;
-      
-      // Filter accounts based on split side
-      let filteredData = accountsData || [];
-      
-      if (splitSide === 'debit') {
-        // When splitting debit side, exclude accounts in 700-799 range (credit accounts)
-        filteredData = filteredData.filter(account => {
-          const accountNumber = parseInt(account.number);
-          return !(accountNumber >= 700 && accountNumber <= 799);
-        });
-      } else {
-        // When splitting credit side, exclude accounts in 400-499 range (debit accounts)
-        filteredData = filteredData.filter(account => {
-          const accountNumber = parseInt(account.number);
-          return !(accountNumber >= 400 && accountNumber <= 499);
-        });
-      }
-      
-      setAccounts(filteredData);
-    } catch (error) {
-      console.error('Error searching accounts:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    
+    setFilteredAccounts(filtered);
+  }, [allAccounts, splitSide]);
 
   // Update search queries array when fields change
   useEffect(() => {
@@ -164,7 +122,7 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
   }, [fields.length]);
 
   const handleAccountChange = (index: number, accountId: string) => {
-    const selectedAccount = accounts.find(acc => acc.id === accountId);
+    const selectedAccount = allAccounts.find(acc => acc.id === accountId);
     form.setValue(`splitItems.${index}.account_id`, accountId);
     
     if (selectedAccount) {
@@ -182,7 +140,7 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
     // Clear selected account if user changes search text
     const currentAccountId = form.getValues(`splitItems.${index}.account_id`);
     if (currentAccountId) {
-      const selectedAccount = accounts.find(acc => acc.id === currentAccountId);
+      const selectedAccount = allAccounts.find(acc => acc.id === currentAccountId);
       if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
         form.setValue(`splitItems.${index}.account_id`, '');
       }
@@ -308,15 +266,11 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
                                       <div className="py-6 text-center text-sm text-gray-500">
                                         Wpisz co najmniej 2 znaki...
                                       </div>
-                                    ) : isSearching ? (
-                                      <div className="py-6 text-center text-sm text-gray-500">
-                                        Wyszukiwanie...
-                                      </div>
-                                    ) : accounts.length === 0 ? (
+                                    ) : filteredAccounts.length === 0 ? (
                                       <CommandEmpty>Nie znaleziono konta.</CommandEmpty>
                                     ) : (
                                       <CommandGroup>
-                                        {accounts.map((account) => (
+                                        {filteredAccounts.map((account) => (
                                           <CommandItem
                                             key={account.id}
                                             value={`${account.number} ${account.name}`}

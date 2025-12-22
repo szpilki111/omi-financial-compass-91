@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { KpirTransaction, Account } from '@/types/kpir';
+import { KpirTransaction } from '@/types/kpir';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 import { useToast } from '@/hooks/use-toast';
 import CurrencySelector from '@/components/CurrencySelector';
 import ExchangeRateManager from '@/components/ExchangeRateManager';
@@ -36,7 +37,7 @@ interface KpirEditDialogProps {
 const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, transaction }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: accounts = [] } = useFilteredAccounts();
   const [loading, setLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
@@ -56,32 +57,6 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const fetchAccounts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .order('number', { ascending: true });
-          
-        if (error) {
-          throw error;
-        }
-        
-        setAccounts(data);
-      } catch (error) {
-        console.error('Błąd podczas pobierania kont:', error);
-        toast({
-          title: "Błąd",
-          description: "Nie udało się pobrać listy kont",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchAccounts();
-  }, [user]);
 
   useEffect(() => {
     if (transaction) {

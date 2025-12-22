@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useInvalidateFilteredAccounts } from "@/hooks/useFilteredAccounts";
 
 // Category definitions based on location identifier prefix
 const LOCATION_CATEGORIES = {
@@ -33,6 +34,7 @@ interface AccountRestriction {
 
 const AccountRestrictionsManagement = () => {
   const queryClient = useQueryClient();
+  const invalidateFilteredAccounts = useInvalidateFilteredAccounts();
 
   // Fetch all accounts with pagination to ensure we get all 5000+ accounts
   const { data: accounts, isLoading: accountsLoading } = useQuery({
@@ -107,6 +109,8 @@ const AccountRestrictionsManagement = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['account-restrictions'] });
+      // Invalidacja centralnego hooka kont - wszystkie komponenty natychmiast zobaczą zmianę
+      invalidateFilteredAccounts();
       toast.success("Ograniczenie zostało zaktualizowane");
     },
     onError: (error) => {

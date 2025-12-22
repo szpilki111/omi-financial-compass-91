@@ -14,14 +14,10 @@ import { useToast } from '@/hooks/use-toast';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Upload, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 import Papa from 'papaparse';
 
-interface Account {
-  id: string;
-  number: string;
-  name: string;
-  type: string;
-}
+// Account type is now imported from useFilteredAccounts as FilteredAccount
 
 interface CsvTransaction {
   description: string;
@@ -42,7 +38,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<CsvTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: accounts = [] } = useFilteredAccounts();
   const [mappings, setMappings] = useState({
     descriptionColumn: '',
     amountColumn: '',
@@ -67,19 +63,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
     return '';
   };
 
-  const fetchAccounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, number, name, type');
-        
-      if (error) throw error;
-      
-      setAccounts(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania kont:', error);
-    }
-  };
+  // Accounts are now fetched via useFilteredAccounts hook
 
   // Detect and convert encoding to UTF-8
   const detectAndConvertEncoding = async (file: File): Promise<string> => {
@@ -170,9 +154,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
         }
       }
     });
-    
-    // Pobierz konta z bazy danych
-    fetchAccounts();
+    // Accounts are already fetched via useFilteredAccounts hook
   };
 
   const handleMappingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
