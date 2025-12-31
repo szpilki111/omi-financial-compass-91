@@ -178,7 +178,15 @@ const Index = () => {
               rel="noopener noreferrer"
               className="ml-1 text-amber-700 hover:text-amber-800 font-medium transition-colors"
             >
-              marekglowacki.pl
+              marekglowacki.pl • 
+            </a>
+            <a 
+              href="https://glowaccy-solutions.pl" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="ml-1 text-amber-700 hover:text-amber-800 font-medium transition-colors"
+            >
+              glowaccy-solutions.pl
             </a>
           </p>
         </div>
