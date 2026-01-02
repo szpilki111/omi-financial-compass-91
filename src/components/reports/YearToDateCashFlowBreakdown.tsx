@@ -27,8 +27,49 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
   month, 
   year 
 }) => {
+  // Fetch location category and restrictions
+  const { data: restrictionData } = useQuery({
+    queryKey: ['account-restrictions-for-cashflow', locationId],
+    queryFn: async () => {
+      // Get location identifier
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', locationId)
+        .single();
+
+      if (locationError) {
+        console.error('Error fetching location:', locationError);
+        return { restrictedPrefixes: [] };
+      }
+
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+      
+      if (!locationCategory) {
+        return { restrictedPrefixes: [] };
+      }
+
+      // Get restrictions for this category
+      const { data: restrictionsData, error: restrictionsError } = await supabase
+        .from('account_category_restrictions')
+        .select('account_number_prefix')
+        .eq('category_prefix', locationCategory)
+        .eq('is_restricted', true);
+
+      if (restrictionsError) {
+        console.error('Error fetching restrictions:', restrictionsError);
+        return { restrictedPrefixes: [] };
+      }
+
+      return {
+        restrictedPrefixes: restrictionsData?.map(r => r.account_number_prefix) || []
+      };
+    },
+    enabled: !!locationId
+  });
+
   const { data: cashFlowData, isLoading } = useQuery({
-    queryKey: ['cash_flow_breakdown', locationId, month, year],
+    queryKey: ['cash_flow_breakdown', locationId, month, year, restrictionData?.restrictedPrefixes],
     queryFn: async () => {
       // Oblicz daty na podstawie miesiąca i roku
       const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -54,6 +95,15 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
         .lte('date', dateTo);
 
       if (error) throw error;
+
+      const restrictedPrefixes = restrictionData?.restrictedPrefixes || [];
+
+      // Funkcja do sprawdzania czy konto jest ograniczone
+      const isAccountRestricted = (accountNumber: string) => {
+        if (!accountNumber || restrictedPrefixes.length === 0) return false;
+        const accountPrefix = accountNumber.split('-')[0];
+        return restrictedPrefixes.includes(accountPrefix);
+      };
 
       // Definiuj kategorie zgodnie z obrazkiem
       const categoryDefinitions = {
@@ -92,8 +142,8 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
         transactions?.forEach(transaction => {
           const { debit_account, credit_account, debit_amount, credit_amount, amount } = transaction;
           
-          // Dla konta debetowego
-          if (debit_account) {
+          // Dla konta debetowego - skip if restricted
+          if (debit_account && !isAccountRestricted(debit_account.number)) {
             const key = debit_account.number;
             const transactionAmount = debit_amount && debit_amount > 0 ? debit_amount : Number(amount);
             
@@ -107,8 +157,8 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
             }
           }
           
-          // Dla konta kredytowego
-          if (credit_account) {
+          // Dla konta kredytowego - skip if restricted
+          if (credit_account && !isAccountRestricted(credit_account.number)) {
             const key = credit_account.number;
             const transactionAmount = credit_amount && credit_amount > 0 ? credit_amount : Number(amount);
             
@@ -169,7 +219,7 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
 
       return result;
     },
-    enabled: !!locationId
+    enabled: !!locationId && restrictionData !== undefined
   });
 
   const formatCurrency = (value: number) => {

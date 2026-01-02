@@ -18,7 +18,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
-import { Account } from '@/types/kpir';
+import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
 
 interface AccountComboboxProps {
   value: string;
@@ -43,131 +43,14 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [allAccounts, setAllAccounts] = useState<Account[]>([]); // All accounts for location
-  const [filteredAccounts, setFilteredAccounts] = useState<Account[]>([]); // Filtered by search
-  const [loading, setLoading] = useState(false);
   const [displayedAccountName, setDisplayedAccountName] = useState('');
-  const [shouldAutoOpen, setShouldAutoOpen] = useState(true); // Track if we should auto-open
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [shouldAutoOpen, setShouldAutoOpen] = useState(true);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
-  // Load all accounts for location once on mount or when locationId changes
-  useEffect(() => {
-    if (!locationId) {
-      setAllAccounts([]);
-      setInitialLoadDone(true);
-      return;
-    }
+  // Use central hook for fetching accounts with restrictions applied
+  const { data: allAccounts = [], isLoading: loading } = useFilteredAccounts();
 
-    const fetchAllAccounts = async () => {
-      setLoading(true);
-
-      // Get the location identifier first
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('location_identifier')
-        .eq('id', locationId)
-        .single();
-
-      if (locationError) {
-        console.error('Error fetching location data:', locationError);
-        setAllAccounts([]);
-        setLoading(false);
-        setInitialLoadDone(true);
-        return;
-      }
-
-      // Get location category from identifier
-      const locationCategory = locationData?.location_identifier?.split('-')[0];
-
-      // Get account restrictions for this category
-      let restrictions: any[] = [];
-      if (locationCategory) {
-        const { data: restrictionsData, error: restrictionsError } = await supabase
-          .from('account_category_restrictions')
-          .select('*')
-          .eq('category_prefix', locationCategory)
-          .eq('is_restricted', true);
-
-        if (!restrictionsError && restrictionsData) {
-          restrictions = restrictionsData;
-        }
-      }
-
-      // Get manually assigned accounts for this location
-      const { data: locationAccountData, error: locationAccountError } = await supabase
-        .from('location_accounts')
-        .select('account_id')
-        .eq('location_id', locationId);
-      
-      if (locationAccountError) {
-        console.error('Error fetching location accounts:', locationAccountError);
-        setAllAccounts([]);
-        setLoading(false);
-        setInitialLoadDone(true);
-        return;
-      }
-
-      let accountIds = locationAccountData.map(la => la.account_id);
-      let allAccountsData: any[] = [];
-
-      // Get manually assigned accounts (only active ones)
-      if (accountIds.length > 0) {
-        const { data: manualAccounts, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .in('id', accountIds)
-          .eq('is_active', true)
-          .order('number', { ascending: true });
-
-        if (!error && manualAccounts) {
-          allAccountsData = [...manualAccounts];
-        }
-      }
-
-      // If location has an identifier, fetch accounts matching the pattern using server-side filtering
-      if (locationData?.location_identifier) {
-        const identifier = locationData.location_identifier;
-        
-        // Use server-side LIKE filtering for better performance (only active accounts)
-        const { data: matchingAccounts, error: matchError } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .eq('is_active', true)
-          .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
-          .order('number', { ascending: true });
-
-        if (!matchError && matchingAccounts) {
-          // Merge with existing accounts, avoiding duplicates
-          const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
-          const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
-          allAccountsData = [...allAccountsData, ...newAccounts];
-        }
-      }
-
-      // Apply category restrictions - remove accounts that are restricted for this category
-      if (locationCategory && restrictions.length > 0) {
-        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
-        
-        allAccountsData = allAccountsData.filter(account => {
-          const parts = account.number.split('-');
-          const accountPrefix = parts[0];
-          return !restrictedPrefixes.includes(accountPrefix);
-        });
-      }
-
-      // Sort by account number
-      allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
-      
-      setAllAccounts(allAccountsData);
-      setLoading(false);
-      setInitialLoadDone(true);
-    };
-
-    fetchAllAccounts();
-  }, [locationId]);
-
-  // Funkcja sprawdzająca czy konto jest dozwolone dla danej strony
+  // Filter accounts by side (debit/credit) restrictions
   const isAccountAllowedForSide = (accountNumber: string, checkSide?: 'debit' | 'credit') => {
     if (!checkSide) return true;
     
@@ -183,7 +66,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   };
 
   // Filter accounts by search term and side (client-side filtering)
-  useEffect(() => {
+  const filteredAccounts = useMemo(() => {
     let filtered = [...allAccounts];
 
     // Apply side filtering
@@ -200,12 +83,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       );
     }
 
-    setFilteredAccounts(filtered);
+    return filtered;
   }, [allAccounts, searchTerm, side]);
 
   // Fetch display name for selected account
   useEffect(() => {
-    if (value && locationId) {
+    if (value) {
       const selectedInList = allAccounts.find(acc => acc.id === value);
       if (selectedInList) {
         setDisplayedAccountName(selectedInList.number);
@@ -226,29 +109,14 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
         }
       };
       fetchInitialAccount();
-    } else if (value) {
-      const fetchAccount = async () => {
-        const { data } = await supabase
-          .from('accounts')
-          .select('id, number, name')
-          .eq('id', value)
-          .maybeSingle();
-
-        if (data) {
-          setDisplayedAccountName(data.number);
-        } else {
-          setDisplayedAccountName('');
-        }
-      };
-      fetchAccount();
     } else {
       setDisplayedAccountName('');
     }
-  }, [value, locationId, allAccounts]);
+  }, [value, allAccounts]);
 
-  // Funkcja obsługująca focus na przycisku
+  // Handle focus on button
   const handleButtonFocus = () => {
-    if (autoOpenOnFocus && !disabled && locationId && shouldAutoOpen) {
+    if (autoOpenOnFocus && !disabled && shouldAutoOpen) {
       setOpen(true);
     }
   };
@@ -288,7 +156,6 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       <PopoverContent 
         className="min-w-[450px] w-auto max-w-[600px] p-0"
         onWheel={(e) => {
-          // Przechwytuj scroll na poziomie PopoverContent i przekaż do listy
           const list = e.currentTarget.querySelector('[cmdk-list]') as HTMLElement;
           if (list) {
             e.stopPropagation();
@@ -301,11 +168,9 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
             placeholder="Szukaj po numerze lub nazwie..."
             value={searchTerm}
             onValueChange={(value) => {
-              // Sprawdź czy użytkownik wpisuje cyfry czy tekst
               const startsWithDigit = /^\d/.test(value.replace(/-/g, ''));
               
               if (startsWithDigit) {
-                // Automatyczne formatowanie: dodaj myślnik po każdych 3 cyfrach
                 const digitsOnly = value.replace(/\D/g, '');
                 let formatted = '';
                 for (let i = 0; i < digitsOnly.length; i++) {
@@ -316,28 +181,23 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                 }
                 setSearchTerm(formatted);
               } else {
-                // Dla tekstu - przepuść bez zmian (wyszukiwanie po nazwie)
                 setSearchTerm(value);
               }
             }}
             onKeyDown={(e) => {
               if (e.key === 'Tab') {
-                // Zamknij popover i przenieś fokus na trigger, który pozwoli na naturalną nawigację Tab
                 e.preventDefault();
                 setOpen(false);
                 setSearchTerm('');
                 
-                // Po zamknięciu popovera, przenieś fokus na następny element
                 setTimeout(() => {
                   if (triggerRef.current) {
-                    // Znajdź wszystkie focusowalne elementy
                     const focusableElements = document.querySelectorAll<HTMLElement>(
                       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
                     );
                     const elements = Array.from(focusableElements);
                     const currentIndex = elements.indexOf(triggerRef.current);
                     
-                    // Przejdź do następnego (lub poprzedniego jeśli Shift+Tab)
                     const nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
                     if (nextIndex >= 0 && nextIndex < elements.length) {
                       elements[nextIndex].focus();
@@ -346,14 +206,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                 }, 0);
               } else if (e.key === 'Enter') {
                 e.preventDefault();
-                // Znajdź pierwsze pasujące konto
                 const firstAccount = filteredAccounts[0];
                 if (firstAccount) {
                   onChange(firstAccount.id);
                   setOpen(false);
                   setSearchTerm('');
-                  setShouldAutoOpen(false); // Prevent auto-open after Enter selection
-                  // Wywołaj callback po wybraniu konta
+                  setShouldAutoOpen(false);
                   if (onAccountSelected) {
                     setTimeout(() => {
                       onAccountSelected();
@@ -365,11 +223,10 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
           />
           <CommandList className="max-h-[400px] overflow-y-auto">
             {loading && <CommandEmpty>Ładowanie...</CommandEmpty>}
-            {!locationId && !loading && <CommandEmpty>Lokalizacja nieokreślona.</CommandEmpty>}
-            {locationId && !loading && filteredAccounts.length === 0 && !searchTerm.trim() && (
+            {!loading && filteredAccounts.length === 0 && !searchTerm.trim() && (
                <CommandEmpty>Brak dostępnych kont dla tej lokalizacji.</CommandEmpty>
             )}
-            {locationId && !loading && filteredAccounts.length === 0 && searchTerm.trim() && (
+            {!loading && filteredAccounts.length === 0 && searchTerm.trim() && (
               <CommandEmpty>Nie znaleziono kont pasujących do wyszukiwania.</CommandEmpty>
             )}
             <CommandGroup>
@@ -381,8 +238,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                     onChange(currentValue === value ? '' : currentValue);
                     setOpen(false);
                     setSearchTerm('');
-                    setShouldAutoOpen(false); // Prevent auto-open after selection
-                    // Wywołaj callback po wybraniu konta
+                    setShouldAutoOpen(false);
                     if (onAccountSelected && currentValue !== value && currentValue !== '') {
                       setTimeout(() => {
                         onAccountSelected();

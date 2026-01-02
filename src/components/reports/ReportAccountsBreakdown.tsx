@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/Spinner';
+import { useAuth } from '@/context/AuthContext';
 
 interface AccountBreakdown {
   account_number: string;
@@ -33,9 +34,52 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
   year,
   dateRange 
 }) => {
+  const { user } = useAuth();
+
+  // Fetch location category and restrictions
+  const { data: restrictionData } = useQuery({
+    queryKey: ['account-restrictions-for-reports', locationId],
+    queryFn: async () => {
+      // Get location identifier
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', locationId)
+        .single();
+
+      if (locationError) {
+        console.error('Error fetching location:', locationError);
+        return { restrictedPrefixes: [] };
+      }
+
+      const locationCategory = locationData?.location_identifier?.split('-')[0];
+      
+      if (!locationCategory) {
+        return { restrictedPrefixes: [] };
+      }
+
+      // Get restrictions for this category
+      const { data: restrictionsData, error: restrictionsError } = await supabase
+        .from('account_category_restrictions')
+        .select('account_number_prefix')
+        .eq('category_prefix', locationCategory)
+        .eq('is_restricted', true);
+
+      if (restrictionsError) {
+        console.error('Error fetching restrictions:', restrictionsError);
+        return { restrictedPrefixes: [] };
+      }
+
+      return {
+        restrictedPrefixes: restrictionsData?.map(r => r.account_number_prefix) || []
+      };
+    },
+    enabled: !!locationId
+  });
+
   // Pobieranie szczegółowej rozpiski kont dla raportu
   const { data: accountsBreakdown, isLoading } = useQuery({
-    queryKey: ['report_accounts_breakdown', reportId, locationId, month, year, dateRange],
+    queryKey: ['report_accounts_breakdown', reportId, locationId, month, year, dateRange, restrictionData?.restrictedPrefixes],
     queryFn: async () => {
       let dateFrom: string;
       let dateTo: string;
@@ -73,19 +117,30 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
       if (error) throw error;
 
+      const restrictedPrefixes = restrictionData?.restrictedPrefixes || [];
+
+      // Funkcja do sprawdzania czy konto jest ograniczone
+      const isAccountRestricted = (accountNumber: string) => {
+        if (!accountNumber || restrictedPrefixes.length === 0) return false;
+        const accountPrefix = accountNumber.split('-')[0];
+        return restrictedPrefixes.includes(accountPrefix);
+      };
+
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
       const isRelevantAccount = (accountNumber: string) => {
         if (!accountNumber) return false;
+        // Skip restricted accounts
+        if (isAccountRestricted(accountNumber)) return false;
         return accountNumber.startsWith('2') || accountNumber.startsWith('4') || accountNumber.startsWith('7');
       };
 
-      // Zgrupuj transakcje według kont i oblicz sumy - TYLKO dla kont 2xx, 4xx, 7xx
+      // Zgrupuj transakcje według kont i oblicz sumy - TYLKO dla kont 2xx, 4xx, 7xx (bez ograniczonych)
       const accountTotals = new Map<string, AccountBreakdown>();
 
       transactions?.forEach(transaction => {
         const { amount, debit_account, credit_account, debit_amount, credit_amount } = transaction;
 
-        // Dla konta debetowego - sprawdź czy to konto 2xx, 4xx lub 7xx
+        // Dla konta debetowego - sprawdź czy to konto 2xx, 4xx lub 7xx i nie jest ograniczone
         if (debit_account && isRelevantAccount(debit_account.number)) {
           const key = `${debit_account.number}_debit`;
           const existing = accountTotals.get(key);
@@ -107,7 +162,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
           }
         }
 
-        // Dla konta kredytowego - sprawdź czy to konto 2xx, 4xx lub 7xx
+        // Dla konta kredytowego - sprawdź czy to konto 2xx, 4xx lub 7xx i nie jest ograniczone
         if (credit_account && isRelevantAccount(credit_account.number)) {
           const key = `${credit_account.number}_credit`;
           const existing = accountTotals.get(key);
@@ -141,7 +196,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
       return breakdown;
     },
-    enabled: !!locationId
+    enabled: !!locationId && restrictionData !== undefined
   });
 
   // Funkcja do kategoryzacji kont - TYLKO konta wpływające na przychody/koszty
