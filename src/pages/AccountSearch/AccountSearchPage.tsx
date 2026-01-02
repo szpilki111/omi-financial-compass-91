@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, TrendingUp, Eye, Edit, X } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, Eye, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
+import { useFilteredAccounts } from '@/hooks/useFilteredAccounts';
 import AccountSelector from './AccountSelector';
 import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
@@ -55,116 +56,19 @@ const AccountSearchPage = () => {
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<any>(null);
 
-  // Get user's location
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('location_id')
-        .eq('id', user?.id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
+  // Use central hook for fetching accounts with restrictions applied
+  const { data: allFilteredAccounts = [] } = useFilteredAccounts();
 
-  // Fetch accounts filtered by location
-  const { data: accounts } = useQuery({
-    queryKey: ['accounts', searchTerm, userProfile?.location_id],
-    queryFn: async () => {
-      if (searchTerm.length < 2 || !userProfile?.location_id) return [];
-      
-      // Get location identifier
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('location_identifier')
-        .eq('id', userProfile.location_id)
-        .single();
-
-      if (locationError) {
-        console.error('Error fetching location:', locationError);
-        return [];
-      }
-
-      const identifier = locationData?.location_identifier;
-      if (!identifier) {
-        console.error('No location identifier found');
-        return [];
-      }
-
-      const locationCategory = identifier.split('-')[0];
-
-      // Get account restrictions for this category
-      let restrictions: any[] = [];
-      if (locationCategory) {
-        const { data: restrictionsData } = await supabase
-          .from('account_category_restrictions')
-          .select('*')
-          .eq('category_prefix', locationCategory)
-          .eq('is_restricted', true);
-
-        restrictions = restrictionsData || [];
-      }
-
-      // Get manually assigned accounts
-      const { data: locationAccountData } = await supabase
-        .from('location_accounts')
-        .select('account_id')
-        .eq('location_id', userProfile.location_id);
-
-      const accountIds = locationAccountData?.map(la => la.account_id) || [];
-
-      // Server-side filter: accounts matching location identifier pattern (only active)
-      // Pattern: %-{identifier} (exact) or %-{identifier}-% (with suffix)
-      const { data: locationAccounts, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('is_active', true)
-        .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
-        .order('number');
-
-      if (error) throw error;
-
-      // Get manually assigned accounts separately (only active)
-      let manualAccounts: any[] = [];
-      if (accountIds.length > 0) {
-        const { data: manualData } = await supabase
-          .from('accounts')
-          .select('*')
-          .in('id', accountIds)
-          .eq('is_active', true);
-        manualAccounts = manualData || [];
-      }
-
-      // Combine and deduplicate
-      const allLocationAccounts = [...(locationAccounts || []), ...manualAccounts];
-      const uniqueAccounts = Array.from(
-        new Map(allLocationAccounts.map(a => [a.id, a])).values()
-      );
-
-      // Now filter by search term (number prefix OR name contains)
-      const searchLower = searchTerm.toLowerCase();
-      let filteredAccounts = uniqueAccounts.filter(account => 
-        account.number.toLowerCase().startsWith(searchLower) ||
-        account.name.toLowerCase().includes(searchLower)
-      );
-
-      // Apply category restrictions
-      if (locationCategory && restrictions.length > 0) {
-        const restrictedPrefixes = restrictions.map(r => r.account_number_prefix);
-        filteredAccounts = filteredAccounts.filter(account => {
-          const parts = account.number.split('-');
-          const accountPrefix = parts[0];
-          return !restrictedPrefixes.includes(accountPrefix);
-        });
-      }
-
-      return filteredAccounts as Account[];
-    },
-    enabled: searchTerm.length >= 2 && !selectedAccount && !!userProfile?.location_id,
-  });
+  // Filter accounts by search term (client-side)
+  const accounts = useMemo(() => {
+    if (searchTerm.length < 2 || selectedAccount) return [];
+    
+    const searchLower = searchTerm.toLowerCase();
+    return allFilteredAccounts.filter(account => 
+      account.number.toLowerCase().startsWith(searchLower) ||
+      account.name.toLowerCase().includes(searchLower)
+    );
+  }, [allFilteredAccounts, searchTerm, selectedAccount]);
 
   // Fetch transactions for selected account
   const { data: transactions, isLoading: transactionsLoading } = useQuery({
@@ -195,7 +99,7 @@ const AccountSearchPage = () => {
   });
 
   // Fetch document for editing
-  const { data: documentData, refetch: refetchDocument } = useQuery({
+  const { data: documentData } = useQuery({
     queryKey: ['document', editingDocument?.id],
     queryFn: async () => {
       if (!editingDocument?.id) return null;
@@ -290,7 +194,6 @@ const AccountSearchPage = () => {
     const value = e.target.value;
     setSearchTerm(value);
     
-    // If user modifies the search term and we have a selected account, clear it
     if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
       setSelectedAccount(null);
     }
@@ -314,9 +217,7 @@ const AccountSearchPage = () => {
   };
 
   const handleDocumentUpdated = () => {
-    // Refresh the transactions list after document update
     if (selectedAccount) {
-      // This will trigger a refetch of the transactions query
       window.location.reload();
     }
     setIsDocumentDialogOpen(false);
