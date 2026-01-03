@@ -45,26 +45,14 @@ export const AccountsSettingsTab: React.FC = () => {
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  // Pobierz restrykcje kont dla tej lokalizacji
+  // Użyj centralnego hooka - automatycznie stosuje restrykcje kategorii
+  const { data: allAccounts = [], isLoading: accountsLoading } = useFilteredAccounts();
+
+  // Pobierz restrykcje kont dla sprawdzenia czy konto wymaga analitycznych
   const { data: accountRestrictions } = useQuery({
-    queryKey: ['account-restrictions', user?.location],
+    queryKey: ['account-restrictions-analytical'],
     queryFn: async () => {
-      if (!user?.location) return [];
-
-      // Get the location identifier first
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('location_identifier')
-        .eq('id', user.location)
-        .single();
-
-      if (locationError) return [];
-
-      // Get location category from identifier
-      const locationCategory = locationData?.location_identifier?.split('-')[0];
-
-      // Get ALL account restrictions, not just for this category
-      // The restrictions define globally which accounts should be analytical
+      // Get ALL account restrictions where analytical is required
       const { data: restrictionsData, error: restrictionsError } = await supabase
         .from('account_category_restrictions')
         .select('*')
@@ -72,117 +60,7 @@ export const AccountsSettingsTab: React.FC = () => {
 
       if (restrictionsError) return [];
       return restrictionsData || [];
-    },
-    enabled: !!user?.location
-  });
-
-  // Pobierz konta dostępne dla użytkownika - bez searchQuery w queryKey, filtrowanie po stronie klienta
-  const { data: allAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['available-accounts', user?.location],
-    queryFn: async () => {
-      if (!user?.location) return [];
-
-      // For admin/prowincjal - show all accounts without limit (only active)
-      if (user.role === 'admin' || user.role === 'prowincjal') {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type, analytical')
-          .eq('is_active', true)
-          .order('number');
-
-        if (error) throw error;
-        return data || [];
-      }
-
-      // For ekonom - use same logic as AccountCombobox but without the 50 limit
-      // Get the location identifier first
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('location_identifier')
-        .eq('id', user.location)
-        .single();
-
-      if (locationError) {
-        console.error('Error fetching location data:', locationError);
-        return [];
-      }
-
-      // Get location category from identifier
-      const locationCategory = locationData?.location_identifier?.split('-')[0];
-
-      // Get account restrictions for this category
-      let restrictions: any[] = [];
-      if (locationCategory) {
-        const { data: restrictionsData, error: restrictionsError } = await supabase
-          .from('account_category_restrictions')
-          .select('*')
-          .eq('category_prefix', locationCategory)
-          .eq('is_restricted', true);
-
-        if (!restrictionsError) {
-          restrictions = restrictionsData || [];
-        }
-      }
-
-      // Get manually assigned accounts for this location
-      const { data: locationAccountData, error: locationAccountError } = await supabase
-        .from('location_accounts')
-        .select('account_id')
-        .eq('location_id', user.location);
-      
-      if (locationAccountError) {
-        console.error('Error fetching location accounts:', locationAccountError);
-        return [];
-      }
-
-      let accountIds = locationAccountData?.map(la => la.account_id) || [];
-      let allAccountsData: any[] = [];
-
-      // Get manually assigned accounts - fetch ALL without limit (only active)
-      if (accountIds.length > 0) {
-        const { data: manualAccounts, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type, analytical')
-          .in('id', accountIds)
-          .eq('is_active', true)
-          .order('number');
-
-        if (!error && manualAccounts) {
-          allAccountsData = [...manualAccounts];
-        }
-      }
-
-      // If location has an identifier, fetch accounts matching the pattern directly from database (only active)
-      if (locationData?.location_identifier) {
-        const identifier = locationData.location_identifier;
-        
-        // Use server-side filtering with LIKE to avoid Supabase's 1000 row default limit
-        // Match accounts like "xxx-2-3" or "xxx-2-3-x" for identifier "2-3"
-        const { data: matchingAccounts, error: matchError } = await supabase
-          .from('accounts')
-          .select('id, number, name, type, analytical')
-          .eq('is_active', true)
-          .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
-          .order('number');
-
-        if (!matchError && matchingAccounts) {
-          // Merge with existing accounts, avoiding duplicates
-          const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
-          const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
-          allAccountsData = [...allAccountsData, ...newAccounts];
-        }
-      }
-
-      // Note: In Settings page, show ALL accounts for the location without applying
-      // category restrictions - economists need to see all accounts to manage analytical sub-accounts
-
-      // Sort by account number
-      allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
-
-      // Return ALL accounts without any limit
-      return allAccountsData;
-    },
-    enabled: !!user?.location
+    }
   });
 
   // Filtrowanie kont po stronie klienta - przeszukuje WSZYSTKIE konta z allAccounts
