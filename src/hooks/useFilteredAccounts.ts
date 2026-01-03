@@ -33,12 +33,16 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
   const includeInactive = options?.includeInactive ?? false;
 
   return useQuery({
-    queryKey: ['filtered-accounts', user?.location, skipRestrictions, includeInactive],
+    queryKey: ['filtered-accounts', user?.locations, skipRestrictions, includeInactive],
     queryFn: async (): Promise<FilteredAccount[]> => {
-      if (!user?.location) return [];
+      // Użyj wszystkich lokalizacji użytkownika
+      const userLocations = user?.locations || [];
+      const userIdentifiers = user?.locationIdentifiers || [];
+      
+      if (userLocations.length === 0) return [];
 
       // Admin i prowincjał widzą wszystkie konta (chyba że skipRestrictions=false)
-      if ((user.role === 'admin' || user.role === 'prowincjal') && skipRestrictions) {
+      if ((user?.role === 'admin' || user?.role === 'prowincjal') && skipRestrictions) {
         const { data, error } = await supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
@@ -52,50 +56,40 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
         return data || [];
       }
 
-      // 1. Pobierz dane lokalizacji (identyfikator)
-      const { data: locationData, error: locationError } = await supabase
-        .from('locations')
-        .select('location_identifier')
-        .eq('id', user.location)
-        .single();
+      // 1. Pobierz kategorie lokalizacji z identyfikatorów (pierwsza część przed myślnikiem)
+      const locationCategories = [...new Set(
+        userIdentifiers.map(id => id.split('-')[0]).filter(Boolean)
+      )];
 
-      if (locationError) {
-        console.error('Error fetching location data:', locationError);
-        return [];
-      }
-
-      // 2. Pobierz kategorię lokalizacji z identyfikatora (pierwsza część przed myślnikiem)
-      const locationCategory = locationData?.location_identifier?.split('-')[0];
-
-      // 3. Pobierz restrykcje dla tej kategorii
+      // 2. Pobierz restrykcje dla wszystkich kategorii
       let restrictedPrefixes: string[] = [];
-      if (locationCategory && !skipRestrictions) {
+      if (locationCategories.length > 0 && !skipRestrictions) {
         const { data: restrictionsData, error: restrictionsError } = await supabase
           .from('account_category_restrictions')
           .select('account_number_prefix')
-          .eq('category_prefix', locationCategory)
+          .in('category_prefix', locationCategories)
           .eq('is_restricted', true);
 
         if (!restrictionsError && restrictionsData) {
-          restrictedPrefixes = restrictionsData.map(r => r.account_number_prefix);
+          restrictedPrefixes = [...new Set(restrictionsData.map(r => r.account_number_prefix))];
         }
       }
 
-      // 4. Pobierz ręcznie przypisane konta dla tej lokalizacji
+      // 3. Pobierz ręcznie przypisane konta dla WSZYSTKICH lokalizacji użytkownika
       const { data: locationAccountData, error: locationAccountError } = await supabase
         .from('location_accounts')
         .select('account_id')
-        .eq('location_id', user.location);
+        .in('location_id', userLocations);
 
       if (locationAccountError) {
         console.error('Error fetching location accounts:', locationAccountError);
         return [];
       }
 
-      const manualAccountIds = locationAccountData?.map(la => la.account_id) || [];
+      const manualAccountIds = [...new Set(locationAccountData?.map(la => la.account_id) || [])];
       let allAccountsData: FilteredAccount[] = [];
 
-      // 5. Pobierz ręcznie przypisane konta
+      // 4. Pobierz ręcznie przypisane konta
       if (manualAccountIds.length > 0) {
         let query = supabase
           .from('accounts')
@@ -114,10 +108,8 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
         }
       }
 
-      // 6. Pobierz konta pasujące do identyfikatora lokalizacji
-      if (locationData?.location_identifier) {
-        const identifier = locationData.location_identifier;
-        
+      // 5. Pobierz konta pasujące do WSZYSTKICH identyfikatorów lokalizacji
+      for (const identifier of userIdentifiers) {
         let query = supabase
           .from('accounts')
           .select('id, number, name, type, analytical')
@@ -138,7 +130,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
         }
       }
 
-      // 7. KLUCZOWE: Odfiltruj konta z ograniczeniami
+      // 6. KLUCZOWE: Odfiltruj konta z ograniczeniami
       if (restrictedPrefixes.length > 0) {
         allAccountsData = allAccountsData.filter(account => {
           const parts = account.number.split('-');
@@ -148,12 +140,12 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
         });
       }
 
-      // 8. Sortuj po numerze konta
+      // 7. Sortuj po numerze konta
       allAccountsData.sort((a, b) => a.number.localeCompare(b.number));
 
       return allAccountsData;
     },
-    enabled: !!user?.location,
+    enabled: (user?.locations?.length ?? 0) > 0,
     staleTime: 5 * 60 * 1000, // 5 minut cache
   });
 };
