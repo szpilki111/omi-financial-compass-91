@@ -12,6 +12,8 @@ interface UserData {
   email: string;
   role: Role;
   location: string;
+  locations: string[];           // wszystkie przypisane lokalizacje (ID)
+  locationIdentifiers: string[]; // identyfikatory lokalizacji (np. ["2-1", "2-3"])
 }
 
 interface AuthContextType {
@@ -58,12 +60,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        // Pobierz wszystkie lokalizacje użytkownika z user_locations
+        const { data: userLocations } = await supabase
+          .from('user_locations')
+          .select('location_id')
+          .eq('user_id', userId);
+
+        const locationIds = userLocations?.map(ul => ul.location_id) || [];
+        
+        // Jeśli brak w user_locations, użyj location_id z profilu
+        if (locationIds.length === 0 && profile.location_id) {
+          locationIds.push(profile.location_id);
+        }
+
+        // Pobierz identyfikatory lokalizacji
+        let locationIdentifiers: string[] = [];
+        if (locationIds.length > 0) {
+          const { data: locationsData } = await supabase
+            .from('locations')
+            .select('id, location_identifier')
+            .in('id', locationIds);
+          
+          locationIdentifiers = locationsData
+            ?.map(l => l.location_identifier)
+            .filter((id): id is string => !!id) || [];
+        }
+
         setUser({
           id: profile.id,
           name: profile.name,
           email: profile.email,
           role: profile.role as Role,
-          location: profile.location_id || '',
+          location: profile.location_id || locationIds[0] || '',
+          locations: locationIds,
+          locationIdentifiers: locationIdentifiers,
         });
       } catch {
         setUser(null);
