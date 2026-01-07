@@ -35,6 +35,12 @@ export const AccountsSettingsTab: React.FC = () => {
   const [editingAnalytical, setEditingAnalytical] = useState<AnalyticalAccount | null>(null);
   const [displayedCount, setDisplayedCount] = useState(50);
 
+  // Lokalizacje użytkownika - zdefiniowane raz na początku
+  const userLocations = useMemo(() => 
+    user?.locations || (user?.location ? [user.location] : []),
+    [user?.locations, user?.location]
+  );
+
   // Debounce - aktualizuj searchQuery po 500ms od ostatniej zmiany
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -84,22 +90,23 @@ export const AccountsSettingsTab: React.FC = () => {
   const totalFilteredCount = filteredAccounts.length;
   const totalAccountsCount = allAccounts?.length || 0;
 
-  // Pobierz konta analityczne
+  // Pobierz konta analityczne - obsługa wielu lokalizacji
+
   const { data: analyticalAccounts, isLoading: analyticalLoading } = useQuery({
-    queryKey: ['analytical-accounts', user?.location],
+    queryKey: ['analytical-accounts', userLocations],
     queryFn: async () => {
-      if (!user?.location) return [];
+      if (userLocations.length === 0) return [];
 
       const { data, error } = await supabase
         .from('analytical_accounts')
         .select('*')
-        .eq('location_id', user.location)
+        .in('location_id', userLocations)
         .order('number_suffix');
 
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user?.location
+    enabled: userLocations.length > 0
   });
 
   // Mutacja do usuwania kont analitycznych
@@ -243,7 +250,8 @@ export const AccountsSettingsTab: React.FC = () => {
     }
   };
 
-  const canManageAnalytical = user?.role === 'ekonom' || user?.role === 'proboszcz';
+  // Każdy użytkownik z przypisaną lokalizacją może zarządzać kontami analitycznymi
+  const canManageAnalytical = user?.role === 'admin' || user?.role === 'prowincjal' || userLocations.length > 0;
 
   if (accountsLoading || analyticalLoading) {
     return <Spinner />;

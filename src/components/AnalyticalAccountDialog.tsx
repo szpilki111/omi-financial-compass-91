@@ -56,8 +56,10 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
       return;
     }
 
-    if (!user || !user.location) {
-      toast.error('Brak uprawnień do tworzenia kont');
+    // Sprawdź czy użytkownik ma przypisaną lokalizację
+    const userLocations = user?.locations || (user?.location ? [user.location] : []);
+    if (!user || userLocations.length === 0) {
+      toast.error('Brak uprawnień do tworzenia kont - użytkownik nie ma przypisanej lokalizacji');
       return;
     }
 
@@ -84,30 +86,56 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
 
         toast.success('Konto analityczne zostało zaktualizowane');
       } else {
-        // Tryb tworzenia - istniejąca logika
-        const { error: analyticalError } = await supabase
-          .from('analytical_accounts')
-          .insert({
-            parent_account_id: parentAccount.id,
-            location_id: user.location,
-            number_suffix: nextSuffix,
-            name: name.trim(),
-            created_by: user.id
-          });
-
-        if (analyticalError) throw analyticalError;
-
+        // Tryb tworzenia - BEZPIECZNA KOLEJNOŚĆ: najpierw accounts, potem analytical_accounts
         const fullAccountNumber = `${parentAccount.number}-${nextSuffix}`;
-        const { error: accountError } = await supabase
+        
+        // Krok 1: Utwórz konto w tabeli accounts (z analytical: true)
+        const { data: newAccount, error: accountError } = await supabase
           .from('accounts')
           .insert({
             number: fullAccountNumber,
             name: name.trim(),
             type: parentAccount.type,
-            analytical: false
+            analytical: true  // Oznacz jako konto analityczne
+          })
+          .select('id')
+          .single();
+
+        if (accountError) {
+          // Obsługa błędu 409 (duplikat)
+          if (accountError.code === '23505') {
+            toast.error('Konto o tym numerze już istnieje. Odśwież listę i spróbuj ponownie.');
+          } else {
+            throw accountError;
+          }
+          return;
+        }
+
+        // Krok 2: Utwórz wpis w analytical_accounts
+        const locationId = user.location || userLocations[0];
+        const { error: analyticalError } = await supabase
+          .from('analytical_accounts')
+          .insert({
+            parent_account_id: parentAccount.id,
+            location_id: locationId,
+            number_suffix: nextSuffix,
+            name: name.trim(),
+            created_by: user.id
           });
 
-        if (accountError) throw accountError;
+        if (analyticalError) {
+          // Rollback: usuń konto z accounts jeśli analytical_accounts nie powiodło się
+          console.error('Analytical account creation failed, rolling back accounts entry:', analyticalError);
+          await supabase.from('accounts').delete().eq('id', newAccount.id);
+          
+          // Obsługa błędu 409 (duplikat)
+          if (analyticalError.code === '23505') {
+            toast.error('Podkonto o tym numerze już istnieje. Odśwież listę i spróbuj ponownie.');
+          } else {
+            throw analyticalError;
+          }
+          return;
+        }
 
         toast.success('Konto analityczne zostało utworzone');
       }
@@ -115,9 +143,10 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
       setName('');
       onSave();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving analytical account:', error);
-      toast.error(editMode ? 'Błąd podczas aktualizacji konta analitycznego' : 'Błąd podczas tworzenia konta analitycznego');
+      const errorMessage = error?.message || (editMode ? 'Błąd podczas aktualizacji konta analitycznego' : 'Błąd podczas tworzenia konta analitycznego');
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
