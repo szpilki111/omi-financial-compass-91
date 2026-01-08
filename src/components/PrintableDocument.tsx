@@ -31,16 +31,52 @@ interface PrintableDocumentProps {
   locationName?: string;
 }
 
+// Funkcja do grupowania kont analitycznych w syntetyczne
+const groupToSynthetic = (transactions: Transaction[], accounts: Account[]) => {
+  const syntheticMap = new Map<string, {
+    description: string;
+    debit_total: number;
+    credit_total: number;
+    debit_prefix: string;
+    credit_prefix: string;
+    debit_name: string;
+    credit_name: string;
+  }>();
+
+  transactions.forEach(t => {
+    const debitAccount = accounts.find(a => a.id === t.debit_account_id);
+    const creditAccount = accounts.find(a => a.id === t.credit_account_id);
+    
+    // Pobierz prefix syntetyczny (przed myślnikiem)
+    const debitPrefix = debitAccount?.number.split('-')[0] || '';
+    const creditPrefix = creditAccount?.number.split('-')[0] || '';
+    const key = `${debitPrefix}_${creditPrefix}`;
+    
+    const existing = syntheticMap.get(key);
+    if (existing) {
+      existing.debit_total += t.debit_amount || 0;
+      existing.credit_total += t.credit_amount || 0;
+    } else {
+      syntheticMap.set(key, {
+        description: t.description || '',
+        debit_total: t.debit_amount || 0,
+        credit_total: t.credit_amount || 0,
+        debit_prefix: debitPrefix,
+        credit_prefix: creditPrefix,
+        debit_name: debitAccount?.name.split('-')[0].trim() || '',
+        credit_name: creditAccount?.name.split('-')[0].trim() || '',
+      });
+    }
+  });
+
+  return Array.from(syntheticMap.values());
+};
+
 const PrintableDocument = React.forwardRef<HTMLDivElement, PrintableDocumentProps>(
   ({ documentNumber, documentName, documentDate, currency, transactions, parallelTransactions, accounts, locationName }, ref) => {
-    const getAccountDisplay = (accountId?: string) => {
-      if (!accountId) return '-';
-      const account = accounts.find(a => a.id === accountId);
-      return account ? `${account.number} - ${account.name}` : '-';
-    };
-
+    
     const formatAmount = (amount?: number) => {
-      if (amount === undefined || amount === 0) return '-';
+      if (amount === undefined || amount === 0) return '';
       return amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
@@ -62,13 +98,33 @@ const PrintableDocument = React.forwardRef<HTMLDivElement, PrintableDocumentProp
     const totalDebitSum = mainDebitSum + parallelDebitSum;
     const totalCreditSum = mainCreditSum + parallelCreditSum;
 
+    // Filtruj puste transakcje
+    const filteredTransactions = transactions.filter(t => 
+      (t.debit_amount && t.debit_amount > 0) || (t.credit_amount && t.credit_amount > 0)
+    );
+    const filteredParallel = parallelTransactions.filter(t => 
+      (t.debit_amount && t.debit_amount > 0) || (t.credit_amount && t.credit_amount > 0)
+    );
+
+    const getAccountDisplay = (accountId?: string, compact = true) => {
+      if (!accountId) return '-';
+      const account = accounts.find(a => a.id === accountId);
+      if (!account) return '-';
+      // Kompaktowy wyświetlacz: tylko numer i skrócona nazwa
+      if (compact) {
+        const shortName = account.name.length > 20 ? account.name.substring(0, 20) + '...' : account.name;
+        return `${account.number} ${shortName}`;
+      }
+      return `${account.number} - ${account.name}`;
+    };
+
     return (
-      <div ref={ref} className="print-container hidden print:block p-8 bg-white text-black">
+      <div ref={ref} className="print-container hidden print:block p-4 bg-white text-black" style={{ fontSize: '10px' }}>
         <style>{`
           @media print {
             @page {
               size: A4;
-              margin: 1cm;
+              margin: 0.8cm;
             }
             body {
               print-color-adjust: exact;
@@ -76,137 +132,144 @@ const PrintableDocument = React.forwardRef<HTMLDivElement, PrintableDocumentProp
             }
             .print-container {
               display: block !important;
+              font-size: 10px !important;
             }
             .no-print {
               display: none !important;
             }
+            table {
+              page-break-inside: auto;
+            }
+            tr {
+              page-break-inside: avoid;
+              page-break-after: auto;
+            }
           }
         `}</style>
 
-        {/* Header */}
-        <div className="mb-6 border-b-2 border-gray-800 pb-4">
-          <h1 className="text-2xl font-bold mb-2">Dokument księgowy</h1>
-          {locationName && <p className="text-sm text-gray-600">{locationName}</p>}
+        {/* Header - kompaktowy */}
+        <div className="mb-3 border-b border-gray-800 pb-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-base font-bold">Dokument księgowy</h1>
+              {locationName && <p className="text-[9px] text-gray-600">{locationName}</p>}
+            </div>
+            <div className="text-right">
+              <p className="font-bold">{documentNumber}</p>
+              <p className="text-[9px]">{format(documentDate, 'dd.MM.yyyy', { locale: pl })}</p>
+            </div>
+          </div>
+          <p className="text-[9px] mt-1"><strong>Nazwa:</strong> {documentName}</p>
         </div>
 
-        {/* Document Info */}
-        <div className="mb-6 grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Numer dokumentu:</p>
-            <p className="font-bold text-lg">{documentNumber}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Data dokumentu:</p>
-            <p className="font-bold text-lg">{format(documentDate, 'dd.MM.yyyy', { locale: pl })}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="text-sm text-gray-600">Nazwa dokumentu:</p>
-            <p className="font-bold">{documentName}</p>
-          </div>
-        </div>
-
-        {/* Main Transactions */}
-        {transactions.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-bold mb-3 border-b border-gray-400 pb-2">Operacje główne</h2>
-            <table className="w-full text-sm border-collapse">
+        {/* Main Transactions - zagęszczone */}
+        {filteredTransactions.length > 0 && (
+          <div className="mb-3">
+            <h2 className="text-[11px] font-bold mb-1 bg-gray-100 px-1">Operacje główne</h2>
+            <table className="w-full text-[9px] border-collapse">
               <thead>
-                <tr className="border-b-2 border-gray-800">
-                  <th className="text-left py-2 px-2 w-8">Lp.</th>
-                  <th className="text-left py-2 px-2">Opis</th>
-                  <th className="text-right py-2 px-2 w-24">Winien</th>
-                  <th className="text-left py-2 px-2">Konto Wn</th>
-                  <th className="text-right py-2 px-2 w-24">Ma</th>
-                  <th className="text-left py-2 px-2">Konto Ma</th>
+                <tr className="border-b border-gray-600">
+                  <th className="text-left py-0.5 px-1 w-5">#</th>
+                  <th className="text-left py-0.5 px-1">Opis</th>
+                  <th className="text-right py-0.5 px-1 w-16">Wn</th>
+                  <th className="text-left py-0.5 px-1 w-28">Konto Wn</th>
+                  <th className="text-right py-0.5 px-1 w-16">Ma</th>
+                  <th className="text-left py-0.5 px-1 w-28">Konto Ma</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((transaction, index) => (
-                  <tr key={index} className="border-b border-gray-300">
-                    <td className="py-2 px-2">{index + 1}</td>
-                    <td className="py-2 px-2">{transaction.description || '-'}</td>
-                    <td className="py-2 px-2 text-right">{formatAmount(transaction.debit_amount)}</td>
-                    <td className="py-2 px-2 text-xs">{getAccountDisplay(transaction.debit_account_id)}</td>
-                    <td className="py-2 px-2 text-right">{formatAmount(transaction.credit_amount)}</td>
-                    <td className="py-2 px-2 text-xs">{getAccountDisplay(transaction.credit_account_id)}</td>
+                {filteredTransactions.map((transaction, index) => (
+                  <tr key={index} className="border-b border-gray-200">
+                    <td className="py-0.5 px-1">{index + 1}</td>
+                    <td className="py-0.5 px-1 truncate max-w-[120px]" title={transaction.description}>
+                      {transaction.description || '-'}
+                    </td>
+                    <td className="py-0.5 px-1 text-right">{formatAmount(transaction.debit_amount)}</td>
+                    <td className="py-0.5 px-1 text-[8px] truncate">{getAccountDisplay(transaction.debit_account_id)}</td>
+                    <td className="py-0.5 px-1 text-right">{formatAmount(transaction.credit_amount)}</td>
+                    <td className="py-0.5 px-1 text-[8px] truncate">{getAccountDisplay(transaction.credit_account_id)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-gray-800 font-bold">
-                  <td colSpan={2} className="py-2 px-2 text-right">RAZEM:</td>
-                  <td className="py-2 px-2 text-right">{formatAmount(mainDebitSum)} {getCurrencySymbol(currency)}</td>
-                  <td className="py-2 px-2"></td>
-                  <td className="py-2 px-2 text-right">{formatAmount(mainCreditSum)} {getCurrencySymbol(currency)}</td>
-                  <td className="py-2 px-2"></td>
+                <tr className="border-t border-gray-600 font-bold">
+                  <td colSpan={2} className="py-0.5 px-1 text-right">RAZEM:</td>
+                  <td className="py-0.5 px-1 text-right">{formatAmount(mainDebitSum)}</td>
+                  <td className="py-0.5 px-1"></td>
+                  <td className="py-0.5 px-1 text-right">{formatAmount(mainCreditSum)}</td>
+                  <td className="py-0.5 px-1 text-[8px]">{getCurrencySymbol(currency)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
 
-        {/* Parallel Transactions */}
-        {parallelTransactions.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-bold mb-3 border-b border-gray-400 pb-2">Księgowanie równoległe</h2>
-            <table className="w-full text-sm border-collapse">
+        {/* Parallel Transactions - zagęszczone */}
+        {filteredParallel.length > 0 && (
+          <div className="mb-3">
+            <h2 className="text-[11px] font-bold mb-1 bg-gray-100 px-1">Księgowanie równoległe</h2>
+            <table className="w-full text-[9px] border-collapse">
               <thead>
-                <tr className="border-b-2 border-gray-800">
-                  <th className="text-left py-2 px-2 w-8">Lp.</th>
-                  <th className="text-left py-2 px-2">Opis</th>
-                  <th className="text-right py-2 px-2 w-24">Winien</th>
-                  <th className="text-left py-2 px-2">Konto Wn</th>
-                  <th className="text-right py-2 px-2 w-24">Ma</th>
-                  <th className="text-left py-2 px-2">Konto Ma</th>
+                <tr className="border-b border-gray-600">
+                  <th className="text-left py-0.5 px-1 w-5">#</th>
+                  <th className="text-left py-0.5 px-1">Opis</th>
+                  <th className="text-right py-0.5 px-1 w-16">Wn</th>
+                  <th className="text-left py-0.5 px-1 w-28">Konto Wn</th>
+                  <th className="text-right py-0.5 px-1 w-16">Ma</th>
+                  <th className="text-left py-0.5 px-1 w-28">Konto Ma</th>
                 </tr>
               </thead>
               <tbody>
-                {parallelTransactions.map((transaction, index) => (
-                  <tr key={index} className="border-b border-gray-300">
-                    <td className="py-2 px-2">{index + 1}</td>
-                    <td className="py-2 px-2">{transaction.description || '-'}</td>
-                    <td className="py-2 px-2 text-right">{formatAmount(transaction.debit_amount)}</td>
-                    <td className="py-2 px-2 text-xs">{getAccountDisplay(transaction.debit_account_id)}</td>
-                    <td className="py-2 px-2 text-right">{formatAmount(transaction.credit_amount)}</td>
-                    <td className="py-2 px-2 text-xs">{getAccountDisplay(transaction.credit_account_id)}</td>
+                {filteredParallel.map((transaction, index) => (
+                  <tr key={index} className="border-b border-gray-200">
+                    <td className="py-0.5 px-1">{index + 1}</td>
+                    <td className="py-0.5 px-1 truncate max-w-[120px]" title={transaction.description}>
+                      {transaction.description || '-'}
+                    </td>
+                    <td className="py-0.5 px-1 text-right">{formatAmount(transaction.debit_amount)}</td>
+                    <td className="py-0.5 px-1 text-[8px] truncate">{getAccountDisplay(transaction.debit_account_id)}</td>
+                    <td className="py-0.5 px-1 text-right">{formatAmount(transaction.credit_amount)}</td>
+                    <td className="py-0.5 px-1 text-[8px] truncate">{getAccountDisplay(transaction.credit_account_id)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-gray-800 font-bold">
-                  <td colSpan={2} className="py-2 px-2 text-right">RAZEM:</td>
-                  <td className="py-2 px-2 text-right">{formatAmount(parallelDebitSum)} {getCurrencySymbol(currency)}</td>
-                  <td className="py-2 px-2"></td>
-                  <td className="py-2 px-2 text-right">{formatAmount(parallelCreditSum)} {getCurrencySymbol(currency)}</td>
-                  <td className="py-2 px-2"></td>
+                <tr className="border-t border-gray-600 font-bold">
+                  <td colSpan={2} className="py-0.5 px-1 text-right">RAZEM:</td>
+                  <td className="py-0.5 px-1 text-right">{formatAmount(parallelDebitSum)}</td>
+                  <td className="py-0.5 px-1"></td>
+                  <td className="py-0.5 px-1 text-right">{formatAmount(parallelCreditSum)}</td>
+                  <td className="py-0.5 px-1 text-[8px]">{getCurrencySymbol(currency)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
 
-        {/* Summary */}
-        <div className="mt-8 p-4 bg-gray-100 border-2 border-gray-800">
-          <h3 className="font-bold text-lg mb-3">Podsumowanie dokumentu</h3>
-          <div className="grid grid-cols-3 gap-4 text-center">
+        {/* Summary - kompaktowe */}
+        <div className="mt-3 p-2 bg-gray-100 border border-gray-600">
+          <h3 className="font-bold text-[11px] mb-1">Podsumowanie</h3>
+          <div className="grid grid-cols-3 gap-2 text-center text-[9px]">
             <div>
-              <p className="text-sm text-gray-600">Winien razem</p>
-              <p className="font-bold text-lg">{formatAmount(totalDebitSum)} {getCurrencySymbol(currency)}</p>
+              <p className="text-gray-600">Winien</p>
+              <p className="font-bold">{formatAmount(totalDebitSum)} {getCurrencySymbol(currency)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Ma razem</p>
-              <p className="font-bold text-lg">{formatAmount(totalCreditSum)} {getCurrencySymbol(currency)}</p>
+              <p className="text-gray-600">Ma</p>
+              <p className="font-bold">{formatAmount(totalCreditSum)} {getCurrencySymbol(currency)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Suma całkowita</p>
-              <p className="font-bold text-lg">{formatAmount(totalDebitSum + totalCreditSum)} {getCurrencySymbol(currency)}</p>
+              <p className="text-gray-600">Kontrola (Wn = Ma)</p>
+              <p className={`font-bold ${Math.abs(totalDebitSum - totalCreditSum) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>
+                {Math.abs(totalDebitSum - totalCreditSum) < 0.01 ? '✓ OK' : `Δ ${formatAmount(Math.abs(totalDebitSum - totalCreditSum))}`}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-12 pt-6 border-t border-gray-400">
-          <p className="text-xs text-gray-600 text-center">
+        <div className="mt-4 pt-2 border-t border-gray-300">
+          <p className="text-[8px] text-gray-500 text-center">
             Wydrukowano: {format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl })}
           </p>
         </div>
