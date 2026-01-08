@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, TrendingUp, Eye, X } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, Eye, X, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -15,7 +15,9 @@ import { useFilteredAccounts } from '@/hooks/useFilteredAccounts';
 import AccountSelector from './AccountSelector';
 import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
+import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
+
 
 interface Account {
   id: string;
@@ -55,6 +57,8 @@ const AccountSearchPage = () => {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<any>(null);
+
+  const printRef = useRef<HTMLDivElement>(null);
 
   // Use central hook for fetching accounts with restrictions applied
   const { data: allFilteredAccounts = [] } = useFilteredAccounts();
@@ -116,7 +120,7 @@ const AccountSearchPage = () => {
     enabled: !!editingDocument?.id,
   });
 
-  // Calculate totals
+  // Calculate totals - NAPRAWIONE zliczanie
   const totals = useMemo(() => {
     if (!transactions || !selectedAccount) return { debit: 0, credit: 0, balance: 0 };
     
@@ -124,11 +128,17 @@ const AccountSearchPage = () => {
     let creditTotal = 0;
     
     transactions.forEach(transaction => {
+      // Jeśli konto jest po stronie Wn (debit)
       if (transaction.debit_account_id === selectedAccount.id) {
-        debitTotal += transaction.debit_amount || transaction.amount || 0;
+        // Użyj debit_amount jeśli jest, w przeciwnym razie amount
+        const amount = transaction.debit_amount ?? transaction.amount ?? 0;
+        debitTotal += amount;
       }
+      // Jeśli konto jest po stronie Ma (credit)
       if (transaction.credit_account_id === selectedAccount.id) {
-        creditTotal += transaction.credit_amount || transaction.amount || 0;
+        // Użyj credit_amount jeśli jest, w przeciwnym razie amount
+        const amount = transaction.credit_amount ?? transaction.amount ?? 0;
+        creditTotal += amount;
       }
     });
     
@@ -139,7 +149,7 @@ const AccountSearchPage = () => {
     };
   }, [transactions, selectedAccount]);
 
-  // Group transactions by month
+  // Group transactions by month - NAPRAWIONE zliczanie
   const monthlyData = useMemo(() => {
     if (!transactions || !selectedAccount) return [];
     
@@ -157,11 +167,12 @@ const AccountSearchPage = () => {
       
       acc[month].transactions.push(transaction);
       
+      // NAPRAWIONE: użyj debit_amount/credit_amount zamiast amount
       if (transaction.debit_account_id === selectedAccount.id) {
-        acc[month].debit += transaction.amount;
+        acc[month].debit += transaction.debit_amount ?? transaction.amount ?? 0;
       }
       if (transaction.credit_account_id === selectedAccount.id) {
-        acc[month].credit += transaction.amount;
+        acc[month].credit += transaction.credit_amount ?? transaction.amount ?? 0;
       }
       
       return acc;
@@ -228,6 +239,22 @@ const AccountSearchPage = () => {
     setIsDocumentDialogOpen(false);
     setEditingDocument(null);
   };
+
+  // Drukowanie obrotów
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printContent = printRef.current;
+      const originalDisplay = printContent.style.display;
+      printContent.style.display = 'block';
+      
+      window.print();
+      
+      printContent.style.display = originalDisplay;
+    }
+  };
+
+  // Pobierz nazwę lokalizacji użytkownika
+  const locationName = user?.locations?.[0] ? 'Lokalizacja użytkownika' : undefined;
 
   return (
     <MainLayout>
@@ -299,13 +326,16 @@ const AccountSearchPage = () => {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Konto: {selectedAccount.number} - {selectedAccount.name}</span>
-                  <Badge variant="outline">{selectedAccount.type}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{selectedAccount.type}</Badge>
+                    <Badge variant="secondary">{transactions?.length || 0} operacji</Badge>
+                  </div>
                 </CardTitle>
               </CardHeader>
             </Card>
 
             {/* View toggle buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant={!showTurnover ? "default" : "outline"}
                 onClick={() => {
@@ -324,6 +354,14 @@ const AccountSearchPage = () => {
               >
                 <TrendingUp className="h-4 w-4" />
                 Obroty miesięczne
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handlePrint}
+                className="flex items-center gap-2 ml-auto"
+              >
+                <Printer className="h-4 w-4" />
+                Drukuj obroty
               </Button>
             </div>
 
@@ -353,13 +391,13 @@ const AccountSearchPage = () => {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty debetowe</p>
+                    <p className="text-sm text-gray-600">Obroty debetowe (Wn)</p>
                     <p className="text-2xl font-bold text-red-600">
                       {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty kredytowe</p>
+                    <p className="text-sm text-gray-600">Obroty kredytowe (Ma)</p>
                     <p className="text-2xl font-bold text-green-600">
                       {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
                     </p>
@@ -376,6 +414,18 @@ const AccountSearchPage = () => {
           </>
         )}
       </div>
+
+      {/* Printable component (hidden) */}
+      {selectedAccount && transactions && (
+        <PrintableAccountTurnover
+          ref={printRef}
+          account={selectedAccount}
+          transactions={transactions}
+          year={selectedYear}
+          totals={totals}
+          locationName={locationName}
+        />
+      )}
 
       {/* Document Dialog */}
       <DocumentDialog

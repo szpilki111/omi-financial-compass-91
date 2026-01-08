@@ -109,24 +109,60 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
       }
 
       // 5. Pobierz konta pasujące do WSZYSTKICH identyfikatorów lokalizacji
-      for (const identifier of userIdentifiers) {
-        let query = supabase
-          .from('accounts')
-          .select('id, number, name, type, analytical')
-          .or(`number.like.%-${identifier},number.like.%-${identifier}-%`)
-          .order('number');
+      // WAŻNE: Identyfikator lokalizacji (np. "1-3") składa się z 2 liczb oddzielonych myślnikiem
+      // i występuje ZARAZ PO pierwszym myślniku w numerze konta
+      // np. "100-1-3" = prefix "100", identifier "1-3"
+      // np. "100-1-3-5" = prefix "100", identifier "1-3", analityka "5"
+      // NIE: "100-2-1-3" - to jest identifier "2-1", analityka "3"
+      
+      // Funkcja do sprawdzenia czy konto należy do danej lokalizacji
+      const accountMatchesIdentifier = (accountNumber: string, identifier: string): boolean => {
+        const parts = accountNumber.split('-');
+        if (parts.length < 2) return false;
         
-        if (!includeInactive) {
-          query = query.eq('is_active', true);
+        // Identyfikator to 2 liczby po pierwszym myślniku, np. "1-3"
+        const identifierParts = identifier.split('-');
+        if (identifierParts.length !== 2) return false;
+        
+        // Sprawdź czy części 1 i 2 numeru konta pasują do identyfikatora
+        // parts[0] = prefix (np. "100")
+        // parts[1] = pierwsza część identyfikatora (np. "1")
+        // parts[2] = druga część identyfikatora (np. "3")
+        if (parts.length >= 3) {
+          return parts[1] === identifierParts[0] && parts[2] === identifierParts[1];
+        } else if (parts.length === 2) {
+          // Dla kont typu "100-1" - nie pasuje do identyfikatora "1-3"
+          return false;
         }
+        
+        return false;
+      };
+      
+      // Pobierz wszystkie konta i filtruj po stronie klienta
+      let query = supabase
+        .from('accounts')
+        .select('id, number, name, type, analytical')
+        .order('number');
+      
+      if (!includeInactive) {
+        query = query.eq('is_active', true);
+      }
 
-        const { data: matchingAccounts, error: matchError } = await query;
+      const { data: allAccounts, error: fetchError } = await query;
 
-        if (!matchError && matchingAccounts) {
-          // Merge bez duplikatów
-          const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
-          const newAccounts = matchingAccounts.filter(acc => !existingAccountIds.has(acc.id));
-          allAccountsData = [...allAccountsData, ...newAccounts];
+      if (!fetchError && allAccounts) {
+        for (const account of allAccounts) {
+          // Sprawdź czy konto pasuje do któregokolwiek identyfikatora użytkownika
+          const matchesAnyIdentifier = userIdentifiers.some(identifier => 
+            accountMatchesIdentifier(account.number, identifier)
+          );
+          
+          if (matchesAnyIdentifier) {
+            const existingAccountIds = new Set(allAccountsData.map(acc => acc.id));
+            if (!existingAccountIds.has(account.id)) {
+              allAccountsData.push(account);
+            }
+          }
         }
       }
 
