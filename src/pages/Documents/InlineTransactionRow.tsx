@@ -116,13 +116,21 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
   // Check if amounts are equal (with tolerance for floating point precision)
   const amountsEqual = Math.abs(Math.abs(formData.debit_amount) - Math.abs(formData.credit_amount)) <= 0.01;
 
-  // Handle losing focus from the row - only save when amounts are equal
+  // Handle losing focus from the row - save transaction or create split
   const handleRowBlur = (event: React.FocusEvent) => {
     const currentTarget = event.currentTarget;
     const relatedTarget = event.relatedTarget as Node;
     if (currentTarget.contains(relatedTarget)) return;
 
-    if (isFormValid && amountsEqual && !isEditingBlocked) {
+    // Must have description, both accounts, and both amounts to save
+    if (!isFormValid || isEditingBlocked) return;
+
+    const debitAbs = Math.abs(formData.debit_amount);
+    const creditAbs = Math.abs(formData.credit_amount);
+    const difference = Math.abs(debitAbs - creditAbs);
+
+    if (difference <= 0.01) {
+      // Amounts are equal - save single transaction
       console.log("Row blur - saving equal amounts transaction");
       const transaction: Transaction = {
         description: formData.description,
@@ -130,128 +138,67 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         credit_account_id: formData.credit_account_id,
         debit_amount: formData.debit_amount,
         credit_amount: formData.credit_amount,
-        amount: Math.max(formData.debit_amount, formData.credit_amount),
+        amount: Math.max(debitAbs, creditAbs),
         settlement_type: formData.settlement_type,
         currency: currency,
       };
       onSave(transaction);
       resetForm();
+    } else {
+      // Amounts are different - create split (original + balancing)
+      console.log("Row blur - creating split transaction, difference:", difference);
+      
+      // Save original transaction
+      const originalTransaction: Transaction = {
+        description: formData.description,
+        debit_account_id: formData.debit_account_id,
+        credit_account_id: formData.credit_account_id,
+        debit_amount: formData.debit_amount,
+        credit_amount: formData.credit_amount,
+        amount: Math.max(debitAbs, creditAbs),
+        settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+      console.log("💾 Saving original transaction:", originalTransaction);
+      onSave(originalTransaction);
+
+      // Create balancing transaction
+      // When debit < credit: balancing line has debit_amount=difference, credit_amount=0
+      // When credit < debit: balancing line has debit_amount=0, credit_amount=difference
+      const isDebitSmaller = debitAbs < creditAbs;
+      const balancingTransaction: Transaction = {
+        description: formData.description,
+        debit_account_id: isDebitSmaller ? formData.debit_account_id : "",
+        credit_account_id: isDebitSmaller ? "" : formData.credit_account_id,
+        debit_amount: isDebitSmaller ? difference : 0,
+        credit_amount: isDebitSmaller ? 0 : difference,
+        amount: difference,
+        settlement_type: formData.settlement_type,
+        currency: currency,
+      };
+      console.log("💾 Saving balancing transaction:", balancingTransaction);
+      onSave(balancingTransaction);
+      resetForm();
     }
   };
 
-  // Handle losing focus from debit amount field
+  // Handle losing focus from debit amount field - formatting only (split logic moved to handleRowBlur)
   const handleDebitAmountBlur = () => {
-    console.log("=== Debit amount blur triggered ===");
-    console.log("Form data:", formData);
-
     // Format to 2 decimal places on blur
-    if (formData.debit_amount > 0) {
+    if (formData.debit_amount !== 0) {
       handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
     }
-
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    console.log("Amount comparison:", {
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      difference: difference,
-      debitSmaller: formData.debit_amount < formData.credit_amount,
-      significantDifference: difference > 0.01,
-      basicFormValid: isBasicFormValid(),
-      creditAccountSelected: !!formData.credit_account_id,
-    });
-
-    const canCreateBalancing =
-      isBasicFormValid() &&
-      formData.debit_account_id &&
-      difference > 0.01 &&
-      formData.debit_amount < formData.credit_amount;
-
-    if (canCreateBalancing && !isEditingBlocked) {
-      console.log("✓ Creating balancing transaction - debit is smaller");
-      createBalancingTransaction("debit");
-    } else {
-      console.log("✗ Balancing not triggered. Reasons:", {
-        basicFormValid: isBasicFormValid(),
-        creditAccountSelected: !!formData.credit_account_id,
-        significantDifference: difference > 0.01,
-        debitSmaller: formData.debit_amount < formData.credit_amount,
-        editingBlocked: isEditingBlocked,
-      });
-    }
   };
 
-  // Handle losing focus from credit amount field
+  // Handle losing focus from credit amount field - formatting only (split logic moved to handleRowBlur)
   const handleCreditAmountBlur = () => {
-    console.log("=== Credit amount blur triggered ===");
-    console.log("Form data:", formData);
-
     // Format to 2 decimal places on blur
-    if (formData.credit_amount > 0) {
+    if (formData.credit_amount !== 0) {
       handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
     }
-
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    console.log("Amount comparison:", {
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      difference: difference,
-      creditSmaller: formData.credit_amount < formData.debit_amount,
-      significantDifference: difference > 0.01,
-      basicFormValid: isBasicFormValid(),
-      debitAccountSelected: !!formData.debit_account_id,
-    });
-
-    const canCreateBalancing =
-      isBasicFormValid() &&
-      formData.credit_account_id &&
-      difference > 0.01 &&
-      formData.credit_amount < formData.debit_amount;
-
-    if (canCreateBalancing && !isEditingBlocked) {
-      console.log("✓ Creating balancing transaction - credit is smaller");
-      createBalancingTransaction("credit");
-    } else {
-      console.log("✗ Balancing not triggered. Reasons:", {
-        basicFormValid: isBasicFormValid(),
-        debitAccountSelected: !!formData.debit_account_id,
-        significantDifference: difference > 0.01,
-        creditSmaller: formData.credit_amount < formData.debit_amount,
-        editingBlocked: isEditingBlocked,
-      });
-    }
   };
 
-  // Create balancing transaction when one side is smaller
-  const createBalancingTransaction = (smallerSide: "debit" | "credit") => {
-    console.log("🔄 Creating balancing transaction for smaller side:", smallerSide);
-    const originalTransaction: Transaction = {
-      description: formData.description,
-      debit_account_id: formData.debit_account_id,
-      credit_account_id: formData.credit_account_id,
-      debit_amount: formData.debit_amount,
-      credit_amount: formData.credit_amount,
-      amount: Math.max(formData.debit_amount, formData.credit_amount),
-      settlement_type: formData.settlement_type,
-      currency: currency,
-    };
-    console.log("💾 Saving original transaction:", originalTransaction);
-    onSave(originalTransaction);
-
-    const difference = Math.abs(formData.debit_amount - formData.credit_amount);
-    const balancingTransaction: Transaction = {
-      description: formData.description,
-      debit_account_id: smallerSide === "debit" ? "" : formData.debit_account_id,
-      credit_account_id: smallerSide === "credit" ? "" : formData.credit_account_id,
-      debit_amount: smallerSide === "debit" ? difference : 0,
-      credit_amount: smallerSide === "credit" ? difference : 0,
-      amount: difference,
-      settlement_type: formData.settlement_type,
-      currency: currency,
-    };
-    console.log("💾 Saving balancing transaction:", balancingTransaction);
-    onSave(balancingTransaction);
-    resetForm();
-  };
+  // createBalancingTransaction removed - logic consolidated into handleRowBlur
 
   // Helper function to reset form
   const resetForm = () => {
