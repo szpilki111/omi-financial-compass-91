@@ -12,12 +12,14 @@ interface ExportToExcelProps {
   period: string;
   year: number;
   month: number;
+  locationId: string;
 }
 
 interface AccountBreakdown {
   accountNumber: string;
   accountName: string;
   totalAmount: number;
+  side: 'WN' | 'MA';
 }
 
 export const ExportToExcel: React.FC<ExportToExcelProps> = ({
@@ -26,7 +28,8 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
   locationName,
   period,
   year,
-  month
+  month,
+  locationId
 }) => {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -40,16 +43,96 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
         .eq('report_id', reportId)
         .single();
 
-      if (detailsError) throw detailsError;
+      if (detailsError && detailsError.code !== 'PGRST116') throw detailsError;
 
-      // Fetch report account details
-      const { data: accountDetails, error: accountsError } = await supabase
-        .from('report_account_details')
-        .select('*')
-        .eq('report_id', reportId)
-        .order('account_number');
+      // Calculate date range for the month
+      const firstDayOfMonth = new Date(year, month - 1, 1);
+      const lastDayOfMonth = new Date(year, month, 0);
+      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
+      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      if (accountsError) throw accountsError;
+      // Fetch transactions for the period
+      const { data: transactions, error: transactionsError } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+          credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
+        `)
+        .eq('location_id', locationId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo);
+
+      if (transactionsError) throw transactionsError;
+
+      // Process transactions to get account breakdown
+      const accountMap = new Map<string, AccountBreakdown>();
+
+      transactions?.forEach(transaction => {
+        // Process debit account (WN)
+        if (transaction.debit_account) {
+          const acc = transaction.debit_account;
+          const prefix = acc.number.split('-')[0];
+          const amount = transaction.debit_amount || transaction.amount || 0;
+          
+          // Only include 4xx (expenses) and 2xx accounts on debit side
+          if (prefix.startsWith('4') || prefix.startsWith('2')) {
+            const key = `${acc.number}-WN`;
+            const existing = accountMap.get(key);
+            if (existing) {
+              existing.totalAmount += amount;
+            } else {
+              accountMap.set(key, {
+                accountNumber: acc.number,
+                accountName: acc.name,
+                totalAmount: amount,
+                side: 'WN'
+              });
+            }
+          }
+        }
+
+        // Process credit account (MA)
+        if (transaction.credit_account) {
+          const acc = transaction.credit_account;
+          const prefix = acc.number.split('-')[0];
+          const amount = transaction.credit_amount || transaction.amount || 0;
+          
+          // Only include 7xx (income) and 2xx accounts on credit side
+          if (prefix.startsWith('7') || prefix.startsWith('2')) {
+            const key = `${acc.number}-MA`;
+            const existing = accountMap.get(key);
+            if (existing) {
+              existing.totalAmount += amount;
+            } else {
+              accountMap.set(key, {
+                accountNumber: acc.number,
+                accountName: acc.name,
+                totalAmount: amount,
+                side: 'MA'
+              });
+            }
+          }
+        }
+      });
+
+      // Convert map to array and filter out zero amounts
+      const allAccounts = Array.from(accountMap.values())
+        .filter(a => Math.abs(a.totalAmount) > 0.01)
+        .sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+
+      // Separate income and expense accounts
+      const incomeAccounts = allAccounts.filter(a => {
+        const prefix = a.accountNumber.split('-')[0];
+        return (prefix.startsWith('7') && a.side === 'MA') || 
+               (prefix.startsWith('2') && a.side === 'MA');
+      });
+
+      const expenseAccounts = allAccounts.filter(a => {
+        const prefix = a.accountNumber.split('-')[0];
+        return (prefix.startsWith('4') && a.side === 'WN') || 
+               (prefix.startsWith('2') && a.side === 'WN');
+      });
 
       // Create workbook
       const wb = XLSX.utils.book_new();
@@ -74,59 +157,39 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
       ];
 
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      
-      // Set column widths
-      summarySheet['!cols'] = [
-        { wch: 25 },
-        { wch: 20 }
-      ];
-
+      summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Podsumowanie');
 
-      // Accounts breakdown sheet
-      if (accountDetails && accountDetails.length > 0) {
-        const incomeAccounts = accountDetails.filter(a => a.account_type === 'income');
-        const expenseAccounts = accountDetails.filter(a => a.account_type === 'expense');
+      // Income accounts sheet
+      if (incomeAccounts.length > 0) {
+        const incomeData = [
+          ['PRZYCHODY - ROZPISKA KONT'],
+          [''],
+          ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
+          ...incomeAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
+          [''],
+          ['SUMA PRZYCHODÓW', '', '', incomeAccounts.reduce((sum, a) => sum + a.totalAmount, 0)]
+        ];
 
-        // Income accounts sheet
-        if (incomeAccounts.length > 0) {
-          const incomeData = [
-            ['PRZYCHODY'],
-            [''],
-            ['Numer konta', 'Nazwa konta', 'Kwota'],
-            ...incomeAccounts.map(a => [a.account_number, a.account_name, a.total_amount]),
-            [''],
-            ['SUMA PRZYCHODÓW', '', incomeAccounts.reduce((sum, a) => sum + Number(a.total_amount), 0)]
-          ];
+        const incomeSheet = XLSX.utils.aoa_to_sheet(incomeData);
+        incomeSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, incomeSheet, 'Przychody');
+      }
 
-          const incomeSheet = XLSX.utils.aoa_to_sheet(incomeData);
-          incomeSheet['!cols'] = [
-            { wch: 15 },
-            { wch: 40 },
-            { wch: 15 }
-          ];
-          XLSX.utils.book_append_sheet(wb, incomeSheet, 'Przychody');
-        }
+      // Expense accounts sheet
+      if (expenseAccounts.length > 0) {
+        const expenseData = [
+          ['ROZCHODY - ROZPISKA KONT'],
+          [''],
+          ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
+          ...expenseAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
+          [''],
+          ['SUMA ROZCHODÓW', '', '', expenseAccounts.reduce((sum, a) => sum + a.totalAmount, 0)]
+        ];
 
-        // Expense accounts sheet
-        if (expenseAccounts.length > 0) {
-          const expenseData = [
-            ['ROZCHODY'],
-            [''],
-            ['Numer konta', 'Nazwa konta', 'Kwota'],
-            ...expenseAccounts.map(a => [a.account_number, a.account_name, a.total_amount]),
-            [''],
-            ['SUMA ROZCHODÓW', '', expenseAccounts.reduce((sum, a) => sum + Number(a.total_amount), 0)]
-          ];
-
-          const expenseSheet = XLSX.utils.aoa_to_sheet(expenseData);
-          expenseSheet['!cols'] = [
-            { wch: 15 },
-            { wch: 40 },
-            { wch: 15 }
-          ];
-          XLSX.utils.book_append_sheet(wb, expenseSheet, 'Rozchody');
-        }
+        const expenseSheet = XLSX.utils.aoa_to_sheet(expenseData);
+        expenseSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, expenseSheet, 'Rozchody');
       }
 
       // Generate filename
@@ -136,7 +199,7 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
       // Save file
       XLSX.writeFile(wb, filename);
 
-      toast.success('Raport wyeksportowany do Excel');
+      toast.success('Raport wyeksportowany do Excel z rozpiską kont');
     } catch (error: any) {
       console.error('Export error:', error);
       toast.error('Błąd eksportu: ' + error.message);
