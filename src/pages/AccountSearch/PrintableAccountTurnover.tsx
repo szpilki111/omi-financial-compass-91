@@ -56,141 +56,111 @@ const PrintableAccountTurnover = React.forwardRef<HTMLDivElement, PrintableAccou
     const sortedMonths = Object.keys(transactionsByMonth).sort();
 
     return (
-      <div ref={ref} className="print-container hidden print:block p-4 bg-white text-black" style={{ fontSize: '10px' }}>
+      <div ref={ref} className="print-container hidden print:block bg-white text-black" style={{ fontSize: '8px', padding: '4mm' }}>
         <style>{`
           @media print {
-            @page {
-              size: A4;
-              margin: 0.8cm;
-            }
-            body {
-              print-color-adjust: exact;
-              -webkit-print-color-adjust: exact;
-            }
-            .print-container {
-              display: block !important;
-              font-size: 10px !important;
-            }
-            table {
-              page-break-inside: auto;
-            }
-            tr {
-              page-break-inside: avoid;
-            }
+            @page { size: A4; margin: 5mm; }
+            .print-container { display: block !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; }
           }
         `}</style>
 
-        {/* Header */}
-        <div className="mb-3 border-b-2 border-gray-800 pb-2">
-          <div className="flex justify-between items-start">
+        {/* Nagłówek - kompaktowy */}
+        <div style={{ marginBottom: '2mm', borderBottom: '1px solid #000', paddingBottom: '1mm' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <h1 className="text-base font-bold">Obroty na koncie</h1>
-              {locationName && <p className="text-[9px] text-gray-600">{locationName}</p>}
+              <span style={{ fontWeight: 'bold', fontSize: '10px' }}>{account.number}</span>
+              <span style={{ marginLeft: '8px' }}>{account.name}</span>
             </div>
-            <div className="text-right">
-              <p className="font-bold text-sm">Rok {year}</p>
-            </div>
+            <div style={{ fontWeight: 'bold' }}>Rok {year}</div>
           </div>
-          <div className="mt-2 bg-gray-100 p-2">
-            <p className="font-bold">{account.number} - {account.name}</p>
-            <p className="text-[9px] text-gray-600">Typ: {account.type}</p>
-          </div>
+          {locationName && <div style={{ fontSize: '7px', color: '#666' }}>{locationName}</div>}
         </div>
 
-        {/* Podsumowanie roczne na górze */}
-        <div className="mb-3 p-2 bg-blue-50 border border-blue-200">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-[9px] text-gray-600">Obroty Wn (debet)</p>
-              <p className="font-bold text-red-600">{formatAmount(totals.debit)} zł</p>
-            </div>
-            <div>
-              <p className="text-[9px] text-gray-600">Obroty Ma (kredyt)</p>
-              <p className="font-bold text-green-600">{formatAmount(totals.credit)} zł</p>
-            </div>
-            <div>
-              <p className="text-[9px] text-gray-600">Saldo</p>
-              <p className={`font-bold ${totals.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                {formatAmount(totals.balance)} zł
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Wszystkie transakcje w jednej tabeli */}
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #000', background: '#f0f0f0' }}>
+              <th style={{ padding: '1px 2px', textAlign: 'left', width: '50px' }}>Data</th>
+              <th style={{ padding: '1px 2px', textAlign: 'left', width: '70px' }}>Dokument</th>
+              <th style={{ padding: '1px 2px', textAlign: 'left' }}>Opis</th>
+              <th style={{ padding: '1px 2px', textAlign: 'right', width: '70px' }}>Wn</th>
+              <th style={{ padding: '1px 2px', textAlign: 'right', width: '70px' }}>Ma</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedMonths.map(month => {
+              const monthTransactions = transactionsByMonth[month];
+              const firstDate = parseISO(monthTransactions[0].date);
+              const monthName = format(firstDate, 'LLL', { locale: pl });
+              
+              const monthDebit = monthTransactions.reduce((sum, t) => 
+                sum + (t.debit_account_id === account.id ? (t.debit_amount || t.amount || 0) : 0), 0);
+              const monthCredit = monthTransactions.reduce((sum, t) => 
+                sum + (t.credit_account_id === account.id ? (t.credit_amount || t.amount || 0) : 0), 0);
 
-        {/* Transakcje pogrupowane po miesiącach */}
-        {sortedMonths.map(month => {
-          const monthTransactions = transactionsByMonth[month];
-          const monthDebit = monthTransactions.reduce((sum, t) => 
-            sum + (t.debit_account_id === account.id ? (t.debit_amount || t.amount || 0) : 0), 0);
-          const monthCredit = monthTransactions.reduce((sum, t) => 
-            sum + (t.credit_account_id === account.id ? (t.credit_amount || t.amount || 0) : 0), 0);
-          
-          const firstDate = parseISO(monthTransactions[0].date);
-          const monthName = format(firstDate, 'LLLL yyyy', { locale: pl });
-
-          return (
-            <div key={month} className="mb-3">
-              <h3 className="text-[11px] font-bold bg-gray-100 px-1 py-0.5 mb-1">
-                {monthName} ({monthTransactions.length} operacji)
-              </h3>
-              <table className="w-full text-[9px] border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-400">
-                    <th className="text-left py-0.5 px-1 w-16">Data</th>
-                    <th className="text-left py-0.5 px-1 w-20">Dokument</th>
-                    <th className="text-left py-0.5 px-1">Opis</th>
-                    <th className="text-right py-0.5 px-1 w-20">Wn</th>
-                    <th className="text-right py-0.5 px-1 w-20">Ma</th>
+              return (
+                <React.Fragment key={month}>
+                  {/* Nagłówek miesiąca - pojedynczy wiersz */}
+                  <tr style={{ background: '#e8e8e8' }}>
+                    <td colSpan={5} style={{ padding: '1px 2px', fontWeight: 'bold', fontSize: '7px' }}>
+                      {monthName.toUpperCase()} ({monthTransactions.length})
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
+                  {/* Transakcje */}
                   {monthTransactions.map((t) => {
                     const isDebit = t.debit_account_id === account.id;
                     const isCredit = t.credit_account_id === account.id;
                     
                     return (
-                      <tr key={t.id} className="border-b border-gray-200">
-                        <td className="py-0.5 px-1">{format(parseISO(t.date), 'dd.MM')}</td>
-                        <td className="py-0.5 px-1 truncate" title={t.document?.document_name}>
+                      <tr key={t.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '0 2px' }}>{format(parseISO(t.date), 'dd.MM')}</td>
+                        <td style={{ padding: '0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70px' }}>
                           {t.document?.document_number || t.document_number || '-'}
                         </td>
-                        <td className="py-0.5 px-1 truncate max-w-[200px]" title={t.description}>
+                        <td style={{ padding: '0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
                           {t.description}
                         </td>
-                        <td className="py-0.5 px-1 text-right">
+                        <td style={{ padding: '0 2px', textAlign: 'right' }}>
                           {isDebit ? formatAmount(t.debit_amount || t.amount) : ''}
                         </td>
-                        <td className="py-0.5 px-1 text-right">
+                        <td style={{ padding: '0 2px', textAlign: 'right' }}>
                           {isCredit ? formatAmount(t.credit_amount || t.amount) : ''}
                         </td>
                       </tr>
                     );
                   })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-gray-400 font-bold bg-gray-50">
-                    <td colSpan={3} className="py-0.5 px-1 text-right">Razem {monthName}:</td>
-                    <td className="py-0.5 px-1 text-right">{formatAmount(monthDebit)}</td>
-                    <td className="py-0.5 px-1 text-right">{formatAmount(monthCredit)}</td>
+                  {/* Suma miesiąca */}
+                  <tr style={{ borderBottom: '1px solid #999', fontSize: '7px' }}>
+                    <td colSpan={3} style={{ padding: '0 2px', textAlign: 'right', fontWeight: 'bold' }}>Σ {monthName}:</td>
+                    <td style={{ padding: '0 2px', textAlign: 'right', fontWeight: 'bold' }}>{formatAmount(monthDebit)}</td>
+                    <td style={{ padding: '0 2px', textAlign: 'right', fontWeight: 'bold' }}>{formatAmount(monthCredit)}</td>
                   </tr>
-                </tfoot>
-              </table>
-            </div>
-          );
-        })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid #000', fontWeight: 'bold', fontSize: '9px' }}>
+              <td colSpan={3} style={{ padding: '2px', textAlign: 'right' }}>RAZEM ROK {year}:</td>
+              <td style={{ padding: '2px', textAlign: 'right' }}>{formatAmount(totals.debit)}</td>
+              <td style={{ padding: '2px', textAlign: 'right' }}>{formatAmount(totals.credit)}</td>
+            </tr>
+            <tr style={{ fontWeight: 'bold', fontSize: '9px' }}>
+              <td colSpan={3} style={{ padding: '2px', textAlign: 'right' }}>SALDO:</td>
+              <td colSpan={2} style={{ padding: '2px', textAlign: 'right', color: totals.balance >= 0 ? '#006600' : '#cc0000' }}>
+                {formatAmount(totals.balance)} zł
+              </td>
+            </tr>
+          </tfoot>
+        </table>
 
         {transactions.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
             Brak operacji na tym koncie w roku {year}
           </div>
         )}
-
-        {/* Footer */}
-        <div className="mt-4 pt-2 border-t border-gray-300">
-          <p className="text-[8px] text-gray-500 text-center">
-            Wydrukowano: {format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl })} | Liczba operacji: {transactions.length}
-          </p>
-        </div>
       </div>
     );
   }
