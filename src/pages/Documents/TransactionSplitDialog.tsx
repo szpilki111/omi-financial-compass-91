@@ -299,23 +299,56 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
                       <FormField
                         control={form.control}
                         name={`splitItems.${index}.amount`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Kwota</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="text"
-                                inputMode="decimal"
-                                value={field.value || ''}
-                                onChange={(e) => {
-                                  const normalizedValue = e.target.value.replace(",", ".");
-                                  field.onChange(Number(normalizedValue) || 0);
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        render={({ field }) => {
+                          const [localValue, setLocalValue] = useState<string>(
+                            field.value ? field.value.toFixed(2) : ''
+                          );
+                          const [isFocused, setIsFocused] = useState(false);
+                          
+                          // Sync with field value when not focused
+                          useEffect(() => {
+                            if (!isFocused) {
+                              setLocalValue(field.value ? field.value.toFixed(2) : '');
+                            }
+                          }, [field.value, isFocused]);
+                          
+                          return (
+                            <FormItem>
+                              <FormLabel>Kwota</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={localValue}
+                                  onChange={(e) => {
+                                    const inputValue = e.target.value;
+                                    setLocalValue(inputValue);
+                                    
+                                    if (inputValue === "" || inputValue === "-") {
+                                      field.onChange(0);
+                                      return;
+                                    }
+                                    
+                                    const normalizedValue = inputValue.replace(",", ".");
+                                    const numValue = parseFloat(normalizedValue);
+                                    if (!isNaN(numValue)) {
+                                      field.onChange(numValue);
+                                    }
+                                  }}
+                                  onFocus={() => setIsFocused(true)}
+                                  onBlur={() => {
+                                    setIsFocused(false);
+                                    const normalizedValue = localValue.replace(",", ".");
+                                    const numValue = parseFloat(normalizedValue) || 0;
+                                    field.onChange(numValue);
+                                    setLocalValue(numValue ? numValue.toFixed(2) : '');
+                                  }}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
                       />
 
                       <FormField
