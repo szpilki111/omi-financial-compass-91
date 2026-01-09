@@ -168,20 +168,26 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
             placeholder="Szukaj po numerze lub nazwie..."
             value={searchTerm}
             onValueChange={(value) => {
-              const startsWithDigit = /^\d/.test(value.replace(/-/g, ''));
-              
-              if (startsWithDigit) {
-                const digitsOnly = value.replace(/\D/g, '');
-                let formatted = '';
-                for (let i = 0; i < digitsOnly.length; i++) {
-                  if (i > 0 && i % 3 === 0) {
-                    formatted += '-';
-                  }
-                  formatted += digitsOnly[i];
-                }
-                setSearchTerm(formatted);
-              } else {
+              // Jeśli użytkownik wpisał myślnik ręcznie, nie formatuj automatycznie
+              // Pozwala to na wpisanie pełnych numerów kont jak "110-2-3"
+              if (value.includes('-')) {
                 setSearchTerm(value);
+              } else {
+                const startsWithDigit = /^\d/.test(value);
+                
+                if (startsWithDigit) {
+                  const digitsOnly = value.replace(/\D/g, '');
+                  let formatted = '';
+                  for (let i = 0; i < digitsOnly.length; i++) {
+                    if (i > 0 && i % 3 === 0) {
+                      formatted += '-';
+                    }
+                    formatted += digitsOnly[i];
+                  }
+                  setSearchTerm(formatted);
+                } else {
+                  setSearchTerm(value);
+                }
               }
             }}
             onKeyDown={(e) => {
