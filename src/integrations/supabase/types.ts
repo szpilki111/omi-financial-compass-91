@@ -1704,6 +1704,20 @@ export type Database = {
       }
       get_current_user_id: { Args: never; Returns: string }
       get_current_user_id_fixed: { Args: never; Returns: string }
+      get_user_filtered_accounts: {
+        Args: {
+          p_include_inactive?: boolean
+          p_skip_restrictions?: boolean
+          p_user_id: string
+        }
+        Returns: {
+          analytical: boolean
+          id: string
+          name: string
+          number: string
+          type: string
+        }[]
+      }
       get_user_location_id: { Args: never; Returns: string }
       get_user_location_ids: { Args: never; Returns: string[] }
       get_user_role: { Args: never; Returns: string }
