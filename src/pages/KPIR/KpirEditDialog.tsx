@@ -229,16 +229,30 @@ const KpirEditDialog: React.FC<KpirEditDialogProps> = ({ open, onClose, onSave, 
       const dialogElement = window.document.querySelector('[role="dialog"]') as HTMLElement;
       const targetElement = dialogElement || window.document.body;
       
+      // Pobierz rzeczywiste wymiary dialogu
+      const rect = targetElement.getBoundingClientRect();
+      
       const canvas = await html2canvas(targetElement, {
         allowTaint: true,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
         scale: 1,
-        onclone: (clonedDoc) => {
+        width: rect.width,
+        height: rect.height,
+        onclone: (clonedDoc, clonedElement) => {
           // Usuń ciemne overlay z klonu
           const overlays = clonedDoc.querySelectorAll('[data-radix-dialog-overlay]');
           overlays.forEach(el => el.remove());
+          
+          // Usuń transformacje i pozycjonowanie fixed z klonowanego dialogu
+          if (clonedElement) {
+            clonedElement.style.position = 'static';
+            clonedElement.style.transform = 'none';
+            clonedElement.style.left = 'auto';
+            clonedElement.style.top = 'auto';
+            clonedElement.style.margin = '0';
+          }
         }
       });
       const dataUrl = canvas.toDataURL("image/png");
