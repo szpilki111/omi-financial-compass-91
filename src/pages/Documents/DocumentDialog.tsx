@@ -2018,6 +2018,13 @@ const EditableTransactionRow = React.forwardRef<
     ref,
   ) => {
     const { user } = useAuth();
+    
+    // Store TRULY original amounts at mount time - never changes during editing
+    const originalTransactionRef = useRef({
+      debit_amount: transaction.debit_amount,
+      credit_amount: transaction.credit_amount,
+    });
+    
     const [formData, setFormData] = useState({
       description: transaction.description || "",
       debit_account_id: transaction.debit_account_id || "",
@@ -2049,10 +2056,10 @@ const EditableTransactionRow = React.forwardRef<
       }
     }, [formData.credit_amount, isCreditFocused]);
 
-    // Determine if this is a split transaction based on ORIGINAL transaction data (not current form)
+    // Determine if this is a split transaction based on TRULY ORIGINAL values from ref (not prop)
     // This prevents fields from becoming readonly when user temporarily clears an amount
-    const originalDebitEmpty = !transaction.debit_amount || transaction.debit_amount === 0;
-    const originalCreditEmpty = !transaction.credit_amount || transaction.credit_amount === 0;
+    const originalDebitEmpty = !originalTransactionRef.current.debit_amount || originalTransactionRef.current.debit_amount === 0;
+    const originalCreditEmpty = !originalTransactionRef.current.credit_amount || originalTransactionRef.current.credit_amount === 0;
     const isSplitTransaction = (originalDebitEmpty && !originalCreditEmpty) || (originalCreditEmpty && !originalDebitEmpty);
     const isDebitReadOnly = isSplitTransaction && originalDebitEmpty;
     const isCreditReadOnly = isSplitTransaction && originalCreditEmpty;
