@@ -65,26 +65,64 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
 
       if (transactionsError) throw transactionsError;
 
-      // Process transactions to get account breakdown
+      // Funkcja do wyodrębnienia numeru konta syntetycznego (max 3 segmenty)
+      const getSyntheticAccountNumber = (accountNumber: string): string => {
+        if (!accountNumber) return accountNumber;
+        const segments = accountNumber.split('-');
+        if (segments.length <= 3) {
+          return accountNumber;
+        }
+        return segments.slice(0, 3).join('-');
+      };
+
+      // Zbierz unikalne numery kont syntetycznych
+      const syntheticNumbersSet = new Set<string>();
+      transactions?.forEach(transaction => {
+        if (transaction.debit_account) {
+          syntheticNumbersSet.add(getSyntheticAccountNumber(transaction.debit_account.number));
+        }
+        if (transaction.credit_account) {
+          syntheticNumbersSet.add(getSyntheticAccountNumber(transaction.credit_account.number));
+        }
+      });
+
+      // Pobierz nazwy kont syntetycznych z bazy
+      const syntheticNumbers = Array.from(syntheticNumbersSet);
+      let syntheticAccountsMap = new Map<string, string>();
+      
+      if (syntheticNumbers.length > 0) {
+        const { data: syntheticAccounts } = await supabase
+          .from('accounts')
+          .select('number, name')
+          .in('number', syntheticNumbers);
+        
+        syntheticAccounts?.forEach(acc => {
+          syntheticAccountsMap.set(acc.number, acc.name);
+        });
+      }
+
+      // Process transactions to get account breakdown - agregując do kont syntetycznych
       const accountMap = new Map<string, AccountBreakdown>();
 
       transactions?.forEach(transaction => {
         // Process debit account (WN)
         if (transaction.debit_account) {
           const acc = transaction.debit_account;
-          const prefix = acc.number.split('-')[0];
+          const syntheticNumber = getSyntheticAccountNumber(acc.number);
+          const prefix = syntheticNumber.split('-')[0];
           const amount = transaction.debit_amount || transaction.amount || 0;
           
           // Only include 4xx (expenses) and 2xx accounts on debit side
           if (prefix.startsWith('4') || prefix.startsWith('2')) {
-            const key = `${acc.number}-WN`;
+            const key = `${syntheticNumber}-WN`;
             const existing = accountMap.get(key);
             if (existing) {
               existing.totalAmount += amount;
             } else {
+              const syntheticName = syntheticAccountsMap.get(syntheticNumber) || acc.name;
               accountMap.set(key, {
-                accountNumber: acc.number,
-                accountName: acc.name,
+                accountNumber: syntheticNumber,
+                accountName: syntheticName,
                 totalAmount: amount,
                 side: 'WN'
               });
@@ -95,19 +133,21 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
         // Process credit account (MA)
         if (transaction.credit_account) {
           const acc = transaction.credit_account;
-          const prefix = acc.number.split('-')[0];
+          const syntheticNumber = getSyntheticAccountNumber(acc.number);
+          const prefix = syntheticNumber.split('-')[0];
           const amount = transaction.credit_amount || transaction.amount || 0;
           
           // Only include 7xx (income) and 2xx accounts on credit side
           if (prefix.startsWith('7') || prefix.startsWith('2')) {
-            const key = `${acc.number}-MA`;
+            const key = `${syntheticNumber}-MA`;
             const existing = accountMap.get(key);
             if (existing) {
               existing.totalAmount += amount;
             } else {
+              const syntheticName = syntheticAccountsMap.get(syntheticNumber) || acc.name;
               accountMap.set(key, {
-                accountNumber: acc.number,
-                accountName: acc.name,
+                accountNumber: syntheticNumber,
+                accountName: syntheticName,
                 totalAmount: amount,
                 side: 'MA'
               });
