@@ -2049,12 +2049,13 @@ const EditableTransactionRow = React.forwardRef<
       }
     }, [formData.credit_amount, isCreditFocused]);
 
-    // Determine if this is a split transaction with one side empty
-    const isDebitEmpty = !formData.debit_amount || formData.debit_amount === 0;
-    const isCreditEmpty = !formData.credit_amount || formData.credit_amount === 0;
-    const isSplitTransaction = (isDebitEmpty && !isCreditEmpty) || (isCreditEmpty && !isDebitEmpty);
-    const isDebitReadOnly = isSplitTransaction && isDebitEmpty;
-    const isCreditReadOnly = isSplitTransaction && isCreditEmpty;
+    // Determine if this is a split transaction based on ORIGINAL transaction data (not current form)
+    // This prevents fields from becoming readonly when user temporarily clears an amount
+    const originalDebitEmpty = !transaction.debit_amount || transaction.debit_amount === 0;
+    const originalCreditEmpty = !transaction.credit_amount || transaction.credit_amount === 0;
+    const isSplitTransaction = (originalDebitEmpty && !originalCreditEmpty) || (originalCreditEmpty && !originalDebitEmpty);
+    const isDebitReadOnly = isSplitTransaction && originalDebitEmpty;
+    const isCreditReadOnly = isSplitTransaction && originalCreditEmpty;
 
     useEffect(() => {
       const updatedTransaction: Transaction = {
