@@ -411,8 +411,8 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       </Button>
 
       {/* Ukryty element do renderowania PDF */}
-      <div ref={printRef} className="fixed -left-[9999px] top-0 bg-white p-8 w-[210mm]">
-        <div className="space-y-6">
+      <div ref={printRef} className="fixed -left-[9999px] top-0 bg-white p-8 w-[210mm]" style={{ fontSize: '12px' }}>
+        <div className="space-y-6" style={{ breakInside: 'avoid' }}>
           {/* Nagłówek raportu */}
           <div className="text-center border-b-2 border-gray-300 pb-4">
             <h1 className="text-2xl font-bold text-gray-800">RAPORT FINANSOWY</h1>
@@ -506,7 +506,7 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
               </p>
               
               {Object.entries(cashFlowData).map(([mainCategory, categories]) => (
-                <div key={mainCategory} className="mb-6">
+                <div key={mainCategory} className="mb-6" style={{ breakInside: 'avoid' }}>
                   <div className="flex justify-between items-center mb-3 bg-blue-100 p-2 rounded">
                     <h4 className="text-md font-semibold text-blue-800">{mainCategory}</h4>
                   </div>
@@ -562,7 +562,7 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
               </p>
               
               {Object.entries(groupedAccounts || {}).map(([category, accounts]) => (
-                <div key={category} className="mb-6">
+                <div key={category} className="mb-6" style={{ breakInside: 'avoid' }}>
                   <div className="flex justify-between items-center mb-3 bg-gray-100 p-2 rounded">
                     <h4 className="text-md font-semibold">{getCategoryTitle(category)}</h4>
                     <div className="text-md font-bold">

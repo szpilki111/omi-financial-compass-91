@@ -160,36 +160,25 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
       summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Podsumowanie');
 
-      // Income accounts sheet
-      if (incomeAccounts.length > 0) {
-        const incomeData = [
-          ['PRZYCHODY - ROZPISKA KONT'],
+      // Combined accounts sheet (Przychody + Rozchody)
+      if (incomeAccounts.length > 0 || expenseAccounts.length > 0) {
+        const accountsData = [
+          ['ROZPISKA KONT'],
           [''],
+          ['PRZYCHODY'],
           ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
           ...incomeAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
+          ['SUMA PRZYCHODÓW', '', '', incomeAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
           [''],
-          ['SUMA PRZYCHODÓW', '', '', incomeAccounts.reduce((sum, a) => sum + a.totalAmount, 0)]
-        ];
-
-        const incomeSheet = XLSX.utils.aoa_to_sheet(incomeData);
-        incomeSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(wb, incomeSheet, 'Przychody');
-      }
-
-      // Expense accounts sheet
-      if (expenseAccounts.length > 0) {
-        const expenseData = [
-          ['ROZCHODY - ROZPISKA KONT'],
-          [''],
+          ['ROZCHODY'],
           ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
           ...expenseAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
-          [''],
-          ['SUMA ROZCHODÓW', '', '', expenseAccounts.reduce((sum, a) => sum + a.totalAmount, 0)]
+          ['SUMA ROZCHODÓW', '', '', expenseAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
         ];
 
-        const expenseSheet = XLSX.utils.aoa_to_sheet(expenseData);
-        expenseSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(wb, expenseSheet, 'Rozchody');
+        const accountsSheet = XLSX.utils.aoa_to_sheet(accountsData);
+        accountsSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, accountsSheet, 'Rozpiska kont');
       }
 
       // Generate filename
