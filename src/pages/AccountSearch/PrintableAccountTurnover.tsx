@@ -56,15 +56,7 @@ const PrintableAccountTurnover = React.forwardRef<HTMLDivElement, PrintableAccou
     const sortedMonths = Object.keys(transactionsByMonth).sort();
 
     return (
-      <div ref={ref} className="print-container hidden print:block bg-white text-black" style={{ fontSize: '8px', padding: '4mm' }}>
-        <style>{`
-          @media print {
-            @page { size: A4; margin: 5mm; }
-            .print-container { display: block !important; }
-            table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; }
-          }
-        `}</style>
+      <div ref={ref} className="print-content" style={{ fontSize: '9pt', padding: '5mm', background: 'white', color: 'black' }}>
 
         {/* Nagłówek - kompaktowy */}
         <div style={{ marginBottom: '2mm', borderBottom: '1px solid #000', paddingBottom: '1mm' }}>
