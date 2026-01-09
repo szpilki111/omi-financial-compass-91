@@ -168,18 +168,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   });
 
   const handlePrint = () => {
-    if (printRef.current) {
-      // Create print overlay directly in body
-      const printOverlay = document.createElement('div');
-      printOverlay.className = 'print-overlay';
-      printOverlay.innerHTML = printRef.current.innerHTML;
-      document.body.appendChild(printOverlay);
-      
-      window.print();
-      
-      // Clean up after print
-      document.body.removeChild(printOverlay);
-    }
+    window.print();
   };
 
   const captureErrorScreenshot = async () => {

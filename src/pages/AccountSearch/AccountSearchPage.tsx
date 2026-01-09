@@ -243,16 +243,13 @@ const AccountSearchPage = () => {
   // Drukowanie obrotów
   const handlePrint = () => {
     if (printRef.current) {
-      // Create print overlay directly in body
-      const printOverlay = document.createElement('div');
-      printOverlay.className = 'print-overlay';
-      printOverlay.innerHTML = printRef.current.innerHTML;
-      document.body.appendChild(printOverlay);
+      const printContent = printRef.current;
+      const originalDisplay = printContent.style.display;
+      printContent.style.display = 'block';
       
       window.print();
       
-      // Clean up after print
-      document.body.removeChild(printOverlay);
+      printContent.style.display = originalDisplay;
     }
   };
 
