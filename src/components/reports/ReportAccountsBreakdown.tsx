@@ -126,11 +126,20 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         return restrictedPrefixes.includes(accountPrefix);
       };
 
+      // Funkcja do sprawdzania czy konto jest analityczne (więcej niż 3 segmenty oddzielone myślnikami)
+      const isAnalyticalAccount = (accountNumber: string) => {
+        if (!accountNumber) return false;
+        const segments = accountNumber.split('-');
+        return segments.length > 3;
+      };
+
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
       const isRelevantAccount = (accountNumber: string) => {
         if (!accountNumber) return false;
         // Skip restricted accounts
         if (isAccountRestricted(accountNumber)) return false;
+        // Skip analytical accounts
+        if (isAnalyticalAccount(accountNumber)) return false;
         return accountNumber.startsWith('2') || accountNumber.startsWith('4') || accountNumber.startsWith('7');
       };
 
