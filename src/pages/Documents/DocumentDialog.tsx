@@ -255,10 +255,21 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const captureErrorScreenshot = async () => {
     setIsCapturingError(true);
     try {
-      const canvas = await html2canvas(document.body, {
+      // Przechwytuj tylko zawartość dialogu, nie całe body
+      const dialogElement = window.document.querySelector('[role="dialog"]') as HTMLElement;
+      const targetElement = dialogElement || window.document.body;
+      
+      const canvas = await html2canvas(targetElement, {
         allowTaint: true,
         useCORS: true,
         logging: false,
+        backgroundColor: '#ffffff',
+        scale: 1,
+        onclone: (clonedDoc) => {
+          // Usuń ciemne overlay z klonu
+          const overlays = clonedDoc.querySelectorAll('[data-radix-dialog-overlay]');
+          overlays.forEach(el => el.remove());
+        }
       });
       const dataUrl = canvas.toDataURL("image/png");
       setErrorScreenshot(dataUrl);
