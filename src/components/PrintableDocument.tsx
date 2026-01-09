@@ -59,15 +59,7 @@ const PrintableDocument = React.forwardRef<HTMLDivElement, PrintableDocumentProp
     };
 
     return (
-      <div ref={ref} className="print-container hidden print:block bg-white text-black" style={{ fontSize: '9px', padding: '4mm' }}>
-        <style>{`
-          @media print {
-            @page { size: A4; margin: 5mm; }
-            .print-container { display: block !important; }
-            table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; }
-          }
-        `}</style>
+      <div ref={ref} className="print-container hidden print:block" style={{ fontSize: '9pt', padding: '5mm', background: 'white', color: 'black' }}>
 
         {/* Nagłówek - kompaktowy jak Symfonia */}
         <div style={{ marginBottom: '2mm' }}>
