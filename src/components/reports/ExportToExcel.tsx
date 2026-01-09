@@ -137,49 +137,42 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
       // Create workbook
       const wb = XLSX.utils.book_new();
 
-      // Summary sheet
-      const summaryData = [
+      // Single sheet with everything
+      const sheetData: (string | number | null)[][] = [
         ['RAPORT FINANSOWY'],
         [''],
-        ['Placówka:', locationName],
-        ['Okres:', period],
-        ['Rok:', year],
-        ['Miesiąc:', month],
+        ['Placówka:', locationName, '', ''],
+        ['Okres:', period, '', ''],
+        ['Rok:', year, '', ''],
+        ['Miesiąc:', month, '', ''],
         [''],
         ['PODSUMOWANIE FINANSOWE'],
         [''],
-        ['Bilans otwarcia:', reportDetails?.opening_balance || 0],
-        ['Przychody:', reportDetails?.income_total || 0],
-        ['Rozchody:', reportDetails?.expense_total || 0],
-        ['Rozliczenia:', reportDetails?.settlements_total || 0],
-        ['Bilans:', reportDetails?.balance || 0],
-        ['Bilans zamknięcia:', reportDetails?.closing_balance || 0],
+        ['Bilans otwarcia:', reportDetails?.opening_balance || 0, '', ''],
+        ['Przychody:', reportDetails?.income_total || 0, '', ''],
+        ['Rozchody:', reportDetails?.expense_total || 0, '', ''],
+        ['Rozliczenia:', reportDetails?.settlements_total || 0, '', ''],
+        ['Bilans:', reportDetails?.balance || 0, '', ''],
+        ['Bilans zamknięcia:', reportDetails?.closing_balance || 0, '', ''],
+        [''],
+        [''],
+        ['ROZPISKA KONT - PRZYCHODY'],
+        [''],
+        ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
+        ...incomeAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
+        ['SUMA PRZYCHODÓW', '', '', incomeAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
+        [''],
+        [''],
+        ['ROZPISKA KONT - ROZCHODY'],
+        [''],
+        ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
+        ...expenseAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
+        ['SUMA ROZCHODÓW', '', '', expenseAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
       ];
 
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, summarySheet, 'Podsumowanie');
-
-      // Combined accounts sheet (Przychody + Rozchody)
-      if (incomeAccounts.length > 0 || expenseAccounts.length > 0) {
-        const accountsData = [
-          ['ROZPISKA KONT'],
-          [''],
-          ['PRZYCHODY'],
-          ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
-          ...incomeAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
-          ['SUMA PRZYCHODÓW', '', '', incomeAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
-          [''],
-          ['ROZCHODY'],
-          ['Numer konta', 'Nazwa konta', 'Strona', 'Kwota'],
-          ...expenseAccounts.map(a => [a.accountNumber, a.accountName, a.side, a.totalAmount]),
-          ['SUMA ROZCHODÓW', '', '', expenseAccounts.reduce((sum, a) => sum + a.totalAmount, 0)],
-        ];
-
-        const accountsSheet = XLSX.utils.aoa_to_sheet(accountsData);
-        accountsSheet['!cols'] = [{ wch: 20 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(wb, accountsSheet, 'Rozpiska kont');
-      }
+      const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+      sheet['!cols'] = [{ wch: 25 }, { wch: 45 }, { wch: 10 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, sheet, 'Podsumowanie');
 
       // Generate filename
       const monthNames = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paz', 'lis', 'gru'];
