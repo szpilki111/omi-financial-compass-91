@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
       'transactions', // transactions reference documents and accounts
       'reports', // reports reference locations and users
       'report_details', // report_details reference reports
+      'report_account_details', // szczegółowa rozpisja kont z kwotami
       'report_sections',
       'report_entries', // report_entries reference reports
       'account_section_mappings',
