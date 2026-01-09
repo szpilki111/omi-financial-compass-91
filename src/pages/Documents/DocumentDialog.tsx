@@ -2102,16 +2102,6 @@ const EditableTransactionRow = React.forwardRef<
                   setFormData((prev) => ({ ...prev, debit_amount: parseFloat(formData.debit_amount.toFixed(2)) }));
                 }
               }}
-              onKeyDown={(e) => {
-                // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
-                if (
-                  !/[\d.,\-]/.test(e.key) &&
-                  !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
-                  !e.ctrlKey && !e.metaKey
-                ) {
-                  e.preventDefault();
-                }
-              }}
               placeholder="0.00"
               style={{
                 width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) + 130)}px`,
@@ -2159,16 +2149,6 @@ const EditableTransactionRow = React.forwardRef<
                 // Format to 2 decimal places on blur
                 if (formData.credit_amount > 0) {
                   setFormData((prev) => ({ ...prev, credit_amount: parseFloat(formData.credit_amount.toFixed(2)) }));
-                }
-              }}
-              onKeyDown={(e) => {
-                // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
-                if (
-                  !/[\d.,\-]/.test(e.key) &&
-                  !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
-                  !e.ctrlKey && !e.metaKey
-                ) {
-                  e.preventDefault();
                 }
               }}
               placeholder="0.00"

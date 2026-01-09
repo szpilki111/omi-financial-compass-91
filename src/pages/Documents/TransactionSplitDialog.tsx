@@ -311,16 +311,6 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
                                   const normalizedValue = e.target.value.replace(",", ".");
                                   field.onChange(Number(normalizedValue) || 0);
                                 }}
-                                onKeyDown={(e) => {
-                                  // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
-                                  if (
-                                    !/[\d.,\-]/.test(e.key) &&
-                                    !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
-                                    !e.ctrlKey && !e.metaKey
-                                  ) {
-                                    e.preventDefault();
-                                  }
-                                }}
                               />
                             </FormControl>
                             <FormMessage />

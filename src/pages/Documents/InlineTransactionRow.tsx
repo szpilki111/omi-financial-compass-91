@@ -398,14 +398,6 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
-              // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
-              if (
-                !/[\d.,\-]/.test(e.key) &&
-                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
-                !e.ctrlKey && !e.metaKey
-              ) {
-                e.preventDefault();
-              }
             }}
             placeholder="0.00"
             style={{ 
@@ -452,14 +444,6 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
-              // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
-              if (
-                !/[\d.,\-]/.test(e.key) &&
-                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
-                !e.ctrlKey && !e.metaKey
-              ) {
-                e.preventDefault();
-              }
             }}
             placeholder="0.00"
             style={{ 
