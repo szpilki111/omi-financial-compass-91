@@ -327,38 +327,51 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
     onGenerateStart();
 
     try {
-      // Utwórz tymczasowy element do renderowania PDF
-      const element = printRef.current;
-      
-      // Opcje dla html2canvas
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      
-      // Utwórz PDF
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-
-      let position = 0;
-
-      // Dodaj pierwszą stronę
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Dodaj kolejne strony jeśli potrzeba
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 10;
+      const contentWidth = pageWidth - 2 * margin;
+      
+      // Get all sections from the print container
+      const sections = printRef.current.querySelectorAll('[data-pdf-section]');
+      
+      let currentY = margin;
+      let isFirstPage = true;
+      
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i] as HTMLElement;
+        
+        // Render section to canvas
+        const canvas = await html2canvas(section, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        // Check if section fits on current page
+        if (currentY + imgHeight > pageHeight - margin && !isFirstPage) {
+          pdf.addPage();
+          currentY = margin;
+        }
+        
+        // Add image to PDF
+        pdf.addImage(imgData, 'PNG', margin, currentY, imgWidth, imgHeight);
+        currentY += imgHeight + 5; // 5mm gap between sections
+        isFirstPage = false;
+        
+        // If current Y exceeds page, prepare for next page
+        if (currentY > pageHeight - margin) {
+          if (i < sections.length - 1) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        }
       }
 
       // Zapisz PDF
@@ -411,9 +424,9 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       </Button>
 
       {/* Ukryty element do renderowania PDF */}
-      <div ref={printRef} className="fixed -left-[9999px] top-0 bg-white p-8 w-[210mm]" style={{ fontSize: '12px' }}>
-        <div className="space-y-6" style={{ breakInside: 'avoid' }}>
-          {/* Nagłówek raportu */}
+      <div ref={printRef} className="fixed -left-[9999px] top-0 bg-white w-[210mm]" style={{ fontSize: '12px' }}>
+        {/* Nagłówek raportu */}
+        <div data-pdf-section className="bg-white p-4">
           <div className="text-center border-b-2 border-gray-300 pb-4">
             <h1 className="text-2xl font-bold text-gray-800">RAPORT FINANSOWY</h1>
             <h2 className="text-xl font-semibold text-gray-700 mt-2">{report.title}</h2>
@@ -421,8 +434,10 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
               Status: {getStatusLabel(report.status)}
             </p>
           </div>
+        </div>
 
-          {/* Informacje podstawowe */}
+        {/* Informacje podstawowe */}
+        <div data-pdf-section className="bg-white p-4">
           <div className="grid grid-cols-2 gap-6">
             <div>
               <h3 className="text-lg font-semibold mb-2 text-gray-800">Informacje podstawowe</h3>
@@ -453,173 +468,208 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
               </div>
             )}
           </div>
+        </div>
 
-          {/* Komentarze (jeśli istnieją) */}
-          {report.comments && (
-            <div>
-              <h3 className="text-lg font-semibold mb-2 text-gray-800">Komentarze</h3>
-              <div className="bg-gray-100 p-3 rounded text-sm">
-                {report.comments}
-              </div>
-            </div>
-          )}
-
-          {/* Podsumowanie finansowe */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Podsumowanie finansowe</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="font-medium">Saldo otwarcia:</p>
-                  <p className="text-lg font-bold text-blue-600">
-                    {formatCurrency(financialDetails.openingBalance)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-medium">Przychody:</p>
-                  <p className="text-lg font-bold text-green-600">
-                    {formatCurrency(financialDetails.income)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-medium">Koszty:</p>
-                  <p className="text-lg font-bold text-red-600">
-                    {formatCurrency(financialDetails.expense)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-medium">Saldo końcowe:</p>
-                  <p className="text-lg font-bold text-gray-800">
-                    {formatCurrency(financialDetails.balance)}
-                  </p>
-                </div>
-              </div>
+        {/* Komentarze (jeśli istnieją) */}
+        {report.comments && (
+          <div data-pdf-section className="bg-white p-4">
+            <h3 className="text-lg font-semibold mb-2 text-gray-800">Komentarze</h3>
+            <div className="bg-gray-100 p-3 rounded text-sm">
+              {report.comments}
             </div>
           </div>
+        )}
 
-          {/* Stan kasowy i finansowy domu */}
-          {cashFlowData && Object.keys(cashFlowData).length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">Stan kasowy i finansowy domu</h3>
-              <p className="text-xs text-gray-600 mb-4">
-                Szczegółowa rozpiska stanu finansowego według kategorii księgowych na koniec okresu
-              </p>
-              
-              {Object.entries(cashFlowData).map(([mainCategory, categories]) => (
-                <div key={mainCategory} className="mb-6" style={{ breakInside: 'avoid' }}>
-                  <div className="flex justify-between items-center mb-3 bg-blue-100 p-2 rounded">
-                    <h4 className="text-md font-semibold text-blue-800">{mainCategory}</h4>
-                  </div>
-                  
-                  {categories.map((category) => (
-                    <div key={category.title} className="mb-4">
-                      <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
-                        <h5 className="font-medium text-gray-800">{category.title}</h5>
-                        <div className="text-md font-bold">
-                          {formatCurrency(category.total)}
-                        </div>
-                      </div>
-                      
-                      {category.accounts.length > 0 && (
-                        <table className="w-full text-xs border-collapse border border-gray-300 mb-2">
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="border border-gray-300 p-1 text-left">Numer konta</th>
-                              <th className="border border-gray-300 p-1 text-left">Nazwa konta</th>
-                              <th className="border border-gray-300 p-1 text-right">Saldo</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {category.accounts.map((account) => (
-                              <tr key={account.account_number}>
-                                <td className="border border-gray-300 p-1 font-medium">
-                                  {account.account_number}
-                                </td>
-                                <td className="border border-gray-300 p-1">
-                                  {account.account_name}
-                                </td>
-                                <td className="border border-gray-300 p-1 text-right font-medium">
-                                  {formatCurrency(account.balance)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Szczegółowa rozpiska kont */}
-          {accountsBreakdown && accountsBreakdown.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">Szczegółowa rozpiska kont</h3>
-              <p className="text-xs text-gray-600 mb-4">
-                Pokazuje tylko konta wpływające na wynik finansowy (200, 400, 700)
-              </p>
-              
-              {Object.entries(groupedAccounts || {}).map(([category, accounts]) => (
-                <div key={category} className="mb-6" style={{ breakInside: 'avoid' }}>
-                  <div className="flex justify-between items-center mb-3 bg-gray-100 p-2 rounded">
-                    <h4 className="text-md font-semibold">{getCategoryTitle(category)}</h4>
-                    <div className="text-md font-bold">
-                      {formatCurrency(getCategoryTotal(accounts))}
-                    </div>
-                  </div>
-                  
-                  <table className="w-full text-xs border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-300 p-2 text-left">Numer konta</th>
-                        <th className="border border-gray-300 p-2 text-left">Nazwa konta</th>
-                        <th className="border border-gray-300 p-2 text-center">Strona</th>
-                        <th className="border border-gray-300 p-2 text-right">Kwota</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {accounts.map((account, index) => (
-                        <tr key={`${account.account_number}_${account.side}_${index}`}>
-                          <td className="border border-gray-300 p-2 font-medium">
-                            {account.account_number}
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            {account.account_name}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center">
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              account.side === 'debit' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                            }`}>
-                              {account.side === 'debit' ? 'WN' : 'MA'}
-                            </span>
-                          </td>
-                          <td className="border border-gray-300 p-2 text-right font-medium">
-                            {formatCurrency(account.total_amount)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-              
-              <div className="border-t-2 border-gray-400 pt-2 mt-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold">Suma kontrolna:</span>
-                  <span className="font-bold">
-                    {formatCurrency(accountsBreakdown.reduce((sum, account) => sum + account.total_amount, 0))}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  * Suma kontrolna reprezentuje różnicę między obrotami Ma i Wn
+        {/* Podsumowanie finansowe */}
+        <div data-pdf-section className="bg-white p-4">
+          <h3 className="text-lg font-semibold mb-4 text-gray-800">Podsumowanie finansowe</h3>
+          <div className="bg-gray-50 p-4 rounded">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Saldo otwarcia:</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {formatCurrency(financialDetails.openingBalance)}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Przychody:</p>
+                <p className="text-lg font-bold text-green-600">
+                  {formatCurrency(financialDetails.income)}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Koszty:</p>
+                <p className="text-lg font-bold text-red-600">
+                  {formatCurrency(financialDetails.expense)}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Saldo końcowe:</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {formatCurrency(financialDetails.balance)}
                 </p>
               </div>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* Stopka */}
+        {/* Stan kasowy i finansowy domu */}
+        {cashFlowData && Object.keys(cashFlowData).length > 0 && (
+          <div data-pdf-section className="bg-white p-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Stan kasowy i finansowy domu</h3>
+            <p className="text-xs text-gray-600 mb-4">
+              Szczegółowa rozpiska stanu finansowego według kategorii księgowych na koniec okresu
+            </p>
+            
+            {Object.entries(cashFlowData).map(([mainCategory, categories]) => (
+              <div key={mainCategory} className="mb-6">
+                <div className="flex justify-between items-center mb-3 bg-blue-100 p-2 rounded">
+                  <h4 className="text-md font-semibold text-blue-800">{mainCategory}</h4>
+                </div>
+                
+                {categories.map((category) => (
+                  <div key={category.title} className="mb-4">
+                    <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
+                      <h5 className="font-medium text-gray-800">{category.title}</h5>
+                      <div className="text-md font-bold">
+                        {formatCurrency(category.total)}
+                      </div>
+                    </div>
+                    
+                    {category.accounts.length > 0 && (
+                      <table className="w-full text-xs border-collapse border border-gray-300 mb-2">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="border border-gray-300 p-1 text-left">Numer konta</th>
+                            <th className="border border-gray-300 p-1 text-left">Nazwa konta</th>
+                            <th className="border border-gray-300 p-1 text-right">Saldo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {category.accounts.map((account) => (
+                            <tr key={account.account_number}>
+                              <td className="border border-gray-300 p-1 font-medium">
+                                {account.account_number}
+                              </td>
+                              <td className="border border-gray-300 p-1">
+                                {account.account_name}
+                              </td>
+                              <td className="border border-gray-300 p-1 text-right font-medium">
+                                {formatCurrency(account.balance)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Szczegółowa rozpiska kont - Przychody */}
+        {accountsBreakdown && groupedAccounts?.income && groupedAccounts.income.length > 0 && (
+          <div data-pdf-section className="bg-white p-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Szczegółowa rozpiska kont</h3>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3 bg-gray-100 p-2 rounded">
+                <h4 className="text-md font-semibold">{getCategoryTitle('income')}</h4>
+                <div className="text-md font-bold">
+                  {formatCurrency(getCategoryTotal(groupedAccounts.income))}
+                </div>
+              </div>
+              
+              <table className="w-full text-xs border-collapse border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 p-2 text-left">Numer konta</th>
+                    <th className="border border-gray-300 p-2 text-left">Nazwa konta</th>
+                    <th className="border border-gray-300 p-2 text-center">Strona</th>
+                    <th className="border border-gray-300 p-2 text-right">Kwota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedAccounts.income.map((account, index) => (
+                    <tr key={`${account.account_number}_${account.side}_${index}`}>
+                      <td className="border border-gray-300 p-2 font-medium">
+                        {account.account_number}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {account.account_name}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-center">
+                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">MA</span>
+                      </td>
+                      <td className="border border-gray-300 p-2 text-right font-medium">
+                        {formatCurrency(account.total_amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Szczegółowa rozpiska kont - Koszty */}
+        {accountsBreakdown && groupedAccounts?.expense && groupedAccounts.expense.length > 0 && (
+          <div data-pdf-section className="bg-white p-4">
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3 bg-gray-100 p-2 rounded">
+                <h4 className="text-md font-semibold">{getCategoryTitle('expense')}</h4>
+                <div className="text-md font-bold">
+                  {formatCurrency(getCategoryTotal(groupedAccounts.expense))}
+                </div>
+              </div>
+              
+              <table className="w-full text-xs border-collapse border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 p-2 text-left">Numer konta</th>
+                    <th className="border border-gray-300 p-2 text-left">Nazwa konta</th>
+                    <th className="border border-gray-300 p-2 text-center">Strona</th>
+                    <th className="border border-gray-300 p-2 text-right">Kwota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedAccounts.expense.map((account, index) => (
+                    <tr key={`${account.account_number}_${account.side}_${index}`}>
+                      <td className="border border-gray-300 p-2 font-medium">
+                        {account.account_number}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {account.account_name}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-center">
+                        <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">WN</span>
+                      </td>
+                      <td className="border border-gray-300 p-2 text-right font-medium">
+                        {formatCurrency(account.total_amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="border-t-2 border-gray-400 pt-2 mt-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="font-semibold">Suma kontrolna:</span>
+                <span className="font-bold">
+                  {formatCurrency(accountsBreakdown.reduce((sum, account) => sum + account.total_amount, 0))}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                * Suma kontrolna reprezentuje różnicę między obrotami Ma i Wn
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stopka */}
+        <div data-pdf-section className="bg-white p-4">
           <div className="border-t-2 border-gray-300 pt-4 text-center text-xs text-gray-500">
             <p>Raport wygenerowany automatycznie w dniu {new Date().toLocaleDateString('pl-PL')}</p>
           </div>
