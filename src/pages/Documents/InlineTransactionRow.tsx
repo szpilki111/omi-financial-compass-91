@@ -377,9 +377,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
       <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
-            type="text"
+            type="number"
+            step="0.01"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2).replace('.', ',')}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               const numValue = parseFloat(value) || 0;
@@ -397,17 +398,11 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               handleDebitAmountBlur();
             }}
             onKeyDown={(e) => {
-              // Allow: digits, comma, dot, minus, control keys
-              if (e.key !== 'Tab' && !/[\d.,\-]/.test(e.key) && 
-                  !e.ctrlKey && !e.metaKey && 
-                  !['ArrowLeft', 'ArrowRight', 'Delete', 'Backspace', 'Enter'].includes(e.key)) {
-                e.preventDefault();
-              }
               if (e.key === "Enter") e.preventDefault();
             }}
-            placeholder="0,00"
+            placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toFixed(2).length) + 130)}px` 
+              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toString().length) + 130)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
@@ -429,9 +424,10 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
       <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
-            type="text"
+            type="number"
+            step="0.01"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2).replace('.', ',')}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               const numValue = parseFloat(value) || 0;
@@ -449,17 +445,11 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
               handleCreditAmountBlur();
             }}
             onKeyDown={(e) => {
-              // Allow: digits, comma, dot, minus, control keys
-              if (e.key !== 'Tab' && !/[\d.,\-]/.test(e.key) && 
-                  !e.ctrlKey && !e.metaKey && 
-                  !['ArrowLeft', 'ArrowRight', 'Delete', 'Backspace', 'Enter'].includes(e.key)) {
-                e.preventDefault();
-              }
               if (e.key === "Enter") e.preventDefault();
             }}
-            placeholder="0,00"
+            placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toFixed(2).length) + 130)}px` 
+              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toString().length) + 130)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
