@@ -162,7 +162,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
 
     const canCreateBalancing =
       isBasicFormValid() &&
-      formData.credit_account_id &&
+      formData.debit_account_id &&
       difference > 0.01 &&
       formData.debit_amount < formData.credit_amount;
 
@@ -203,7 +203,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
 
     const canCreateBalancing =
       isBasicFormValid() &&
-      formData.debit_account_id &&
+      formData.credit_account_id &&
       difference > 0.01 &&
       formData.credit_amount < formData.debit_amount;
 
