@@ -2063,6 +2063,18 @@ const EditableTransactionRow = React.forwardRef<
     const isSplitTransaction = (originalDebitEmpty && !originalCreditEmpty) || (originalCreditEmpty && !originalDebitEmpty);
     const isDebitReadOnly = isSplitTransaction && originalDebitEmpty;
     const isCreditReadOnly = isSplitTransaction && originalCreditEmpty;
+    
+    // Debug logging
+    console.log("📊 EditableTransactionRow readonly check:", {
+      transactionId: transaction.id,
+      originalRef: originalTransactionRef.current,
+      originalDebitEmpty,
+      originalCreditEmpty,
+      isSplitTransaction,
+      isDebitReadOnly,
+      isCreditReadOnly,
+      isEditingBlocked
+    });
 
     useEffect(() => {
       const updatedTransaction: Transaction = {
