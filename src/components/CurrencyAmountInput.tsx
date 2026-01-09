@@ -50,7 +50,9 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
     if (inputValue === '' || inputValue === '-') {
       return;
     }
-    const newValue = parseFloat(inputValue) || 0;
+    // Zamień przecinek na kropkę przed parsowaniem - obsługa klawiatury numerycznej
+    const normalizedValue = inputValue.replace(',', '.');
+    const newValue = parseFloat(normalizedValue) || 0;
     onChange(newValue);
   };
 
@@ -63,15 +65,21 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
     setIsFocused(false);
     
     // Convert empty or invalid input to 0 on blur
-    const inputValue = displayValue.trim();
+    // Zamień przecinek na kropkę przed parsowaniem
+    const inputValue = displayValue.trim().replace(',', '.');
     if (inputValue === '' || inputValue === '-') {
       onChange(0);
       setDisplayValue('');
-    } else if (value > 0) {
-      // Format to 2 decimal places on blur
-      setDisplayValue(value.toFixed(2));
     } else {
-      setDisplayValue('');
+      // Parsuj wartość z normalizowanym separatorem
+      const parsedValue = parseFloat(inputValue) || 0;
+      onChange(parsedValue);
+      if (parsedValue > 0) {
+        // Format to 2 decimal places on blur
+        setDisplayValue(parsedValue.toFixed(2));
+      } else {
+        setDisplayValue('');
+      }
     }
     
     onBlur?.(e);
@@ -100,8 +108,8 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
               if (e.key === 'Enter') {
                 e.preventDefault();
               }
-              // Allow Tab, numbers, decimal point, and control keys
-              if (e.key !== 'Tab' && !/[\d.,\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete') {
+              // Allow Tab, numbers, decimal point (both . and ,), minus, and control keys
+              if (e.key !== 'Tab' && !/[\d.,\-\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete' && e.key !== 'Backspace') {
                 e.preventDefault();
               }
             }}
