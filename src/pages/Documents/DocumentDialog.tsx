@@ -2085,12 +2085,12 @@ const EditableTransactionRow = React.forwardRef<
         <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
             <Input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={formData.debit_amount ? formData.debit_amount.toFixed(2) : ""}
               onChange={(e) => {
-                const value = parseFloat(e.target.value) || 0;
+                const normalizedValue = e.target.value.replace(",", ".");
+                const value = parseFloat(normalizedValue) || 0;
                 // Limit to 10 digits before decimal point
                 if (Math.abs(value) < 10000000000) {
                   setFormData((prev) => ({ ...prev, debit_amount: value }));
@@ -2100,6 +2100,16 @@ const EditableTransactionRow = React.forwardRef<
                 // Format to 2 decimal places on blur
                 if (formData.debit_amount > 0) {
                   setFormData((prev) => ({ ...prev, debit_amount: parseFloat(formData.debit_amount.toFixed(2)) }));
+                }
+              }}
+              onKeyDown={(e) => {
+                // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
+                if (
+                  !/[\d.,\-]/.test(e.key) &&
+                  !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
+                  !e.ctrlKey && !e.metaKey
+                ) {
+                  e.preventDefault();
                 }
               }}
               placeholder="0.00"
@@ -2134,12 +2144,12 @@ const EditableTransactionRow = React.forwardRef<
         <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
             <Input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={formData.credit_amount ? formData.credit_amount.toFixed(2) : ""}
               onChange={(e) => {
-                const value = parseFloat(e.target.value) || 0;
+                const normalizedValue = e.target.value.replace(",", ".");
+                const value = parseFloat(normalizedValue) || 0;
                 // Limit to 10 digits before decimal point
                 if (Math.abs(value) < 10000000000) {
                   setFormData((prev) => ({ ...prev, credit_amount: value }));
@@ -2149,6 +2159,16 @@ const EditableTransactionRow = React.forwardRef<
                 // Format to 2 decimal places on blur
                 if (formData.credit_amount > 0) {
                   setFormData((prev) => ({ ...prev, credit_amount: parseFloat(formData.credit_amount.toFixed(2)) }));
+                }
+              }}
+              onKeyDown={(e) => {
+                // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
+                if (
+                  !/[\d.,\-]/.test(e.key) &&
+                  !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
+                  !e.ctrlKey && !e.metaKey
+                ) {
+                  e.preventDefault();
                 }
               }}
               placeholder="0.00"

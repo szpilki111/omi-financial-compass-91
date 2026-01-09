@@ -304,11 +304,23 @@ const TransactionSplitDialog = ({ isOpen, onClose, onSplit, transaction, splitSi
                             <FormLabel>Kwota</FormLabel>
                             <FormControl>
                               <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                {...field}
-                                onChange={(e) => field.onChange(Number(e.target.value))}
+                                type="text"
+                                inputMode="decimal"
+                                value={field.value || ''}
+                                onChange={(e) => {
+                                  const normalizedValue = e.target.value.replace(",", ".");
+                                  field.onChange(Number(normalizedValue) || 0);
+                                }}
+                                onKeyDown={(e) => {
+                                  // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
+                                  if (
+                                    !/[\d.,\-]/.test(e.key) &&
+                                    !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
+                                    !e.ctrlKey && !e.metaKey
+                                  ) {
+                                    e.preventDefault();
+                                  }
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
