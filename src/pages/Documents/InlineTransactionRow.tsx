@@ -377,10 +377,9 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
       <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount}
+            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               const numValue = parseFloat(value) || 0;
@@ -399,6 +398,14 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
+              // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
+              if (
+                !/[\d.,\-]/.test(e.key) &&
+                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
+                !e.ctrlKey && !e.metaKey
+              ) {
+                e.preventDefault();
+              }
             }}
             placeholder="0.00"
             style={{ 
@@ -424,10 +431,9 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
       <TableCell className="w-auto">
         <div className="flex items-center space-x-2">
           <Input
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount}
+            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
             onChange={(e) => {
               const value = e.target.value.replace(",", ".");
               const numValue = parseFloat(value) || 0;
@@ -446,6 +452,14 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.preventDefault();
+              // Allow: digits, dot, comma, minus, backspace, delete, tab, arrows
+              if (
+                !/[\d.,\-]/.test(e.key) &&
+                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key) &&
+                !e.ctrlKey && !e.metaKey
+              ) {
+                e.preventDefault();
+              }
             }}
             placeholder="0.00"
             style={{ 
