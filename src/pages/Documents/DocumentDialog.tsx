@@ -9,7 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, Printer, Bug } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Copy, BookOpen, Split, GripVertical, FileSpreadsheet, Bug } from "lucide-react";
+import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import { ErrorReportDialog } from "@/components/ErrorReportDialog";
 import { format } from "date-fns";
@@ -167,8 +168,85 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     enabled: !!userProfile?.location_id && !!documentDate && isOpen,
   });
 
-  const handlePrint = () => {
-    window.print();
+  const handleExportToExcel = () => {
+    const formData = form.getValues();
+    
+    // Połącz transakcje główne i równoległe
+    const allTransactions = [...transactions, ...parallelTransactions].filter(t => 
+      (t.debit_amount && t.debit_amount > 0) || (t.credit_amount && t.credit_amount > 0)
+    );
+
+    // Funkcja pomocnicza do pobierania numeru konta
+    const getAccountNumber = (accountId?: string) => {
+      if (!accountId) return '';
+      return accounts?.find(a => a.id === accountId)?.number || '';
+    };
+
+    // Sumy
+    const totalDebit = allTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
+    const totalCredit = allTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
+
+    // Buduj dane arkusza
+    const wsData: (string | number | undefined)[][] = [];
+    
+    // Nagłówek dokumentu
+    wsData.push([`POLECENIE KSIĘGOWANIA nr ${formData.document_number}`]);
+    wsData.push([formData.document_name]);
+    wsData.push([]);
+    wsData.push([
+      `Data dokumentu: ${format(formData.document_date, 'dd.MM.yyyy')}`,
+      '',
+      `Data operacji: ${format(formData.document_date, 'dd.MM.yyyy')}`
+    ]);
+    wsData.push([
+      `Okres: ${format(formData.document_date, 'MM/yyyy')}`,
+      '',
+      `Waluta: ${formData.currency}`
+    ]);
+    wsData.push([]);
+    
+    // Nagłówki tabeli transakcji
+    wsData.push(['Lp', 'Treść zapisu', 'Kwota Wn', 'Konto Wn', 'Kwota Ma', 'Konto Ma']);
+    
+    // Transakcje
+    allTransactions.forEach((t, idx) => {
+      wsData.push([
+        idx + 1,
+        t.description || '-',
+        t.debit_amount || '',
+        getAccountNumber(t.debit_account_id),
+        t.credit_amount || '',
+        getAccountNumber(t.credit_account_id)
+      ]);
+    });
+    
+    // Wiersz podsumowania
+    wsData.push(['', 'Razem:', totalDebit, '', totalCredit, '']);
+
+    // Utwórz arkusz i skoroszyt
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Ustaw szerokości kolumn
+    ws['!cols'] = [
+      { wch: 5 },   // Lp
+      { wch: 40 },  // Treść zapisu
+      { wch: 15 },  // Kwota Wn
+      { wch: 15 },  // Konto Wn
+      { wch: 15 },  // Kwota Ma
+      { wch: 15 }   // Konto Ma
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dokument');
+    
+    // Eksportuj plik
+    const fileName = `${formData.document_number.replace(/\//g, '-')}_${format(formData.document_date, 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    toast({
+      title: 'Eksport zakończony',
+      description: `Plik ${fileName} został pobrany`,
+    });
   };
 
   const captureErrorScreenshot = async () => {
@@ -1752,9 +1830,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
             <div className="flex justify-end space-x-2">
               {document && (
-                <Button type="button" variant="outline" onClick={handlePrint} className="flex items-center gap-2">
-                  <Printer className="h-4 w-4" />
-                  Drukuj
+                <Button type="button" variant="outline" onClick={handleExportToExcel} className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Eksport do Excel
                 </Button>
               )}
               <Button
