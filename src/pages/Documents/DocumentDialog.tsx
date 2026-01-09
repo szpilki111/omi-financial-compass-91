@@ -2000,6 +2000,29 @@ const EditableTransactionRow = React.forwardRef<
       debit_amount: transaction.debit_amount || 0,
       credit_amount: transaction.credit_amount || 0,
     });
+    
+    // Local state for amount input fields to allow free typing
+    const [debitAmountInput, setDebitAmountInput] = useState<string>(
+      transaction.debit_amount ? transaction.debit_amount.toFixed(2) : ""
+    );
+    const [creditAmountInput, setCreditAmountInput] = useState<string>(
+      transaction.credit_amount ? transaction.credit_amount.toFixed(2) : ""
+    );
+    const [isDebitFocused, setIsDebitFocused] = useState(false);
+    const [isCreditFocused, setIsCreditFocused] = useState(false);
+    
+    // Sync local input state with formData when not focused
+    useEffect(() => {
+      if (!isDebitFocused) {
+        setDebitAmountInput(formData.debit_amount ? formData.debit_amount.toFixed(2) : "");
+      }
+    }, [formData.debit_amount, isDebitFocused]);
+    
+    useEffect(() => {
+      if (!isCreditFocused) {
+        setCreditAmountInput(formData.credit_amount ? formData.credit_amount.toFixed(2) : "");
+      }
+    }, [formData.credit_amount, isCreditFocused]);
 
     // Determine if this is a split transaction with one side empty
     const isDebitEmpty = !formData.debit_amount || formData.debit_amount === 0;
@@ -2087,24 +2110,33 @@ const EditableTransactionRow = React.forwardRef<
             <Input
               type="text"
               inputMode="decimal"
-              value={formData.debit_amount ? formData.debit_amount.toFixed(2) : ""}
+              value={debitAmountInput}
               onChange={(e) => {
-                const normalizedValue = e.target.value.replace(",", ".");
-                const value = parseFloat(normalizedValue) || 0;
-                // Limit to 10 digits before decimal point
-                if (Math.abs(value) < 10000000000) {
-                  setFormData((prev) => ({ ...prev, debit_amount: value }));
+                const inputValue = e.target.value;
+                setDebitAmountInput(inputValue);
+                
+                if (inputValue === "" || inputValue === "-") {
+                  setFormData((prev) => ({ ...prev, debit_amount: 0 }));
+                  return;
+                }
+                
+                const normalizedValue = inputValue.replace(",", ".");
+                const numValue = parseFloat(normalizedValue);
+                if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                  setFormData((prev) => ({ ...prev, debit_amount: numValue }));
                 }
               }}
-              onBlur={(e) => {
-                // Format to 2 decimal places on blur
-                if (formData.debit_amount > 0) {
-                  setFormData((prev) => ({ ...prev, debit_amount: parseFloat(formData.debit_amount.toFixed(2)) }));
-                }
+              onFocus={() => setIsDebitFocused(true)}
+              onBlur={() => {
+                setIsDebitFocused(false);
+                const normalizedValue = debitAmountInput.replace(",", ".");
+                const numValue = parseFloat(normalizedValue) || 0;
+                setFormData((prev) => ({ ...prev, debit_amount: numValue }));
+                setDebitAmountInput(numValue ? numValue.toFixed(2) : "");
               }}
               placeholder="0.00"
               style={{
-                width: `${Math.max(60, (!formData.debit_amount ? 3 : formData.debit_amount.toFixed(2).length) + 130)}px`,
+                width: `${Math.max(60, (debitAmountInput.length || 3) + 130)}px`,
               }}
               className={cn(
                 "text-right",
@@ -2136,24 +2168,33 @@ const EditableTransactionRow = React.forwardRef<
             <Input
               type="text"
               inputMode="decimal"
-              value={formData.credit_amount ? formData.credit_amount.toFixed(2) : ""}
+              value={creditAmountInput}
               onChange={(e) => {
-                const normalizedValue = e.target.value.replace(",", ".");
-                const value = parseFloat(normalizedValue) || 0;
-                // Limit to 10 digits before decimal point
-                if (Math.abs(value) < 10000000000) {
-                  setFormData((prev) => ({ ...prev, credit_amount: value }));
+                const inputValue = e.target.value;
+                setCreditAmountInput(inputValue);
+                
+                if (inputValue === "" || inputValue === "-") {
+                  setFormData((prev) => ({ ...prev, credit_amount: 0 }));
+                  return;
+                }
+                
+                const normalizedValue = inputValue.replace(",", ".");
+                const numValue = parseFloat(normalizedValue);
+                if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                  setFormData((prev) => ({ ...prev, credit_amount: numValue }));
                 }
               }}
-              onBlur={(e) => {
-                // Format to 2 decimal places on blur
-                if (formData.credit_amount > 0) {
-                  setFormData((prev) => ({ ...prev, credit_amount: parseFloat(formData.credit_amount.toFixed(2)) }));
-                }
+              onFocus={() => setIsCreditFocused(true)}
+              onBlur={() => {
+                setIsCreditFocused(false);
+                const normalizedValue = creditAmountInput.replace(",", ".");
+                const numValue = parseFloat(normalizedValue) || 0;
+                setFormData((prev) => ({ ...prev, credit_amount: numValue }));
+                setCreditAmountInput(numValue ? numValue.toFixed(2) : "");
               }}
               placeholder="0.00"
               style={{
-                width: `${Math.max(70, (formData.credit_amount === 0 || !formData.credit_amount ? 4 : formData.credit_amount.toString().length) + 130)}px`,
+                width: `${Math.max(70, (creditAmountInput.length || 4) + 130)}px`,
               }}
               className={cn(
                 "text-right",

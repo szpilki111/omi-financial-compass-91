@@ -43,6 +43,12 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
 
   const [creditTouched, setCreditTouched] = useState(false);
   const [debitTouched, setDebitTouched] = useState(false);
+  
+  // Local state for amount input fields to allow free typing
+  const [debitAmountInput, setDebitAmountInput] = useState<string>("");
+  const [creditAmountInput, setCreditAmountInput] = useState<string>("");
+  const [isDebitFocused, setIsDebitFocused] = useState(false);
+  const [isCreditFocused, setIsCreditFocused] = useState(false);
 
   // Check if there's any data entered
   const hasAnyData =
@@ -292,11 +298,26 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
 
   const handleDebitFocus = () => {
     setDebitTouched(true);
+    setIsDebitFocused(true);
   };
 
   const handleCreditFocus = () => {
     setCreditTouched(true);
+    setIsCreditFocused(true);
   };
+  
+  // Sync local input state with formData when not focused
+  useEffect(() => {
+    if (!isDebitFocused) {
+      setDebitAmountInput(formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2));
+    }
+  }, [formData.debit_amount, isDebitFocused]);
+  
+  useEffect(() => {
+    if (!isCreditFocused) {
+      setCreditAmountInput(formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2));
+    }
+  }, [formData.credit_amount, isCreditFocused]);
 
   const getCurrencySymbol = (currency: string = "PLN") => {
     const currencySymbols: { [key: string]: string } = {
@@ -379,21 +400,29 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.debit_amount === 0 ? "" : formData.debit_amount.toFixed(2)}
+            value={debitAmountInput}
             onChange={(e) => {
-              const value = e.target.value.replace(",", ".");
-              const numValue = parseFloat(value) || 0;
-              // Limit to 10 digits before decimal point
-              if (Math.abs(numValue) < 10000000000) {
+              const inputValue = e.target.value;
+              setDebitAmountInput(inputValue);
+              
+              if (inputValue === "" || inputValue === "-") {
+                handleDebitAmountChange(0);
+                return;
+              }
+              
+              const normalizedValue = inputValue.replace(",", ".");
+              const numValue = parseFloat(normalizedValue);
+              if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
                 handleDebitAmountChange(numValue);
               }
             }}
             onFocus={handleDebitFocus}
-            onBlur={(e) => {
-              // Format to 2 decimal places on blur
-              if (formData.debit_amount > 0) {
-                handleDebitAmountChange(parseFloat(formData.debit_amount.toFixed(2)));
-              }
+            onBlur={() => {
+              setIsDebitFocused(false);
+              const normalizedValue = debitAmountInput.replace(",", ".");
+              const numValue = parseFloat(normalizedValue) || 0;
+              handleDebitAmountChange(numValue);
+              setDebitAmountInput(numValue === 0 ? "" : numValue.toFixed(2));
               handleDebitAmountBlur();
             }}
             onKeyDown={(e) => {
@@ -401,7 +430,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.debit_amount === 0 ? 4 : formData.debit_amount.toString().length) + 130)}px` 
+              width: `${Math.max(70, (debitAmountInput.length || 4) + 130)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
@@ -425,21 +454,29 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
           <Input
             type="text"
             inputMode="decimal"
-            value={formData.credit_amount === 0 ? "" : formData.credit_amount.toFixed(2)}
+            value={creditAmountInput}
             onChange={(e) => {
-              const value = e.target.value.replace(",", ".");
-              const numValue = parseFloat(value) || 0;
-              // Limit to 10 digits before decimal point
-              if (Math.abs(numValue) < 10000000000) {
+              const inputValue = e.target.value;
+              setCreditAmountInput(inputValue);
+              
+              if (inputValue === "" || inputValue === "-") {
+                handleCreditAmountChange(0);
+                return;
+              }
+              
+              const normalizedValue = inputValue.replace(",", ".");
+              const numValue = parseFloat(normalizedValue);
+              if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
                 handleCreditAmountChange(numValue);
               }
             }}
             onFocus={handleCreditFocus}
-            onBlur={(e) => {
-              // Format to 2 decimal places on blur
-              if (formData.credit_amount > 0) {
-                handleCreditAmountChange(parseFloat(formData.credit_amount.toFixed(2)));
-              }
+            onBlur={() => {
+              setIsCreditFocused(false);
+              const normalizedValue = creditAmountInput.replace(",", ".");
+              const numValue = parseFloat(normalizedValue) || 0;
+              handleCreditAmountChange(numValue);
+              setCreditAmountInput(numValue === 0 ? "" : numValue.toFixed(2));
               handleCreditAmountBlur();
             }}
             onKeyDown={(e) => {
@@ -447,7 +484,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
             }}
             placeholder="0.00"
             style={{ 
-              width: `${Math.max(70, (formData.credit_amount === 0 ? 4 : formData.credit_amount.toString().length) + 130)}px` 
+              width: `${Math.max(70, (creditAmountInput.length || 4) + 130)}px` 
             }}
             className={cn("text-right", hasValidationError && "border-destructive focus-visible:ring-destructive")}
             disabled={isEditingBlocked}
