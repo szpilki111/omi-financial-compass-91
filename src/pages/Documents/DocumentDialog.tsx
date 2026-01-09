@@ -1836,7 +1836,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               {document && (
                 <Button type="button" variant="outline" onClick={handleExportToExcel} className="flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4" />
-                  Eksport do Excel
+                  Drukuj
                 </Button>
               )}
               <Button
