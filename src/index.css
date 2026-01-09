@@ -315,17 +315,17 @@
   }
 }
 
-/* === PRINT STYLES - Globally hide everything except printable content === */
+/* === PRINT STYLES - Show only printable content === */
 @media print {
-  /* Hide everything by default */
-  body > * {
+  /* Hide all app content */
+  body > *:not(.print-overlay) {
     display: none !important;
   }
   
-  /* Show only the printable container */
-  .print-container {
+  /* Print overlay - full page black/white table style */
+  .print-overlay {
     display: block !important;
-    position: absolute !important;
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
@@ -339,35 +339,38 @@
   }
   
   /* Reset colors to black/white for print */
-  .print-container * {
+  .print-overlay * {
     color: black !important;
     background: white !important;
     border-color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
-  .print-container table {
+  .print-overlay table {
     border-collapse: collapse !important;
+    width: 100% !important;
   }
   
-  .print-container th,
-  .print-container td {
+  .print-overlay th,
+  .print-overlay td {
     border: 1px solid black !important;
-    padding: 1px 3px !important;
+    padding: 2px 4px !important;
   }
   
-  .print-container th {
-    background: #f0f0f0 !important;
+  .print-overlay th {
+    background: #eee !important;
     font-weight: bold !important;
   }
   
   /* Page settings */
   @page {
     size: A4;
-    margin: 5mm;
+    margin: 8mm;
   }
   
   /* Prevent page breaks inside rows */
-  .print-container tr {
+  .print-overlay tr {
     page-break-inside: avoid !important;
   }
 }

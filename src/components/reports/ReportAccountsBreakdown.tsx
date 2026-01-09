@@ -134,7 +134,21 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         return accountNumber.startsWith('2') || accountNumber.startsWith('4') || accountNumber.startsWith('7');
       };
 
-      // Zgrupuj transakcje według kont i oblicz sumy - TYLKO dla kont 2xx, 4xx, 7xx (bez ograniczonych)
+      // Funkcja do wyodrębnienia konta syntetycznego (3 pierwsze segmenty)
+      // np. 110-2-3-1 → 110-2-3, 700-1 → 700-1
+      const getSyntheticAccount = (accountNumber: string): string => {
+        const parts = accountNumber.split('-');
+        if (parts.length <= 3) return accountNumber;
+        return parts.slice(0, 3).join('-');
+      };
+
+      // Funkcja do wyodrębnienia nazwy syntetycznej (bez sufiksu lokalizacji)
+      const getSyntheticName = (accountName: string): string => {
+        // Zwróć nazwę przed pierwszym myślnikiem lub całość
+        return accountName.split(' - ')[0].trim();
+      };
+
+      // Zgrupuj transakcje według kont SYNTETYCZNYCH i oblicz sumy - TYLKO dla kont 2xx, 4xx, 7xx (bez ograniczonych)
       const accountTotals = new Map<string, AccountBreakdown>();
 
       transactions?.forEach(transaction => {
@@ -142,7 +156,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
         // Dla konta debetowego - sprawdź czy to konto 2xx, 4xx lub 7xx i nie jest ograniczone
         if (debit_account && isRelevantAccount(debit_account.number)) {
-          const key = `${debit_account.number}_debit`;
+          const syntheticNumber = getSyntheticAccount(debit_account.number);
+          const key = `${syntheticNumber}_debit`;
           const existing = accountTotals.get(key);
           
           // Użyj debit_amount jeśli jest dostępne, w przeciwnym razie amount
@@ -152,8 +167,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
             existing.total_amount += transactionAmount;
           } else {
             accountTotals.set(key, {
-              account_number: debit_account.number,
-              account_name: debit_account.name,
+              account_number: syntheticNumber,
+              account_name: getSyntheticName(debit_account.name),
               account_type: debit_account.type,
               total_amount: transactionAmount,
               category: categorizeAccount(debit_account.number, 'debit'),
@@ -164,7 +179,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
         // Dla konta kredytowego - sprawdź czy to konto 2xx, 4xx lub 7xx i nie jest ograniczone
         if (credit_account && isRelevantAccount(credit_account.number)) {
-          const key = `${credit_account.number}_credit`;
+          const syntheticNumber = getSyntheticAccount(credit_account.number);
+          const key = `${syntheticNumber}_credit`;
           const existing = accountTotals.get(key);
           
           // Użyj credit_amount jeśli jest dostępne, w przeciwnym razie amount
@@ -174,8 +190,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
             existing.total_amount += transactionAmount;
           } else {
             accountTotals.set(key, {
-              account_number: credit_account.number,
-              account_name: credit_account.name,
+              account_number: syntheticNumber,
+              account_name: getSyntheticName(credit_account.name),
               account_type: credit_account.type,
               total_amount: transactionAmount,
               category: categorizeAccount(credit_account.number, 'credit'),
