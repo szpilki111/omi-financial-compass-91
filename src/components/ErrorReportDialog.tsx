@@ -106,90 +106,92 @@ export const ErrorReportDialog = ({
 
       if (insertError) throw insertError;
 
-      // Create notification for admins - use RPC to bypass RLS
-      const { data: admins } = await supabase.rpc('get_admin_emails');
-
-      if (admins && admins.length > 0) {
-        const notifications = admins.map((admin: { id: string; email: string; name: string }) => ({
-          user_id: admin.id,
-          title: "Nowe zgłoszenie błędu",
-          message: `${title} (priorytet: ${priority})`,
-          priority: priority === "critical" || priority === "high" ? "high" : "medium",
-          action_link: "/administracja?tab=error-reports",
-          action_label: "Zobacz zgłoszenie",
-        }));
-
-        await supabase.from("notifications").insert(notifications);
-
-        // Send email to admins
-        try {
-          const adminEmails = admins.filter((a: { email: string }) => a.email).map((a: { email: string }) => a.email);
-          
-          // Get reporter name
-          const { data: reporterProfile } = await supabase
-            .from("profiles")
-            .select("name")
-            .eq("id", userId)
-            .single();
-
-          if (adminEmails.length > 0) {
-            await sendNewErrorReportEmailToAdmins(
-              title,
-              description,
-              priority,
-              newReport.id,
-              reporterProfile?.name || "Użytkownik",
-              adminEmails
-            );
-          }
-        } catch (emailError) {
-          console.error("Failed to send admin notification emails:", emailError);
-        }
-      }
-
-      // Send confirmation email to user
-      try {
-        const { data: userProfile } = await supabase
-          .from("profiles")
-          .select("name, email")
-          .eq("id", userId)
-          .single();
-
-        if (userProfile?.email && newReport?.id) {
-          await sendErrorReportConfirmationEmail(
-            userProfile.email,
-            userProfile.name || "Użytkowniku",
-            title,
-            description,
-            priority,
-            newReport.id
-          );
-        }
-      } catch (emailError) {
-        console.error("Failed to send confirmation email:", emailError);
-        // Don't fail the whole operation if email fails
-      }
-
-      toast({
-        title: "Zgłoszenie wysłane",
-        description: "Twoje zgłoszenie błędu zostało przesłane. Potwierdzenie otrzymasz na email.",
-      });
-
-      // Reset form
+      // Reset form and close dialog IMMEDIATELY after successful insert
       setTitle("");
       setDescription("");
       setPriority("medium");
       setAdditionalFiles([]);
+      setIsSubmitting(false);
       onOpenChange(false);
+
+      toast({
+        title: "Zgłoszenie wysłane",
+        description: "Twoje zgłoszenie zostało przesłane. Powiadomienia email są wysyłane w tle.",
+      });
+
+      // Send notifications and emails ASYNCHRONOUSLY in background (non-blocking)
+      const sendNotificationsInBackground = async () => {
+        try {
+          // Create notification for admins
+          const { data: admins } = await supabase.rpc('get_admin_emails');
+
+          if (admins && admins.length > 0) {
+            const notifications = admins.map((admin: { id: string; email: string; name: string }) => ({
+              user_id: admin.id,
+              title: "Nowe zgłoszenie błędu",
+              message: `${title} (priorytet: ${priority})`,
+              priority: priority === "critical" || priority === "high" ? "high" : "medium",
+              action_link: "/administracja?tab=error-reports",
+              action_label: "Zobacz zgłoszenie",
+            }));
+
+            await supabase.from("notifications").insert(notifications);
+
+            // Send email to admins
+            const adminEmails = admins.filter((a: { email: string }) => a.email).map((a: { email: string }) => a.email);
+            
+            // Get reporter name
+            const { data: reporterProfile } = await supabase
+              .from("profiles")
+              .select("name")
+              .eq("id", userId)
+              .single();
+
+            if (adminEmails.length > 0) {
+              sendNewErrorReportEmailToAdmins(
+                title,
+                description,
+                priority,
+                newReport.id,
+                reporterProfile?.name || "Użytkownik",
+                adminEmails
+              ).catch(err => console.error("Failed to send admin emails:", err));
+            }
+          }
+
+          // Send confirmation email to user
+          const { data: userProfile } = await supabase
+            .from("profiles")
+            .select("name, email")
+            .eq("id", userId)
+            .single();
+
+          if (userProfile?.email && newReport?.id) {
+            sendErrorReportConfirmationEmail(
+              userProfile.email,
+              userProfile.name || "Użytkowniku",
+              title,
+              description,
+              priority,
+              newReport.id
+            ).catch(err => console.error("Failed to send confirmation email:", err));
+          }
+        } catch (bgError) {
+          console.error("Background notification error:", bgError);
+        }
+      };
+
+      // Fire and forget - don't await
+      sendNotificationsInBackground();
+
     } catch (error) {
       console.error("Error submitting report:", error);
+      setIsSubmitting(false);
       toast({
         title: "Błąd",
         description: "Nie udało się wysłać zgłoszenia. Spróbuj ponownie.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
