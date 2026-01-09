@@ -360,6 +360,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
             period={report.period}
             year={report.year}
             month={report.month}
+            locationId={report.location_id}
           />
           {(report.status === 'draft' || canResubmit) && user?.role === 'ekonom' && (
             <Button onClick={handleSubmitReport} disabled={isSubmitting}>
