@@ -134,40 +134,78 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
         return prefixes.some(prefix => accountNumber.startsWith(prefix));
       };
 
-      // Oblicz salda dla każdej kategorii
+      // Funkcja do wyodrębnienia numeru konta syntetycznego (max 3 segmenty)
+      const getSyntheticAccountNumber = (accountNumber: string): string => {
+        if (!accountNumber) return accountNumber;
+        const segments = accountNumber.split('-');
+        if (segments.length <= 3) {
+          return accountNumber;
+        }
+        return segments.slice(0, 3).join('-');
+      };
+
+      // Zbierz unikalne numery kont syntetycznych
+      const syntheticNumbersSet = new Set<string>();
+      transactions?.forEach(transaction => {
+        if (transaction.debit_account && !isAccountRestricted(transaction.debit_account.number)) {
+          syntheticNumbersSet.add(getSyntheticAccountNumber(transaction.debit_account.number));
+        }
+        if (transaction.credit_account && !isAccountRestricted(transaction.credit_account.number)) {
+          syntheticNumbersSet.add(getSyntheticAccountNumber(transaction.credit_account.number));
+        }
+      });
+
+      // Pobierz nazwy kont syntetycznych z bazy
+      const syntheticNumbers = Array.from(syntheticNumbersSet);
+      let syntheticAccountsMap = new Map<string, string>();
+      
+      if (syntheticNumbers.length > 0) {
+        const { data: syntheticAccounts } = await supabase
+          .from('accounts')
+          .select('number, name')
+          .in('number', syntheticNumbers);
+        
+        syntheticAccounts?.forEach(acc => {
+          syntheticAccountsMap.set(acc.number, acc.name);
+        });
+      }
+
+      // Oblicz salda dla każdej kategorii - agregując do kont syntetycznych
       const calculateCategoryBalances = () => {
         const accountBalances = new Map<string, { balance: number, account: any }>();
         
-        // Przelicz salda wszystkich kont
+        // Przelicz salda wszystkich kont - agregując do syntetycznych
         transactions?.forEach(transaction => {
           const { debit_account, credit_account, debit_amount, credit_amount, amount } = transaction;
           
           // Dla konta debetowego - skip if restricted
           if (debit_account && !isAccountRestricted(debit_account.number)) {
-            const key = debit_account.number;
+            const syntheticNumber = getSyntheticAccountNumber(debit_account.number);
+            const syntheticName = syntheticAccountsMap.get(syntheticNumber) || debit_account.name;
             const transactionAmount = debit_amount && debit_amount > 0 ? debit_amount : Number(amount);
             
-            if (accountBalances.has(key)) {
-              accountBalances.get(key)!.balance += transactionAmount;
+            if (accountBalances.has(syntheticNumber)) {
+              accountBalances.get(syntheticNumber)!.balance += transactionAmount;
             } else {
-              accountBalances.set(key, {
+              accountBalances.set(syntheticNumber, {
                 balance: transactionAmount,
-                account: debit_account
+                account: { ...debit_account, number: syntheticNumber, name: syntheticName }
               });
             }
           }
           
           // Dla konta kredytowego - skip if restricted
           if (credit_account && !isAccountRestricted(credit_account.number)) {
-            const key = credit_account.number;
+            const syntheticNumber = getSyntheticAccountNumber(credit_account.number);
+            const syntheticName = syntheticAccountsMap.get(syntheticNumber) || credit_account.name;
             const transactionAmount = credit_amount && credit_amount > 0 ? credit_amount : Number(amount);
             
-            if (accountBalances.has(key)) {
-              accountBalances.get(key)!.balance -= transactionAmount;
+            if (accountBalances.has(syntheticNumber)) {
+              accountBalances.get(syntheticNumber)!.balance -= transactionAmount;
             } else {
-              accountBalances.set(key, {
+              accountBalances.set(syntheticNumber, {
                 balance: -transactionAmount,
-                account: credit_account
+                account: { ...credit_account, number: syntheticNumber, name: syntheticName }
               });
             }
           }
