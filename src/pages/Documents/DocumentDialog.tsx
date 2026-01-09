@@ -176,10 +176,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       (t.debit_amount && t.debit_amount > 0) || (t.credit_amount && t.credit_amount > 0)
     );
 
-    // Funkcja pomocnicza do pobierania numeru konta
-    const getAccountNumber = (accountId?: string) => {
-      if (!accountId) return '';
-      return accounts?.find(a => a.id === accountId)?.number || '';
+    // Funkcja pomocnicza do pobierania numeru konta - użyj danych z transakcji lub lookup w accounts
+    const getDebitAccountNumber = (t: Transaction) => {
+      return t.debitAccountNumber || t.debitAccount?.number || accounts?.find(a => a.id === t.debit_account_id)?.number || '';
+    };
+    
+    const getCreditAccountNumber = (t: Transaction) => {
+      return t.creditAccountNumber || t.creditAccount?.number || accounts?.find(a => a.id === t.credit_account_id)?.number || '';
     };
 
     // Sumy
@@ -214,9 +217,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         idx + 1,
         t.description || '-',
         t.debit_amount || '',
-        getAccountNumber(t.debit_account_id),
+        getDebitAccountNumber(t),
         t.credit_amount || '',
-        getAccountNumber(t.credit_account_id)
+        getCreditAccountNumber(t)
       ]);
     });
     
@@ -579,7 +582,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     try {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*")
+        .select(`
+          *,
+          debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+          credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
+        `)
         .eq("document_id", documentId)
         .order("display_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
@@ -596,11 +603,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         })),
       );
 
+      // Mapuj transakcje aby dołączyć numery kont
+      const mappedTransactions = (data || []).map(t => ({
+        ...t,
+        debitAccountNumber: t.debit_account?.number || '',
+        creditAccountNumber: t.credit_account?.number || '',
+        debitAccount: t.debit_account,
+        creditAccount: t.credit_account,
+      }));
+
       // Podziel na główne i równoległe
-      const mainTransactions = (data || [])
+      const mainTransactions = mappedTransactions
         .filter((t) => !t.is_parallel)
         .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-      const parallelTxs = (data || [])
+      const parallelTxs = mappedTransactions
         .filter((t) => t.is_parallel)
         .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
@@ -615,21 +631,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const sortedMain = sortByDisplayOrder(mainTransactions);
       const sortedParallel = sortByDisplayOrder(parallelTxs);
 
-      // Opcjonalnie: normalizuj display_order (1, 2, 3...) – tylko jeśli chcesz ciągłość
-      // Jeśli chcesz zachować oryginalne wartości z bazy – pomiń to!
-      const normalizeOrder = (txs: any[]) =>
-        txs.map((t, idx) => ({
-          ...t,
-          display_order: idx + 1, // tylko jeśli chcesz wymusić ciągłość
-        }));
-
       // Użyj tej wersji, jeśli chcesz zachować oryginalne display_order:
       setTransactions(sortedMain);
       setParallelTransactions(sortedParallel);
-
-      // LUB użyj tej, jeśli chcesz ciągłość 1,2,3... (zalecane):
-      // setTransactions(normalizeOrder(sortedMain));
-      // setParallelTransactions(normalizeOrder(sortedParallel));
 
       console.log("UI order (after sort):", {
         main: sortedMain.map((t) => ({ id: t.id, display_order: t.display_order })),
