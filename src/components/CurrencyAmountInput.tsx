@@ -109,8 +109,31 @@ const CurrencyAmountInput: React.FC<CurrencyAmountInputProps> = ({
                 e.preventDefault();
               }
               // Allow Tab, numbers, decimal point (both . and ,), minus, and control keys
-              if (e.key !== 'Tab' && !/[\d.,\-\b\r]/.test(e.key) && !e.ctrlKey && !e.metaKey && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Delete' && e.key !== 'Backspace') {
+              // e.code === 'NumpadDecimal' obsługuje klawisz dziesiętny numpada niezależnie od ustawień klawiatury
+              const isNumpadDecimal = e.code === 'NumpadDecimal';
+              const isAllowedKey = e.key === 'Tab' || 
+                /[\d.,\-]/.test(e.key) || 
+                e.ctrlKey || 
+                e.metaKey || 
+                ['ArrowLeft', 'ArrowRight', 'Delete', 'Backspace', 'Home', 'End'].includes(e.key) ||
+                isNumpadDecimal;
+              
+              if (!isAllowedKey) {
                 e.preventDefault();
+              }
+              
+              // Jeśli to numpad decimal, wstaw kropkę (lub przecinek - i tak normalizujemy)
+              if (isNumpadDecimal && e.key !== '.' && e.key !== ',') {
+                e.preventDefault();
+                const input = e.currentTarget;
+                const start = input.selectionStart || 0;
+                const end = input.selectionEnd || 0;
+                const newValue = displayValue.slice(0, start) + '.' + displayValue.slice(end);
+                setDisplayValue(newValue);
+                // Ustaw kursor po wstawionej kropce
+                setTimeout(() => {
+                  input.setSelectionRange(start + 1, start + 1);
+                }, 0);
               }
             }}
             placeholder={placeholder}
