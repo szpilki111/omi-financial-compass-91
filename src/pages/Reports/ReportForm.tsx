@@ -257,10 +257,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
   };
 
   const onSubmit = async (values: z.infer<typeof reportFormSchema>) => {
-    if (!user?.location) {
+    // Use selected location from form, not user.location
+    const locationId = values.locationIds?.[0];
+    
+    if (!locationId) {
       toast({
         title: "Błąd",
-        description: "Nie można określić lokalizacji użytkownika.",
+        description: "Wybierz lokalizację dla raportu.",
         variant: "destructive",
       });
       return;
@@ -269,13 +272,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
     setIsSubmitting(true);
     console.log('🚀 ROZPOCZĘCIE TWORZENIA RAPORTU');
     console.log('📝 Dane formularza:', values);
+    console.log('📍 Wybrana lokalizacja:', locationId);
 
     try {
-      const month = parseInt(values.month);
+      const month = parseInt(values.month || '1');
       const year = parseInt(values.year);
       
       // Check for incomplete documents before creating report
-      const incompleteDocuments = await checkIncompleteDocuments(user.location, month, year);
+      const incompleteDocuments = await checkIncompleteDocuments(locationId, month, year);
       
       if (incompleteDocuments.length > 0) {
         setIncompleteDocsList(incompleteDocuments);
@@ -289,7 +293,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       const { data: existingReport, error: checkError } = await supabase
         .from('reports')
         .select('id, title')
-        .eq('location_id', user.location)
+        .eq('location_id', locationId)
         .eq('month', month)
         .eq('year', year)
         .maybeSingle();
@@ -313,8 +317,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
         .select('name')
-        .eq('id', user.location)
-        .single();
+        .eq('id', locationId)
+        .maybeSingle();
 
       if (locationError) {
         console.error('❌ Błąd pobierania danych lokalizacji:', locationError);
@@ -333,7 +337,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           period: period,
           month: month,
           year: year,
-          location_id: user.location,
+          location_id: locationId,
           status: 'draft'
         })
         .select()
@@ -351,7 +355,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       try {
         const financialResult = await calculateAndSaveReportSummary(
           newReport.id,
-          user.location,
+          locationId,
           month,
           year
         );

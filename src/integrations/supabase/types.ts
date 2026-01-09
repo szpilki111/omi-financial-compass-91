@@ -1659,6 +1659,7 @@ export type Database = {
         Args: { p_parent_id: string }
         Returns: number
       }
+      can_access_report: { Args: { p_report_id: string }; Returns: boolean }
       change_user_password:
         | { Args: { new_password: string; user_id: number }; Returns: boolean }
         | {
