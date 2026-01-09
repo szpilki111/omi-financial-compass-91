@@ -164,14 +164,14 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
 
 const parseAmount = (amountStr: string): number => {
   if (!amountStr) return 0;
-  console.log('Raw amount:', amountStr); // Debugowanie
+  // Usuwa spacje, niełamliwe spacje i separatory tysięcy (kropki w formacie polskim)
   const cleanAmount = amountStr
-    .replace(/[\s\xa0]/g, '') // Usuwa spacje i niełamliwe spacje
-    .replace(',', '.');
-  console.log('Cleaned amount:', cleanAmount); // Debugowanie
+    .replace(/[\s\xa0]/g, '') // Usuwa spacje
+    .replace(/\./g, '')       // Usuwa kropki jako separator tysięcy (format polski: 6.020,00)
+    .replace(',', '.');       // Zamienia przecinek na kropkę jako separator dziesiętny
+  
   const parsed = parseFloat(cleanAmount) || 0;
-  console.log('Parsed amount:', parsed); // Debugowanie
-  return parsed * 1000; // Przelicz na grosze
+  return parsed; // Zwraca kwotę w złotych
 };
 
   const handleImport = async () => {
@@ -228,63 +228,79 @@ const parseAmount = (amountStr: string): number => {
         throw docError;
       }
 
-      // Parsuj pełny plik CSV with proper encoding
-      Papa.parse(file, {
+      // Parsuj pełny plik CSV z prawidłowym kodowaniem (jak dla podglądu)
+      const fileContent = await detectAndConvertEncoding(file);
+      
+      Papa.parse(fileContent, {
         header: false,
         skipEmptyLines: true,
-        encoding: 'UTF-8',
         complete: async (results) => {
           try {
             const transactionsToImport = [];
             
-            // Znajdź domyślne konta
-            const defaultDebitAccountId = accounts.find(acc => acc.number.includes('100'))?.id || '';
+            // Pobierz indeksy kolumn z mapowania
+            const descColIndex = parseInt(mappings.descriptionColumn.split(' ')[1]) - 1;
+            const debitAmountColIndex = parseInt(mappings.amountColumn.split(' ')[1]) - 1;
+            const debitAccountColIndex = parseInt(mappings.accountColumn.split(' ')[1]) - 1;
+            const creditAmountColIndex = mappings.secondAmountColumn ? 
+              parseInt(mappings.secondAmountColumn.split(' ')[1]) - 1 : -1;
+            const creditAccountColIndex = mappings.codeColumn ? 
+              parseInt(mappings.codeColumn.split(' ')[1]) - 1 : -1;
             
             for (let rowIndex = 0; rowIndex < results.data.length; rowIndex++) {
               const row = results.data[rowIndex] as string[];
               
-              const description = row[parseInt(mappings.descriptionColumn.split(' ')[1]) - 1] || '';
-              const amountStr = row[parseInt(mappings.amountColumn.split(' ')[1]) - 1] || '';
-              const accountNumber = row[parseInt(mappings.accountColumn.split(' ')[1]) - 1] || '';
+              const description = row[descColIndex] || '';
+              const debitAmountStr = row[debitAmountColIndex] || '';
+              const debitAccountNumber = row[debitAccountColIndex] || '';
+              const creditAmountStr = creditAmountColIndex >= 0 ? (row[creditAmountColIndex] || '') : debitAmountStr;
+              const creditAccountNumber = creditAccountColIndex >= 0 ? (row[creditAccountColIndex] || '') : '';
               
-              const amount = parseAmount(amountStr);
+              const debitAmount = parseAmount(debitAmountStr);
+              const creditAmount = parseAmount(creditAmountStr);
               
-              if (!description || !amount || !accountNumber) {
-                continue; // Pomiń nieprawidłowe wiersze
+              // Pomiń wiersze bez opisu lub bez żadnej kwoty
+              if (!description || (!debitAmount && !creditAmount)) {
+                console.log(`Skipping row ${rowIndex}: description="${description}", debitAmount=${debitAmount}`);
+                continue;
               }
               
-              // Znajdź konto na podstawie numeru
-              let creditAccountId = '';
-              const matchedAccount = accounts.find(acc => 
-                acc.number.includes(accountNumber) || 
-                accountNumber.includes(acc.number)
+              // Znajdź konto Winien na podstawie numeru
+              const debitAccount = accounts.find(acc => 
+                acc.number === debitAccountNumber || 
+                acc.number.startsWith(debitAccountNumber) ||
+                debitAccountNumber.startsWith(acc.number)
               );
-              creditAccountId = matchedAccount?.id || '';
               
-              // Jeśli nie znaleziono konta, użyj domyślnego konta przychodów
-              if (!creditAccountId) {
-                creditAccountId = accounts.find(acc => acc.number.includes('700'))?.id || '';
-              }
+              // Znajdź konto Ma na podstawie numeru
+              const creditAccount = accounts.find(acc => 
+                acc.number === creditAccountNumber || 
+                acc.number.startsWith(creditAccountNumber) ||
+                creditAccountNumber.startsWith(acc.number)
+              );
               
-              if (defaultDebitAccountId && creditAccountId) {
-              const absoluteAmount = Math.abs(amount);
+              // Użyj kwoty (preferuj debitAmount, fallback do creditAmount)
+              const amount = debitAmount || creditAmount;
+              
+              if (debitAccount?.id || creditAccount?.id) {
                 transactionsToImport.push({
                   document_id: document.id,
                   document_number: documentNumber,
                   date: documentDate.toISOString().split('T')[0],
                   description: description,
-                  debit_amount: absoluteAmount,
-                  credit_amount: absoluteAmount,
-                  // Winien po lewej (debit) - wpływy, Ma po prawej (credit) - wypływy
-                  debit_account_id: amount > 0 ? creditAccountId : defaultDebitAccountId,
-                  credit_account_id: amount > 0 ? defaultDebitAccountId : creditAccountId,
+                  debit_amount: amount,
+                  credit_amount: amount,
+                  debit_account_id: debitAccount?.id || null,
+                  credit_account_id: creditAccount?.id || null,
                   currency: 'PLN',
                   exchange_rate: 1,
                   settlement_type: 'Bank',
                   location_id: user.location,
                   user_id: user.id,
-                  created_at: new Date(Date.now() + rowIndex * 1000).toISOString()
+                  display_order: rowIndex
                 });
+              } else {
+                console.log(`Skipping row ${rowIndex}: no matching accounts for debit="${debitAccountNumber}", credit="${creditAccountNumber}"`);
               }
             }
             
@@ -306,7 +322,7 @@ const parseAmount = (amountStr: string): number => {
             } else {
               toast({
                 title: "Uwaga",
-                description: "Nie znaleziono żadnych poprawnych danych do importu",
+                description: "Nie znaleziono żadnych poprawnych danych do importu. Sprawdź czy numery kont w pliku CSV odpowiadają kontom w systemie.",
                 variant: "destructive",
               });
             }
