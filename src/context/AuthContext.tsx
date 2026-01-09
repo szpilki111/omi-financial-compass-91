@@ -399,7 +399,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const canApproveReports = user?.role === 'admin' || user?.role === 'prowincjal';
-  const canCreateReports = user?.role === 'ekonom';
+  const canCreateReports = user?.role === 'ekonom' || user?.role === 'proboszcz';
 
   return (
     <AuthContext.Provider
