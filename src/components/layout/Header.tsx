@@ -123,8 +123,6 @@ const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Moje konto</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => logout()}>Wyloguj</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
