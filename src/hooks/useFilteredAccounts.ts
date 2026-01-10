@@ -43,14 +43,19 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
     queryFn: async (): Promise<FilteredAccount[]> => {
       if (!user?.id) return [];
 
-      // Pobierz wszystkie konta bez limitu - Supabase ma domyślny limit 1000
-      // Musimy paginować lub użyć .limit() z dużą wartością
+      // Supabase ma domyślny limit 1000 rekordów per request (db-max-rows)
+      // Musimy paginować po 1000, by pobrać wszystkie konta
       const allAccounts: FilteredAccount[] = [];
-      const pageSize = 5000; // Pobierz po 5000 rekordów
+      const pageSize = 1000; // Limit Supabase per request
       let offset = 0;
       let hasMore = true;
+      let iterations = 0;
+      const maxIterations = 50; // Bezpiecznik - max 50000 kont
 
-      while (hasMore) {
+      console.log('[useFilteredAccounts] Starting pagination fetch...');
+
+      while (hasMore && iterations < maxIterations) {
+        iterations++;
         const { data, error } = await supabase.rpc('get_user_filtered_accounts', {
           p_user_id: user.id,
           p_include_inactive: includeInactive,
@@ -62,15 +67,20 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
           throw error;
         }
 
-        if (data && data.length > 0) {
+        const fetchedCount = data?.length ?? 0;
+        console.log(`[useFilteredAccounts] Page ${iterations}: fetched ${fetchedCount} accounts (offset: ${offset})`);
+
+        if (data && fetchedCount > 0) {
           allAccounts.push(...(data as FilteredAccount[]));
-          offset += data.length;
-          // Jeśli otrzymaliśmy mniej niż pageSize, to koniec
-          hasMore = data.length === pageSize;
+          offset += fetchedCount;
+          // Kontynuuj jeśli otrzymaliśmy pełną stronę (pageSize rekordów)
+          hasMore = fetchedCount === pageSize;
         } else {
           hasMore = false;
         }
       }
+
+      console.log(`[useFilteredAccounts] Total fetched: ${allAccounts.length} accounts in ${iterations} pages`);
 
       return allAccounts;
     },
