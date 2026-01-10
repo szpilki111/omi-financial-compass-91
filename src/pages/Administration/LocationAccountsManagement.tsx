@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2, Check, ChevronsUpDown, RefreshCw, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollableTable } from '@/components/ui/ScrollableTable';
 import { cn } from '@/lib/utils';
@@ -79,7 +79,9 @@ const LocationAccountsManagement = () => {
       
       if (error) throw error;
       return data;
-    }
+    },
+    retry: 2,
+    staleTime: 10000,
   });
 
   // Function to search accounts based on query
@@ -139,7 +141,7 @@ const LocationAccountsManagement = () => {
   }, []);
 
   // Fetch location-account assignments with proper joins
-  const { data: locationAccounts, isLoading } = useQuery({
+  const { data: locationAccounts, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['location-accounts'],
     queryFn: async () => {
       console.log('Pobieranie przypisań kont do placówek...');
@@ -194,7 +196,9 @@ const LocationAccountsManagement = () => {
         if (locationCompare !== 0) return locationCompare;
         return a.accounts.number.localeCompare(b.accounts.number);
       });
-    }
+    },
+    retry: 2,
+    staleTime: 10000,
   });
 
   // Fetch accounts automatically assigned by location identifier
@@ -392,11 +396,41 @@ const LocationAccountsManagement = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p>Błąd podczas ładowania danych.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Spróbuj ponownie
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Przypisywanie kont do placówek</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Przypisywanie kont do placówek</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Odśwież dane"
+            >
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 items-end mb-6">

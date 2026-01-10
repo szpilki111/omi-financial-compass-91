@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Lock, Unlock, Check, Pencil } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock, Check, Pencil, RefreshCw, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import UserDialog from "./UserDialog";
 import { ScrollableTable } from "@/components/ui/ScrollableTable";
@@ -101,10 +101,12 @@ const UsersManagement = () => {
       
       if (error) throw error;
       return data;
-    }
+    },
+    retry: 2,
+    staleTime: 10000,
   });
 
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       // Get users with their login events
@@ -165,6 +167,8 @@ const UsersManagement = () => {
 
       return usersWithDetails as UserProfile[];
     },
+    retry: 2,
+    staleTime: 10000,
   });
 
   // Filter users by location
@@ -320,13 +324,43 @@ const UsersManagement = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p>Błąd podczas ładowania danych.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Spróbuj ponownie
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const displayedUsers = filteredUsers?.slice(0, displayedCount);
 
   return (
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Zarządzanie użytkownikami</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Zarządzanie użytkownikami</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Odśwież dane"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
           <Button onClick={() => setIsUserDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Dodaj użytkownika

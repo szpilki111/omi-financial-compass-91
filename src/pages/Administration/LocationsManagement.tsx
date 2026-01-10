@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Edit, Trash2, Settings, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, Check, ChevronsUpDown, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
@@ -58,9 +58,9 @@ const LocationsManagement = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Pobierz listę placówek z ustawieniami
-  const { data: locations, isLoading } = useQuery({
-    queryKey: ['locations'],
+  // Pobierz listę placówek z ustawieniami - unikalny queryKey by nie kolidować z innymi komponentami
+  const { data: locations, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['locations-with-settings'],
     queryFn: async () => {
       const { data: locationsData, error: locationsError } = await supabase
         .from('locations')
@@ -87,7 +87,9 @@ const LocationsManagement = () => {
       });
 
       return locationsWithSettings;
-    }
+    },
+    retry: 2,
+    staleTime: 10000, // 10 sekund dla panelu admin
   });
 
   // Mutacja do usuwania placówki
@@ -149,6 +151,7 @@ const LocationsManagement = () => {
       if (error) throw error;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locations-with-settings'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
       toast({
         title: "Sukces",
@@ -191,6 +194,7 @@ const LocationsManagement = () => {
     setIsDialogOpen(false);
     setSelectedLocation(null);
     if (saved) {
+      queryClient.invalidateQueries({ queryKey: ['locations-with-settings'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     }
   };
@@ -199,6 +203,7 @@ const LocationsManagement = () => {
     setIsSettingsDialogOpen(false);
     setSelectedLocationForSettings(null);
     if (saved) {
+      queryClient.invalidateQueries({ queryKey: ['locations-with-settings'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     }
   };
@@ -208,6 +213,25 @@ const LocationsManagement = () => {
       <Card>
         <CardContent className="pt-6">
           <p className="text-center">Ładowanie placówek...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p>Błąd podczas ładowania danych.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Spróbuj ponownie
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -224,6 +248,15 @@ const LocationsManagement = () => {
           <div className="flex justify-between items-center">
             <CardTitle>Zarządzanie placówkami</CardTitle>
             <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                title="Odśwież dane"
+              >
+                <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+              </Button>
               <Popover open={locationSelectOpen} onOpenChange={setLocationSelectOpen}>
                 <PopoverTrigger asChild>
                   <Button
