@@ -18,18 +18,24 @@ interface UseFilteredAccountsOptions {
 /**
  * Centralny hook do pobierania kont z uwzględnieniem restrykcji widoczności.
  * 
+ * UWAGA: Admin ZAWSZE widzi wszystkie konta bez żadnych filtrów i ograniczeń.
+ * 
  * Wykorzystuje funkcję SQL `get_user_filtered_accounts` do filtrowania server-side:
  * - Identyfikator lokalizacji (np. "1-3") to 2 liczby po pierwszym myślniku
  * - np. "100-1-3" = prefix "100", identifier "1-3"
  * - np. "100-1-3-5" = prefix "100", identifier "1-3", analityka "5"
+ * - Jednoczęściowy identyfikator (np. "1" dla Prowincji) też jest obsługiwany
  * 
- * Konta z zaznaczonymi restrykcjami są CAŁKOWICIE niewidoczne dla użytkowników danej kategorii placówki.
+ * Konta z zaznaczonymi restrykcjami są CAŁKOWICIE niewidoczne dla użytkowników danej kategorii placówki
+ * (nie dotyczy admina).
  */
 export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
-  const skipRestrictions = options?.skipRestrictions ?? false;
+  // Admin ZAWSZE widzi wszystkie konta bez ograniczeń
+  const isAdmin = user?.role === 'admin';
+  const skipRestrictions = isAdmin || (options?.skipRestrictions ?? false);
   const includeInactive = options?.includeInactive ?? false;
 
   return useQuery({
@@ -38,6 +44,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
       if (!user?.id) return [];
 
       // Wywołaj funkcję SQL do filtrowania server-side
+      // Dla admina funkcja SQL zwróci wszystkie konta bez filtrów
       const { data, error } = await supabase.rpc('get_user_filtered_accounts', {
         p_user_id: user.id,
         p_include_inactive: includeInactive,

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -11,11 +11,40 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccountsSettingsTab } from './AccountsSettingsTab';
 import TrustedDevicesTab from './TrustedDevicesTab';
+import { MapPin, Building2, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface UserLocation {
+  id: string;
+  name: string;
+  location_identifier: string | null;
+}
 
 const SettingsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch user's assigned locations
+  const { data: userLocations, isLoading: isLoadingLocations } = useQuery({
+    queryKey: ['user-locations', user?.id],
+    queryFn: async (): Promise<UserLocation[]> => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('user_locations')
+        .select('location_id, locations!inner(id, name, location_identifier)')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user locations:', error);
+        return [];
+      }
+
+      return (data || []).map((ul: any) => ul.locations as UserLocation);
+    },
+    enabled: !!user?.id
+  });
 
   // Fetch user settings directly from the table
   const { data: settings, isLoading } = useQuery({
@@ -126,12 +155,94 @@ const SettingsPage = () => {
           <p className="text-gray-600">Personalizuj wygląd i zachowanie aplikacji</p>
         </div>
 
-        <Tabs defaultValue="appearance" className="space-y-6">
+        <Tabs defaultValue="profile" className="space-y-6">
           <TabsList>
+            <TabsTrigger value="profile">Profil</TabsTrigger>
             <TabsTrigger value="appearance">Wygląd</TabsTrigger>
             <TabsTrigger value="security">Bezpieczeństwo</TabsTrigger>
             <TabsTrigger value="accounts">Konta</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="profile">
+            <div className="space-y-6">
+              {/* User info card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Informacje o użytkowniku
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Imię i nazwisko</Label>
+                      <p className="font-medium">{user?.name || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Email</Label>
+                      <p className="font-medium">{user?.email || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Rola</Label>
+                      <Badge variant="secondary" className="mt-1">
+                        {user?.role === 'admin' ? 'Administrator' : 
+                         user?.role === 'prowincjal' ? 'Prowincjał' : 
+                         user?.role === 'ekonom' ? 'Ekonom' : 
+                         user?.role === 'proboszcz' ? 'Proboszcz' : 
+                         user?.role || '-'}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Assigned locations card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Przypisane placówki
+                  </CardTitle>
+                  <CardDescription>
+                    Lista lokalizacji, do których masz dostęp w systemie
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingLocations ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    </div>
+                  ) : userLocations && userLocations.length > 0 ? (
+                    <div className="space-y-2">
+                      {userLocations.map((location) => (
+                        <div 
+                          key={location.id} 
+                          className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border"
+                        >
+                          <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{location.name}</p>
+                          </div>
+                          {location.location_identifier && (
+                            <Badge variant="outline" className="flex-shrink-0">
+                              {location.location_identifier}
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>Brak przypisanych placówek</p>
+                      <p className="text-sm">Skontaktuj się z administratorem, aby uzyskać dostęp.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
           <TabsContent value="appearance">
             <Card>

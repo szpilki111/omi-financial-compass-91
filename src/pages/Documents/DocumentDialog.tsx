@@ -1456,7 +1456,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       <FormLabel>Numer dokumentu</FormLabel>
                       <div className="flex gap-2">
                         <FormControl>
-                          <Input {...field} placeholder="np. DOM/2024/01/001" />
+                          <Input 
+                            {...field} 
+                            placeholder="np. DOM/2024/01/001" 
+                            readOnly
+                            className="bg-muted cursor-not-allowed"
+                          />
                         </FormControl>
                         {!document && (
                           <Button
