@@ -43,20 +43,36 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
     queryFn: async (): Promise<FilteredAccount[]> => {
       if (!user?.id) return [];
 
-      // Wywołaj funkcję SQL do filtrowania server-side
-      // Dla admina funkcja SQL zwróci wszystkie konta bez filtrów
-      const { data, error } = await supabase.rpc('get_user_filtered_accounts', {
-        p_user_id: user.id,
-        p_include_inactive: includeInactive,
-        p_skip_restrictions: skipRestrictions
-      });
+      // Pobierz wszystkie konta bez limitu - Supabase ma domyślny limit 1000
+      // Musimy paginować lub użyć .limit() z dużą wartością
+      const allAccounts: FilteredAccount[] = [];
+      const pageSize = 5000; // Pobierz po 5000 rekordów
+      let offset = 0;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Error fetching filtered accounts:', error);
-        throw error;
+      while (hasMore) {
+        const { data, error } = await supabase.rpc('get_user_filtered_accounts', {
+          p_user_id: user.id,
+          p_include_inactive: includeInactive,
+          p_skip_restrictions: skipRestrictions
+        }).range(offset, offset + pageSize - 1);
+
+        if (error) {
+          console.error('Error fetching filtered accounts:', error);
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          allAccounts.push(...(data as FilteredAccount[]));
+          offset += data.length;
+          // Jeśli otrzymaliśmy mniej niż pageSize, to koniec
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
 
-      return (data || []) as FilteredAccount[];
+      return allAccounts;
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minut cache
