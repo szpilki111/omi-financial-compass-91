@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Eye, ExternalLink, Upload, X, Search } from "lucide-react";
+import { Eye, ExternalLink, Upload, X, Search, RefreshCw, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -118,7 +118,7 @@ const ErrorReportsManagement = () => {
     },
   });
 
-  const { data: reports, isLoading } = useQuery({
+  const { data: reports, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["error-reports", statusFilter, priorityFilter],
     queryFn: async () => {
       let query = supabase.from("error_reports").select("*").order("created_at", { ascending: false });
@@ -152,6 +152,8 @@ const ErrorReportsManagement = () => {
 
       return [] as ErrorReport[];
     },
+    retry: 2,
+    staleTime: 10000,
   });
 
   const { data: responses } = useQuery({
@@ -439,8 +441,39 @@ const ErrorReportsManagement = () => {
     return <div className="p-8">Ładowanie zgłoszeń...</div>;
   }
 
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <p>Błąd podczas ładowania danych.</p>
+          </div>
+          <Button variant="outline" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Spróbuj ponownie
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {/* Header with refresh button */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Zgłoszenia błędów</h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Odśwież dane"
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
       {/* Search input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

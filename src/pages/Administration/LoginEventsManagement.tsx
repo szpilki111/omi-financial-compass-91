@@ -13,7 +13,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, XCircle, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CheckCircle2, XCircle, Search, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface LoginEvent {
   id: string;
@@ -38,7 +39,7 @@ const LoginEventsManagement = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
 
   // Fetch locations for filter
-  const { data: locations } = useQuery({
+  const { data: locations, error: locationsError } = useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -48,10 +49,12 @@ const LoginEventsManagement = () => {
       
       if (error) throw error;
       return data;
-    }
+    },
+    retry: 2,
+    staleTime: 10000,
   });
 
-  const { data: loginEvents, isLoading } = useQuery({
+  const { data: loginEvents, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['login-events'],
     queryFn: async () => {
       // Pobierz wszystkie zdarzenia logowania
@@ -85,7 +88,9 @@ const LoginEventsManagement = () => {
 
       return eventsWithProfiles as LoginEvent[];
     },
-    refetchInterval: 30000, // Odświeżaj co 30 sekund
+    refetchInterval: 30000,
+    retry: 2,
+    staleTime: 10000,
   });
 
   if (isLoading) {
@@ -93,6 +98,25 @@ const LoginEventsManagement = () => {
       <Card>
         <CardContent className="pt-6">
           <p className="text-center">Ładowanie zdarzeń logowania...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p>Błąd podczas ładowania danych.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Spróbuj ponownie
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -128,7 +152,18 @@ const LoginEventsManagement = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Rejestr logowań</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle>Rejestr logowań</CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Odśwież dane"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
         <div className="flex gap-4 mt-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

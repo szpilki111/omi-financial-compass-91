@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Edit, Save, X, Upload, Trash2, Plus, Archive, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Edit, Save, X, Upload, Trash2, Plus, Archive, RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { ScrollableTable } from '@/components/ui/ScrollableTable';
@@ -103,7 +103,7 @@ const AccountsManagement = () => {
   }, [user?.role]);
 
   // Fetch accounts
-  const { data: accounts, isLoading } = useQuery({
+  const { data: accounts, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['accounts', debouncedSearchQuery, showInactive],
     queryFn: async () => {
       let query = supabase
@@ -124,7 +124,9 @@ const AccountsManagement = () => {
       
       if (error) throw error;
       return data as Account[];
-    }
+    },
+    retry: 2,
+    staleTime: 10000,
   });
 
   // Preserve focus after query updates
@@ -595,12 +597,42 @@ const AccountsManagement = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p>Błąd podczas ładowania danych.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Spróbuj ponownie
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Zarządzanie kontami</span>
+            <div className="flex items-center gap-2">
+              <span>Zarządzanie kontami</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                title="Odśwież dane"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
             <span className="text-sm font-normal text-muted-foreground">
               Dostępnych: {activeCount} {showInactive && `| Zdezaktywowanych: ${inactiveCount}`}
             </span>
