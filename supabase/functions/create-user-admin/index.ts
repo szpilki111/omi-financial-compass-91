@@ -158,7 +158,20 @@ serve(async (req) => {
     });
 
     if (insertErr) {
-      console.error("Insert profile error:", insertErr);
+      console.error("Insert profile error:", insertErr, {
+        userId: newUserId,
+        profileData: newProfile,
+      });
+      
+      // Rollback: usuń użytkownika auth, który został utworzony
+      // żeby nie zostawiać "osieroconych" użytkowników bez profilu
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(newUserId);
+        console.log("Rolled back auth user creation:", newUserId);
+      } catch (deleteErr) {
+        console.error("Failed to rollback auth user:", deleteErr);
+      }
+      
       return new Response(JSON.stringify({ error: insertErr.message, code: "profile_insert_failed" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
