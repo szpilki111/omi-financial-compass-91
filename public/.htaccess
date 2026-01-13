@@ -1,0 +1,18 @@
+# SPA fallback for Apache servers
+# This ensures all routes are handled by index.html for React Router
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # If the requested file or directory exists, serve it directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  
+  # Otherwise, serve index.html for all other requests (SPA routing)
+  RewriteRule ^ /index.html [L]
+</IfModule>
+
+# Fallback 404 handler
+ErrorDocument 404 /index.html
