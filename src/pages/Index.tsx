@@ -1,21 +1,31 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, BarChart3, Wallet, Building2 } from 'lucide-react';
 import oblaciLogo from '@/assets/oblaci-logo.png';
+import ResetPassword from './ResetPassword';
 
 const Index = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Sprawdź czy jest token resetowania hasła
+  const resetToken = searchParams.get('token');
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      // Redirect authenticated users to documents page instead of dashboard
+    // Nie przekierowuj jeśli jest token resetowania
+    if (!isLoading && isAuthenticated && !resetToken) {
       navigate('/dokumenty', { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate, resetToken]);
+
+  // Jeśli jest token resetowania hasła - wyświetl stronę resetowania
+  if (resetToken) {
+    return <ResetPassword />;
+  }
 
   // Show loading while checking authentication
   if (isLoading) {
