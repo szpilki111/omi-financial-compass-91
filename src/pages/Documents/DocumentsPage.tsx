@@ -255,6 +255,49 @@ const DocumentsPage = () => {
     });
   };
 
+  const downloadExcelFormTemplate = () => {
+    // Dynamicznie importuj xlsx i generuj szablon
+    import('xlsx').then((XLSX) => {
+      const wb = XLSX.utils.book_new();
+      
+      const templateData = [
+        ['FORMULARZ ROZLICZEŃ INDYWIDUALNYCH'],
+        [],
+        ['Imię i Nazwisko:', '', 'Placówka:', '', 'Kod lokalizacji:', '2-1'],
+        ['Typ płatności:', 'Gotówka', 'Nr konta kasowego:', '', '100-2-1-1', ''],
+        ['Miesiąc:', new Date().getMonth() + 1, '', 'Rok:', new Date().getFullYear(), ''],
+        [],
+        ['PRZYCHODY', '', '', '', 'ROZCHODY', '', ''],
+        ['Konto', 'Opis', 'Kwota', '', 'Konto', 'Opis', 'Kwota'],
+        ['149', 'Z kasy domowej', '', '', '401', 'Biurowe', ''],
+        ['210', 'Intencje', '', '', '402', 'Poczta', ''],
+        ['702', 'Misje', '', '', '403', 'Telefony, Internet', ''],
+        ['703', 'Duszpasterstwo', '', '', '404', 'Podróże lokalne', ''],
+        ['704', 'Kolęda', '', '', '405', 'Środki czystości', ''],
+        ['705', 'Zastępstwa', '', '', '410', 'Żywność', ''],
+        ['710', 'Odsetki', '', '', '420', 'Utrzymanie', ''],
+        ['711', 'Sprzedaż kalendarzy', '', '', '421', 'Remonty', ''],
+        ['714', 'Pensje', '', '', '430', 'Ubezpieczenia', ''],
+        ['715', 'Zwroty', '', '', '431', 'Podatki', ''],
+        ['717', 'Inne przychody', '', '', '440', 'Inne koszty', ''],
+      ];
+      
+      const ws = XLSX.utils.aoa_to_sheet(templateData);
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 25 }, { wch: 12 }, { wch: 4 },
+        { wch: 8 }, { wch: 25 }, { wch: 12 }
+      ];
+      
+      XLSX.utils.book_append_sheet(wb, ws, 'Rozliczenie');
+      XLSX.writeFile(wb, 'szablon_rozliczen.xlsx');
+      
+      toast({
+        title: "Szablon pobrany",
+        description: "Szablon formularza rozliczeń Excel został pobrany",
+      });
+    });
+  };
+
   const downloadCsvTemplate = () => {
     const csvContent = `Furta;"6.020,00";420-1-1-1;"6.020,00";100
 Kuchnia;"33.480,00";420-1-1-2;"33.480,00";100
@@ -368,6 +411,10 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
               <Button onClick={() => setIsExcelFormImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 Import Rozliczeń Excel
+              </Button>
+              <Button onClick={downloadExcelFormTemplate} variant="outline" size="sm" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Szablon Rozliczeń
               </Button>
               <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
