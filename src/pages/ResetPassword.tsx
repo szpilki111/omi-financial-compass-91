@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { z } from 'zod';
+import { extractResetToken } from '@/components/auth/PasswordResetGate';
 
 const passwordSchema = z.string()
   .min(8, 'Hasło musi mieć minimum 8 znaków')
@@ -17,6 +18,24 @@ const passwordSchema = z.string()
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
+  
+  // Wyciągnij token z różnych źródeł (query string, hash, pathname)
+  const token = useMemo(() => {
+    // Najpierw próbuj z searchParams (standard)
+    const paramToken = searchParams.get('token');
+    if (paramToken) {
+      console.log('[ResetPassword] Token from searchParams');
+      return paramToken;
+    }
+    
+    // Fallback do globalnego extractora dla edge cases
+    const extractedToken = extractResetToken();
+    if (extractedToken) {
+      console.log('[ResetPassword] Token from extractResetToken');
+    }
+    return extractedToken;
+  }, [searchParams]);
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,10 +53,8 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Get token from URL
-  const token = searchParams.get('token');
-
   useEffect(() => {
+    console.log('[ResetPassword] Token check:', token ? 'present' : 'missing');
     // If we have a custom token, it's valid (verification happens on submit)
     if (token) {
       setIsValidToken(true);
