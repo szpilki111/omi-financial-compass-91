@@ -140,12 +140,19 @@ const ResetPassword = () => {
         },
       });
 
-      if (error) {
-        throw new Error(error.message || 'Nie udało się zmienić hasła');
-      }
-
+      // Edge function zwraca status 400 z error body - sprawdź data.error
       if (data?.error) {
         throw new Error(data.error);
+      }
+
+      if (error) {
+        // Spróbuj wyciągnąć wiadomość z context jeśli dostępna
+        const errorMessage = error.message || 'Nie udało się zmienić hasła';
+        throw new Error(errorMessage);
+      }
+
+      if (!data?.success) {
+        throw new Error('Nie udało się zmienić hasła');
       }
 
       toast({
@@ -158,9 +165,24 @@ const ResetPassword = () => {
       }, 2000);
     } catch (error: any) {
       console.error('Error resetting password:', error);
+      
+      // Mapuj typowe błędy na przyjazne komunikaty
+      let friendlyMessage = 'Nie udało się zmienić hasła.';
+      const errorMsg = error.message?.toLowerCase() || '';
+      
+      if (errorMsg.includes('wygasł') || errorMsg.includes('expired')) {
+        friendlyMessage = 'Link do resetowania hasła wygasł. Poproś administratora o nowy link.';
+      } else if (errorMsg.includes('wykorzystany') || errorMsg.includes('already used') || errorMsg.includes('used')) {
+        friendlyMessage = 'Ten link do resetowania hasła został już wykorzystany. Poproś administratora o nowy link.';
+      } else if (errorMsg.includes('nieprawidłowy') || errorMsg.includes('invalid')) {
+        friendlyMessage = 'Link do resetowania hasła jest nieprawidłowy lub wygasł.';
+      } else if (error.message) {
+        friendlyMessage = error.message;
+      }
+      
       toast({
-        title: 'Błąd',
-        description: error.message || 'Nie udało się zmienić hasła.',
+        title: 'Nie można zmienić hasła',
+        description: friendlyMessage,
         variant: 'destructive',
       });
     } finally {
