@@ -5,12 +5,13 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
 import Mt940ImportDialog from './Mt940ImportDialog';
 import CsvImportDialog from './CsvImportDialog';
+import ExcelFormImportDialog from './ExcelFormImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,6 +45,7 @@ const DocumentsPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMt940ImportOpen, setIsMt940ImportOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [isExcelFormImportOpen, setIsExcelFormImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isImportSectionOpen, setIsImportSectionOpen] = useState(false);
 
@@ -244,6 +246,15 @@ const DocumentsPage = () => {
     });
   };
 
+  const handleExcelFormImportComplete = (count: number) => {
+    refetch();
+    setIsExcelFormImportOpen(false);
+    toast({
+      title: "Sukces",
+      description: `Zaimportowano ${count} dokumentów z formularza rozliczeń Excel`,
+    });
+  };
+
   const downloadCsvTemplate = () => {
     const csvContent = `Furta;"6.020,00";420-1-1-1;"6.020,00";100
 Kuchnia;"33.480,00";420-1-1-2;"33.480,00";100
@@ -353,7 +364,11 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
           </div>
 
           {isImportSectionOpen && (
-            <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border">
+            <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border flex-wrap">
+              <Button onClick={() => setIsExcelFormImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                Import Rozliczeń Excel
+              </Button>
               <Button onClick={() => setIsCsvImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 Import CSV
@@ -444,6 +459,12 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
         open={isCsvImportOpen}
         onClose={() => setIsCsvImportOpen(false)}
         onImportComplete={handleCsvImportComplete}
+      />
+
+      <ExcelFormImportDialog
+        open={isExcelFormImportOpen}
+        onClose={() => setIsExcelFormImportOpen(false)}
+        onImportComplete={handleExcelFormImportComplete}
       />
     </MainLayout>
   );
