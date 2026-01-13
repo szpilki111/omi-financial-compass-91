@@ -260,25 +260,25 @@ const DocumentsPage = () => {
     import('xlsx').then((XLSX) => {
       const wb = XLSX.utils.book_new();
       
-      // Dokładny układ zgodny z formularzem - kolumny A-I, wiersze 1-30+
+      // Dokładny układ zgodny z formularzem - kolumny A-I, wiersze 1-24
       const templateData = [
-        // Wiersz 1: Nagłówek (merge później)
-        ['', '', '', '', 'Formularz rozliczeń indywidualnych', '', '', '', ''],
-        // Wiersz 2: Podtytuł + Imię i Nazwisko
-        ['', 'Wypełniamy tylko komórki zacienione.', '', '', 'Imię i Nazwisko:', '', '', '', ''],
+        // Wiersz 1: Informacja
+        ['', 'Wypełniamy tylko komórki zacienione.', '', '', '', '', '', '', ''],
+        // Wiersz 2: Imię i Nazwisko
+        ['', '', 'Imię i Nazwisko:', '', '', '', '', '', ''],
         // Wiersz 3: Placówka
-        ['', '', '', 'Placówka:', '', '', '', '', '2-17'],
+        ['', '', 'Placówka:', '', '', '', '', '', '2-17'],
         // Wiersz 4: Gotówka/rachunek
-        ['', '', '', 'Gotówka/rachunek (podać nr)', 'gotówka', '', '', '', '100-2-17'],
+        ['', '', 'Gotówka/rachunek (podać nr)', '', 'gotówka', '', '', '', '100-2-17'],
         // Wiersz 5: pusty
         ['', '', '', '', '', '', '', '', ''],
         // Wiersz 6: Miesiąc i Rok
-        ['', '', 'Miesiąc:', '', '', '', '', 'Rok:', ''],
+        ['Miesiąc:', '', '', '', '', '', '', 'Rok:', ''],
         // Wiersz 7: Nagłówki sekcji
-        ['', '', 'PRZYCHODY', '', '', '', 'ROZCHODY', '', ''],
+        ['PRZYCHODY', '', '', '', '', 'ROZCHODY', '', '', ''],
         // Wiersz 8: Nagłówki kolumn
         ['LP', 'Konto', 'Opis', '', 'Kwota', 'LP', 'Konto', 'Opis', 'Kwota'],
-        // Wiersz 9: Saldo z poprzedniego okresu
+        // Wiersz 9: Saldo z poprzedniego okresu + Biurowe
         ['1.', '', 'Saldo z poprzedniego okresu', '', '', '1.', '401', 'Biurowe', ''],
         // Wiersz 10
         ['2.', '149', 'Z kasy domowej', '', '', '2.', '402', 'Poczta przesyłki kurierskie', ''],
@@ -314,10 +314,10 @@ const DocumentsPage = () => {
       
       // Szerokości kolumn A-I
       ws['!cols'] = [
-        { wch: 4 },   // A - LP
+        { wch: 5 },   // A - LP
         { wch: 6 },   // B - Konto
-        { wch: 40 },  // C - Opis
-        { wch: 4 },   // D - separator/etykieta
+        { wch: 45 },  // C - Opis
+        { wch: 3 },   // D - separator
         { wch: 12 },  // E - Kwota przychody
         { wch: 4 },   // F - LP rozchody
         { wch: 6 },   // G - Konto rozchody
