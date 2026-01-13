@@ -79,13 +79,15 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error('Błąd podczas tworzenia tokena');
     }
 
-    // Build reset URL - używamy /reset-password?token= bo mamy globalny handler
+    // Build reset URLs - using hash-based format to bypass server deep-linking issues
+    // The server always serves / and the SPA PasswordResetGate handles the hash
     const appUrl = 'https://finanse.oblaci.pl';
-    const resetUrl = `${appUrl}/reset-password?token=${token}`;
+    const resetUrl = `${appUrl}/#?token=${token}`;
+    const backupUrl = `${appUrl}/?token=${token}`;
 
     // Build beautiful email using shared template style
-    const emailHtml = buildPasswordResetEmail(profile.name, resetUrl);
-    const emailText = buildPasswordResetText(profile.name, resetUrl);
+    const emailHtml = buildPasswordResetEmail(profile.name, resetUrl, backupUrl);
+    const emailText = buildPasswordResetText(profile.name, resetUrl, backupUrl);
 
     // Send email via send-email function
     const { data: emailData, error: emailError } = await supabase.functions.invoke('send-email', {
@@ -128,10 +130,8 @@ serve(async (req: Request): Promise<Response> => {
   }
 });
 
-function buildPasswordResetEmail(userName: string, resetUrl: string): string {
+function buildPasswordResetEmail(userName: string, resetUrl: string, backupUrl: string): string {
   const goldGradient = 'linear-gradient(135deg, #E6B325, #D4A017)';
-  const goldPrimary = '#E6B325';
-  const goldLight = '#fef9e7';
   const orangePrimary = '#f59e0b';
   const orangeLight = '#fef3c7';
 
@@ -167,6 +167,12 @@ function buildPasswordResetEmail(userName: string, resetUrl: string): string {
   html += `<a href="${resetUrl}" style="display:inline-block;padding:14px 32px;background:${goldGradient};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">🔐 Ustaw nowe hasło</a>`;
   html += '</td></tr></table>';
   
+  // Backup link
+  html += '<div style="margin:24px 0 16px 0;color:#64748b;font-size:13px;line-height:1.6;text-align:center;">';
+  html += 'Jeśli przycisk nie działa, skopiuj i wklej ten link do przeglądarki:<br>';
+  html += `<a href="${backupUrl}" style="color:#E6B325;word-break:break-all;">${backupUrl}</a>`;
+  html += '</div>';
+  
   // Security notice
   html += `<div style="background-color:#f8fafc;border-left:4px solid #94a3b8;padding:16px 20px;margin:24px 0;border-radius:0 8px 8px 0;">`;
   html += '<p style="margin:0;color:#64748b;font-size:14px;">Jeśli to nie Ty prosiłeś o reset hasła, zignoruj tę wiadomość. Twoje konto jest bezpieczne.</p></div>';
@@ -184,7 +190,7 @@ function buildPasswordResetEmail(userName: string, resetUrl: string): string {
   return html;
 }
 
-function buildPasswordResetText(userName: string, resetUrl: string): string {
+function buildPasswordResetText(userName: string, resetUrl: string, backupUrl: string): string {
   return `Reset hasła - System Finansowy OMI
 
 Witaj ${userName},
@@ -195,6 +201,9 @@ UWAGA: Link jest ważny przez 1 godzinę.
 
 Aby ustawić nowe hasło, otwórz poniższy link:
 ${resetUrl}
+
+Jeśli powyższy link nie działa, użyj tego:
+${backupUrl}
 
 Jeśli to nie Ty prosiłeś o reset hasła, zignoruj tę wiadomość. Twoje konto jest bezpieczne.
 
