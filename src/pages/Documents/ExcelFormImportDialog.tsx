@@ -100,246 +100,103 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
     return undefined;
   };
 
-  // Parsowanie pliku Excel
+  // Parsowanie pliku Excel - dostosowane do szablonu
+  // Układ szablonu:
+  // Wiersz 1: Informacja "Wypełniamy tylko komórki zacienione."
+  // Wiersz 2: C = "Imię i Nazwisko:", E = wartość
+  // Wiersz 3: C = "Placówka:", E = wartość, I = kod (np. "2-17")
+  // Wiersz 4: C = "Gotówka/rachunek (podać nr)", E = typ (gotówka/bank), I = numer konta (np. "100-2-17")
+  // Wiersz 5: pusty
+  // Wiersz 6: A = "Miesiąc:", B = wartość, H = "Rok:", I = wartość
+  // Wiersz 7: A = "PRZYCHODY", F = "ROZCHODY"
+  // Wiersz 8: Nagłówki - LP, Konto, Opis, '', Kwota, LP, Konto, Opis, Kwota
+  // Wiersz 9+: Dane - przychody w kol. A-E, rozchody w kol. F-I
   const parseExcelFile = async (file: File): Promise<ExcelFormData> => {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     
-    // Pobierz pierwszy arkusz
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    // Konwertuj do JSON (z zachowaniem pozycji komórek)
+    // Konwertuj do tablicy 2D (wiersze x kolumny)
     const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
     
     console.log('Parsed Excel data:', data);
     
-    // Parsowanie nagłówka formularza
-    // Struktura formularza (na podstawie obrazka):
-    // Wiersz 2-3: Imię i Nazwisko, Placówka
-    // Wiersz 4: Gotówka/Bank, Numer konta
-    // Wiersz 5: Miesiąc, Rok
-    // Wiersze od ~7: Pozycje przychodowe i rozchodowe
+    // Pobierz wartości z konkretnych komórek zgodnie z szablonem
+    // Indeksy 0-based: wiersz 2 = index 1, kolumna E = index 4, itd.
     
-    let fullName = '';
-    let locationName = '';
-    let locationCode = '';
-    let paymentType: 'gotowka' | 'bank' = 'gotowka';
-    let cashAccountNumber = '';
-    let month = new Date().getMonth() + 1;
-    let year = new Date().getFullYear();
+    // Wiersz 2 (index 1): Imię i Nazwisko w kolumnie E (index 4) lub dalej
+    const fullName = String(data[1]?.[4] || data[1]?.[3] || '').trim();
     
-    // Szukamy kluczowych danych w nagłówku
-    for (let rowIdx = 0; rowIdx < Math.min(10, data.length); rowIdx++) {
-      const row = data[rowIdx];
-      if (!row) continue;
-      
-      for (let colIdx = 0; colIdx < row.length; colIdx++) {
-        const cell = String(row[colIdx] || '').toLowerCase().trim();
-        const nextCell = row[colIdx + 1] ? String(row[colIdx + 1]).trim() : '';
-        
-        // Szukaj placówki/lokalizacji
-        if (cell.includes('placówka') || cell.includes('lokalizacja') || cell.includes('dom')) {
-          locationName = nextCell || String(row[colIdx + 2] || '').trim();
-        }
-        
-        // Szukaj kodu lokalizacji (format np. "2-17", "2-1")
-        if (cell.includes('kod') || (nextCell && /^\d+-\d+(-\d+)?$/.test(nextCell))) {
-          const match = String(row[colIdx + 1] || row[colIdx + 2] || '').match(/(\d+-\d+(-\d+)?)/);
-          if (match) {
-            locationCode = match[1];
-          }
-        }
-        
-        // Szukaj typu płatności
-        if (cell.includes('gotówka') || cell.includes('gotowka')) {
-          paymentType = 'gotowka';
-        } else if (cell.includes('bank') || cell.includes('rachunek')) {
-          paymentType = 'bank';
-        }
-        
-        // Szukaj numeru konta kasowego (format 100-X-X-X lub 130-X-X-X)
-        const accountMatch = String(row[colIdx] || '').match(/^(100|130)-\d+-\d+(-\d+)?$/);
-        if (accountMatch) {
-          cashAccountNumber = row[colIdx];
-        }
-        
-        // Szukaj miesiąca i roku
-        if (cell.includes('miesiąc') || cell.includes('miesiac')) {
-          const monthVal = parseInt(nextCell);
-          if (monthVal >= 1 && monthVal <= 12) month = monthVal;
-        }
-        if (cell.includes('rok') && !cell.includes('dochod')) {
-          const yearVal = parseInt(nextCell);
-          if (yearVal >= 2000 && yearVal <= 2100) year = yearVal;
-        }
-        
-        // Szukaj imienia
-        if (cell.includes('imię') || cell.includes('imie') || cell.includes('nazwisko')) {
-          fullName = nextCell;
-        }
-      }
-    }
+    // Wiersz 3 (index 2): Placówka w E (index 4), Kod lokalizacji w I (index 8)
+    const locationName = String(data[2]?.[4] || data[2]?.[3] || '').trim();
+    const locationCode = String(data[2]?.[8] || '').trim();
     
-    // Jeśli nie znaleziono kodu lokalizacji, spróbuj wyciągnąć z numeru konta
-    if (!locationCode && cashAccountNumber) {
-      const parts = cashAccountNumber.split('-');
-      if (parts.length >= 3) {
-        locationCode = `${parts[1]}-${parts[2]}`;
-      }
-    }
+    // Wiersz 4 (index 3): Typ płatności w E (index 4), Numer konta w I (index 8)
+    const paymentTypeRaw = String(data[3]?.[4] || '').toLowerCase().trim();
+    const paymentType: 'gotowka' | 'bank' = 
+      paymentTypeRaw.includes('bank') || paymentTypeRaw.includes('rachunek') ? 'bank' : 'gotowka';
+    const cashAccountNumber = String(data[3]?.[8] || '').trim();
+    
+    // Wiersz 6 (index 5): Miesiąc w B (index 1), Rok w I (index 8)
+    const monthRaw = data[5]?.[1] || data[5]?.[2];
+    const yearRaw = data[5]?.[8];
+    
+    let month = parseInt(String(monthRaw)) || new Date().getMonth() + 1;
+    let year = parseInt(String(yearRaw)) || new Date().getFullYear();
+    
+    // Walidacja
+    if (month < 1 || month > 12) month = new Date().getMonth() + 1;
+    if (year < 2000 || year > 2100) year = new Date().getFullYear();
+    
+    console.log('Parsed header:', { fullName, locationName, locationCode, paymentType, cashAccountNumber, month, year });
     
     // Parsowanie pozycji przychodowych i rozchodowych
+    // Zaczynamy od wiersza 9 (index 8)
     const incomeItems: FormItem[] = [];
     const expenseItems: FormItem[] = [];
     
-    // Szukamy wierszy z numerami kont (zaczynających się od cyfry)
-    let inIncomeSection = false;
-    let inExpenseSection = false;
-    
-    for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+    for (let rowIdx = 8; rowIdx < data.length; rowIdx++) {
       const row = data[rowIdx];
       if (!row) continue;
       
-      // Sprawdź nagłówki sekcji
-      const rowText = row.join(' ').toLowerCase();
-      if (rowText.includes('przychod') || rowText.includes('dochod') || rowText.includes('wpływ')) {
-        inIncomeSection = true;
-        inExpenseSection = false;
-        continue;
-      }
-      if (rowText.includes('rozchod') || rowText.includes('wydatek') || rowText.includes('koszty')) {
-        inIncomeSection = false;
-        inExpenseSection = true;
-        continue;
+      // PRZYCHODY: kolumny A-E (index 0-4)
+      // A = LP, B = Konto, C = Opis, D = pusty, E = Kwota
+      const incomeAccount = String(row[1] || '').trim();
+      const incomeDesc = String(row[2] || '').trim();
+      const incomeAmountRaw = row[4];
+      
+      if (incomeAccount && /^\d{3}$/.test(incomeAccount)) {
+        const amount = parseAmount(incomeAmountRaw);
+        if (amount > 0) {
+          incomeItems.push({
+            baseAccountNumber: incomeAccount,
+            description: incomeDesc || `Konto ${incomeAccount}`,
+            amount
+          });
+        }
       }
       
-      // Szukaj pozycji z numerami kont i kwotami
-      // Format: Numer konta | Opis | Kwota
-      // lub: Numer konta | Opis | Kwota (przychody) | Numer konta | Opis | Kwota (rozchody)
+      // ROZCHODY: kolumny F-I (index 5-8)
+      // F = LP, G = Konto, H = Opis, I = Kwota
+      const expenseAccount = String(row[6] || '').trim();
+      const expenseDesc = String(row[7] || '').trim();
+      const expenseAmountRaw = row[8];
       
-      for (let colIdx = 0; colIdx < row.length; colIdx++) {
-        const cell = String(row[colIdx] || '').trim();
-        
-        // Sprawdź czy to numer konta (3-cyfrowy prefix konta)
-        const accountMatch = cell.match(/^(\d{3})$/);
-        if (accountMatch) {
-          const baseAccountNumber = accountMatch[1];
-          
-          // Szukaj opisu i kwoty w kolejnych kolumnach
-          let description = '';
-          let amount = 0;
-          
-          for (let searchIdx = colIdx + 1; searchIdx < Math.min(colIdx + 5, row.length); searchIdx++) {
-            const searchCell = row[searchIdx];
-            if (searchCell === undefined || searchCell === null || searchCell === '') continue;
-            
-            const searchStr = String(searchCell).trim();
-            
-            // Sprawdź czy to kwota (liczba z separatorem)
-            const amountMatch = searchStr.replace(/\s/g, '').match(/^[\d\s.,]+$/);
-            if (amountMatch) {
-              const cleanAmount = searchStr
-                .replace(/\s/g, '')
-                .replace(/\./g, '')  // Usuń kropki (separator tysięcy)
-                .replace(',', '.');   // Zamień przecinek na kropkę
-              amount = parseFloat(cleanAmount) || 0;
-            } else if (!description && searchStr.length > 1 && !/^\d+$/.test(searchStr)) {
-              // To opis (tekst, nie sama liczba)
-              description = searchStr;
-            }
-          }
-          
-          // Dodaj pozycję jeśli ma kwotę
-          if (amount > 0) {
-            const item: FormItem = {
-              baseAccountNumber,
-              description: description || `Konto ${baseAccountNumber}`,
-              amount
-            };
-            
-            // Określ typ na podstawie numeru konta lub sekcji
-            const accountPrefix = parseInt(baseAccountNumber.charAt(0));
-            
-            // Konta 7xx, 2xx, 1xx (oprócz 100) to przychody
-            // Konta 4xx to koszty
-            if (accountPrefix === 7 || accountPrefix === 2 || (accountPrefix === 1 && baseAccountNumber !== '100')) {
-              incomeItems.push(item);
-            } else if (accountPrefix === 4) {
-              expenseItems.push(item);
-            } else if (inIncomeSection) {
-              incomeItems.push(item);
-            } else if (inExpenseSection) {
-              expenseItems.push(item);
-            }
-          }
+      if (expenseAccount && /^\d{3}$/.test(expenseAccount)) {
+        const amount = parseAmount(expenseAmountRaw);
+        if (amount > 0) {
+          expenseItems.push({
+            baseAccountNumber: expenseAccount,
+            description: expenseDesc || `Konto ${expenseAccount}`,
+            amount
+          });
         }
       }
     }
     
-    // Jeśli nie wykryto pozycji, spróbuj parsować całą tabelę
-    if (incomeItems.length === 0 && expenseItems.length === 0) {
-      // Alternatywne parsowanie - szukamy dowolnych wierszy z formatem konto-kwota
-      for (let rowIdx = 5; rowIdx < data.length; rowIdx++) {
-        const row = data[rowIdx];
-        if (!row || row.length < 2) continue;
-        
-        // Sprawdź każdą komórkę
-        for (let colIdx = 0; colIdx < row.length - 1; colIdx++) {
-          const cell = String(row[colIdx] || '').trim();
-          
-          // Szukaj pełnych numerów kont (np. 711-2-1, 401-2-17)
-          const fullAccountMatch = cell.match(/^(\d{3})-(\d+)-(\d+)(-\d+)?$/);
-          if (fullAccountMatch) {
-            const baseAccountNumber = fullAccountMatch[1];
-            
-            // Szukaj kwoty w sąsiednich komórkach
-            for (let searchIdx = colIdx + 1; searchIdx < Math.min(colIdx + 4, row.length); searchIdx++) {
-              const searchCell = row[searchIdx];
-              if (!searchCell) continue;
-              
-              const searchStr = String(searchCell).trim().replace(/\s/g, '');
-              const amountMatch = searchStr.match(/^[\d.,]+$/);
-              
-              if (amountMatch) {
-                const cleanAmount = searchStr
-                  .replace(/\./g, '')
-                  .replace(',', '.');
-                const amount = parseFloat(cleanAmount) || 0;
-                
-                if (amount > 0) {
-                  const item: FormItem = {
-                    baseAccountNumber,
-                    description: `Konto ${cell}`,
-                    amount
-                  };
-                  
-                  const accountPrefix = parseInt(baseAccountNumber.charAt(0));
-                  if (accountPrefix === 7 || accountPrefix === 2) {
-                    incomeItems.push(item);
-                  } else if (accountPrefix === 4) {
-                    expenseItems.push(item);
-                  }
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    console.log('Parsed form data:', {
-      fullName,
-      locationName,
-      locationCode,
-      paymentType,
-      cashAccountNumber,
-      month,
-      year,
-      incomeItems,
-      expenseItems
-    });
+    console.log('Parsed items:', { incomeItems, expenseItems });
     
     return {
       fullName,
@@ -352,6 +209,20 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
       incomeItems,
       expenseItems
     };
+  };
+  
+  // Pomocnicza funkcja do parsowania kwot
+  const parseAmount = (value: any): number => {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return value;
+    
+    const str = String(value).trim().replace(/\s/g, '');
+    // Obsługa formatu polskiego: 1 234,56 lub 1.234,56
+    const cleaned = str
+      .replace(/\./g, '')  // Usuń kropki (separator tysięcy)
+      .replace(',', '.');   // Zamień przecinek na kropkę (separator dziesiętny)
+    
+    return parseFloat(cleaned) || 0;
   };
 
   // Generowanie transakcji na podstawie sparsowanych danych
