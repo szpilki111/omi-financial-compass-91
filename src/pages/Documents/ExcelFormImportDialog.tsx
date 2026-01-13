@@ -322,6 +322,22 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
     }
   };
 
+  // Sprawdź czy są błędy kont - blokada importu
+  const hasAccountErrors = generatedTransactions.some(t => t.hasError);
+  const missingAccounts = useMemo(() => {
+    const missing = new Set<string>();
+    generatedTransactions.forEach(t => {
+      if (t.hasError && t.errorMessage) {
+        // Wyciągnij numer konta z komunikatu błędu
+        const match = t.errorMessage.match(/Nie znaleziono konta (.+)/);
+        if (match) {
+          missing.add(match[1]);
+        }
+      }
+    });
+    return Array.from(missing);
+  }, [generatedTransactions]);
+
   const handleImport = async () => {
     if (!parsedData || generatedTransactions.length === 0) {
       toast({
@@ -341,17 +357,17 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
       return;
     }
     
-    // Filtruj tylko poprawne transakcje
-    const validTransactions = generatedTransactions.filter(t => !t.hasError);
-    
-    if (validTransactions.length === 0) {
+    // BLOKADA: Nie pozwól na import jeśli są brakujące konta
+    if (hasAccountErrors) {
       toast({
-        title: "Błąd",
-        description: "Wszystkie transakcje zawierają błędy. Dodaj brakujące konta przed importem.",
+        title: "Błąd importu",
+        description: `Nie można zaimportować pliku. Brakujące konta: ${missingAccounts.join(', ')}`,
         variant: "destructive",
       });
       return;
     }
+    
+    const validTransactions = generatedTransactions;
     
     setLoading(true);
     
@@ -606,6 +622,27 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
                 </span>
               </div>
 
+              {/* Alert o brakujących kontach - blokada importu */}
+              {hasAccountErrors && missingAccounts.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Import zablokowany - brakujące konta</AlertTitle>
+                  <AlertDescription>
+                    Nie można zaimportować pliku. Następujące konta nie istnieją w systemie:
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {missingAccounts.map((account, idx) => (
+                        <Badge key={idx} variant="outline" className="font-mono">
+                          {account}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm">
+                      Dodaj brakujące konta w module Administracja → Konta, lub popraw numery kont w pliku Excel.
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Podgląd transakcji */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Podgląd operacji do zaimportowania</Label>
@@ -672,17 +709,22 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
           </Button>
           <Button 
             onClick={handleImport} 
-            disabled={loading || !parsedData || validCount === 0}
+            disabled={loading || !parsedData || generatedTransactions.length === 0 || hasAccountErrors}
           >
             {loading ? (
               <>
                 <span className="animate-spin mr-2">⏳</span>
                 Importowanie...
               </>
+            ) : hasAccountErrors ? (
+              <>
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Brakujące konta
+              </>
             ) : (
               <>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Importuj {validCount} operacji
+                Importuj {generatedTransactions.length} operacji
               </>
             )}
           </Button>
