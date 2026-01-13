@@ -79,9 +79,9 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error('Błąd podczas tworzenia tokena');
     }
 
-    // Build reset URL - używamy /?token= bo hosting nie ma SPA rewrites
+    // Build reset URL - używamy /reset-password?token= bo mamy globalny handler
     const appUrl = 'https://finanse.oblaci.pl';
-    const resetUrl = `${appUrl}/?token=${token}`;
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
 
     // Build beautiful email using shared template style
     const emailHtml = buildPasswordResetEmail(profile.name, resetUrl);
