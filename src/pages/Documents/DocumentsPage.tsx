@@ -260,32 +260,69 @@ const DocumentsPage = () => {
     import('xlsx').then((XLSX) => {
       const wb = XLSX.utils.book_new();
       
+      // Dokładny układ zgodny z formularzem - kolumny A-I, wiersze 1-30+
       const templateData = [
-        ['FORMULARZ ROZLICZEŃ INDYWIDUALNYCH'],
-        [],
-        ['Imię i Nazwisko:', '', 'Placówka:', '', 'Kod lokalizacji:', '2-1'],
-        ['Typ płatności:', 'Gotówka', 'Nr konta kasowego:', '', '100-2-1-1', ''],
-        ['Miesiąc:', new Date().getMonth() + 1, '', 'Rok:', new Date().getFullYear(), ''],
-        [],
-        ['PRZYCHODY', '', '', '', 'ROZCHODY', '', ''],
-        ['Konto', 'Opis', 'Kwota', '', 'Konto', 'Opis', 'Kwota'],
-        ['149', 'Z kasy domowej', '', '', '401', 'Biurowe', ''],
-        ['210', 'Intencje', '', '', '402', 'Poczta', ''],
-        ['702', 'Misje', '', '', '403', 'Telefony, Internet', ''],
-        ['703', 'Duszpasterstwo', '', '', '404', 'Podróże lokalne', ''],
-        ['704', 'Kolęda', '', '', '405', 'Środki czystości', ''],
-        ['705', 'Zastępstwa', '', '', '410', 'Żywność', ''],
-        ['710', 'Odsetki', '', '', '420', 'Utrzymanie', ''],
-        ['711', 'Sprzedaż kalendarzy', '', '', '421', 'Remonty', ''],
-        ['714', 'Pensje', '', '', '430', 'Ubezpieczenia', ''],
-        ['715', 'Zwroty', '', '', '431', 'Podatki', ''],
-        ['717', 'Inne przychody', '', '', '440', 'Inne koszty', ''],
+        // Wiersz 1: Nagłówek (merge później)
+        ['', '', '', '', 'Formularz rozliczeń indywidualnych', '', '', '', ''],
+        // Wiersz 2: Podtytuł + Imię i Nazwisko
+        ['', 'Wypełniamy tylko komórki zacienione.', '', '', 'Imię i Nazwisko:', '', '', '', ''],
+        // Wiersz 3: Placówka
+        ['', '', '', 'Placówka:', '', '', '', '', '2-17'],
+        // Wiersz 4: Gotówka/rachunek
+        ['', '', '', 'Gotówka/rachunek (podać nr)', 'gotówka', '', '', '', '100-2-17'],
+        // Wiersz 5: pusty
+        ['', '', '', '', '', '', '', '', ''],
+        // Wiersz 6: Miesiąc i Rok
+        ['', '', 'Miesiąc:', '', '', '', '', 'Rok:', ''],
+        // Wiersz 7: Nagłówki sekcji
+        ['', '', 'PRZYCHODY', '', '', '', 'ROZCHODY', '', ''],
+        // Wiersz 8: Nagłówki kolumn
+        ['LP', 'Konto', 'Opis', '', 'Kwota', 'LP', 'Konto', 'Opis', 'Kwota'],
+        // Wiersz 9: Saldo z poprzedniego okresu
+        ['1.', '', 'Saldo z poprzedniego okresu', '', '', '1.', '401', 'Biurowe', ''],
+        // Wiersz 10
+        ['2.', '149', 'Z kasy domowej', '', '', '2.', '402', 'Poczta przesyłki kurierskie', ''],
+        // Wiersz 11
+        ['3.', '210', 'Intencje, ilość:', '', '', '3.', '403', 'Telefony, Internet, TV', ''],
+        // Wiersz 12
+        ['4.', '702', 'Misje/Rekolekcje/inne', '', '', '4.', '404', 'Reprezentacyjne', ''],
+        // Wiersz 13
+        ['5.', '703', 'Duszpasterstwo parafialne (zastępstwa itp.)', '', '', '5.', '405', 'Prowizje opłaty bankowe', ''],
+        // Wiersz 14
+        ['6.', '704', 'Kolęda', '', '', '6.', '406', 'Usługi serwisowe', ''],
+        // Wiersz 15
+        ['7.', '705', 'Zastępstwa zagraniczne', '', '', '7.', '410', 'Pralnia, artykuły chemiczne i konserwacja', ''],
+        // Wiersz 16
+        ['8.', '710', 'Odsetki i przychody finansowe', '', '', '8.', '411', 'Podróże komunikacja publiczna', ''],
+        // Wiersz 17
+        ['9.', '711', 'Sprzedaż kalendarzy', '', '', '9.', '412', 'Koszty utrzymania samochodu, paliwo itd.', ''],
+        // Wiersz 18
+        ['10.', '714', 'Pensje, emerytury i renty', '', '', '10.', '413', 'Noclegi', ''],
+        // Wiersz 19
+        ['11.', '715', 'Zwroty', '', '', '11.', '421', 'Osobiste, higiena osobista', ''],
+        // Wiersz 20
+        ['12.', '717', 'Inne', '', '', '12.', '423', 'Formacja ustawiczna', ''],
+        // Wiersz 21
+        ['', '', '', '', '', '13.', '424', 'Leczenie, opieka zdrowotna', ''],
+        // Wiersz 22
+        ['', '', '', '', '', '14.', '430', 'Kult', ''],
+        // Wiersz 23
+        ['', '', '', '', '', '15.', '431', 'Książki, gazety, czasopisma, prenumeraty', ''],
       ];
       
       const ws = XLSX.utils.aoa_to_sheet(templateData);
+      
+      // Szerokości kolumn A-I
       ws['!cols'] = [
-        { wch: 8 }, { wch: 25 }, { wch: 12 }, { wch: 4 },
-        { wch: 8 }, { wch: 25 }, { wch: 12 }
+        { wch: 4 },   // A - LP
+        { wch: 6 },   // B - Konto
+        { wch: 40 },  // C - Opis
+        { wch: 4 },   // D - separator/etykieta
+        { wch: 12 },  // E - Kwota przychody
+        { wch: 4 },   // F - LP rozchody
+        { wch: 6 },   // G - Konto rozchody
+        { wch: 45 },  // H - Opis rozchody
+        { wch: 12 },  // I - Kwota rozchody
       ];
       
       XLSX.utils.book_append_sheet(wb, ws, 'Rozliczenie');
