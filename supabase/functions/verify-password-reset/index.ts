@@ -103,9 +103,10 @@ serve(async (req: Request): Promise<Response> => {
 
   } catch (error: any) {
     console.error('Error in verify-password-reset:', error);
+    // Return 200 with error in body so client can read it
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 });
