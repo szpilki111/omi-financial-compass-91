@@ -25,6 +25,7 @@ interface ExcelFormData {
   locationName: string;
   locationCode: string;
   paymentType: 'gotowka' | 'bank';
+  paymentTypeRaw: string; // E4 - oryginalna wartość typu płatności
   cashAccountNumber: string;
   month: number;
   year: number;
@@ -134,9 +135,10 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
     const locationCode = String(data[2]?.[8] || '').trim();
     
     // Wiersz 4 (index 3): Typ płatności w E (index 4), Numer konta w I (index 8)
-    const paymentTypeRaw = String(data[3]?.[4] || '').toLowerCase().trim();
+    const paymentTypeRawValue = String(data[3]?.[4] || '').trim();
+    const paymentTypeLower = paymentTypeRawValue.toLowerCase();
     const paymentType: 'gotowka' | 'bank' = 
-      paymentTypeRaw.includes('bank') || paymentTypeRaw.includes('rachunek') ? 'bank' : 'gotowka';
+      paymentTypeLower.includes('bank') || paymentTypeLower.includes('rachunek') ? 'bank' : 'gotowka';
     const cashAccountNumber = String(data[3]?.[8] || '').trim();
     
     // Wiersz 6 (index 5): Miesiąc w B (index 1), Rok w I (index 8)
@@ -162,9 +164,12 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
       if (!row) continue;
       
       // PRZYCHODY: kolumny A-E (index 0-4)
-      // A = LP, B = Konto, C = Opis, D = pusty, E = Kwota
+      // A = LP, B = Konto, C = Opis, D = dodatkowy opis, E = Kwota
       const incomeAccount = String(row[1] || '').trim();
-      const incomeDesc = String(row[2] || '').trim();
+      const incomeDescC = String(row[2] || '').trim();
+      const incomeDescD = String(row[3] || '').trim();
+      // Połącz C i D jeśli D nie jest puste
+      const incomeDesc = incomeDescD ? `${incomeDescC} ${incomeDescD}`.trim() : incomeDescC;
       const incomeAmountRaw = row[4];
       
       if (incomeAccount && /^\d{3}$/.test(incomeAccount)) {
@@ -203,6 +208,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
       locationName,
       locationCode,
       paymentType,
+      paymentTypeRaw: paymentTypeRawValue,
       cashAccountNumber,
       month,
       year,
@@ -385,8 +391,8 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
         throw numberError;
       }
 
-      // Utwórz dokument
-      const documentName = `Rozliczenie indywidualne${parsedData.locationName ? ` - ${parsedData.locationName}` : ''} - ${parsedData.month}/${parsedData.year}`;
+      // Utwórz dokument - format: "Rozliczenie: (E3)-(E2)-(E4)"
+      const documentName = `Rozliczenie: ${parsedData.locationName || 'Nieznana lokalizacja'}-${parsedData.fullName || 'Nieznany'}-${parsedData.paymentTypeRaw || 'Brak typu'}`;
       
       const { data: document, error: docError } = await supabase
         .from('documents')
