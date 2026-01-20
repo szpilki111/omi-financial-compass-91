@@ -472,11 +472,15 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({
   };
 
   const downloadTemplate = async () => {
+    console.log('=== POBIERANIE SZABLONU Z SUPABASE STORAGE ===');
+    console.log('Bucket: Document, Plik: 1.xlsx');
     try {
       // Pobierz plik z Supabase Storage (bucket: Document, plik: 1.xlsx)
       const { data, error } = await supabase.storage
         .from('Document')
         .download('1.xlsx');
+      
+      console.log('Odpowiedź z storage:', { data, error });
       
       if (error) {
         throw error;
