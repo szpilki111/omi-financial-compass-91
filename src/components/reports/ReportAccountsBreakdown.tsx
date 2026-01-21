@@ -137,10 +137,13 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
       };
 
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
+      // UWAGA: Konta 200 są teraz w kategorii należności/zobowiązań, nie w przychodach/kosztach
       const isRelevantAccount = (accountNumber: string) => {
         if (!accountNumber) return false;
         // Skip restricted accounts
         if (isAccountRestricted(accountNumber)) return false;
+        // Konta 200 nie są już liczone do przychodów/kosztów
+        if (accountNumber.startsWith('200')) return false;
         return accountNumber.startsWith('2') || accountNumber.startsWith('4') || accountNumber.startsWith('7');
       };
 

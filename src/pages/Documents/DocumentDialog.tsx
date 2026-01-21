@@ -25,6 +25,7 @@ import PrintableDocument from "@/components/PrintableDocument";
 import { AccountCombobox } from "./AccountCombobox";
 import { Transaction } from "./types";
 import CurrencySelector from "@/components/CurrencySelector";
+import ExchangeRateManager from "@/components/ExchangeRateManager";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DndContext,
@@ -88,6 +89,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [hasInlineFormData, setHasInlineFormData] = useState(false);
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
   const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
   const [isCapturingError, setIsCapturingError] = useState(false);
@@ -554,6 +556,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         document_date: new Date(document.document_date),
         currency: document.currency || "PLN",
       });
+      
+      // Ustaw kurs wymiany z dokumentu
+      setExchangeRate(document.exchange_rate || 1);
 
       loadTransactions(document.id);
       setHasUnsavedChanges(false);
@@ -566,6 +571,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
       setTransactions([]);
       setParallelTransactions([]);
+      setExchangeRate(1);
       setHasUnsavedChanges(false);
     }
   }, [document, form, isOpen]);
@@ -877,6 +883,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_name: data.document_name,
             document_date: format(data.document_date, "yyyy-MM-dd"),
             currency: data.currency,
+            exchange_rate: data.currency !== 'PLN' ? exchangeRate : 1,
             validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null,
           })
           .eq("id", document.id);
@@ -891,6 +898,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             location_id: user.location,
             user_id: user.id,
             currency: data.currency,
+            exchange_rate: data.currency !== 'PLN' ? exchangeRate : 1,
             validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null,
           })
           .select()
@@ -1501,18 +1509,30 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 />
 
                 {locationSettings?.allow_foreign_currencies && (
-                  <FormField
-                    control={form.control}
-                    name="currency"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <CurrencySelector value={field.value} onChange={field.onChange} disabled={isEditingBlocked} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="currency"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <CurrencySelector value={field.value} onChange={field.onChange} disabled={isEditingBlocked} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {form.watch('currency') !== 'PLN' && (
+                      <div className="col-span-full">
+                        <ExchangeRateManager
+                          currency={form.watch('currency')}
+                          value={exchangeRate}
+                          onChange={setExchangeRate}
+                          disabled={isEditingBlocked}
+                        />
+                      </div>
                     )}
-                  />
+                  </>
                 )}
               </div>
 

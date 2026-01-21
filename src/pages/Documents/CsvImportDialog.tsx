@@ -312,9 +312,28 @@ const parseAmount = (amountStr: string): number => {
                 
               if (error) throw error;
               
+              // Walidacja dokumentu - sprawdź brakujące konta i zapisz błędy
+              const validationErrors: { type: string; message: string }[] = [];
+              const incompleteCount = transactionsToImport.filter(
+                t => !t.debit_account_id || !t.credit_account_id
+              ).length;
+              
+              if (incompleteCount > 0) {
+                validationErrors.push({
+                  type: 'missing_accounts',
+                  message: `${incompleteCount} operacji wymaga uzupełnienia kont`
+                });
+                
+                // Zaktualizuj dokument z błędami walidacji
+                await supabase
+                  .from('documents')
+                  .update({ validation_errors: validationErrors })
+                  .eq('id', document.id);
+              }
+              
               toast({
                 title: "Sukces",
-                description: `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami`,
+                description: `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami.${incompleteCount > 0 ? ` ${incompleteCount} wymaga uzupełnienia kont.` : ''}`,
               });
               
               onImportComplete(1);
