@@ -238,13 +238,7 @@ export const AccountsSettingsTab: React.FC = () => {
   const hasNoAccountsAtAll = !allAccounts?.length;
   const hasNoFilteredResults = allAccounts?.length > 0 && filteredAccounts?.length === 0;
   return <div className="space-y-6">
-      <Alert className="mb-4 bg-blue-50 border-blue-200">
-        <Info className="h-4 w-4 text-blue-600" />
-        <AlertDescription className="text-sm text-blue-800">Jak usunąć konto? Konta główne może dezaktywować lub usunąć tylko Administrator.<strong>Jak usunąć konto?</strong> Konta główne można dezaktywować lub usunąć tylko w panelu administracyjnym 
-          (Administracja → Zarządzanie kontami). Konta analityczne (podkonta) możesz usunąć tutaj, klikając przycisk "Usuń" 
-          przy rozwinięciu konta głównego. Usunięcie jest możliwe tylko jeśli konto nie ma powiązanych transakcji.
-        </AlertDescription>
-      </Alert>
+      
       <Card>
         <CardHeader>
           <CardTitle>Dostępne konta</CardTitle>
