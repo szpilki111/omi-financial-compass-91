@@ -1732,6 +1732,7 @@ export type Database = {
           analytical: boolean
           has_analytics: boolean
           id: string
+          is_active: boolean
           name: string
           number: string
           type: string

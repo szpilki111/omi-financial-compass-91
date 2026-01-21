@@ -122,14 +122,26 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 Array.isArray(document.validation_errors) && 
                 document.validation_errors.filter((e: any) => e.type !== 'locked_by_report').length > 0;
               
-              // Count total missing fields instead of incomplete transactions
+              // Count total missing fields including import errors
               let totalMissingFields = 0;
+              let hasMissingAccountsError = false;
               if (hasErrors) {
                 document.validation_errors
                   .filter((error: any) => error.type !== 'locked_by_report')
                   .forEach((error: any) => {
                     if (error.missingFields && typeof error.missingFields === 'object') {
                       totalMissingFields += Object.keys(error.missingFields).length;
+                    }
+                    // Obsłuż błędy z importu MT940/CSV
+                    if (error.type === 'missing_accounts') {
+                      hasMissingAccountsError = true;
+                      // Wyciągnij liczbę z message, np. "5 operacji wymaga uzupełnienia kont"
+                      const match = error.message?.match(/^(\d+)/);
+                      if (match) {
+                        totalMissingFields += parseInt(match[1], 10);
+                      } else {
+                        totalMissingFields += 1;
+                      }
                     }
                   });
               }
@@ -170,7 +182,10 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                     ) : hasErrors && totalMissingFields > 0 ? (
                       <Badge variant="destructive" className="flex items-center gap-1 w-fit">
                         <AlertTriangle className="h-3 w-3" />
-                        {totalMissingFields} {totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}
+                        {hasMissingAccountsError 
+                          ? `${totalMissingFields} ${totalMissingFields === 1 ? 'brak konta' : 'brak kont'}`
+                          : `${totalMissingFields} ${totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}`
+                        }
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
