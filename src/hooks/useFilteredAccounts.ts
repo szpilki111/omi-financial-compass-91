@@ -8,6 +8,7 @@ export interface FilteredAccount {
   name: string;
   type: string;
   analytical?: boolean;
+  has_analytics?: boolean;
 }
 
 interface UseFilteredAccountsOptions {
@@ -20,7 +21,7 @@ interface UseFilteredAccountsOptions {
  * 
  * UWAGA: Admin ZAWSZE widzi wszystkie konta bez żadnych filtrów i ograniczeń.
  * 
- * Wykorzystuje funkcję SQL `get_user_filtered_accounts` do filtrowania server-side:
+ * Wykorzystuje funkcję SQL `get_user_filtered_accounts_with_analytics` do filtrowania server-side:
  * - Identyfikator lokalizacji (np. "1-3") to 2 liczby po pierwszym myślniku
  * - np. "100-1-3" = prefix "100", identifier "1-3"
  * - np. "100-1-3-5" = prefix "100", identifier "1-3", analityka "5"
@@ -28,6 +29,8 @@ interface UseFilteredAccountsOptions {
  * 
  * Konta z zaznaczonymi restrykcjami są CAŁKOWICIE niewidoczne dla użytkowników danej kategorii placówki
  * (nie dotyczy admina).
+ * 
+ * Konta z has_analytics=true mają podkonta analityczne i nie powinny być bezpośrednio wybierane do operacji.
  */
 export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
   const { user } = useAuth();
@@ -56,7 +59,9 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
 
       while (hasMore && iterations < maxIterations) {
         iterations++;
-        const { data, error } = await supabase.rpc('get_user_filtered_accounts', {
+        
+        // Używamy nowej funkcji z flagą has_analytics
+        const { data, error } = await supabase.rpc('get_user_filtered_accounts_with_analytics', {
           p_user_id: user.id,
           p_include_inactive: includeInactive,
           p_skip_restrictions: skipRestrictions

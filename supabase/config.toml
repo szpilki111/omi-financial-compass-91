@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.verify-password-reset]
 verify_jwt = false
+
+[functions.fetch-nbp-rates]
+verify_jwt = false

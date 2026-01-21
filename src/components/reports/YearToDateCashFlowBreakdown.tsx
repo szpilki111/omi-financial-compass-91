@@ -105,9 +105,10 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
         return restrictedPrefixes.includes(accountPrefix);
       };
 
-      // Definiuj kategorie zgodnie z obrazkiem
+      // Definiuj kategorie zgodnie z nową strukturą
+      // UWAGA: Usunięto sekcję "Towary", konta 200 przeniesione do należności/zobowiązań
       const categoryDefinitions = {
-        'A. Stan finansowy domu': {
+        'A. Majątek domu (Aktywa)': {
           'Kasa domu': ['100'],
           'Kasa dewiz': ['101', '102', '103', '104', '105', '106', '107', '108'],
           'Bank': ['110'],
@@ -117,14 +118,11 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
         'B. Intencje': {
           'Intencje': ['210', '701']
         },
-        'C. Towary': {
-          'Towary': ['301', '449']
-        },
-        'D. Należności i zobowiązania': {
+        'C. Należności i zobowiązania': {
+          'Rozliczenia z prowincją': ['200', '201'],
           'Pożyczki udzielone': ['212', '213'],
           'Pożyczki zaciągnięte': ['215'],
           'Sumy przechodnie': ['149', '150'],
-          'Rozliczenia z prowincją': ['200', '201'],
           'Rozliczenia z innymi': ['202', '208']
         }
       };

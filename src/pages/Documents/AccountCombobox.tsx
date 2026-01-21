@@ -236,33 +236,47 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
               <CommandEmpty>Nie znaleziono kont pasujących do wyszukiwania.</CommandEmpty>
             )}
             <CommandGroup>
-              {filteredAccounts.map((account) => (
-                <CommandItem
-                  key={account.id}
-                  value={account.id}
-                  onSelect={(currentValue) => {
-                    onChange(currentValue === value ? '' : currentValue);
-                    setOpen(false);
-                    setSearchTerm('');
-                    setShouldAutoOpen(false);
-                    if (onAccountSelected && currentValue !== value && currentValue !== '') {
-                      setTimeout(() => {
-                        onAccountSelected();
-                      }, 100);
-                    }
-                  }}
-                  className="flex items-center"
-                >
-                  <Check
+              {filteredAccounts.map((account) => {
+                const hasAnalytics = account.has_analytics ?? false;
+                const isDisabled = hasAnalytics;
+                
+                return (
+                  <CommandItem
+                    key={account.id}
+                    value={account.id}
+                    disabled={isDisabled}
+                    onSelect={(currentValue) => {
+                      if (isDisabled) return; // Blokuj wybór kont z analityką
+                      onChange(currentValue === value ? '' : currentValue);
+                      setOpen(false);
+                      setSearchTerm('');
+                      setShouldAutoOpen(false);
+                      if (onAccountSelected && currentValue !== value && currentValue !== '') {
+                        setTimeout(() => {
+                          onAccountSelected();
+                        }, 100);
+                      }
+                    }}
                     className={cn(
-                      'mr-2 h-4 w-4 shrink-0',
-                      value === account.id ? 'opacity-100' : 'opacity-0'
+                      "flex items-center",
+                      isDisabled && "opacity-50 cursor-not-allowed"
                     )}
-                  />
-                  <span className="font-mono text-sm mr-2 shrink-0">{account.number}</span>
-                  <span className="truncate flex-1" title={account.name}>{account.name}</span>
-                </CommandItem>
-              ))}
+                    title={isDisabled ? "To konto ma podkonta analityczne - wybierz właściwe podkonto" : undefined}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4 shrink-0',
+                        value === account.id ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    <span className="font-mono text-sm mr-2 shrink-0">{account.number}</span>
+                    <span className="truncate flex-1" title={account.name}>{account.name}</span>
+                    {hasAnalytics && (
+                      <span className="text-muted-foreground ml-2 text-xs" title="Konto z analityką">📊</span>
+                    )}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

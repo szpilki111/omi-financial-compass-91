@@ -488,6 +488,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
 
       // Transakcje będą importowane bez przypisanych kont
       // Użytkownik uzupełni je ręcznie po imporcie
+      // Zachowujemy oryginalną kolejność z pliku przez display_order
       const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
@@ -503,6 +504,7 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         settlement_type: 'Bank',
         location_id: user.location,
         user_id: user.id,
+        display_order: index, // Zachowaj oryginalną kolejność z pliku MT940
         created_at: new Date(Date.now() + index * 1000).toISOString()
       }));
 
@@ -513,6 +515,27 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
       if (transError) {
         console.error('Error creating transactions:', transError);
         throw transError;
+      }
+      
+      // Walidacja dokumentu - sprawdź brakujące konta i zapisz błędy
+      const validationErrors: { type: string; message: string }[] = [];
+      const incompleteCount = transactionsToInsert.filter(
+        t => !t.debit_account_id || !t.credit_account_id
+      ).length;
+      
+      if (incompleteCount > 0) {
+        validationErrors.push({
+          type: 'missing_accounts',
+          message: `${incompleteCount} operacji wymaga uzupełnienia kont`
+        });
+      }
+      
+      // Zaktualizuj dokument z błędami walidacji
+      if (validationErrors.length > 0) {
+        await supabase
+          .from('documents')
+          .update({ validation_errors: validationErrors })
+          .eq('id', document.id);
       }
       
       toast({

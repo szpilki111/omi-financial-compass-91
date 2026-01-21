@@ -525,6 +525,7 @@ export type Database = {
           document_date: string
           document_name: string
           document_number: string
+          exchange_rate: number
           id: string
           location_id: string
           updated_at: string
@@ -537,6 +538,7 @@ export type Database = {
           document_date: string
           document_name: string
           document_number: string
+          exchange_rate?: number
           id?: string
           location_id: string
           updated_at?: string
@@ -549,6 +551,7 @@ export type Database = {
           document_date?: string
           document_name?: string
           document_number?: string
+          exchange_rate?: number
           id?: string
           location_id?: string
           updated_at?: string
@@ -1713,6 +1716,21 @@ export type Database = {
         }
         Returns: {
           analytical: boolean
+          id: string
+          name: string
+          number: string
+          type: string
+        }[]
+      }
+      get_user_filtered_accounts_with_analytics: {
+        Args: {
+          p_include_inactive?: boolean
+          p_skip_restrictions?: boolean
+          p_user_id: string
+        }
+        Returns: {
+          analytical: boolean
+          has_analytics: boolean
           id: string
           name: string
           number: string

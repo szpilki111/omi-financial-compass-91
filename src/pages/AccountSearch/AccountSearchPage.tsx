@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, TrendingUp, Eye, X, Printer } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, Eye, X, Printer, FileSpreadsheet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -17,6 +17,8 @@ import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
+import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface Account {
@@ -50,6 +52,7 @@ interface Transaction {
 const AccountSearchPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -59,7 +62,6 @@ const AccountSearchPage = () => {
   const [editingDocument, setEditingDocument] = useState<any>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
-
   // Use central hook for fetching accounts with restrictions applied
   const { data: allFilteredAccounts = [] } = useFilteredAccounts();
 
@@ -253,6 +255,70 @@ const AccountSearchPage = () => {
     }
   };
 
+  // Eksport do Excela
+  const handleExportToExcel = () => {
+    if (!selectedAccount || !transactions) return;
+    
+    const wsData: (string | number | undefined)[][] = [];
+    
+    // Nagłówek
+    wsData.push([`Obroty konta: ${selectedAccount.number} - ${selectedAccount.name}`]);
+    wsData.push([`Rok: ${selectedYear}`]);
+    wsData.push([]);
+    
+    // Nagłówki tabeli
+    wsData.push(['Data', 'Nr dokumentu', 'Opis', 'Strona Wn', 'Strona Ma', 'Saldo bieżące']);
+    
+    // Dane transakcji
+    let runningBalance = 0;
+    const sortedTransactions = [...transactions].sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    
+    sortedTransactions.forEach(t => {
+      const isDebit = t.debit_account_id === selectedAccount.id;
+      const isCredit = t.credit_account_id === selectedAccount.id;
+      const debitAmount = isDebit ? (t.debit_amount ?? t.amount ?? 0) : 0;
+      const creditAmount = isCredit ? (t.credit_amount ?? t.amount ?? 0) : 0;
+      runningBalance += debitAmount - creditAmount;
+      
+      wsData.push([
+        format(parseISO(t.date), 'dd.MM.yyyy'),
+        t.document_number || '-',
+        t.description || '-',
+        debitAmount || '',
+        creditAmount || '',
+        runningBalance
+      ]);
+    });
+    
+    // Podsumowanie
+    wsData.push([]);
+    wsData.push(['', '', 'RAZEM:', totals.debit, totals.credit, totals.balance]);
+    
+    // Utwórz arkusz
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [
+      { wch: 12 },
+      { wch: 20 },
+      { wch: 50 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 }
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Obroty');
+    
+    const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}_${selectedYear}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    toast({
+      title: 'Eksport zakończony',
+      description: `Plik ${fileName} został pobrany`,
+    });
+  };
+
   // Pobierz nazwę lokalizacji użytkownika
   const locationName = user?.locations?.[0] ? 'Lokalizacja użytkownika' : undefined;
 
@@ -358,10 +424,18 @@ const AccountSearchPage = () => {
               <Button
                 variant="outline"
                 onClick={handlePrint}
-                className="flex items-center gap-2 ml-auto"
+                className="flex items-center gap-2"
               >
                 <Printer className="h-4 w-4" />
-                Drukuj obroty
+                Drukuj
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportToExcel}
+                className="flex items-center gap-2 ml-auto"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Eksport do Excel
               </Button>
             </div>
 
