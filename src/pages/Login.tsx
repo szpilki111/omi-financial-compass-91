@@ -51,6 +51,10 @@ const Login = () => {
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
   const [twoFactorInProgress, setTwoFactorInProgress] = useState(false);
 
+  // Password reset states
+  const [resetMessage, setResetMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+
   // Fetch 2FA setting from database
   const { data: twoFactorEnabled = true } = useQuery({
     queryKey: ['app-settings', 'two_factor_auth_enabled'],
@@ -282,6 +286,46 @@ const Login = () => {
       setPendingEmail('');
     }
   };
+
+  const handleForgotPassword = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setResetMessage(null);
+    
+    const email = loginField.trim().toLowerCase();
+    if (!email) {
+      setResetMessage({ type: 'error', text: 'Wprowadź adres email, aby zresetować hasło' });
+      return;
+    }
+    
+    if (!email.includes('@')) {
+      setResetMessage({ type: 'error', text: 'Wprowadź poprawny adres email' });
+      return;
+    }
+    
+    setIsResettingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: { email },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setResetMessage({ 
+        type: 'success', 
+        text: `Link do resetowania hasła został wysłany na adres ${email}` 
+      });
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      setResetMessage({ 
+        type: 'error', 
+        text: err?.message || 'Nie udało się wysłać emaila z linkiem resetującym' 
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -551,7 +595,8 @@ const Login = () => {
               </div>
             </>}
 
-          {!isSigningUp && <div className="flex items-center justify-between">
+          {!isSigningUp && <>
+            <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input id="remember-me" type="checkbox" className="h-4 w-4 border-omi-gray-300 rounded text-omi-500 focus:ring-omi-500" />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-omi-gray-700">
@@ -559,12 +604,26 @@ const Login = () => {
                 </label>
               </div>
 
-              <div>
-                <a href="#" className="text-sm text-omi-500 hover:text-omi-600">
-                  Zapomniałeś hasła?
-                </a>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResettingPassword}
+                className="text-sm text-omi-500 hover:text-omi-600 disabled:opacity-50"
+              >
+                {isResettingPassword ? 'Wysyłanie...' : 'Zapomniałeś hasła?'}
+              </button>
+            </div>
+            
+            {resetMessage && (
+              <div className={`p-3 rounded-md text-sm ${
+                resetMessage.type === 'success' 
+                  ? 'bg-green-50 text-green-700 border border-green-200' 
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {resetMessage.text}
               </div>
-            </div>}
+            )}
+          </>}
 
           <Button type="submit" disabled={isLoading} className="omi-btn omi-btn-primary w-full flex justify-center">
             {isLoading ? <Spinner size="sm" /> : isSigningUp ? 'Zarejestruj się' : 'Zaloguj się'}
