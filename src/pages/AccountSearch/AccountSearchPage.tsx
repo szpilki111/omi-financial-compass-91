@@ -19,15 +19,12 @@ import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-
-
 interface Account {
   id: string;
   number: string;
   name: string;
   type: string;
 }
-
 interface Transaction {
   id: string;
   date: string;
@@ -48,11 +45,14 @@ interface Transaction {
   debitAccount?: Account;
   creditAccount?: Account;
 }
-
 const AccountSearchPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const {
+    user
+  } = useAuth();
+  const {
+    toast
+  } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -60,75 +60,72 @@ const AccountSearchPage = () => {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<any>(null);
-
   const printRef = useRef<HTMLDivElement>(null);
   // Use central hook for fetching accounts with restrictions applied
-  const { data: allFilteredAccounts = [] } = useFilteredAccounts();
+  const {
+    data: allFilteredAccounts = []
+  } = useFilteredAccounts();
 
   // Filter accounts by search term (client-side)
   const accounts = useMemo(() => {
     if (searchTerm.length < 2 || selectedAccount) return [];
-    
     const searchLower = searchTerm.toLowerCase();
-    return allFilteredAccounts.filter(account => 
-      account.number.toLowerCase().startsWith(searchLower) ||
-      account.name.toLowerCase().includes(searchLower)
-    );
+    return allFilteredAccounts.filter(account => account.number.toLowerCase().startsWith(searchLower) || account.name.toLowerCase().includes(searchLower));
   }, [allFilteredAccounts, searchTerm, selectedAccount]);
 
   // Fetch transactions for selected account
-  const { data: transactions, isLoading: transactionsLoading } = useQuery({
+  const {
+    data: transactions,
+    isLoading: transactionsLoading
+  } = useQuery({
     queryKey: ['account-transactions', selectedAccount?.id, selectedYear],
     queryFn: async () => {
       if (!selectedAccount) return [];
-      
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
-      
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('transactions').select(`
           *,
           document:documents(id, document_number, document_name),
           debitAccount:accounts!transactions_debit_account_id_fkey(id, number, name, type),
           creditAccount:accounts!transactions_credit_account_id_fkey(id, number, name, type)
-        `)
-        .or(`debit_account_id.eq.${selectedAccount.id},credit_account_id.eq.${selectedAccount.id}`)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false });
-      
+        `).or(`debit_account_id.eq.${selectedAccount.id},credit_account_id.eq.${selectedAccount.id}`).gte('date', startDate).lte('date', endDate).order('date', {
+        ascending: false
+      });
       if (error) throw error;
       return data as Transaction[];
     },
-    enabled: !!selectedAccount,
+    enabled: !!selectedAccount
   });
 
   // Fetch document for editing
-  const { data: documentData } = useQuery({
+  const {
+    data: documentData
+  } = useQuery({
     queryKey: ['document', editingDocument?.id],
     queryFn: async () => {
       if (!editingDocument?.id) return null;
-      
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', editingDocument.id)
-        .single();
-      
+      const {
+        data,
+        error
+      } = await supabase.from('documents').select('*').eq('id', editingDocument.id).single();
       if (error) throw error;
       return data;
     },
-    enabled: !!editingDocument?.id,
+    enabled: !!editingDocument?.id
   });
 
   // Calculate totals - NAPRAWIONE zliczanie
   const totals = useMemo(() => {
-    if (!transactions || !selectedAccount) return { debit: 0, credit: 0, balance: 0 };
-    
+    if (!transactions || !selectedAccount) return {
+      debit: 0,
+      credit: 0,
+      balance: 0
+    };
     let debitTotal = 0;
     let creditTotal = 0;
-    
     transactions.forEach(transaction => {
       // Jeśli konto jest po stronie Wn (debit)
       if (transaction.debit_account_id === selectedAccount.id) {
@@ -143,7 +140,6 @@ const AccountSearchPage = () => {
         creditTotal += amount;
       }
     });
-    
     return {
       debit: debitTotal,
       credit: creditTotal,
@@ -154,21 +150,21 @@ const AccountSearchPage = () => {
   // Group transactions by month - NAPRAWIONE zliczanie
   const monthlyData = useMemo(() => {
     if (!transactions || !selectedAccount) return [];
-    
     const grouped = transactions.reduce((acc, transaction) => {
       const month = format(parseISO(transaction.date), 'yyyy-MM');
       if (!acc[month]) {
         acc[month] = {
           month,
-          monthName: format(parseISO(transaction.date), 'LLLL yyyy', { locale: pl }),
+          monthName: format(parseISO(transaction.date), 'LLLL yyyy', {
+            locale: pl
+          }),
           transactions: [],
           debit: 0,
           credit: 0
         };
       }
-      
       acc[month].transactions.push(transaction);
-      
+
       // NAPRAWIONE: użyj debit_amount/credit_amount zamiast amount
       if (transaction.debit_account_id === selectedAccount.id) {
         acc[month].debit += transaction.debit_amount ?? transaction.amount ?? 0;
@@ -176,59 +172,46 @@ const AccountSearchPage = () => {
       if (transaction.credit_account_id === selectedAccount.id) {
         acc[month].credit += transaction.credit_amount ?? transaction.amount ?? 0;
       }
-      
       return acc;
     }, {} as Record<string, any>);
-    
     return Object.values(grouped).sort((a: any, b: any) => b.month.localeCompare(a.month));
   }, [transactions, selectedAccount]);
-
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
     if (selectedMonth === null) return transactions;
-    
     return transactions.filter(transaction => {
       const transactionMonth = new Date(transaction.date).getMonth() + 1;
       return transactionMonth === selectedMonth;
     });
   }, [transactions, selectedMonth]);
-
   const handleSelectAccount = (account: Account) => {
     setSelectedAccount(account);
     setSearchTerm(`${account.number} - ${account.name}`);
   };
-
   const handleClearSelection = () => {
     setSelectedAccount(null);
     setSearchTerm('');
   };
-
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    
     if (selectedAccount && value !== `${selectedAccount.number} - ${selectedAccount.name}`) {
       setSelectedAccount(null);
     }
   };
-
   const handleEditDocument = async (documentId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', documentId)
-        .single();
-      
+      const {
+        data,
+        error
+      } = await supabase.from('documents').select('*').eq('id', documentId).single();
       if (error) throw error;
-      
       setEditingDocument(data);
       setIsDocumentDialogOpen(true);
     } catch (error) {
       console.error('Error fetching document:', error);
     }
   };
-
   const handleDocumentUpdated = () => {
     if (selectedAccount) {
       window.location.reload();
@@ -236,7 +219,6 @@ const AccountSearchPage = () => {
     setIsDocumentDialogOpen(false);
     setEditingDocument(null);
   };
-
   const handleCloseDocumentDialog = () => {
     setIsDocumentDialogOpen(false);
     setEditingDocument(null);
@@ -248,9 +230,7 @@ const AccountSearchPage = () => {
       const printContent = printRef.current;
       const originalDisplay = printContent.style.display;
       printContent.style.display = 'block';
-      
       window.print();
-      
       printContent.style.display = originalDisplay;
     }
   };
@@ -258,72 +238,60 @@ const AccountSearchPage = () => {
   // Eksport do Excela
   const handleExportToExcel = () => {
     if (!selectedAccount || !transactions) return;
-    
     const wsData: (string | number | undefined)[][] = [];
-    
+
     // Nagłówek
     wsData.push([`Obroty konta: ${selectedAccount.number} - ${selectedAccount.name}`]);
     wsData.push([`Rok: ${selectedYear}`]);
     wsData.push([]);
-    
+
     // Nagłówki tabeli
     wsData.push(['Data', 'Nr dokumentu', 'Opis', 'Strona Wn', 'Strona Ma', 'Saldo bieżące']);
-    
+
     // Dane transakcji
     let runningBalance = 0;
-    const sortedTransactions = [...transactions].sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    
+    const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     sortedTransactions.forEach(t => {
       const isDebit = t.debit_account_id === selectedAccount.id;
       const isCredit = t.credit_account_id === selectedAccount.id;
-      const debitAmount = isDebit ? (t.debit_amount ?? t.amount ?? 0) : 0;
-      const creditAmount = isCredit ? (t.credit_amount ?? t.amount ?? 0) : 0;
+      const debitAmount = isDebit ? t.debit_amount ?? t.amount ?? 0 : 0;
+      const creditAmount = isCredit ? t.credit_amount ?? t.amount ?? 0 : 0;
       runningBalance += debitAmount - creditAmount;
-      
-      wsData.push([
-        format(parseISO(t.date), 'dd.MM.yyyy'),
-        t.document_number || '-',
-        t.description || '-',
-        debitAmount || '',
-        creditAmount || '',
-        runningBalance
-      ]);
+      wsData.push([format(parseISO(t.date), 'dd.MM.yyyy'), t.document_number || '-', t.description || '-', debitAmount || '', creditAmount || '', runningBalance]);
     });
-    
+
     // Podsumowanie
     wsData.push([]);
     wsData.push(['', '', 'RAZEM:', totals.debit, totals.credit, totals.balance]);
-    
+
     // Utwórz arkusz
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [
-      { wch: 12 },
-      { wch: 20 },
-      { wch: 50 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 }
-    ];
-    
+    ws['!cols'] = [{
+      wch: 12
+    }, {
+      wch: 20
+    }, {
+      wch: 50
+    }, {
+      wch: 15
+    }, {
+      wch: 15
+    }, {
+      wch: 15
+    }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Obroty');
-    
     const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}_${selectedYear}.xlsx`;
     XLSX.writeFile(wb, fileName);
-    
     toast({
       title: 'Eksport zakończony',
-      description: `Plik ${fileName} został pobrany`,
+      description: `Plik ${fileName} został pobrany`
     });
   };
 
   // Pobierz nazwę lokalizacji użytkownika
   const locationName = user?.locations?.[0] ? 'Lokalizacja użytkownika' : undefined;
-
-  return (
-    <MainLayout>
+  return <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => navigate('/dokumenty')} className="flex items-center gap-2">
@@ -346,47 +314,24 @@ const AccountSearchPage = () => {
               <div className="flex-1">
                 <label className="block text-sm font-medium mb-2">Numer lub nazwa konta</label>
                 <div className="relative">
-                  <Input
-                    placeholder="Wpisz co najmniej 2 znaki (numer lub nazwa)..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                  />
-                  {selectedAccount && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClearSelection}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                    >
+                  <Input placeholder="Wpisz co najmniej 2 znaki (numer lub nazwa)..." value={searchTerm} onChange={handleSearchChange} />
+                  {selectedAccount && <Button variant="ghost" size="sm" onClick={handleClearSelection} className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0">
                       <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                    </Button>}
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Rok</label>
-                <Input
-                  type="number"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="w-24"
-                />
+                <Input type="number" value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="w-24" />
               </div>
             </div>
             
-            {accounts && accounts.length > 0 && !selectedAccount && (
-              <AccountSelector
-                accounts={accounts}
-                selectedAccount={selectedAccount}
-                onSelectAccount={handleSelectAccount}
-              />
-            )}
+            {accounts && accounts.length > 0 && !selectedAccount && <AccountSelector accounts={accounts} selectedAccount={selectedAccount} onSelectAccount={handleSelectAccount} />}
           </CardContent>
         </Card>
 
         {/* Results */}
-        {selectedAccount && (
-          <>
+        {selectedAccount && <>
             {/* Account info header */}
             <Card>
               <CardHeader>
@@ -402,63 +347,29 @@ const AccountSearchPage = () => {
 
             {/* View toggle buttons */}
             <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={!showTurnover ? "default" : "outline"}
-                onClick={() => {
-                  setShowTurnover(false);
-                  setSelectedMonth(null);
-                }}
-                className="flex items-center gap-2"
-              >
+              <Button variant={!showTurnover ? "default" : "outline"} onClick={() => {
+            setShowTurnover(false);
+            setSelectedMonth(null);
+          }} className="flex items-center gap-2">
                 <Eye className="h-4 w-4" />
                 Wszystkie operacje
               </Button>
-              <Button
-                variant={showTurnover ? "default" : "outline"}
-                onClick={() => setShowTurnover(true)}
-                className="flex items-center gap-2"
-              >
+              <Button variant={showTurnover ? "default" : "outline"} onClick={() => setShowTurnover(true)} className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 Obroty miesięczne
               </Button>
-              <Button
-                variant="outline"
-                onClick={handlePrint}
-                className="flex items-center gap-2"
-              >
-                <Printer className="h-4 w-4" />
-                Drukuj
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleExportToExcel}
-                className="flex items-center gap-2 ml-auto"
-              >
+              
+              <Button variant="outline" onClick={handleExportToExcel} className="flex items-center gap-2 ml-auto">
                 <FileSpreadsheet className="h-4 w-4" />
                 Eksport do Excel
               </Button>
             </div>
 
             {/* Content based on view mode */}
-            {showTurnover ? (
-              <MonthlyTurnoverView
-                monthlyData={monthlyData}
-                selectedAccount={selectedAccount}
-                onViewMonth={(month) => {
-                  setSelectedMonth(month);
-                  setShowTurnover(false);
-                }}
-              />
-            ) : (
-              <TransactionsList
-                transactions={filteredTransactions}
-                selectedAccount={selectedAccount}
-                isLoading={transactionsLoading}
-                onEditDocument={handleEditDocument}
-                selectedMonth={selectedMonth}
-                onClearMonthFilter={() => setSelectedMonth(null)}
-              />
-            )}
+            {showTurnover ? <MonthlyTurnoverView monthlyData={monthlyData} selectedAccount={selectedAccount} onViewMonth={month => {
+          setSelectedMonth(month);
+          setShowTurnover(false);
+        }} /> : <TransactionsList transactions={filteredTransactions} selectedAccount={selectedAccount} isLoading={transactionsLoading} onEditDocument={handleEditDocument} selectedMonth={selectedMonth} onClearMonthFilter={() => setSelectedMonth(null)} />}
 
             {/* Account totals at the bottom */}
             <Card>
@@ -467,49 +378,41 @@ const AccountSearchPage = () => {
                   <div className="text-center">
                     <p className="text-sm text-gray-600">Obroty debetowe (Wn)</p>
                     <p className="text-2xl font-bold text-red-600">
-                      {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                      {totals.debit.toLocaleString('pl-PL', {
+                    style: 'currency',
+                    currency: 'PLN'
+                  })}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-gray-600">Obroty kredytowe (Ma)</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                      {totals.credit.toLocaleString('pl-PL', {
+                    style: 'currency',
+                    currency: 'PLN'
+                  })}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-gray-600">Saldo ({selectedYear})</p>
                     <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {totals.balance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                      {totals.balance.toLocaleString('pl-PL', {
+                    style: 'currency',
+                    currency: 'PLN'
+                  })}
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </>
-        )}
+          </>}
       </div>
 
       {/* Printable component (hidden) */}
-      {selectedAccount && transactions && (
-        <PrintableAccountTurnover
-          ref={printRef}
-          account={selectedAccount}
-          transactions={transactions}
-          year={selectedYear}
-          totals={totals}
-          locationName={locationName}
-        />
-      )}
+      {selectedAccount && transactions && <PrintableAccountTurnover ref={printRef} account={selectedAccount} transactions={transactions} year={selectedYear} totals={totals} locationName={locationName} />}
 
       {/* Document Dialog */}
-      <DocumentDialog
-        isOpen={isDocumentDialogOpen}
-        onClose={handleCloseDocumentDialog}
-        onDocumentCreated={handleDocumentUpdated}
-        document={documentData}
-      />
-    </MainLayout>
-  );
+      <DocumentDialog isOpen={isDocumentDialogOpen} onClose={handleCloseDocumentDialog} onDocumentCreated={handleDocumentUpdated} document={documentData} />
+    </MainLayout>;
 };
-
 export default AccountSearchPage;
