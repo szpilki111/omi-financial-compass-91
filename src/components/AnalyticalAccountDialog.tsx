@@ -67,22 +67,48 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
 
     try {
       if (editMode && editData) {
-        // Tryb edycji - aktualizuj tylko nazwę
+        // Tryb edycji - aktualizuj nazwę w obu tabelach
+        
+        // 1. Pobierz pełny numer konta z analytical_accounts -> accounts relationship
+        const { data: analyticalData, error: fetchError } = await supabase
+          .from('analytical_accounts')
+          .select('parent_account_id')
+          .eq('id', editData.id)
+          .single();
+        
+        if (fetchError) throw fetchError;
+        
+        // 2. Pobierz numer konta rodzica
+        const { data: parentAccountData, error: parentError } = await supabase
+          .from('accounts')
+          .select('number')
+          .eq('id', analyticalData.parent_account_id)
+          .single();
+        
+        if (parentError) throw parentError;
+        
+        // 3. Zbuduj pełny numer konta analitycznego
+        const fullAccountNumber = `${parentAccountData.number}-${editData.number_suffix}`;
+        console.log('Updating account with number:', fullAccountNumber);
+        
+        // 4. Zaktualizuj nazwę w tabeli accounts NAJPIERW
+        const { error: accountError } = await supabase
+          .from('accounts')
+          .update({ name: name.trim() })
+          .eq('number', fullAccountNumber);
+
+        if (accountError) {
+          console.error('Error updating accounts table:', accountError);
+          throw accountError;
+        }
+        
+        // 5. Zaktualizuj nazwę w tabeli analytical_accounts
         const { error: analyticalError } = await supabase
           .from('analytical_accounts')
           .update({ name: name.trim() })
           .eq('id', editData.id);
 
         if (analyticalError) throw analyticalError;
-
-        // Zaktualizuj również nazwę w tabeli accounts
-        const fullAccountNumber = `${parentAccount.number}-${editData.number_suffix}`;
-        const { error: accountError } = await supabase
-          .from('accounts')
-          .update({ name: name.trim() })
-          .eq('number', fullAccountNumber);
-
-        if (accountError) throw accountError;
 
         toast.success('Konto analityczne zostało zaktualizowane');
       } else {
