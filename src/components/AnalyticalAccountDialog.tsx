@@ -92,14 +92,21 @@ export const AnalyticalAccountDialog: React.FC<AnalyticalAccountDialogProps> = (
         console.log('Updating account with number:', fullAccountNumber);
         
         // 4. Zaktualizuj nazwę w tabeli accounts NAJPIERW
-        const { error: accountError } = await supabase
+        const { error: accountError, data: updatedAccounts } = await supabase
           .from('accounts')
           .update({ name: name.trim() })
-          .eq('number', fullAccountNumber);
+          .eq('number', fullAccountNumber)
+          .select('id');
 
         if (accountError) {
           console.error('Error updating accounts table:', accountError);
           throw accountError;
+        }
+        
+        // Sprawdź czy rekord został faktycznie zaktualizowany (RLS może cicho odrzucić)
+        if (!updatedAccounts || updatedAccounts.length === 0) {
+          console.error('RLS blocked update - no rows affected for account:', fullAccountNumber);
+          throw new Error('Brak uprawnień do edycji tego konta. Skontaktuj się z administratorem.');
         }
         
         // 5. Zaktualizuj nazwę w tabeli analytical_accounts
