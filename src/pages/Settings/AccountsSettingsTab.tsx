@@ -135,6 +135,21 @@ export const AccountsSettingsTab: React.FC = () => {
       const fullAccountNumber = `${parentAccount.number}-${analyticalAccount.number_suffix}`;
       console.log('Deleting analytical account with number:', fullAccountNumber);
 
+      // Check if this account has any child accounts (sub-analytical accounts)
+      const { data: childAccounts, error: childError } = await supabase
+        .from('accounts')
+        .select('id, number')
+        .like('number', `${fullAccountNumber}-%`);
+      
+      if (childError) {
+        console.error('Error checking child accounts:', childError);
+        throw childError;
+      }
+      
+      if (childAccounts && childAccounts.length > 0) {
+        throw new Error(`Nie można usunąć konta, ponieważ ma przypisane podkonta: ${childAccounts.map(c => c.number).join(', ')}`);
+      }
+
       // Delete from accounts table first (the main account record)
       const {
         error: accountDeleteError
@@ -166,9 +181,9 @@ export const AccountsSettingsTab: React.FC = () => {
       });
       toast.success('Konto analityczne zostało trwale usunięte');
     },
-    onError: error => {
+    onError: (error: Error) => {
       console.error('Error deleting analytical account:', error);
-      toast.error('Błąd podczas usuwania konta analitycznego');
+      toast.error(error.message || 'Błąd podczas usuwania konta analitycznego');
     }
   });
   const toggleExpanded = (accountId: string) => {
