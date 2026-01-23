@@ -211,13 +211,15 @@ const LocationAccountsManagement = () => {
       const selectedLocation = locations?.find(loc => loc.id === selectedLocationId);
       if (!selectedLocation?.location_identifier) return [];
 
-      console.log('Pobieranie kont dla identyfikatora:', selectedLocation.location_identifier);
+      const locationIdentifier = selectedLocation.location_identifier;
+      console.log('Pobieranie kont dla identyfikatora:', locationIdentifier);
 
-      // Fetch all accounts that end with the location identifier
-      const { data: accounts, error } = await supabase
+      // Fetch all accounts and filter by exact location identifier in segments 2-3
+      // Pattern: XXX-{segment2}-{segment3} or XXX-{segment2}-{segment3}-{suffix}
+      const { data: allAccounts, error } = await supabase
         .from('accounts')
         .select('id, number, name, type')
-        .like('number', `%-${selectedLocation.location_identifier}`)
+        .like('number', '%-%') // Must have at least one dash
         .order('number');
 
       if (error) {
@@ -225,16 +227,26 @@ const LocationAccountsManagement = () => {
         throw error;
       }
 
-      console.log('Znalezione konta dla identyfikatora:', accounts);
+      // Filter accounts where segments 2-3 exactly match the location identifier
+      const filteredAccounts = (allAccounts || []).filter(account => {
+        const parts = account.number.split('-');
+        if (parts.length < 3) return false;
+        
+        // Build the identifier from segments 2 and 3 (indices 1 and 2)
+        const accountLocationId = `${parts[1]}-${parts[2]}`;
+        return accountLocationId === locationIdentifier;
+      });
 
-      return accounts?.map(account => ({
+      console.log('Znalezione konta dla identyfikatora:', filteredAccounts.length);
+
+      return filteredAccounts.map(account => ({
         id: `auto-${account.id}`, // Prefix to distinguish from manual assignments
         location_id: selectedLocationId,
         account_id: account.id,
         locations: selectedLocation,
         accounts: account,
         isAutoAssigned: true
-      })) || [];
+      }));
     },
     enabled: !!selectedLocationId && !!locations
   });
