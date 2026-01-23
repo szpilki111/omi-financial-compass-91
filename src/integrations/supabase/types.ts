@@ -842,31 +842,40 @@ export type Database = {
       locations: {
         Row: {
           address: string | null
+          bank_account: string | null
+          city: string | null
           created_at: string
           id: string
           location_identifier: string | null
           name: string
           nip: string | null
+          postal_code: string | null
           regon: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          bank_account?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           location_identifier?: string | null
           name: string
           nip?: string | null
+          postal_code?: string | null
           regon?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          bank_account?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           location_identifier?: string | null
           name?: string
           nip?: string | null
+          postal_code?: string | null
           regon?: string | null
           updated_at?: string
         }

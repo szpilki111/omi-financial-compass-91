@@ -28,6 +28,9 @@ interface Location {
   address: string | null;
   nip: string | null;
   regon: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  bank_account?: string | null;
 }
 
 interface LocationSetting {
@@ -49,6 +52,9 @@ interface LocationFormData {
   location_identifier: string;
   nip: string;
   regon: string;
+  postal_code: string;
+  city: string;
+  bank_account: string;
 }
 
 const LocationDialog: React.FC<LocationDialogProps> = ({
@@ -86,6 +92,9 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
       location_identifier: '',
       nip: '',
       regon: '',
+      postal_code: '',
+      city: '',
+      bank_account: '',
     },
   });
 
@@ -99,6 +108,9 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
         location_identifier: (location as any)?.location_identifier || '',
         nip: location?.nip || '',
         regon: location?.regon || '',
+        postal_code: location?.postal_code || '',
+        city: location?.city || '',
+        bank_account: location?.bank_account || '',
       });
     }
   }, [location, locationSetting, isOpen, isLoadingSettings, form]);
@@ -115,6 +127,9 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
             location_identifier: data.location_identifier || null,
             nip: data.nip || null,
             regon: data.regon || null,
+            postal_code: data.postal_code || null,
+            city: data.city || null,
+            bank_account: data.bank_account || null,
           })
           .eq('id', location.id);
 
@@ -162,6 +177,9 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
             location_identifier: data.location_identifier || null,
             nip: data.nip || null,
             regon: data.regon || null,
+            postal_code: data.postal_code || null,
+            city: data.city || null,
+            bank_account: data.bank_account || null,
           })
           .select()
           .single();
@@ -349,8 +367,81 @@ const LocationDialog: React.FC<LocationDialogProps> = ({
                     />
                   </FormControl>
                   <FormMessage />
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     Identyfikator używany do automatycznego przypisywania kont (np. konto "210-3-13" będzie widoczne dla placówki z identyfikatorem "3-13")
+                  </p>
+                </FormItem>
+              )}
+            />
+
+            <div className="border-t pt-4 mt-4">
+              <h4 className="text-sm font-semibold mb-3">Dane do raportu miesięcznego</h4>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="postal_code"
+                rules={{ 
+                  pattern: { 
+                    value: /^[0-9]{2}-[0-9]{3}$/, 
+                    message: 'Kod pocztowy musi mieć format XX-XXX' 
+                  } 
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kod pocztowy</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="np. 38-500"
+                        {...field}
+                        maxLength={6}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Miasto</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="np. Sanok"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="bank_account"
+              rules={{ 
+                pattern: { 
+                  value: /^[0-9\s]{26,32}$/, 
+                  message: 'Numer konta musi składać się z 26 cyfr' 
+                } 
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Numer konta bankowego prowincji</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="np. 12 3456 7890 1234 5678 9012 3456"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-sm text-muted-foreground">
+                    Numer konta wyświetlany w stopce raportu miesięcznego
                   </p>
                 </FormItem>
               )}
