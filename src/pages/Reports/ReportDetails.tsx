@@ -15,6 +15,8 @@ import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdow
 import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
 import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
 import ExportToExcel from '@/components/reports/ExportToExcel';
+import ExportToExcelFull from '@/components/reports/ExportToExcelFull';
+import ReportViewFull from '@/components/reports/ReportViewFull';
 import { Report } from '@/types/reports';
 
 interface ReportDetailsProps {
@@ -353,6 +355,10 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
         
         <div className="flex gap-2">
+          <ExportToExcelFull
+            report={report}
+            locationName={report.location?.name || 'Nieznana'}
+          />
           <ExportToExcel
             reportId={reportId!}
             reportTitle={report.title}
@@ -473,6 +479,16 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           />
         )}
       </div>
+
+      {/* Pełny widok raportu zgodny ze wzorem */}
+      {report && (
+        <ReportViewFull
+          report={report}
+          locationId={report.location_id}
+          month={report.month}
+          year={report.year}
+        />
+      )}
 
       {/* Szczegółowa rozpiska kont PRZED sekcji stanu kasowego */}
       {report && (
