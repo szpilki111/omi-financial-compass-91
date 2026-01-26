@@ -160,6 +160,7 @@
     border-radius: 0;
     background: white;
     color: #000000;
+    caret-color: #000000;
     padding: 2px 4px;
     font-size: 11px;
   }
@@ -178,6 +179,7 @@
     border-radius: 0;
     background: white;
     color: #000000;
+    caret-color: #000000;
     padding: 2px 4px;
     font-size: 11px;
   }
