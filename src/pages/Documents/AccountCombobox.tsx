@@ -19,6 +19,10 @@ import {
 } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
+import { useAuth } from '@/context/AuthContext';
+
+// Limit wyświetlanych kont dla admina (performance optimization)
+const ADMIN_DISPLAY_LIMIT = 20;
 
 interface AccountComboboxProps {
   value: string;
@@ -46,6 +50,9 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   const [displayedAccountName, setDisplayedAccountName] = useState('');
   const [shouldAutoOpen, setShouldAutoOpen] = useState(true);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // Use central hook for fetching accounts with restrictions applied
   const { data: allAccounts = [], isLoading: loading } = useFilteredAccounts();
@@ -66,6 +73,7 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
   };
 
   // Filter accounts by search term and side (client-side filtering)
+  // For admin: search through ALL accounts but display only first 20
   const filteredAccounts = useMemo(() => {
     let filtered = [...allAccounts];
 
@@ -83,8 +91,31 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       );
     }
 
+    // For admin: limit displayed accounts to improve performance
+    if (isAdmin) {
+      return filtered.slice(0, ADMIN_DISPLAY_LIMIT);
+    }
+
     return filtered;
-  }, [allAccounts, searchTerm, side]);
+  }, [allAccounts, searchTerm, side, isAdmin]);
+  
+  // Total matching count (for showing "more results" message)
+  const totalMatchingCount = useMemo(() => {
+    if (!isAdmin) return 0;
+    
+    let filtered = [...allAccounts];
+    if (side) {
+      filtered = filtered.filter(account => isAccountAllowedForSide(account.number, side));
+    }
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(account => 
+        account.number.toLowerCase().includes(term) || 
+        account.name.toLowerCase().includes(term)
+      );
+    }
+    return filtered.length;
+  }, [allAccounts, searchTerm, side, isAdmin]);
 
   // Fetch display name for selected account
   useEffect(() => {
@@ -277,6 +308,12 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                   </CommandItem>
                 );
               })}
+              {/* Info for admin when more results are available */}
+              {isAdmin && totalMatchingCount > ADMIN_DISPLAY_LIMIT && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground text-center border-t">
+                  Wyświetlono {ADMIN_DISPLAY_LIMIT} z {totalMatchingCount} kont. Wpisz więcej znaków aby zawęzić wyniki.
+                </div>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
