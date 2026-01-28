@@ -195,11 +195,31 @@ export const AccountsSettingsTab: React.FC = () => {
     }
     setExpandedAccounts(newExpanded);
   };
-  const getNextSuffix = (parentAccountId: string): string => {
+  const getNextSuffix = (parentAccountId: string, parentAccountNumber: string): string => {
+    // Check both analytical_accounts table AND actual accounts table for existing sub-accounts
     const parentAnalytical = analyticalAccounts?.filter(aa => aa.parent_account_id === parentAccountId) || [];
-    if (parentAnalytical.length === 0) return '1';
-    const existingSuffixes = parentAnalytical.map(aa => parseInt(aa.number_suffix));
-    const maxSuffix = Math.max(...existingSuffixes);
+    
+    // Also check allAccounts for any accounts that start with parentAccountNumber-
+    // This catches sub-accounts that may exist in accounts table but not in analytical_accounts
+    const existingSubAccounts = allAccounts?.filter(acc => {
+      if (!acc.number.startsWith(parentAccountNumber + '-')) return false;
+      // Extract the suffix after the parent number
+      const suffix = acc.number.substring(parentAccountNumber.length + 1);
+      // Only count direct children (no additional hyphens in suffix for first level)
+      return !suffix.includes('-') && /^\d+$/.test(suffix);
+    }) || [];
+    
+    // Collect all existing suffixes from both sources
+    const suffixesFromAnalytical = parentAnalytical.map(aa => parseInt(aa.number_suffix)).filter(n => !isNaN(n));
+    const suffixesFromAccounts = existingSubAccounts.map(acc => {
+      const suffix = acc.number.substring(parentAccountNumber.length + 1);
+      return parseInt(suffix);
+    }).filter(n => !isNaN(n));
+    
+    const allSuffixes = [...new Set([...suffixesFromAnalytical, ...suffixesFromAccounts])];
+    
+    if (allSuffixes.length === 0) return '1';
+    const maxSuffix = Math.max(...allSuffixes);
     return (maxSuffix + 1).toString();
   };
   const getAccountAnalytical = (accountId: string): AnalyticalAccount[] => {
@@ -340,7 +360,7 @@ export const AccountsSettingsTab: React.FC = () => {
       setDialogOpen(false);
       setEditMode(false);
       setEditingAnalytical(null);
-    }} onSave={handleDialogSave} parentAccount={selectedAccount} nextSuffix={getNextSuffix(selectedAccount.id)} editMode={editMode} editData={editingAnalytical ? {
+    }} onSave={handleDialogSave} parentAccount={selectedAccount} nextSuffix={getNextSuffix(selectedAccount.id, selectedAccount.number)} editMode={editMode} editData={editingAnalytical ? {
       id: editingAnalytical.id,
       name: editingAnalytical.name,
       number_suffix: editingAnalytical.number_suffix

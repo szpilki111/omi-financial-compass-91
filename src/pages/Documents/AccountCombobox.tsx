@@ -74,8 +74,13 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
 
   // Filter accounts by search term and side (client-side filtering)
   // For admin: search through ALL accounts but display only first 20
+  // CRITICAL: Exclude accounts with has_analytics=true (parent accounts with sub-accounts)
   const filteredAccounts = useMemo(() => {
     let filtered = [...allAccounts];
+
+    // CRITICAL: Filter out parent accounts that have sub-accounts (has_analytics=true)
+    // These accounts should not be selectable for posting - user must select specific sub-account
+    filtered = filtered.filter(account => !account.has_analytics);
 
     // Apply side filtering
     if (side) {
@@ -104,6 +109,8 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
     if (!isAdmin) return 0;
     
     let filtered = [...allAccounts];
+    // Also exclude has_analytics accounts from count
+    filtered = filtered.filter(account => !account.has_analytics);
     if (side) {
       filtered = filtered.filter(account => isAccountAllowedForSide(account.number, side));
     }

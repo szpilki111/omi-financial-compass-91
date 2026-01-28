@@ -173,9 +173,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const handleExportToExcel = () => {
     const formData = form.getValues();
     
-    // Połącz transakcje główne i równoległe
+    // Połącz transakcje główne i równoległe - NAPRAWKA: obsługa ujemnych kwot
+    // Filtruj transakcje które mają jakąkolwiek kwotę (dodatnią lub ujemną, ale nie zero)
     const allTransactions = [...transactions, ...parallelTransactions].filter(t => 
-      (t.debit_amount && t.debit_amount > 0) || (t.credit_amount && t.credit_amount > 0)
+      (t.debit_amount && t.debit_amount !== 0) || (t.credit_amount && t.credit_amount !== 0)
     );
 
     // Funkcja pomocnicza do pobierania numeru konta - użyj danych z transakcji lub lookup w accounts
@@ -187,7 +188,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return t.creditAccountNumber || t.creditAccount?.number || accounts?.find(a => a.id === t.credit_account_id)?.number || '';
     };
 
-    // Sumy
+    // Sumy - zachowaj ujemne wartości
     const totalDebit = allTransactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
     const totalCredit = allTransactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
 
@@ -213,14 +214,18 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Nagłówki tabeli transakcji
     wsData.push(['Lp', 'Treść zapisu', 'Kwota Wn', 'Konto Wn', 'Kwota Ma', 'Konto Ma']);
     
-    // Transakcje
+    // Transakcje - NAPRAWKA: wyświetlaj wartości nawet gdy są ujemne lub zero
     allTransactions.forEach((t, idx) => {
+      // Dla kwot: wyświetl wartość lub pusty string jeśli brak konta
+      const debitValue = t.debit_amount !== undefined && t.debit_amount !== null ? t.debit_amount : '';
+      const creditValue = t.credit_amount !== undefined && t.credit_amount !== null ? t.credit_amount : '';
+      
       wsData.push([
         idx + 1,
         t.description || '-',
-        t.debit_amount || '',
+        debitValue,
         getDebitAccountNumber(t),
-        t.credit_amount || '',
+        creditValue,
         getCreditAccountNumber(t)
       ]);
     });
