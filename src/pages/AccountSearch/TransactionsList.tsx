@@ -3,6 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -50,6 +51,8 @@ interface TransactionsListProps {
   onEditDocument: (documentId: string) => void;
   selectedMonth: number | null;
   onClearMonthFilter: () => void;
+  selectedTransactionIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 const TransactionsList: React.FC<TransactionsListProps> = ({
@@ -59,6 +62,8 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
   onEditDocument,
   selectedMonth,
   onClearMonthFilter,
+  selectedTransactionIds = [],
+  onSelectionChange,
 }) => {
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('pl-PL', {
@@ -67,6 +72,27 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
       minimumFractionDigits: 2,
     }).format(amount);
   };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange(transactions.map(t => t.id));
+    } else {
+      onSelectionChange([]);
+    }
+  };
+
+  const handleSelectOne = (transactionId: string, checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange([...selectedTransactionIds, transactionId]);
+    } else {
+      onSelectionChange(selectedTransactionIds.filter(id => id !== transactionId));
+    }
+  };
+
+  const allSelected = transactions.length > 0 && selectedTransactionIds.length === transactions.length;
+  const someSelected = selectedTransactionIds.length > 0 && selectedTransactionIds.length < transactions.length;
 
   if (isLoading) {
     return (
@@ -96,12 +122,19 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
               </Badge>
             )}
           </CardTitle>
-          {selectedMonth && (
-            <Button variant="ghost" size="sm" onClick={onClearMonthFilter} className="flex items-center gap-1">
-              <X className="h-3 w-3" />
-              Usuń filtr miesiąca
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedTransactionIds.length > 0 && (
+              <Badge variant="secondary">
+                Zaznaczono: {selectedTransactionIds.length}
+              </Badge>
+            )}
+            {selectedMonth && (
+              <Button variant="ghost" size="sm" onClick={onClearMonthFilter} className="flex items-center gap-1">
+                <X className="h-3 w-3" />
+                Usuń filtr miesiąca
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -114,6 +147,20 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {onSelectionChange && (
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) {
+                            (el as any).indeterminate = someSelected;
+                          }
+                        }}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Zaznacz wszystkie"
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Data</TableHead>
                   <TableHead>Dokument</TableHead>
                   <TableHead>Opis</TableHead>
@@ -124,8 +171,21 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
               </TableHeader>
               <TableBody>
                 {transactions.map((transaction) => {
+                  const isSelected = selectedTransactionIds.includes(transaction.id);
                   return (
-                    <TableRow key={transaction.id}>
+                    <TableRow 
+                      key={transaction.id}
+                      className={isSelected ? 'bg-blue-50 hover:bg-blue-100' : ''}
+                    >
+                      {onSelectionChange && (
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleSelectOne(transaction.id, !!checked)}
+                            aria-label={`Zaznacz operację ${transaction.description}`}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         {format(parseISO(transaction.date), 'dd.MM.yyyy', { locale: pl })}
                       </TableCell>
