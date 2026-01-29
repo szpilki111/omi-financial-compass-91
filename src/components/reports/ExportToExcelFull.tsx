@@ -125,20 +125,20 @@ const handleExport = async () => {
   try {
     const { month, year, location_id } = report;
 
-    // Fetch location details
+    // Pobranie danych lokalizacji
     const { data: locationData } = await supabase
       .from('locations')
       .select('*')
       .eq('id', location_id)
       .single();
 
-    // Calculate date range
+    // Zakres dat
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
     const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
     const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Fetch transactions
+    // Pobranie transakcji
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select(`
@@ -152,7 +152,7 @@ const handleExport = async () => {
 
     if (error) throw error;
 
-    // Process transactions into account totals
+    // Przetwarzanie transakcji
     const incomeMap = new Map<string, number>();
     const expenseMap = new Map<string, number>();
     const financialStatusMap = new Map<string, { debits: number; credits: number }>();
@@ -161,161 +161,254 @@ const handleExport = async () => {
     let intentions210CelebratedGiven = 0;
 
     transactions?.forEach(tx => {
-      // Credit side processing
+      // Strona Ma (credit)
       if (tx.credit_account) {
         const accNum = tx.credit_account.number;
         const prefix = accNum.split('-')[0];
         const amount = tx.credit_amount || tx.amount || 0;
-        
-        // Income - only 7xx accounts
+
         if (prefix.startsWith('7')) {
           incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amount);
         }
-
-        // Financial status for 1xx accounts (Ma = Obciążenia)
         if (prefix.startsWith('1')) {
           const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
           existing.credits += amount;
           financialStatusMap.set(prefix, existing);
         }
-
-        // Liabilities for 2xx accounts (Ma = Zobowiązania)
         if (prefix.startsWith('2')) {
           const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
           existing.liabilities += amount;
           liabilitiesMap.set(prefix, existing);
         }
-
-        // Intentions 210 (Ma = odprawione i oddane)
         if (prefix === '210') {
           intentions210CelebratedGiven += amount;
         }
       }
 
-      // Debit side processing
+      // Strona Wn (debit)
       if (tx.debit_account) {
         const accNum = tx.debit_account.number;
         const prefix = accNum.split('-')[0];
         const amount = tx.debit_amount || tx.amount || 0;
-        
-        // Expenses - only 4xx accounts
+
         if (prefix.startsWith('4')) {
           expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amount);
         }
-
-        // Financial status for 1xx accounts (Wn = Uznania)
         if (prefix.startsWith('1')) {
           const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
           existing.debits += amount;
           financialStatusMap.set(prefix, existing);
         }
-
-        // Liabilities for 2xx accounts (Wn = Należności)
         if (prefix.startsWith('2')) {
           const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
           existing.receivables += amount;
           liabilitiesMap.set(prefix, existing);
         }
-
-        // Intentions 210 (Wn = przyjęte)
         if (prefix === '210') {
           intentions210Received += amount;
         }
       }
     });
 
-    // Create workbook
+    // Tworzenie skoroszytu
     const wb = XLSX.utils.book_new();
 
-    // ========== SHEET 1: STRONA 1 ==========
-const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+    // ────────────────────────────────────────────────
+    // ARKUSZ 1 – Strona 1 (Stan finansowy, Intencje, Należności)
+    // ────────────────────────────────────────────────
+    const sheet1Data: (string | number | null)[][] = [];
 
-// Szerokości kolumn
-sheet1['!cols'] = [
-  { wch: 30.84 },
-  { wch: 18.83 },
-  { wch: 18.83 },
-  { wch: 18.83 },
-  { wch: 18.83 }
-];
+    sheet1Data.push([locationData?.name || '']);
+    sheet1Data.push([`${locationData?.postal_code || ''} ${locationData?.city || ''}`]);
+    sheet1Data.push([locationData?.address || '']);
+    sheet1Data.push(['']);
+    sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
+    sheet1Data.push(['']);
 
-// Marginesy (w calach – 0.75 ≈ 1.9 cm, zostawiamy Twoje obecne lub zmieniamy na ~1 cm)
-sheet1['!margins'] = {
-  left:   0.39,   // ≈ 1 cm
-  right:  0.39,
-  top:    0.39,
-  bottom: 0.39,
-  header: 0.3,
-  footer: 0.3
-};
+    // A. Stan finansowy domu
+    sheet1Data.push(['A. Stan finansowy domu']);
+    sheet1Data.push(['', 'Początek miesiąca', 'Uznania', 'Obciążenia', 'Koniec miesiąca']);
 
-// Orientacja pozioma – już dobrze
-sheet1['!pageSetup'] = {
-  orientation: 'landscape'
-};
+    let totalOpening = 0;
+    let totalDebits = 0;
+    let totalCredits = 0;
+    let totalClosing = 0;
 
-// Czcionka 12 pt – już masz
-const range1 = XLSX.utils.decode_range(sheet1['!ref']);
-for (let R = range1.s.r; R <= range1.e.r; ++R) {
-  for (let C = range1.s.c; C <= range1.e.c; ++C) {
-    const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-    if (!sheet1[cell_ref]) continue;
-    sheet1[cell_ref].s = sheet1[cell_ref].s || {};
-    sheet1[cell_ref].s.font = { sz: 12 };
-  }
-}
+    FINANCIAL_STATUS_CATEGORIES.forEach(category => {
+      let categoryDebits = 0;
+      let categoryCredits = 0;
+      category.accounts.forEach(acc => {
+        const data = financialStatusMap.get(acc);
+        if (data) {
+          categoryDebits += data.debits;
+          categoryCredits += data.credits;
+        }
+      });
+      const opening = 0; // brak danych historycznych
+      const closing = opening + categoryDebits - categoryCredits;
 
-XLSX.utils.book_append_sheet(wb, sheet1, 'Strona 1');
+      totalOpening += opening;
+      totalDebits += categoryDebits;
+      totalCredits += categoryCredits;
+      totalClosing += closing;
 
-// ========== SHEET 2: STRONA 2 ==========
-const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
+      sheet1Data.push([category.name, opening, categoryDebits, categoryCredits, closing]);
+    });
 
-// Szerokości kolumn – bez zmian
-sheet2['!cols'] = [
-  { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
-  { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
-];
+    sheet1Data.push(['SALDO', totalOpening, totalDebits, totalCredits, totalClosing]);
+    sheet1Data.push(['']);
 
-// ✦ NAJWAŻNIEJSZA ZMIANA – marginesy 1 cm (w calach: 1 cm ≈ 0.3937)
-sheet2['!margins'] = {
-  left:   0.39,
-  right:  0.39,
-  top:    0.39,
-  bottom: 0.39,
-  header: 0.3,
-  footer: 0.3
-};
+    // B. Intencje
+    sheet1Data.push(['B. Intencje']);
+    sheet1Data.push(['', 'Początek miesiąca', 'Odprawione i oddane', 'Przyjęte', 'Stan końcowy']);
+    const intentionsOpening = 0;
+    const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
+    sheet1Data.push(['1. Intencje', intentionsOpening, intentions210CelebratedGiven, intentions210Received, intentionsClosing]);
+    sheet1Data.push(['']);
 
-// Czcionka 10 pt – już masz, dla pewności zostawiamy
-const range2 = XLSX.utils.decode_range(sheet2['!ref']);
-for (let R = range2.s.r; R <= range2.e.r; ++R) {
-  for (let C = range2.s.c; C <= range2.e.c; ++C) {
-    const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-    if (!sheet2[cell_ref]) continue;
-    sheet2[cell_ref].s = sheet2[cell_ref].s || {};
-    sheet2[cell_ref].s.font = { sz: 10 };
-  }
-}
+    // C. Należności i zobowiązania
+    sheet1Data.push(['C. Należności i zobowiązania']);
+    sheet1Data.push(['', 'Początek miesiąca', 'Należności', 'Zobowiązania', 'Koniec miesiąca']);
 
-// Orientacja – jeśli chcesz też poziomą w arkuszu 2, dodaj:
-sheet2['!pageSetup'] = {
-  orientation: 'portrait'   // ← portrait (pionowa) jest domyślna, zmień na 'landscape' jeśli potrzebujesz
-};
+    LIABILITY_CATEGORIES.forEach(category => {
+      let receivables = 0;
+      let liabilities = 0;
+      category.accounts.forEach(acc => {
+        const data = liabilitiesMap.get(acc);
+        if (data) {
+          receivables += data.receivables;
+          liabilities += data.liabilities;
+        }
+      });
+      const opening = 0;
+      const closing = opening + receivables - liabilities;
+      sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
+    });
+    sheet1Data.push(['']);
 
-XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
+    // Podpisy
+    sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
+    sheet1Data.push(['']);
+    sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
+    sheet1Data.push(['']);
+    sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ''}`]);
 
+    const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
-    // Generate filename
+    sheet1['!cols'] = [
+      { wch: 30.84 },
+      { wch: 18.83 },
+      { wch: 18.83 },
+      { wch: 18.83 },
+      { wch: 18.83 }
+    ];
+
+    sheet1['!margins'] = {
+      left: 0.39,
+      right: 0.39,
+      top: 0.39,
+      bottom: 0.39,
+      header: 0.3,
+      footer: 0.3
+    };
+
+    sheet1['!pageSetup'] = {
+      orientation: 'landscape'
+    };
+
+    // Czcionka 12 dla całego arkusza 1
+    const range1 = XLSX.utils.decode_range(sheet1['!ref']);
+    for (let R = range1.s.r; R <= range1.e.r; ++R) {
+      for (let C = range1.s.c; C <= range1.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        if (!sheet1[cell_ref]) continue;
+        sheet1[cell_ref].s = sheet1[cell_ref].s || {};
+        sheet1[cell_ref].s.font = { sz: 12 };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, sheet1, 'Strona 1');
+
+    // ────────────────────────────────────────────────
+    // ARKUSZ 2 – Strona 2 (Przychody i Rozchody)
+    // ────────────────────────────────────────────────
+    const sheet2Data: (string | number | null)[][] = [];
+
+    sheet2Data.push(['I. PRZYCHODY', null, null, null, 'II. ROZCHODY', null, null]);
+    sheet2Data.push([null, null, null, null, null, null, null]);
+    sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
+
+    let totalIncome = 0;
+    INCOME_ACCOUNTS.forEach(acc => {
+      totalIncome += incomeMap.get(acc.number) || 0;
+    });
+
+    let totalExpense = 0;
+    EXPENSE_ACCOUNTS.forEach(acc => {
+      totalExpense += expenseMap.get(acc.number) || 0;
+    });
+
+    const maxLen = Math.max(INCOME_ACCOUNTS.length, EXPENSE_ACCOUNTS.length);
+    for (let i = 0; i < maxLen; i++) {
+      const incAcc = i < INCOME_ACCOUNTS.length ? INCOME_ACCOUNTS[i] : { number: null, name: null };
+      const expAcc = i < EXPENSE_ACCOUNTS.length ? EXPENSE_ACCOUNTS[i] : { number: null, name: null };
+      const incAmount = incomeMap.get(incAcc.number) || 0;
+      const expAmount = expenseMap.get(expAcc.number) || 0;
+
+      sheet2Data.push([
+        incAcc.number, incAcc.name, incAmount, null,
+        expAcc.number, expAcc.name, expAmount
+      ]);
+    }
+
+    sheet2Data.push([null, null, null, null, null, null, null]);
+    sheet2Data.push([null, 'PRZYCHODY RAZEM:', totalIncome, null, null, 'ROZCHODY RAZEM:', totalExpense]);
+
+    const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
+
+    sheet2['!cols'] = [
+      { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
+      { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
+    ];
+
+    // Marginesy 1 cm (≈ 0.3937 cala)
+    sheet2['!margins'] = {
+      left: 0.39,
+      right: 0.39,
+      top: 0.39,
+      bottom: 0.39,
+      header: 0.3,
+      footer: 0.3
+    };
+
+    // Czcionka 10 dla całego arkusza 2
+    const range2 = XLSX.utils.decode_range(sheet2['!ref']);
+    for (let R = range2.s.r; R <= range2.e.r; ++R) {
+      for (let C = range2.s.c; C <= range2.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        if (!sheet2[cell_ref]) continue;
+        sheet2[cell_ref].s = sheet2[cell_ref].s || {};
+        sheet2[cell_ref].s.font = { sz: 10 };
+      }
+    }
+
+    // Orientacja pionowa (domyślna) – możesz zmienić na 'landscape' jeśli chcesz
+    // sheet2['!pageSetup'] = { orientation: 'portrait' };
+
+    XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
+
+    // ────────────────────────────────────────────────
+    // Zapis pliku
+    // ────────────────────────────────────────────────
     const monthNames = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paz', 'lis', 'gru'];
-    const filename = `sprawozdanie_${locationName.replace(/\s+/g, '_')}_${monthNames[month - 1]}_${year}.xlsx`;
+    const filename = `sprawozdanie_${(locationData?.name || 'lokalizacja').replace(/\s+/g, '_')}_${monthNames[month - 1]}_${year}.xlsx`;
 
-    // Save file
     XLSX.writeFile(wb, filename);
 
     toast.success('Raport wyeksportowany do Excel zgodnie ze wzorem');
   } catch (error: any) {
     console.error('Export error:', error);
-    toast.error('Błąd eksportu: ' + error.message);
+    toast.error('Błąd eksportu: ' + (error.message || 'nieznany błąd'));
   } finally {
     setIsExporting(false);
   }
