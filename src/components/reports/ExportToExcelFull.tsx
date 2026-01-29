@@ -227,183 +227,83 @@ const handleExport = async () => {
     // Create workbook
     const wb = XLSX.utils.book_new();
 
-    // ========== SHEET 1: STRONA 1 (Stan finansowy, Intencje, Należności) ==========
-    const sheet1Data: (string | number | null)[][] = [];
-    
-    // Header
-    sheet1Data.push([locationData?.name || locationName]);
-    sheet1Data.push([`${locationData?.postal_code || ''} ${locationData?.city || ''}`]);
-    sheet1Data.push([locationData?.address || '']);
-    sheet1Data.push(['']);
-    sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
-    sheet1Data.push(['']);
+    // ========== SHEET 1: STRONA 1 ==========
+const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
-    // A. Stan finansowy domu
-    sheet1Data.push(['A. Stan finansowy domu']);
-    sheet1Data.push(['', 'Początek miesiąca', 'Uznania', 'Obciążenia', 'Koniec miesiąca']);
+// Szerokości kolumn
+sheet1['!cols'] = [
+  { wch: 30.84 },
+  { wch: 18.83 },
+  { wch: 18.83 },
+  { wch: 18.83 },
+  { wch: 18.83 }
+];
 
-    let totalOpening = 0;
-    let totalDebits = 0;
-    let totalCredits = 0;
-    let totalClosing = 0;
+// Marginesy (w calach – 0.75 ≈ 1.9 cm, zostawiamy Twoje obecne lub zmieniamy na ~1 cm)
+sheet1['!margins'] = {
+  left:   0.39,   // ≈ 1 cm
+  right:  0.39,
+  top:    0.39,
+  bottom: 0.39,
+  header: 0.3,
+  footer: 0.3
+};
 
-    FINANCIAL_STATUS_CATEGORIES.forEach(category => {
-      let categoryDebits = 0;
-      let categoryCredits = 0;
-      category.accounts.forEach(acc => {
-        const data = financialStatusMap.get(acc);
-        if (data) {
-          categoryDebits += data.debits;
-          categoryCredits += data.credits;
-        }
-      });
-      const opening = 0; // Would need historical data
-      const closing = opening + categoryDebits - categoryCredits;
-      
-      totalOpening += opening;
-      totalDebits += categoryDebits;
-      totalCredits += categoryCredits;
-      totalClosing += closing;
+// Orientacja pozioma – już dobrze
+sheet1['!pageSetup'] = {
+  orientation: 'landscape'
+};
 
-      sheet1Data.push([category.name, opening, categoryDebits, categoryCredits, closing]);
-    });
+// Czcionka 12 pt – już masz
+const range1 = XLSX.utils.decode_range(sheet1['!ref']);
+for (let R = range1.s.r; R <= range1.e.r; ++R) {
+  for (let C = range1.s.c; C <= range1.e.c; ++C) {
+    const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+    if (!sheet1[cell_ref]) continue;
+    sheet1[cell_ref].s = sheet1[cell_ref].s || {};
+    sheet1[cell_ref].s.font = { sz: 12 };
+  }
+}
 
-    sheet1Data.push(['SALDO', totalOpening, totalDebits, totalCredits, totalClosing]);
-    sheet1Data.push(['']);
+XLSX.utils.book_append_sheet(wb, sheet1, 'Strona 1');
 
-    // B. Intencje
-    sheet1Data.push(['B. Intencje']);
-    sheet1Data.push(['', 'Początek miesiąca', 'Odprawione i oddane', 'Przyjęte', 'Stan końcowy']);
-    const intentionsOpening = 0;
-    const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
-    sheet1Data.push(['1. Intencje', intentionsOpening, intentions210CelebratedGiven, intentions210Received, intentionsClosing]);
-    sheet1Data.push(['']);
+// ========== SHEET 2: STRONA 2 ==========
+const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
 
-    // C. Należności i zobowiązania
-    sheet1Data.push(['C. Należności i zobowiązania']);
-    sheet1Data.push(['', 'Początek miesiąca', 'Należności', 'Zobowiązania', 'Koniec miesiąca']);
-    LIABILITY_CATEGORIES.forEach(category => {
-      let receivables = 0;
-      let liabilities = 0;
-      category.accounts.forEach(acc => {
-        const data = liabilitiesMap.get(acc);
-        if (data) {
-          receivables += data.receivables;
-          liabilities += data.liabilities;
-        }
-      });
-      const opening = 0;
-      const closing = opening + receivables - liabilities;
-      sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
-    });
-    sheet1Data.push(['']);
+// Szerokości kolumn – bez zmian
+sheet2['!cols'] = [
+  { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
+  { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
+];
 
-    // Podpisy
-    sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
-    sheet1Data.push(['']);
-    sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
-    sheet1Data.push(['']);
-    sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ''}`]);
+// ✦ NAJWAŻNIEJSZA ZMIANA – marginesy 1 cm (w calach: 1 cm ≈ 0.3937)
+sheet2['!margins'] = {
+  left:   0.39,
+  right:  0.39,
+  top:    0.39,
+  bottom: 0.39,
+  header: 0.3,
+  footer: 0.3
+};
 
-    const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+// Czcionka 10 pt – już masz, dla pewności zostawiamy
+const range2 = XLSX.utils.decode_range(sheet2['!ref']);
+for (let R = range2.s.r; R <= range2.e.r; ++R) {
+  for (let C = range2.s.c; C <= range2.e.c; ++C) {
+    const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+    if (!sheet2[cell_ref]) continue;
+    sheet2[cell_ref].s = sheet2[cell_ref].s || {};
+    sheet2[cell_ref].s.font = { sz: 10 };
+  }
+}
 
-    // Szerokości kolumn
-    sheet1['!cols'] = [
-      { wch: 30.84 },
-      { wch: 18.83 },
-      { wch: 18.83 },
-      { wch: 18.83 },
-      { wch: 18.83 }
-    ];
+// Orientacja – jeśli chcesz też poziomą w arkuszu 2, dodaj:
+sheet2['!pageSetup'] = {
+  orientation: 'portrait'   // ← portrait (pionowa) jest domyślna, zmień na 'landscape' jeśli potrzebujesz
+};
 
-    // Marginesy
-    sheet1['!margins'] = {
-      left: 0.75,
-      right: 0.75,
-      top: 0.98,
-      bottom: 0.98,
-      header: 0.51,
-      footer: 0.51
-    };
+XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
 
-    // Orientacja pozioma
-    sheet1['!pageSetup'] = {
-      orientation: 'landscape'
-    };
-
-    // Czcionka 12 pt dla wszystkich komórek
-    const range1 = XLSX.utils.decode_range(sheet1['!ref']);
-    for (let R = range1.s.r; R <= range1.e.r; ++R) {
-      for (let C = range1.s.c; C <= range1.e.c; ++C) {
-        const cell_address = { c: C, r: R };
-        const cell_ref = XLSX.utils.encode_cell(cell_address);
-        if (!sheet1[cell_ref]) continue;
-        if (!sheet1[cell_ref].s) sheet1[cell_ref].s = {};
-        sheet1[cell_ref].s.font = { sz: 12 };
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, sheet1, 'Strona 1');
-
-    // ========== SHEET 2: STRONA 2 (Przychody i Rozchody) ==========
-    const sheet2Data: (string | number | null)[][] = [];
-    
-    // Budowa struktury z dwoma sekcjami obok siebie
-    sheet2Data.push(['I. PRZYCHODY', null, null, null, 'II. ROZCHODY', null, null]);
-    sheet2Data.push([null, null, null, null, null, null, null]);
-    sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
-
-    // Oblicz sumy
-    let totalIncome = 0;
-    INCOME_ACCOUNTS.forEach(acc => {
-      totalIncome += incomeMap.get(acc.number) || 0;
-    });
-    let totalExpense = 0;
-    EXPENSE_ACCOUNTS.forEach(acc => {
-      totalExpense += expenseMap.get(acc.number) || 0;
-    });
-
-    // Wypełnij wiersze przychodów i rozchodów obok siebie
-    const maxLen = Math.max(INCOME_ACCOUNTS.length, EXPENSE_ACCOUNTS.length);
-    for (let i = 0; i < maxLen; i++) {
-      const incAcc = i < INCOME_ACCOUNTS.length ? INCOME_ACCOUNTS[i] : { number: null, name: null };
-      const expAcc = i < EXPENSE_ACCOUNTS.length ? EXPENSE_ACCOUNTS[i] : { number: null, name: null };
-      const incAmount = incomeMap.get(incAcc.number) || 0;
-      const expAmount = expenseMap.get(expAcc.number) || 0;
-      sheet2Data.push([
-        incAcc.number, incAcc.name, incAmount, null,
-        expAcc.number, expAcc.name, expAmount
-      ]);
-    }
-
-    // Sumy na dole
-    sheet2Data.push([null, null, null, null, null, null, null]); // Pusta linia
-    sheet2Data.push([null, 'PRZYCHODY RAZEM:', totalIncome, null, null, 'ROZCHODY RAZEM:', totalExpense]);
-
-    const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
-
-    // Szerokości kolumn
-    sheet2['!cols'] = [
-      { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
-      { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
-    ];
-
-    // Marginesy
-    sheet2['!margins'] = { left: 0.39, right: 0.39, top: 0.79, bottom: 0.79, header: 0.51, footer: 0.51 };
-
-    // Czcionka 10 pt dla wszystkich komórek
-    const range2 = XLSX.utils.decode_range(sheet2['!ref']);
-    for (let R = range2.s.r; R <= range2.e.r; ++R) {
-      for (let C = range2.s.c; C <= range2.e.c; ++C) {
-        const cell_address = { c: C, r: R };
-        const cell_ref = XLSX.utils.encode_cell(cell_address);
-        if (!sheet2[cell_ref]) continue;
-        if (!sheet2[cell_ref].s) sheet2[cell_ref].s = {};
-        sheet2[cell_ref].s.font = { sz: 10 };
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
 
     // Generate filename
     const monthNames = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paz', 'lis', 'gru'];
