@@ -11,41 +11,38 @@ interface ExportToExcelFullProps {
   locationName: string;
 }
 
-// Predefiniowane konta przychodów zgodne ze wzorem
+// Nowa lista kont przychodów - tylko 7xx zgodnie z planem
 const INCOME_ACCOUNTS = [
-  { number: '210', name: 'Intencje przyjęte' },
-  { number: '212', name: 'Zwrot pożyczki' },
-  { number: '215', name: 'Zaciągnięte pożyczki' },
-  { number: '217', name: 'Sumy przechodnie' },
-  { number: '225', name: 'Sprzedaż towarów' },
   { number: '701', name: 'Intencje odprawione na dom' },
   { number: '702', name: 'Duszpasterstwo OMI' },
-  { number: '703', name: 'Stałe ofiary' },
-  { number: '704', name: 'Ofiary z nabożeństw' },
-  { number: '705', name: 'Kolęda, opłatek' },
+  { number: '703', name: 'Duszpasterstwo parafialne' },
+  { number: '704', name: 'Kolęda' },
+  { number: '705', name: 'Zastępstwa zagraniczne' },
   { number: '706', name: 'Ofiary okazjonalne' },
   { number: '707', name: 'Stypendia, dotacje, emerytury' },
   { number: '708', name: 'Dotacje z kurii' },
   { number: '709', name: 'Wynajem, dzierżawa' },
-  { number: '710', name: 'Darowizny' },
-  { number: '711', name: 'Różne wpływy' },
-  { number: '712', name: 'Spadki, zapisy' },
+  { number: '710', name: 'Odsetki' },
+  { number: '711', name: 'Sprzedaż towarów' },
+  { number: '712', name: 'Dzierżawa' },
   { number: '713', name: 'Przychód ze sprzedaży' },
-  { number: '714', name: 'Odsetki bankowe' },
-  { number: '715', name: 'Dotacje z funduszy UE' },
-  { number: '716', name: 'Dochód ze składek' },
-  { number: '717', name: 'Dochód z działalności' },
-  { number: '725', name: 'Inne przychody' },
-  { number: '730', name: 'Przychody finansowe' },
+  { number: '714', name: 'Pensje, emerytury' },
+  { number: '715', name: 'Zwroty' },
+  { number: '716', name: 'Usługi' },
+  { number: '717', name: 'Inne' },
+  { number: '718', name: 'Rekolektanci' },
+  { number: '719', name: 'Dzierżawa przechodnia' },
+  { number: '720', name: 'Ofiary' },
+  { number: '721', name: 'Darowizny' },
+  { number: '722', name: 'Pensje katechetów' },
+  { number: '725', name: 'Nadzwyczajne' },
+  { number: '727', name: 'Ogród' },
+  { number: '728', name: 'Gospodarstwo' },
+  { number: '730', name: 'Sprzedaż majątku trwałego' },
 ];
 
-// Predefiniowane konta rozchodów zgodne ze wzorem
+// Nowa lista kont rozchodów - tylko 4xx zgodnie z planem
 const EXPENSE_ACCOUNTS = [
-  { number: '210', name: 'Intencje odprawione i oddane' },
-  { number: '212', name: 'Udzielone pożyczki' },
-  { number: '215', name: 'Spłata pożyczek' },
-  { number: '217', name: 'Sumy przechodnie' },
-  { number: '225', name: 'Zakup towarów' },
   { number: '401', name: 'Żywność' },
   { number: '402', name: 'Alkohol' },
   { number: '403', name: 'Opłaty za energię' },
@@ -72,25 +69,41 @@ const EXPENSE_ACCOUNTS = [
   { number: '424', name: 'Inwestycje' },
   { number: '425', name: 'Wydatki bankowe' },
   { number: '430', name: 'Podatki' },
+  { number: '431', name: 'Książki, czasopisma' },
+  { number: '435', name: 'Wakacje' },
+  { number: '440', name: 'Żywność dodatkowa' },
+  { number: '441', name: 'Salon' },
+  { number: '442', name: 'Odzież dodatkowa' },
+  { number: '443', name: 'Pralnia' },
+  { number: '444', name: 'Energia, woda' },
+  { number: '445', name: 'Podatki dodatkowe' },
+  { number: '446', name: 'Ogród' },
+  { number: '447', name: 'Gospodarstwo' },
+  { number: '449', name: 'Zakup towarów do sprzedaży' },
   { number: '450', name: 'Różne wydatki' },
-  { number: '458', name: 'Inne koszty' },
-  { number: '201-1-1', name: 'Świadczenia na prowincję (uregulowane)' },
+  { number: '451', name: 'Remonty zwyczajne' },
+  { number: '452', name: 'Remonty nadzwyczajne' },
+  { number: '453', name: 'Spotkania, zjazdy' },
+  { number: '455', name: 'Studia' },
+  { number: '456', name: 'Powołania' },
+  { number: '457', name: 'Apostolat' },
+  { number: '458', name: 'Biedni' },
+  { number: '459', name: 'Misje' },
 ];
 
+// Nowa struktura kategorii stanu finansowego
 const FINANCIAL_STATUS_CATEGORIES = [
-  { key: 'kasa_domu', name: '1. Kasa domu', accounts: ['100'] },
-  { key: 'kasa_dewiz', name: '2. Kasa dewiz', accounts: ['101', '102', '103', '104', '105', '106', '107', '108'] },
-  { key: 'bank', name: '3. Bank', accounts: ['110', '111', '112'] },
-  { key: 'lokaty', name: '4. Lokaty bankowe', accounts: ['117', '118', '119'] },
-  { key: 'bank_dewiz', name: '5. Bank dewizowy', accounts: ['113', '114', '115', '116'] },
+  { key: 'kasa_domu', name: '1. Kasa domu', accounts: ['100', '101', '102', '103', '104', '105', '106', '107', '108', '109'] },
+  { key: 'bank', name: '2. Bank', accounts: ['110', '111', '112', '113', '114', '115', '116'] },
+  { key: 'lokaty', name: '3. Lokaty bankowe', accounts: ['117'] },
 ];
 
+// Nowa struktura kategorii należności/zobowiązań
 const LIABILITY_CATEGORIES = [
   { name: '1. Pożyczki udzielone', accounts: ['212', '213'] },
   { name: '2. Pożyczki zaciągnięte', accounts: ['215'] },
-  { name: '3. Sumy przechodnie', accounts: ['149', '150'] },
-  { name: '4. Rozliczenia z prowincją', accounts: ['200', '201'] },
-  { name: '5. Rozliczenia z innymi', accounts: ['202', '208'] },
+  { name: '3. Rozliczenia z prowincją', accounts: ['201'] },
+  { name: '4. Rozliczenia z innymi', accounts: ['217'] },
 ];
 
 export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
@@ -139,50 +152,74 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
 
       if (error) throw error;
 
-      // Fetch report details
-      const { data: reportDetails } = await supabase
-        .from('report_details')
-        .select('*')
-        .eq('report_id', report.id)
-        .single();
-
       // Process transactions into account totals
       const incomeMap = new Map<string, number>();
       const expenseMap = new Map<string, number>();
-      const financialStatusMap = new Map<string, { income: number; expense: number }>();
+      const financialStatusMap = new Map<string, { debits: number; credits: number }>();
+      const liabilitiesMap = new Map<string, { receivables: number; liabilities: number }>();
+      let intentions210Received = 0;
+      let intentions210CelebratedGiven = 0;
 
       transactions?.forEach(tx => {
-        // Income - credit side
+        // Credit side processing
         if (tx.credit_account) {
           const accNum = tx.credit_account.number;
           const prefix = accNum.split('-')[0];
           const amount = tx.credit_amount || tx.amount || 0;
           
-          if (prefix.startsWith('7') || prefix.startsWith('2')) {
+          // Income - only 7xx accounts
+          if (prefix.startsWith('7')) {
             incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amount);
           }
 
+          // Financial status for 1xx accounts (Ma = Obciążenia)
           if (prefix.startsWith('1')) {
-            const existing = financialStatusMap.get(prefix) || { income: 0, expense: 0 };
-            existing.income += amount;
+            const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
+            existing.credits += amount;
             financialStatusMap.set(prefix, existing);
+          }
+
+          // Liabilities for 2xx accounts (Ma = Zobowiązania)
+          if (prefix.startsWith('2')) {
+            const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
+            existing.liabilities += amount;
+            liabilitiesMap.set(prefix, existing);
+          }
+
+          // Intentions 210 (Ma = odprawione i oddane)
+          if (prefix === '210') {
+            intentions210CelebratedGiven += amount;
           }
         }
 
-        // Expenses - debit side
+        // Debit side processing
         if (tx.debit_account) {
           const accNum = tx.debit_account.number;
           const prefix = accNum.split('-')[0];
           const amount = tx.debit_amount || tx.amount || 0;
           
-          if (prefix.startsWith('4') || prefix.startsWith('2')) {
+          // Expenses - only 4xx accounts
+          if (prefix.startsWith('4')) {
             expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amount);
           }
 
+          // Financial status for 1xx accounts (Wn = Uznania)
           if (prefix.startsWith('1')) {
-            const existing = financialStatusMap.get(prefix) || { income: 0, expense: 0 };
-            existing.expense += amount;
+            const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
+            existing.debits += amount;
             financialStatusMap.set(prefix, existing);
+          }
+
+          // Liabilities for 2xx accounts (Wn = Należności)
+          if (prefix.startsWith('2')) {
+            const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
+            existing.receivables += amount;
+            liabilitiesMap.set(prefix, existing);
+          }
+
+          // Intentions 210 (Wn = przyjęte)
+          if (prefix === '210') {
+            intentions210Received += amount;
           }
         }
       });
@@ -190,7 +227,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
       // Create workbook
       const wb = XLSX.utils.book_new();
 
-      // ========== SHEET 1: PRZYCHODY ==========
+      // ========== SHEET 1: STRONA 1 (Stan finansowy, Intencje, Należności) ==========
       const sheet1Data: (string | number | null)[][] = [];
       
       // Header
@@ -200,41 +237,103 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
       sheet1Data.push(['']);
       sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
       sheet1Data.push(['']);
-      sheet1Data.push(['I. PRZYCHODY']);
-      sheet1Data.push(['']);
-      sheet1Data.push(['Nr. konta', 'Treść', 'kwota']);
 
-      // Income rows
-      let totalIncome = 0;
-      INCOME_ACCOUNTS.forEach(acc => {
-        const amount = incomeMap.get(acc.number) || 0;
-        totalIncome += amount;
-        sheet1Data.push([acc.number, acc.name, amount]);
+      // A. Stan finansowy domu
+      sheet1Data.push(['A. Stan finansowy domu']);
+      sheet1Data.push(['', 'Początek miesiąca', 'Uznania', 'Obciążenia', 'Koniec miesiąca']);
+
+      let totalOpening = 0;
+      let totalDebits = 0;
+      let totalCredits = 0;
+      let totalClosing = 0;
+
+      FINANCIAL_STATUS_CATEGORIES.forEach(category => {
+        let categoryDebits = 0;
+        let categoryCredits = 0;
+        category.accounts.forEach(acc => {
+          const data = financialStatusMap.get(acc);
+          if (data) {
+            categoryDebits += data.debits;
+            categoryCredits += data.credits;
+          }
+        });
+        const opening = 0; // Would need historical data
+        const closing = opening + categoryDebits - categoryCredits;
+        
+        totalOpening += opening;
+        totalDebits += categoryDebits;
+        totalCredits += categoryCredits;
+        totalClosing += closing;
+
+        sheet1Data.push([category.name, opening, categoryDebits, categoryCredits, closing]);
       });
 
+      sheet1Data.push(['SALDO', totalOpening, totalDebits, totalCredits, totalClosing]);
       sheet1Data.push(['']);
-      sheet1Data.push(['', 'PRZYCHODY RAZEM:', totalIncome]);
+
+      // B. Intencje
+      sheet1Data.push(['B. Intencje']);
+      sheet1Data.push(['', 'Początek miesiąca', 'Odprawione i oddane', 'Przyjęte', 'Stan końcowy']);
+      const intentionsOpening = 0;
+      const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
+      sheet1Data.push(['1. Intencje', intentionsOpening, intentions210CelebratedGiven, intentions210Received, intentionsClosing]);
       sheet1Data.push(['']);
+
+      // D. Należności i zobowiązania
+      sheet1Data.push(['D. Należności i zobowiązania']);
+      sheet1Data.push(['', 'Początek miesiąca', 'Należności', 'Zobowiązania', 'Koniec miesiąca']);
+      LIABILITY_CATEGORIES.forEach(category => {
+        let receivables = 0;
+        let liabilities = 0;
+        category.accounts.forEach(acc => {
+          const data = liabilitiesMap.get(acc);
+          if (data) {
+            receivables += data.receivables;
+            liabilities += data.liabilities;
+          }
+        });
+        const opening = 0;
+        const closing = opening + receivables - liabilities;
+        sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
+      });
       sheet1Data.push(['']);
+
+      // Podpisy
       sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
       sheet1Data.push(['']);
       sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
       sheet1Data.push(['']);
-      sheet1Data.push(['']);
       sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ''}`]);
 
       const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
-      sheet1['!cols'] = [{ wch: 15 }, { wch: 45 }, { wch: 18 }];
-      XLSX.utils.book_append_sheet(wb, sheet1, 'Przychody');
+      sheet1['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, sheet1, 'Strona 1');
 
-      // ========== SHEET 2: ROZCHODY I PODSUMOWANIA ==========
+      // ========== SHEET 2: STRONA 2 (Przychody i Rozchody) ==========
       const sheet2Data: (string | number | null)[][] = [];
       
+      // I. PRZYCHODY
+      sheet2Data.push(['I. PRZYCHODY']);
+      sheet2Data.push(['']);
+      sheet2Data.push(['Nr. konta', 'Treść', 'kwota']);
+
+      let totalIncome = 0;
+      INCOME_ACCOUNTS.forEach(acc => {
+        const amount = incomeMap.get(acc.number) || 0;
+        totalIncome += amount;
+        sheet2Data.push([acc.number, acc.name, amount]);
+      });
+
+      sheet2Data.push(['']);
+      sheet2Data.push(['', 'PRZYCHODY RAZEM:', totalIncome]);
+      sheet2Data.push(['']);
+      sheet2Data.push(['']);
+
+      // II. ROZCHODY
       sheet2Data.push(['II. ROZCHODY']);
       sheet2Data.push(['']);
       sheet2Data.push(['Nr. konta', 'Treść', 'kwota']);
 
-      // Expense rows
       let totalExpense = 0;
       EXPENSE_ACCOUNTS.forEach(acc => {
         const amount = expenseMap.get(acc.number) || 0;
@@ -244,64 +343,10 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
 
       sheet2Data.push(['']);
       sheet2Data.push(['', 'ROZCHODY RAZEM:', totalExpense]);
-      sheet2Data.push(['']);
-      sheet2Data.push(['']);
-
-      // A. Stan finansowy domu
-      sheet2Data.push(['A. Stan finansowy domu']);
-      sheet2Data.push(['', 'Początek miesiąca', 'Przychody', 'Rozchody', 'Koniec miesiąca']);
-
-      let totalOpening = 0;
-      let totalFsIncome = 0;
-      let totalFsExpense = 0;
-      let totalClosing = 0;
-
-      FINANCIAL_STATUS_CATEGORIES.forEach(category => {
-        let categoryIncome = 0;
-        let categoryExpense = 0;
-        category.accounts.forEach(acc => {
-          const data = financialStatusMap.get(acc);
-          if (data) {
-            categoryIncome += data.income;
-            categoryExpense += data.expense;
-          }
-        });
-        const opening = 0; // Would need historical data
-        const closing = opening + categoryIncome - categoryExpense;
-        
-        totalOpening += opening;
-        totalFsIncome += categoryIncome;
-        totalFsExpense += categoryExpense;
-        totalClosing += closing;
-
-        sheet2Data.push([category.name, opening, categoryIncome, categoryExpense, closing]);
-      });
-
-      sheet2Data.push(['SALDO', totalOpening, totalFsIncome, totalFsExpense, totalClosing]);
-      sheet2Data.push(['']);
-      sheet2Data.push(['']);
-
-      // B. Intencje
-      sheet2Data.push(['B. Intencje']);
-      sheet2Data.push(['', 'Początek miesiąca', 'Odprawione i oddane', 'Przyjęte', 'Stan końcowy']);
-      const intentions210Income = incomeMap.get('210') || 0;
-      const intentions210Expense = expenseMap.get('210') || 0;
-      const intentionsOpening = 0;
-      const intentionsClosing = intentionsOpening - intentions210Expense + intentions210Income;
-      sheet2Data.push(['1. Intencje', intentionsOpening, intentions210Expense, intentions210Income, intentionsClosing]);
-      sheet2Data.push(['']);
-      sheet2Data.push(['']);
-
-      // D. Należności i zobowiązania (skip C - Towary)
-      sheet2Data.push(['D. Należności i zobowiązania']);
-      sheet2Data.push(['', 'należności (pocz.)', 'zobowiązania (pocz.)', 'należności (zm.)', 'zobowiązania (zm.)', 'należności (kon.)', 'zobowiązania (kon.)']);
-      LIABILITY_CATEGORIES.forEach(category => {
-        sheet2Data.push([category.name, 0, 0, 0, 0, 0, 0]);
-      });
 
       const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
-      sheet2['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
-      XLSX.utils.book_append_sheet(wb, sheet2, 'Rozchody');
+      sheet2['!cols'] = [{ wch: 15 }, { wch: 45 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
 
       // Generate filename
       const monthNames = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paz', 'lis', 'gru'];

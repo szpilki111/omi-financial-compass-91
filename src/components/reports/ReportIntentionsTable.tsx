@@ -3,9 +3,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 interface IntentionsData {
   openingBalance: number;
-  celebratedAndGiven: number;
-  received: number;
-  closingBalance: number;
+  celebratedAndGiven: number; // Odprawione i oddane (Ma)
+  received: number; // Przyjęte (Wn)
+  closingBalance: number; // Wzór: początek + przyjęte - odprawione
 }
 
 interface ReportIntentionsTableProps {
@@ -23,6 +23,9 @@ export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
       maximumFractionDigits: 2
     }).format(value);
   };
+
+  // Oblicz stan końcowy: początek + przyjęte - odprawione
+  const calculatedClosing = data.openingBalance + data.received - data.celebratedAndGiven;
 
   return (
     <div className={`${className}`}>
@@ -43,7 +46,7 @@ export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
             <TableCell className="text-right font-mono">{formatCurrency(data.openingBalance)}</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(data.celebratedAndGiven)}</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(data.received)}</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(data.closingBalance)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(calculatedClosing)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>

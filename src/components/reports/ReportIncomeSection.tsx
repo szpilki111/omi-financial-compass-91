@@ -1,32 +1,34 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-// Predefiniowana lista kont przychodów zgodna ze wzorem raportu
+// Nowa lista kont przychodów - tylko 7xx zgodnie z planem
 const INCOME_ACCOUNTS = [
-  { number: '210', name: 'Intencje przyjęte' },
-  { number: '212', name: 'Zwrot pożyczki' },
-  { number: '215', name: 'Zaciągnięte pożyczki' },
-  { number: '217', name: 'Sumy przechodnie' },
-  { number: '225', name: 'Sprzedaż towarów' },
   { number: '701', name: 'Intencje odprawione na dom' },
   { number: '702', name: 'Duszpasterstwo OMI' },
-  { number: '703', name: 'Stałe ofiary' },
-  { number: '704', name: 'Ofiary z nabożeństw' },
-  { number: '705', name: 'Kolęda, opłatek' },
+  { number: '703', name: 'Duszpasterstwo parafialne' },
+  { number: '704', name: 'Kolęda' },
+  { number: '705', name: 'Zastępstwa zagraniczne' },
   { number: '706', name: 'Ofiary okazjonalne' },
   { number: '707', name: 'Stypendia, dotacje, emerytury' },
   { number: '708', name: 'Dotacje z kurii' },
   { number: '709', name: 'Wynajem, dzierżawa' },
-  { number: '710', name: 'Darowizny' },
-  { number: '711', name: 'Różne wpływy' },
-  { number: '712', name: 'Spadki, zapisy' },
+  { number: '710', name: 'Odsetki' },
+  { number: '711', name: 'Sprzedaż towarów' },
+  { number: '712', name: 'Dzierżawa' },
   { number: '713', name: 'Przychód ze sprzedaży' },
-  { number: '714', name: 'Odsetki bankowe' },
-  { number: '715', name: 'Dotacje z funduszy UE' },
-  { number: '716', name: 'Dochód ze składek' },
-  { number: '717', name: 'Dochód z działalności' },
-  { number: '725', name: 'Inne przychody' },
-  { number: '730', name: 'Przychody finansowe' },
+  { number: '714', name: 'Pensje, emerytury' },
+  { number: '715', name: 'Zwroty' },
+  { number: '716', name: 'Usługi' },
+  { number: '717', name: 'Inne' },
+  { number: '718', name: 'Rekolektanci' },
+  { number: '719', name: 'Dzierżawa przechodnia' },
+  { number: '720', name: 'Ofiary' },
+  { number: '721', name: 'Darowizny' },
+  { number: '722', name: 'Pensje katechetów' },
+  { number: '725', name: 'Nadzwyczajne' },
+  { number: '727', name: 'Ogród' },
+  { number: '728', name: 'Gospodarstwo' },
+  { number: '730', name: 'Sprzedaż majątku trwałego' },
 ];
 
 interface AccountData {
@@ -62,6 +64,11 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
     return matchingAccounts.reduce((sum, acc) => sum + acc.amount, 0);
   };
 
+  // Oblicz sumę tylko dla kont 7xx
+  const calculated7xxTotal = INCOME_ACCOUNTS.reduce((sum, acc) => {
+    return sum + getAccountAmount(acc.number);
+  }, 0);
+
   return (
     <div className={`${className}`}>
       <h3 className="text-lg font-bold mb-3 text-center">I. PRZYCHODY</h3>
@@ -86,7 +93,7 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
           })}
           <TableRow className="bg-muted font-bold border-t-2">
             <TableCell colSpan={2} className="text-right">PRZYCHODY RAZEM:</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(totalIncome)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(calculated7xxTotal)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -94,4 +101,5 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   );
 };
 
+export { INCOME_ACCOUNTS };
 export default ReportIncomeSection;

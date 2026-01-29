@@ -52,26 +52,36 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       if (error) throw error;
 
-      // Process income accounts (credit side - 7xx, 2xx)
+      // Process income accounts (credit side - only 7xx)
       const incomeAccounts = new Map<string, AccountData>();
-      // Process expense accounts (debit side - 4xx, 2xx)
+      // Process expense accounts (debit side - only 4xx)
       const expenseAccounts = new Map<string, AccountData>();
       
-      // Financial status data
+      // Financial status data (1xx accounts) with debits and credits
       const financialStatus = new Map<string, {
-        openingBalance: number;
-        income: number;
-        expense: number;
+        debits: number;  // Uznania (Wn)
+        credits: number; // Obciążenia (Ma)
       }>();
 
+      // Liabilities data (2xx accounts) with receivables and liabilities
+      const liabilitiesData = new Map<string, {
+        receivables: number;  // Należności (Wn)
+        liabilities: number;  // Zobowiązania (Ma)
+      }>();
+
+      // Intentions data (account 210)
+      let intentions210Received = 0; // Wn - przyjęte
+      let intentions210CelebratedGiven = 0; // Ma - odprawione i oddane
+
       transactions?.forEach(tx => {
-        // Income - credit side (7xx accounts, 2xx accounts for returns)
+        // Credit side processing
         if (tx.credit_account) {
           const accNum = tx.credit_account.number;
           const prefix = accNum.split('-')[0];
           const amount = tx.credit_amount || tx.amount || 0;
           
-          if (prefix.startsWith('7') || prefix.startsWith('2')) {
+          // Income - only 7xx accounts
+          if (prefix.startsWith('7')) {
             const key = prefix;
             const existing = incomeAccounts.get(key);
             if (existing) {
@@ -85,21 +95,34 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
             }
           }
 
-          // Track financial status for 1xx accounts
+          // Track financial status for 1xx accounts (Ma = Obciążenia)
           if (prefix.startsWith('1')) {
-            const existing = financialStatus.get(prefix) || { openingBalance: 0, income: 0, expense: 0 };
-            existing.income += amount;
+            const existing = financialStatus.get(prefix) || { debits: 0, credits: 0 };
+            existing.credits += amount;
             financialStatus.set(prefix, existing);
+          }
+
+          // Track liabilities for 2xx accounts (Ma = Zobowiązania)
+          if (prefix.startsWith('2')) {
+            const existing = liabilitiesData.get(prefix) || { receivables: 0, liabilities: 0 };
+            existing.liabilities += amount;
+            liabilitiesData.set(prefix, existing);
+          }
+
+          // Intentions 210 (Ma = odprawione i oddane)
+          if (prefix === '210') {
+            intentions210CelebratedGiven += amount;
           }
         }
 
-        // Expenses - debit side (4xx accounts, 2xx accounts for payments)
+        // Debit side processing
         if (tx.debit_account) {
           const accNum = tx.debit_account.number;
           const prefix = accNum.split('-')[0];
           const amount = tx.debit_amount || tx.amount || 0;
           
-          if (prefix.startsWith('4') || prefix.startsWith('2')) {
+          // Expenses - only 4xx accounts
+          if (prefix.startsWith('4')) {
             const key = prefix;
             const existing = expenseAccounts.get(key);
             if (existing) {
@@ -113,18 +136,26 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
             }
           }
 
-          // Track financial status for 1xx accounts
+          // Track financial status for 1xx accounts (Wn = Uznania)
           if (prefix.startsWith('1')) {
-            const existing = financialStatus.get(prefix) || { openingBalance: 0, income: 0, expense: 0 };
-            existing.expense += amount;
+            const existing = financialStatus.get(prefix) || { debits: 0, credits: 0 };
+            existing.debits += amount;
             financialStatus.set(prefix, existing);
+          }
+
+          // Track liabilities for 2xx accounts (Wn = Należności)
+          if (prefix.startsWith('2')) {
+            const existing = liabilitiesData.get(prefix) || { receivables: 0, liabilities: 0 };
+            existing.receivables += amount;
+            liabilitiesData.set(prefix, existing);
+          }
+
+          // Intentions 210 (Wn = przyjęte)
+          if (prefix === '210') {
+            intentions210Received += amount;
           }
         }
       });
-
-      // Calculate intentions data from account 210
-      const intentions210Income = incomeAccounts.get('210')?.amount || 0;
-      const intentions210Expense = expenseAccounts.get('210')?.amount || 0;
 
       return {
         incomeAccounts: Array.from(incomeAccounts.values()),
@@ -135,8 +166,12 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
           prefix,
           ...data
         })),
-        intentionsReceived: intentions210Income,
-        intentionsCelebrated: intentions210Expense
+        liabilitiesData: Array.from(liabilitiesData.entries()).map(([prefix, data]) => ({
+          prefix,
+          ...data
+        })),
+        intentionsReceived: intentions210Received,
+        intentionsCelebrated: intentions210CelebratedGiven
       };
     },
     enabled: !!locationId && !!month && !!year
@@ -192,22 +227,23 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     return months[m - 1] || '';
   };
 
-  // Build financial status table data
+  // Build financial status table data with new structure
   const financialStatusData = DEFAULT_CATEGORIES.map(category => {
     const matchingData = transactionData?.financialStatus.filter(fs => 
       category.accounts.some(acc => fs.prefix.startsWith(acc))
     ) || [];
     
-    const income = matchingData.reduce((sum, d) => sum + d.income, 0);
-    const expense = matchingData.reduce((sum, d) => sum + d.expense, 0);
+    const debits = matchingData.reduce((sum, d) => sum + d.debits, 0);
+    const credits = matchingData.reduce((sum, d) => sum + d.credits, 0);
     const openingBalance = 0; // Would need historical data
-    const closingBalance = openingBalance + income - expense;
+    // Wzór: początek + uznania - obciążenia
+    const closingBalance = openingBalance + debits - credits;
 
     return {
       name: category.name,
       openingBalance,
-      income,
-      expense,
+      debits,
+      credits,
       closingBalance
     };
   });
@@ -215,21 +251,31 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   // Build intentions table data
   const intentionsData = {
     openingBalance: openingBalances?.intentionsOpening || 0,
-    celebratedAndGiven: transactionData?.intentionsCelebrated || 0,
-    received: transactionData?.intentionsReceived || 0,
-    closingBalance: (openingBalances?.intentionsOpening || 0) - (transactionData?.intentionsCelebrated || 0) + (transactionData?.intentionsReceived || 0)
+    celebratedAndGiven: transactionData?.intentionsCelebrated || 0, // Ma
+    received: transactionData?.intentionsReceived || 0, // Wn
+    closingBalance: 0 // Will be calculated in component
   };
 
-  // Build liabilities table data (placeholder)
-  const liabilitiesData = DEFAULT_LIABILITY_CATEGORIES.map(category => ({
-    name: category.name,
-    receivablesOpening: 0,
-    liabilitiesOpening: 0,
-    receivablesChange: 0,
-    liabilitiesChange: 0,
-    receivablesClosing: 0,
-    liabilitiesClosing: 0
-  }));
+  // Build liabilities table data with new structure
+  const liabilitiesTableData = DEFAULT_LIABILITY_CATEGORIES.map(category => {
+    const matchingData = transactionData?.liabilitiesData?.filter(ld => 
+      category.accounts.some(acc => ld.prefix.startsWith(acc))
+    ) || [];
+    
+    const receivables = matchingData.reduce((sum, d) => sum + d.receivables, 0);
+    const liabilities = matchingData.reduce((sum, d) => sum + d.liabilities, 0);
+    const openingBalance = 0; // Would need historical data
+    // Wzór: początek + należności - zobowiązania
+    const closingBalance = openingBalance + receivables - liabilities;
+
+    return {
+      name: category.name,
+      openingBalance,
+      receivables,
+      liabilities,
+      closingBalance
+    };
+  });
 
   return (
     <div className="space-y-8">
@@ -239,6 +285,29 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
           SPRAWOZDANIE MIESIĘCZNE ZA OKRES: {getMonthName(month)} {year} r.
         </h2>
       </div>
+
+      <Separator />
+
+      {/* Section A - Financial Status */}
+      <Card>
+        <CardContent className="pt-6">
+          <ReportFinancialStatusTable data={financialStatusData} />
+        </CardContent>
+      </Card>
+
+      {/* Section B - Intentions */}
+      <Card>
+        <CardContent className="pt-6">
+          <ReportIntentionsTable data={intentionsData} />
+        </CardContent>
+      </Card>
+
+      {/* Section D - Liabilities (skip C - Towary) */}
+      <Card>
+        <CardContent className="pt-6">
+          <ReportLiabilitiesTable data={liabilitiesTableData} />
+        </CardContent>
+      </Card>
 
       <Separator />
 
@@ -259,27 +328,6 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
             accountsData={transactionData?.expenseAccounts || []}
             totalExpense={transactionData?.totalExpense || 0}
           />
-        </CardContent>
-      </Card>
-
-      {/* Section A - Financial Status */}
-      <Card>
-        <CardContent className="pt-6">
-          <ReportFinancialStatusTable data={financialStatusData} />
-        </CardContent>
-      </Card>
-
-      {/* Section B - Intentions */}
-      <Card>
-        <CardContent className="pt-6">
-          <ReportIntentionsTable data={intentionsData} />
-        </CardContent>
-      </Card>
-
-      {/* Section D - Liabilities (skip C - Towary) */}
-      <Card>
-        <CardContent className="pt-6">
-          <ReportLiabilitiesTable data={liabilitiesData} />
         </CardContent>
       </Card>
     </div>

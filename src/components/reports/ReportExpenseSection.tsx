@@ -1,13 +1,8 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-// Predefiniowana lista kont rozchodów zgodna ze wzorem raportu
+// Nowa lista kont rozchodów - tylko 4xx zgodnie z planem
 const EXPENSE_ACCOUNTS = [
-  { number: '210', name: 'Intencje odprawione i oddane' },
-  { number: '212', name: 'Udzielone pożyczki' },
-  { number: '215', name: 'Spłata pożyczek' },
-  { number: '217', name: 'Sumy przechodnie' },
-  { number: '225', name: 'Zakup towarów' },
   { number: '401', name: 'Żywność' },
   { number: '402', name: 'Alkohol' },
   { number: '403', name: 'Opłaty za energię' },
@@ -34,21 +29,26 @@ const EXPENSE_ACCOUNTS = [
   { number: '424', name: 'Inwestycje' },
   { number: '425', name: 'Wydatki bankowe' },
   { number: '430', name: 'Podatki' },
+  { number: '431', name: 'Książki, czasopisma' },
+  { number: '435', name: 'Wakacje' },
+  { number: '440', name: 'Żywność dodatkowa' },
+  { number: '441', name: 'Salon' },
+  { number: '442', name: 'Odzież dodatkowa' },
+  { number: '443', name: 'Pralnia' },
+  { number: '444', name: 'Energia, woda' },
+  { number: '445', name: 'Podatki dodatkowe' },
+  { number: '446', name: 'Ogród' },
+  { number: '447', name: 'Gospodarstwo' },
+  { number: '449', name: 'Zakup towarów do sprzedaży' },
   { number: '450', name: 'Różne wydatki' },
-  { number: '458', name: 'Inne koszty' },
-];
-
-// Podsekcja świadczeń na prowincję
-const PROVINCE_SETTLEMENTS = [
-  { name: 'Kontybucje' },
-  { name: 'Duszpasterstwo OMI 60%' },
-  { name: 'ZUS OMI' },
-  { name: 'Fundusz ubezpieczeniowy' },
-  { name: 'Dzierżawa 20%' },
-  { name: 'Składka medialna' },
-  { name: 'Składka misyjna' },
-  { name: 'Formacja' },
-  { name: 'Inne świadczenia' },
+  { number: '451', name: 'Remonty zwyczajne' },
+  { number: '452', name: 'Remonty nadzwyczajne' },
+  { number: '453', name: 'Spotkania, zjazdy' },
+  { number: '455', name: 'Studia' },
+  { number: '456', name: 'Powołania' },
+  { number: '457', name: 'Apostolat' },
+  { number: '458', name: 'Biedni' },
+  { number: '459', name: 'Misje' },
 ];
 
 interface AccountData {
@@ -57,24 +57,15 @@ interface AccountData {
   amount: number;
 }
 
-interface ProvinceSettlementData {
-  name: string;
-  amount: number;
-}
-
 interface ReportExpenseSectionProps {
   accountsData: AccountData[];
   totalExpense: number;
-  provinceSettlements?: ProvinceSettlementData[];
-  provinceSettlementsTotal?: number;
   className?: string;
 }
 
 export const ReportExpenseSection: React.FC<ReportExpenseSectionProps> = ({
   accountsData,
   totalExpense,
-  provinceSettlements = [],
-  provinceSettlementsTotal = 0,
   className = ''
 }) => {
   const formatCurrency = (value: number) => {
@@ -92,6 +83,11 @@ export const ReportExpenseSection: React.FC<ReportExpenseSectionProps> = ({
     );
     return matchingAccounts.reduce((sum, acc) => sum + acc.amount, 0);
   };
+
+  // Oblicz sumę tylko dla kont 4xx
+  const calculated4xxTotal = EXPENSE_ACCOUNTS.reduce((sum, acc) => {
+    return sum + getAccountAmount(acc.number);
+  }, 0);
 
   return (
     <div className={`${className}`}>
@@ -116,46 +112,10 @@ export const ReportExpenseSection: React.FC<ReportExpenseSectionProps> = ({
             );
           })}
           
-          {/* Świadczenia na prowincję */}
-          <TableRow>
-            <TableCell className="text-center font-mono text-sm">201-1-1</TableCell>
-            <TableCell className="font-semibold">Świadczenia na prowincję (uregulowane)</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(provinceSettlementsTotal)}</TableCell>
-          </TableRow>
-
-          {/* Podsekcja "w tym:" */}
-          {provinceSettlements.length > 0 && (
-            <>
-              <TableRow className="bg-muted/30">
-                <TableCell></TableCell>
-                <TableCell className="italic text-muted-foreground pl-8">w tym:</TableCell>
-                <TableCell></TableCell>
-              </TableRow>
-              {provinceSettlements.map((settlement, index) => (
-                <TableRow key={index} className="bg-muted/20">
-                  <TableCell></TableCell>
-                  <TableCell className="italic text-muted-foreground pl-12">{settlement.name}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground italic">
-                    {formatCurrency(settlement.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="bg-muted/30">
-                <TableCell></TableCell>
-                <TableCell className="italic text-muted-foreground pl-8 font-semibold">
-                  Świadczenia na prowincję razem:
-                </TableCell>
-                <TableCell className="text-right font-mono italic">
-                  {formatCurrency(provinceSettlementsTotal)}
-                </TableCell>
-              </TableRow>
-            </>
-          )}
-
           {/* Suma rozchodów */}
           <TableRow className="bg-muted font-bold border-t-2">
             <TableCell colSpan={2} className="text-right">ROZCHODY RAZEM:</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(totalExpense)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(calculated4xxTotal)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -163,4 +123,5 @@ export const ReportExpenseSection: React.FC<ReportExpenseSectionProps> = ({
   );
 };
 
+export { EXPENSE_ACCOUNTS };
 export default ReportExpenseSection;

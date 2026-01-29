@@ -4,8 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 interface FinancialStatusRow {
   name: string;
   openingBalance: number;
-  income: number;
-  expense: number;
+  debits: number; // Uznania (Wn)
+  credits: number; // Obciążenia (Ma)
   closingBalance: number;
 }
 
@@ -14,13 +14,23 @@ interface ReportFinancialStatusTableProps {
   className?: string;
 }
 
-// Predefiniowane kategorie zgodne ze wzorem raportu
+// Nowa struktura kategorii zgodna z planem
 const DEFAULT_CATEGORIES = [
-  { key: 'kasa_domu', name: '1. Kasa domu', accounts: ['100'] },
-  { key: 'kasa_dewiz', name: '2. Kasa dewiz', accounts: ['101', '102', '103', '104', '105', '106', '107', '108'] },
-  { key: 'bank', name: '3. Bank', accounts: ['110', '111', '112'] },
-  { key: 'lokaty', name: '4. Lokaty bankowe', accounts: ['117', '118', '119'] },
-  { key: 'bank_dewiz', name: '5. Bank dewizowy', accounts: ['113', '114', '115', '116'] },
+  { 
+    key: 'kasa_domu', 
+    name: '1. Kasa domu', 
+    accounts: ['100', '101', '102', '103', '104', '105', '106', '107', '108', '109'] 
+  },
+  { 
+    key: 'bank', 
+    name: '2. Bank', 
+    accounts: ['110', '111', '112', '113', '114', '115', '116'] 
+  },
+  { 
+    key: 'lokaty', 
+    name: '3. Lokaty bankowe', 
+    accounts: ['117'] 
+  },
 ];
 
 export const ReportFinancialStatusTable: React.FC<ReportFinancialStatusTableProps> = ({
@@ -38,11 +48,11 @@ export const ReportFinancialStatusTable: React.FC<ReportFinancialStatusTableProp
   const totals = data.reduce(
     (acc, row) => ({
       openingBalance: acc.openingBalance + row.openingBalance,
-      income: acc.income + row.income,
-      expense: acc.expense + row.expense,
+      debits: acc.debits + row.debits,
+      credits: acc.credits + row.credits,
       closingBalance: acc.closingBalance + row.closingBalance,
     }),
-    { openingBalance: 0, income: 0, expense: 0, closingBalance: 0 }
+    { openingBalance: 0, debits: 0, credits: 0, closingBalance: 0 }
   );
 
   return (
@@ -53,8 +63,8 @@ export const ReportFinancialStatusTable: React.FC<ReportFinancialStatusTableProp
           <TableRow className="bg-muted/50">
             <TableHead className="font-semibold"></TableHead>
             <TableHead className="w-32 text-right font-semibold">Początek miesiąca</TableHead>
-            <TableHead className="w-32 text-right font-semibold">Przychody</TableHead>
-            <TableHead className="w-32 text-right font-semibold">Rozchody</TableHead>
+            <TableHead className="w-32 text-right font-semibold">Uznania</TableHead>
+            <TableHead className="w-32 text-right font-semibold">Obciążenia</TableHead>
             <TableHead className="w-32 text-right font-semibold">Koniec miesiąca</TableHead>
           </TableRow>
         </TableHeader>
@@ -63,16 +73,16 @@ export const ReportFinancialStatusTable: React.FC<ReportFinancialStatusTableProp
             <TableRow key={index}>
               <TableCell className="font-medium">{row.name}</TableCell>
               <TableCell className="text-right font-mono">{formatCurrency(row.openingBalance)}</TableCell>
-              <TableCell className="text-right font-mono">{formatCurrency(row.income)}</TableCell>
-              <TableCell className="text-right font-mono">{formatCurrency(row.expense)}</TableCell>
+              <TableCell className="text-right font-mono">{formatCurrency(row.debits)}</TableCell>
+              <TableCell className="text-right font-mono">{formatCurrency(row.credits)}</TableCell>
               <TableCell className="text-right font-mono">{formatCurrency(row.closingBalance)}</TableCell>
             </TableRow>
           ))}
           <TableRow className="bg-muted font-bold border-t-2">
             <TableCell>SALDO</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(totals.openingBalance)}</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(totals.income)}</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(totals.expense)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(totals.debits)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(totals.credits)}</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(totals.closingBalance)}</TableCell>
           </TableRow>
         </TableBody>
