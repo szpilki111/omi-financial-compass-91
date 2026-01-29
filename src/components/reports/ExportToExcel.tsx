@@ -231,19 +231,6 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
   };
 
   return (
-    <Button
-      variant="outline"
-      onClick={handleExport}
-      disabled={isExporting}
-      className="gap-2"
-    >
-      {isExporting ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <FileSpreadsheet className="h-4 w-4" />
-      )}
-      Eksport do Excel
-    </Button>
   );
 };
 
