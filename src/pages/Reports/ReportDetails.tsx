@@ -488,14 +488,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         />
       )}
 
-      {/* Sekcja ze stanem kasowym i finansowym PO szczegółową rozpiską */}
-      {report && (
-        <YearToDateCashFlowBreakdown
-          locationId={report.location_id}
-          month={report.month}
-          year={report.year}
-        />
-      )}
 
     </div>
   );
