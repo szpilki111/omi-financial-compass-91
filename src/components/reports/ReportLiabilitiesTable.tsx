@@ -35,7 +35,7 @@ export const ReportLiabilitiesTable: React.FC<ReportLiabilitiesTableProps> = ({
 
   return (
     <div className={`${className}`}>
-      <h3 className="text-lg font-bold mb-3">D. Należności i zobowiązania</h3>
+      <h3 className="text-lg font-bold mb-3">C. Należności i zobowiązania</h3>
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">

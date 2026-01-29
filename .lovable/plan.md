@@ -37,7 +37,7 @@ Raport wymaga kompleksowego przeprojektowania zgodnie z dostarczonym wzorem papi
 | Przyjęte | Suma 210 po stronie **Wn** |
 | Stan końcowy | Początek + Przyjęte - Odprawione |
 
-### D. Należności i zobowiązania - NOWA STRUKTURA
+### C. Należności i zobowiązania - NOWA STRUKTURA
 
 | Pozycja | Konta | Kolumny |
 |---------|-------|---------|
@@ -167,7 +167,7 @@ Raport wymaga kompleksowego przeprojektowania zgodnie z dostarczonym wzorem papi
 │    │1.Intencje  │  xxx,xx  │    xxx,xx    │ xxx,xx │xxx,xx ││
 │    └────────────┴──────────┴──────────────┴────────┴───────┘│
 ├─────────────────────────────────────────────────────────────┤
-│ D. Należności i zobowiązania                                │
+│ C. Należności i zobowiązania                                │
 │    ┌─────────────────────┬─────────┬──────────┬───────┬────┐│
 │    │                     │Początek │Należności│Zobowiąz│Kon.││
 │    ├─────────────────────┼─────────┼──────────┼───────┼────┤│

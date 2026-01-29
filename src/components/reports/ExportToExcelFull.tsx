@@ -279,8 +279,8 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
       sheet1Data.push(['1. Intencje', intentionsOpening, intentions210CelebratedGiven, intentions210Received, intentionsClosing]);
       sheet1Data.push(['']);
 
-      // D. Należności i zobowiązania
-      sheet1Data.push(['D. Należności i zobowiązania']);
+      // C. Należności i zobowiązania
+      sheet1Data.push(['C. Należności i zobowiązania']);
       sheet1Data.push(['', 'Początek miesiąca', 'Należności', 'Zobowiązania', 'Koniec miesiąca']);
       LIABILITY_CATEGORIES.forEach(category => {
         let receivables = 0;

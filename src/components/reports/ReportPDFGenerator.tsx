@@ -207,7 +207,7 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
         'C. Towary': {
           'Towary': ['301', '449']
         },
-        'D. Należności i zobowiązania': {
+        'C. Należności i zobowiązania': {
           'Pożyczki udzielone': ['212', '213'],
           'Pożyczki zaciągnięte': ['215'],
           'Sumy przechodnie': ['149', '150'],

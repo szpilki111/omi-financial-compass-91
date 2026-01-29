@@ -403,9 +403,9 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
             </table>
           </div>
 
-          {/* D. Należności i zobowiązania */}
+          {/* C. Należności i zobowiązania */}
           <div className="mb-4">
-            <h2 className="text-sm font-bold bg-gray-100 p-1 mb-1">D. Należności i zobowiązania</h2>
+            <h2 className="text-sm font-bold bg-gray-100 p-1 mb-1">C. Należności i zobowiązania</h2>
             <table className="w-full text-[10px] border-collapse">
               <thead>
                 <tr className="bg-gray-50">
