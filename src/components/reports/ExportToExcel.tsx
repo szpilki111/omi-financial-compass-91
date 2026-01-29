@@ -230,7 +230,7 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
     }
   };
 
-  return <Button></Button>;
+  return <Button variant="transparent"></Button>;
 };
 
 export default ExportToExcel;
