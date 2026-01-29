@@ -448,37 +448,25 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         </div>
       )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Podsumowanie finansowe</h2>
-          {/* Pokazuj przycisk "Przelicz sumy" TYLKO dla raportów roboczych i do poprawy z już obliczonymi sumami */}
-          {shouldShowRecalculateButton && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRefreshSums} 
-              disabled={isRefreshing}
-              title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
-            >
-              {isRefreshing ? (
-                <Spinner size="sm" className="mr-2" />
-              ) : (
-                <RefreshCcwIcon size={16} className="mr-2" />
-              )}
-              Przelicz sumy
-            </Button>
-          )}
+      {/* Przycisk przeliczania sum dla raportów roboczych */}
+      {shouldShowRecalculateButton && (
+        <div className="flex justify-end mb-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefreshSums} 
+            disabled={isRefreshing}
+            title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
+          >
+            {isRefreshing ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <RefreshCcwIcon size={16} className="mr-2" />
+            )}
+            Przelicz sumy
+          </Button>
         </div>
-
-        {financialDetails && (
-          <KpirSummary 
-            income={financialDetails.income}
-            expense={financialDetails.expense}
-            balance={financialDetails.balance}
-            openingBalance={financialDetails.openingBalance}
-          />
-        )}
-      </div>
+      )}
 
       {/* Pełny widok raportu zgodny ze wzorem */}
       {report && (

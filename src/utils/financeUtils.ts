@@ -82,16 +82,16 @@ export const calculateFinancialSummary = async (
     let expense = 0;
 
     // Analiza każdej transakcji
-    // PRZYCHODY: 7xx MA lub 2xx MA
-    // KOSZTY: 4xx WN lub 2xx WN
+    // PRZYCHODY: tylko 7xx MA (zgodnie z nowym planem - usunięto 2xx)
+    // KOSZTY: tylko 4xx WN (zgodnie z nowym planem - usunięto 2xx)
     transactions.forEach((transaction: any, index: number) => {
       const debitNum = transaction.debit_account?.number || '';
       const creditNum = transaction.credit_account?.number || '';
       const baseDebit = getBaseAccount(debitNum);
       const baseCredit = getBaseAccount(creditNum);
 
-      // PRZYCHODY: 7xx MA lub 2xx MA
-      if (baseCredit && (baseCredit.startsWith('7') || baseCredit.startsWith('2'))) {
+      // PRZYCHODY: tylko 7xx MA
+      if (baseCredit && baseCredit.startsWith('7')) {
         const amount = transaction.credit_amount ?? transaction.amount ?? 0;
         if (amount > 0) {
           income += amount;
@@ -99,8 +99,8 @@ export const calculateFinancialSummary = async (
         }
       }
 
-      // KOSZTY: 4xx WN lub 2xx WN
-      if (baseDebit && (baseDebit.startsWith('4') || baseDebit.startsWith('2'))) {
+      // KOSZTY: tylko 4xx WN
+      if (baseDebit && baseDebit.startsWith('4')) {
         const amount = transaction.debit_amount ?? transaction.amount ?? 0;
         if (amount > 0) {
           expense += amount;
