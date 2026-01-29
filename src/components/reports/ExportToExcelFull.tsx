@@ -307,13 +307,31 @@ const handleExport = async () => {
 
     const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
-    // ZMIANA: Szerokości kolumn (dopasowane do wyciągu; zakładam B-E takie same jak B)
-    sheet1['!cols'] = [{ wch: 30.84 }, { wch: 18.83 }, { wch: 18.83 }, { wch: 18.83 }, { wch: 18.83 }];
+    // Szerokości kolumn
+    sheet1['!cols'] = [
+      { wch: 30.84 },
+      { wch: 18.83 },
+      { wch: 18.83 },
+      { wch: 18.83 },
+      { wch: 18.83 }
+    ];
 
-    // ZMIANA: Marginesy
-    sheet1['!margins'] = { left: 0.75, right: 0.75, top: 0.98, bottom: 0.98, header: 0.51, footer: 0.51 };
+    // Marginesy
+    sheet1['!margins'] = {
+      left: 0.75,
+      right: 0.75,
+      top: 0.98,
+      bottom: 0.98,
+      header: 0.51,
+      footer: 0.51
+    };
 
-    // ZMIANA: Wielkość czcionki (12 pt dla wszystkich komórek)
+    // Orientacja pozioma
+    sheet1['!pageSetup'] = {
+      orientation: 'landscape'
+    };
+
+    // Czcionka 12 pt dla wszystkich komórek
     const range1 = XLSX.utils.decode_range(sheet1['!ref']);
     for (let R = range1.s.r; R <= range1.e.r; ++R) {
       for (let C = range1.s.c; C <= range1.e.c; ++C) {
@@ -330,12 +348,12 @@ const handleExport = async () => {
     // ========== SHEET 2: STRONA 2 (Przychody i Rozchody) ==========
     const sheet2Data: (string | number | null)[][] = [];
     
-    // ZMIANA: Budowa struktury z dwoma sekcjami obok siebie (jak w oryginale)
+    // Budowa struktury z dwoma sekcjami obok siebie
     sheet2Data.push(['I. PRZYCHODY', null, null, null, 'II. ROZCHODY', null, null]);
     sheet2Data.push([null, null, null, null, null, null, null]);
     sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
 
-    // Oblicz sumy (jak wcześniej)
+    // Oblicz sumy
     let totalIncome = 0;
     INCOME_ACCOUNTS.forEach(acc => {
       totalIncome += incomeMap.get(acc.number) || 0;
@@ -345,7 +363,7 @@ const handleExport = async () => {
       totalExpense += expenseMap.get(acc.number) || 0;
     });
 
-    // ZMIANA: Wypełnij wiersze przychodów i rozchodów obok siebie (padding pustymi jeśli listy mają różną długość)
+    // Wypełnij wiersze przychodów i rozchodów obok siebie
     const maxLen = Math.max(INCOME_ACCOUNTS.length, EXPENSE_ACCOUNTS.length);
     for (let i = 0; i < maxLen; i++) {
       const incAcc = i < INCOME_ACCOUNTS.length ? INCOME_ACCOUNTS[i] : { number: null, name: null };
@@ -358,22 +376,22 @@ const handleExport = async () => {
       ]);
     }
 
-    // ZMIANA: Sumy na dole (obok siebie)
+    // Sumy na dole
     sheet2Data.push([null, null, null, null, null, null, null]); // Pusta linia
     sheet2Data.push([null, 'PRZYCHODY RAZEM:', totalIncome, null, null, 'ROZCHODY RAZEM:', totalExpense]);
 
     const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
 
-    // ZMIANA: Szerokości kolumn (pełne z wyciągu)
+    // Szerokości kolumn
     sheet2['!cols'] = [
       { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
       { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
     ];
 
-    // ZMIANA: Marginesy
+    // Marginesy
     sheet2['!margins'] = { left: 0.39, right: 0.39, top: 0.79, bottom: 0.79, header: 0.51, footer: 0.51 };
 
-    // ZMIANA: Wielkość czcionki (domyślnie 10 pt, ale 12 pt dla nagłówków w row 1 i 3)
+    // Czcionka 10 pt dla wszystkich komórek
     const range2 = XLSX.utils.decode_range(sheet2['!ref']);
     for (let R = range2.s.r; R <= range2.e.r; ++R) {
       for (let C = range2.s.c; C <= range2.e.c; ++C) {
@@ -381,12 +399,7 @@ const handleExport = async () => {
         const cell_ref = XLSX.utils.encode_cell(cell_address);
         if (!sheet2[cell_ref]) continue;
         if (!sheet2[cell_ref].s) sheet2[cell_ref].s = {};
-        // 12 pt dla nagłówków (row 0 i 2, 0-based)
-        if (R === 0 || R === 2) {
-          sheet2[cell_ref].s.font = { sz: 12 };
-        } else {
-          sheet2[cell_ref].s.font = { sz: 10 };
-        }
+        sheet2[cell_ref].s.font = { sz: 10 };
       }
     }
 
