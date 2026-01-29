@@ -497,18 +497,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         />
       )}
 
-      <div className="flex justify-between">
-        
-        <div className="space-x-2">
-          <ReportPDFGenerator
-            report={report}
-            financialDetails={financialDetails || { income: 0, expense: 0, balance: 0, settlements: 0, openingBalance: 0 }}
-            isGenerating={isGeneratingPDF}
-            onGenerateStart={() => setIsGeneratingPDF(true)}
-            onGenerateEnd={() => setIsGeneratingPDF(false)}
-          />
-        </div>
-      </div>
     </div>
   );
 };
