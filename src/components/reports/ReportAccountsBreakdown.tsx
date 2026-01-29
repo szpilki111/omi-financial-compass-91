@@ -337,67 +337,7 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Szczegółowa rozpiska kont</CardTitle>
-        <p className="text-sm text-omi-gray-500">
-          Pokazuje tylko konta wpływające na wynik finansowy (200, 400, 700)
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {Object.entries(groupedAccounts || {}).map(([category, accounts]) => (
-          <div key={category}>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold">{getCategoryTitle(category)}</h3>
-              <div className="text-lg font-bold">
-                {formatCurrency(getCategoryTotal(accounts))}
-              </div>
-            </div>
-            
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Numer konta</TableHead>
-                  <TableHead>Nazwa konta</TableHead>
-                  <TableHead>Strona</TableHead>
-                  <TableHead className="text-right">Kwota</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accounts.map((account, index) => (
-                  <TableRow key={`${account.account_number}_${account.side}_${index}`}>
-                    <TableCell className="font-medium">
-                      {account.account_number}
-                    </TableCell>
-                    <TableCell>{account.account_name}</TableCell>
-                    <TableCell>
-                      <span className={`text-sm px-2 py-1 rounded ${
-                        account.side === 'debit' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {account.side === 'debit' ? 'WN' : 'MA'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(account.total_amount)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ))}
-        
-        <div className="border-t pt-4">
-          <div className="flex justify-between items-center">
-            <span className="text-lg font-semibold">Suma kontrolna:</span>
-            <span className="text-lg font-bold">
-              {formatCurrency(accountsBreakdown.reduce((sum, account) => sum + account.total_amount, 0))}
-            </span>
-          </div>
-          <p className="text-xs text-omi-gray-500 mt-2">
-            * Suma kontrolna nie powinna być zerowa - reprezentuje różnicę między obrotami Ma i Wn
-          </p>
-        </div>
-      </CardContent>
+
     </Card>
   );
 };
