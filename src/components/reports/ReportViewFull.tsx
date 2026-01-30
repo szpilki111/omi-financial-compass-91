@@ -29,7 +29,84 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
-  // Fetch transactions for the month
+  // Fetch account names from database for 4xx and 7xx accounts
+  const { data: dbAccounts } = useQuery({
+    queryKey: ['accounts-for-report', locationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('number, name')
+        .or('number.like.4%,number.like.7%');
+      if (error) throw error;
+      
+      // Build a map of account prefix -> name
+      const accountNamesMap = new Map<string, string>();
+      data?.forEach(acc => {
+        const prefix = acc.number.split('-')[0];
+        // Only set if not already set (prefer first match)
+        if (!accountNamesMap.has(prefix)) {
+          accountNamesMap.set(prefix, acc.name);
+        }
+      });
+      return accountNamesMap;
+    },
+    enabled: !!locationId
+  });
+
+  // Fetch opening balances from ALL transactions BEFORE this month
+  const { data: openingBalances } = useQuery({
+    queryKey: ['report-opening-balances-calculated', locationId, month, year],
+    queryFn: async () => {
+      // Calculate end of previous month
+      const prevMonthEnd = month === 1 
+        ? new Date(year - 1, 11, 31) 
+        : new Date(year, month - 1, 0);
+      const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
+
+      console.log('📅 Obliczam saldo otwarcia na podstawie transakcji do:', prevMonthEndStr);
+
+      // Fetch ALL transactions up to end of previous month
+      const { data: allTransactions, error } = await supabase
+        .from('transactions')
+        .select(`
+          debit_amount, credit_amount,
+          debit_account:accounts!transactions_debit_account_id_fkey(number),
+          credit_account:accounts!transactions_credit_account_id_fkey(number)
+        `)
+        .eq('location_id', locationId)
+        .lte('date', prevMonthEndStr);
+
+      if (error) throw error;
+
+      // Calculate cumulative balances for each account prefix
+      // For 1xx accounts: balance = sum(Wn) - sum(Ma)
+      // For 2xx accounts: balance = sum(Wn) - sum(Ma)
+      const balances = new Map<string, number>();
+      
+      allTransactions?.forEach(tx => {
+        // Debit side (Wn) - increases balance
+        if (tx.debit_account?.number) {
+          const prefix = tx.debit_account.number.split('-')[0];
+          const amount = tx.debit_amount || 0;
+          balances.set(prefix, (balances.get(prefix) || 0) + amount);
+        }
+        
+        // Credit side (Ma) - decreases balance
+        if (tx.credit_account?.number) {
+          const prefix = tx.credit_account.number.split('-')[0];
+          const amount = tx.credit_amount || 0;
+          balances.set(prefix, (balances.get(prefix) || 0) - amount);
+        }
+      });
+
+      console.log('💰 Obliczone salda otwarcia:', Object.fromEntries(balances));
+
+      return balances;
+    },
+    enabled: !!locationId && !!month && !!year
+  });
+
+  // Fetch transactions for the CURRENT month only
   const { data: transactionData, isLoading } = useQuery({
     queryKey: ['report-full-data', locationId, month, year],
     queryFn: async () => {
@@ -38,7 +115,9 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      // Fetch all transactions for the month
+      console.log('📅 Pobieram transakcje TYLKO za okres:', dateFrom, '-', dateTo);
+
+      // Fetch all transactions for the month ONLY
       const { data: transactions, error } = await supabase
         .from('transactions')
         .select(`
@@ -51,6 +130,8 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         .lte('date', dateTo);
 
       if (error) throw error;
+
+      console.log('📊 Pobrano transakcji za bieżący miesiąc:', transactions?.length);
 
       // Process income accounts (credit side - only 7xx)
       const incomeAccounts = new Map<string, AccountData>();
@@ -177,40 +258,6 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     enabled: !!locationId && !!month && !!year
   });
 
-  // Fetch opening balances
-  const { data: openingBalances } = useQuery({
-    queryKey: ['report-opening-balances', locationId, month, year],
-    queryFn: async () => {
-      // Get previous month's report for opening balances
-      const prevMonth = month === 1 ? 12 : month - 1;
-      const prevYear = month === 1 ? year - 1 : year;
-
-      const { data: prevReport } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('location_id', locationId)
-        .eq('month', prevMonth)
-        .eq('year', prevYear)
-        .single();
-
-      if (prevReport) {
-        const { data: prevDetails } = await supabase
-          .from('report_details')
-          .select('*')
-          .eq('report_id', prevReport.id)
-          .single();
-        
-        return {
-          financialOpening: prevDetails?.closing_balance || 0,
-          intentionsOpening: 0 // Would need to calculate from transactions
-        };
-      }
-
-      return { financialOpening: 0, intentionsOpening: 0 };
-    },
-    enabled: !!locationId && !!month && !!year
-  });
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -227,6 +274,21 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     return months[m - 1] || '';
   };
 
+  // Helper function to get opening balance for a category
+  const getCategoryOpeningBalance = (accounts: string[]): number => {
+    if (!openingBalances) return 0;
+    let total = 0;
+    accounts.forEach(acc => {
+      // Check all prefixes that start with this account number
+      openingBalances.forEach((balance, prefix) => {
+        if (prefix.startsWith(acc)) {
+          total += balance;
+        }
+      });
+    });
+    return total;
+  };
+
   // Build financial status table data with new structure
   const financialStatusData = DEFAULT_CATEGORIES.map(category => {
     const matchingData = transactionData?.financialStatus.filter(fs => 
@@ -235,7 +297,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     
     const debits = matchingData.reduce((sum, d) => sum + d.debits, 0);
     const credits = matchingData.reduce((sum, d) => sum + d.credits, 0);
-    const openingBalance = 0; // Would need historical data
+    const openingBalance = getCategoryOpeningBalance(category.accounts);
     // Wzór: początek + uznania - obciążenia
     const closingBalance = openingBalance + debits - credits;
 
@@ -248,12 +310,15 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     };
   });
 
+  // Calculate intentions opening balance from previous transactions
+  const intentionsOpeningBalance = openingBalances?.get('210') || 0;
+
   // Build intentions table data
   const intentionsData = {
-    openingBalance: openingBalances?.intentionsOpening || 0,
+    openingBalance: intentionsOpeningBalance,
     celebratedAndGiven: transactionData?.intentionsCelebrated || 0, // Ma
     received: transactionData?.intentionsReceived || 0, // Wn
-    closingBalance: 0 // Will be calculated in component
+    closingBalance: intentionsOpeningBalance + (transactionData?.intentionsReceived || 0) - (transactionData?.intentionsCelebrated || 0)
   };
 
   // Build liabilities table data with new structure
@@ -264,7 +329,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     
     const receivables = matchingData.reduce((sum, d) => sum + d.receivables, 0);
     const liabilities = matchingData.reduce((sum, d) => sum + d.liabilities, 0);
-    const openingBalance = 0; // Would need historical data
+    const openingBalance = getCategoryOpeningBalance(category.accounts);
     // Wzór: początek + należności - zobowiązania
     const closingBalance = openingBalance + receivables - liabilities;
 
@@ -311,22 +376,24 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       <Separator />
 
-      {/* Section I - Income */}
+      {/* Section I - Income - pass account names from database */}
       <Card>
         <CardContent className="pt-6">
           <ReportIncomeSection 
             accountsData={transactionData?.incomeAccounts || []}
             totalIncome={transactionData?.totalIncome || 0}
+            accountNamesFromDb={dbAccounts}
           />
         </CardContent>
       </Card>
 
-      {/* Section II - Expenses */}
+      {/* Section II - Expenses - pass account names from database */}
       <Card>
         <CardContent className="pt-6">
           <ReportExpenseSection 
             accountsData={transactionData?.expenseAccounts || []}
             totalExpense={transactionData?.totalExpense || 0}
+            accountNamesFromDb={dbAccounts}
           />
         </CardContent>
       </Card>

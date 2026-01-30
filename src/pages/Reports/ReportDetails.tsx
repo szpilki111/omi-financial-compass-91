@@ -425,12 +425,13 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       </div>
 
       {/* Sekcja zatwierdzania dla admina i prowincjała - używamy canApproveReports z kontekstu */}
-      {canApproveReports && report?.status === 'submitted' && (
+      {canApproveReports && (report?.status === 'submitted' || report?.status === 'approved') && (
         <ReportApprovalActions 
           reportId={reportId!} 
           reportMonth={report.month}
           reportYear={report.year}
           locationId={report.location_id}
+          currentStatus={report.status}
           onApprovalComplete={handleApprovalComplete}
         />
       )}

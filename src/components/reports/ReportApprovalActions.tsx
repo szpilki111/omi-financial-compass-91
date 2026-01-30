@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Unlock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -13,6 +12,7 @@ interface ReportApprovalActionsProps {
   reportMonth: number;
   reportYear: number;
   locationId: string;
+  currentStatus?: string;
   onApprovalComplete: () => void;
 }
 
@@ -21,6 +21,7 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
   reportMonth,
   reportYear,
   locationId,
+  currentStatus,
   onApprovalComplete
 }) => {
   const [comments, setComments] = useState('');
@@ -172,6 +173,113 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       setIsProcessing(false);
     }
   };
+
+  // Handle unlocking an approved report
+  const handleUnlock = async () => {
+    if (!reportId) return;
+
+    setIsProcessing(true);
+    
+    try {
+      console.log('Odblokowywanie raportu:', reportId);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('Użytkownik nie jest zalogowany');
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || profile.role !== 'admin') {
+        throw new Error('Tylko administrator może odblokować zatwierdzony raport');
+      }
+
+      // Update report status to draft
+      const { error: updateError } = await supabase
+        .from('reports')
+        .update({
+          status: 'draft',
+          reviewed_at: null,
+          reviewed_by: null,
+          comments: null
+        })
+        .eq('id', reportId);
+
+      if (updateError) {
+        console.error('Błąd odblokowywania raportu:', updateError);
+        throw updateError;
+      }
+
+      // Unlock documents for this period
+      const startDate = new Date(reportYear, reportMonth - 1, 1);
+      const endDate = new Date(reportYear, reportMonth, 0);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      const { error: unlockError } = await supabase
+        .from('documents')
+        .update({ validation_errors: null })
+        .eq('location_id', locationId)
+        .gte('document_date', startDateStr)
+        .lte('document_date', endDateStr);
+
+      if (unlockError) {
+        console.error('Błąd odblokowywania dokumentów:', unlockError);
+      }
+
+      toast({
+        title: "Raport odblokowany",
+        description: "Raport został przywrócony do statusu roboczego. Dokumenty z tego okresu zostały odblokowane.",
+      });
+
+      onApprovalComplete();
+      window.location.reload();
+    } catch (error) {
+      console.error('Błąd podczas odblokowywania raportu:', error);
+      
+      toast({
+        title: "Błąd",
+        description: error instanceof Error ? error.message : "Wystąpił problem podczas odblokowywania raportu.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Show unlock button for approved reports (admin only)
+  if (currentStatus === 'approved') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Zarządzanie raportem</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Ten raport został zatwierdzony. Jako administrator możesz go odblokować, aby umożliwić poprawki.
+          </p>
+          <Button
+            onClick={handleUnlock}
+            disabled={isProcessing}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {isProcessing ? (
+              <Spinner size="sm" />
+            ) : (
+              <Unlock size={16} />
+            )}
+            Odblokuj raport do edycji
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
