@@ -1,34 +1,11 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-// Nowa lista kont przychodów - tylko 7xx zgodnie z planem
-const INCOME_ACCOUNTS = [
-  { number: '701', name: 'Intencje odprawione na dom' },
-  { number: '702', name: 'Duszpasterstwo OMI' },
-  { number: '703', name: 'Duszpasterstwo parafialne' },
-  { number: '704', name: 'Kolęda' },
-  { number: '705', name: 'Zastępstwa zagraniczne' },
-  { number: '706', name: 'Ofiary okazjonalne' },
-  { number: '707', name: 'Stypendia, dotacje, emerytury' },
-  { number: '708', name: 'Dotacje z kurii' },
-  { number: '709', name: 'Wynajem, dzierżawa' },
-  { number: '710', name: 'Odsetki' },
-  { number: '711', name: 'Sprzedaż towarów' },
-  { number: '712', name: 'Dzierżawa' },
-  { number: '713', name: 'Przychód ze sprzedaży' },
-  { number: '714', name: 'Pensje, emerytury' },
-  { number: '715', name: 'Zwroty' },
-  { number: '716', name: 'Usługi' },
-  { number: '717', name: 'Inne' },
-  { number: '718', name: 'Rekolektanci' },
-  { number: '719', name: 'Dzierżawa przechodnia' },
-  { number: '720', name: 'Ofiary' },
-  { number: '721', name: 'Darowizny' },
-  { number: '722', name: 'Pensje katechetów' },
-  { number: '725', name: 'Nadzwyczajne' },
-  { number: '727', name: 'Ogród' },
-  { number: '728', name: 'Gospodarstwo' },
-  { number: '730', name: 'Sprzedaż majątku trwałego' },
+// Lista prefiksów kont przychodów - tylko 7xx zgodnie z planem
+const INCOME_ACCOUNT_PREFIXES = [
+  '701', '702', '703', '704', '705', '706', '707', '708', '709', '710',
+  '711', '712', '713', '714', '715', '716', '717', '718', '719', '720',
+  '721', '722', '725', '727', '728', '730'
 ];
 
 interface AccountData {
@@ -41,18 +18,30 @@ interface ReportIncomeSectionProps {
   accountsData: AccountData[];
   totalIncome: number;
   className?: string;
+  accountNamesFromDb?: Map<string, string>;
 }
 
 export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   accountsData,
   totalIncome,
-  className = ''
+  className = '',
+  accountNamesFromDb
 }) => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pl-PL', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(value);
+  };
+
+  // Get account name - prefer database name, fallback to transaction data
+  const getAccountName = (prefix: string): string => {
+    if (accountNamesFromDb?.has(prefix)) {
+      return accountNamesFromDb.get(prefix)!;
+    }
+    // Fallback: check if any account in accountsData starts with this prefix
+    const matching = accountsData.find(acc => acc.accountNumber.startsWith(prefix));
+    return matching?.accountName || prefix;
   };
 
   // Mapuj dane na predefiniowane konta
@@ -65,8 +54,8 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   };
 
   // Oblicz sumę tylko dla kont 7xx
-  const calculated7xxTotal = INCOME_ACCOUNTS.reduce((sum, acc) => {
-    return sum + getAccountAmount(acc.number);
+  const calculated7xxTotal = INCOME_ACCOUNT_PREFIXES.reduce((sum, prefix) => {
+    return sum + getAccountAmount(prefix);
   }, 0);
 
   return (
@@ -81,12 +70,13 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {INCOME_ACCOUNTS.map((account) => {
-            const amount = getAccountAmount(account.number);
+          {INCOME_ACCOUNT_PREFIXES.map((prefix) => {
+            const amount = getAccountAmount(prefix);
+            const name = getAccountName(prefix);
             return (
-              <TableRow key={account.number}>
-                <TableCell className="text-center font-mono text-sm">{account.number}</TableCell>
-                <TableCell>{account.name}</TableCell>
+              <TableRow key={prefix}>
+                <TableCell className="text-center font-mono text-sm">{prefix}</TableCell>
+                <TableCell>{name}</TableCell>
                 <TableCell className="text-right font-mono">{formatCurrency(amount)}</TableCell>
               </TableRow>
             );
@@ -101,5 +91,5 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   );
 };
 
-export { INCOME_ACCOUNTS };
+export { INCOME_ACCOUNT_PREFIXES };
 export default ReportIncomeSection;

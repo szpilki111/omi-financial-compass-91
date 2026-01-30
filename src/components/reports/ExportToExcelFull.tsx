@@ -11,84 +11,19 @@ interface ExportToExcelFullProps {
   locationName: string;
 }
 
-// Nowa lista kont przychodów - tylko 7xx zgodnie z planem
-const INCOME_ACCOUNTS = [
-  { number: '701', name: 'Intencje odprawione na dom' },
-  { number: '702', name: 'Duszpasterstwo OMI' },
-  { number: '703', name: 'Duszpasterstwo parafialne' },
-  { number: '704', name: 'Kolęda' },
-  { number: '705', name: 'Zastępstwa zagraniczne' },
-  { number: '706', name: 'Ofiary okazjonalne' },
-  { number: '707', name: 'Stypendia, dotacje, emerytury' },
-  { number: '708', name: 'Dotacje z kurii' },
-  { number: '709', name: 'Wynajem, dzierżawa' },
-  { number: '710', name: 'Odsetki' },
-  { number: '711', name: 'Sprzedaż towarów' },
-  { number: '712', name: 'Dzierżawa' },
-  { number: '713', name: 'Przychód ze sprzedaży' },
-  { number: '714', name: 'Pensje, emerytury' },
-  { number: '715', name: 'Zwroty' },
-  { number: '716', name: 'Usługi' },
-  { number: '717', name: 'Inne' },
-  { number: '718', name: 'Rekolektanci' },
-  { number: '719', name: 'Dzierżawa przechodnia' },
-  { number: '720', name: 'Ofiary' },
-  { number: '721', name: 'Darowizny' },
-  { number: '722', name: 'Pensje katechetów' },
-  { number: '725', name: 'Nadzwyczajne' },
-  { number: '727', name: 'Ogród' },
-  { number: '728', name: 'Gospodarstwo' },
-  { number: '730', name: 'Sprzedaż majątku trwałego' },
+// Lista prefiksów kont - nazwy pobierane z bazy danych
+const INCOME_ACCOUNT_PREFIXES = [
+  '701', '702', '703', '704', '705', '706', '707', '708', '709', '710',
+  '711', '712', '713', '714', '715', '716', '717', '718', '719', '720',
+  '721', '722', '725', '727', '728', '730'
 ];
 
-// Nowa lista kont rozchodów - tylko 4xx zgodnie z planem
-const EXPENSE_ACCOUNTS = [
-  { number: '401', name: 'Żywność' },
-  { number: '402', name: 'Alkohol' },
-  { number: '403', name: 'Opłaty za energię' },
-  { number: '404', name: 'Opłaty telefoniczne' },
-  { number: '405', name: 'Opłaty komunalne' },
-  { number: '406', name: 'Transport' },
-  { number: '407', name: 'Opłaty administracyjne' },
-  { number: '408', name: 'Ubezpieczenia' },
-  { number: '409', name: 'Remonty, naprawy' },
-  { number: '410', name: 'Wyposażenie' },
-  { number: '411', name: 'Materiały biurowe' },
-  { number: '412', name: 'Prenumerata, książki' },
-  { number: '413', name: 'Środki czystości' },
-  { number: '414', name: 'Odzież' },
-  { number: '415', name: 'Leczenie' },
-  { number: '416', name: 'Formacja, studia' },
-  { number: '417', name: 'Duszpasterstwo' },
-  { number: '418', name: 'Podróże służbowe' },
-  { number: '419', name: 'Urlopy, rekolekcje' },
-  { number: '420', name: 'Reprezentacja' },
-  { number: '421', name: 'Wynagrodzenia' },
-  { number: '422', name: 'ZUS' },
-  { number: '423', name: 'Usługi obce' },
-  { number: '424', name: 'Inwestycje' },
-  { number: '425', name: 'Wydatki bankowe' },
-  { number: '430', name: 'Podatki' },
-  { number: '431', name: 'Książki, czasopisma' },
-  { number: '435', name: 'Wakacje' },
-  { number: '440', name: 'Żywność dodatkowa' },
-  { number: '441', name: 'Salon' },
-  { number: '442', name: 'Odzież dodatkowa' },
-  { number: '443', name: 'Pralnia' },
-  { number: '444', name: 'Energia, woda' },
-  { number: '445', name: 'Podatki dodatkowe' },
-  { number: '446', name: 'Ogród' },
-  { number: '447', name: 'Gospodarstwo' },
-  { number: '449', name: 'Zakup towarów do sprzedaży' },
-  { number: '450', name: 'Różne wydatki' },
-  { number: '451', name: 'Remonty zwyczajne' },
-  { number: '452', name: 'Remonty nadzwyczajne' },
-  { number: '453', name: 'Spotkania, zjazdy' },
-  { number: '455', name: 'Studia' },
-  { number: '456', name: 'Powołania' },
-  { number: '457', name: 'Apostolat' },
-  { number: '458', name: 'Biedni' },
-  { number: '459', name: 'Misje' },
+const EXPENSE_ACCOUNT_PREFIXES = [
+  '401', '402', '403', '404', '405', '406', '407', '408', '409', '410',
+  '411', '412', '413', '414', '415', '416', '417', '418', '419', '420',
+  '421', '422', '423', '424', '425', '430', '431', '435', '440', '441',
+  '442', '443', '444', '445', '446', '447', '449', '450', '451', '452',
+  '453', '455', '456', '457', '458', '459'
 ];
 
 // Nowa struktura kategorii stanu finansowego
@@ -132,13 +67,58 @@ const handleExport = async () => {
       .eq('id', location_id)
       .single();
 
+    // Pobranie nazw kont z bazy danych
+    const { data: dbAccounts } = await supabase
+      .from('accounts')
+      .select('number, name')
+      .or('number.like.4%,number.like.7%');
+    
+    // Build account names map
+    const accountNamesMap = new Map<string, string>();
+    dbAccounts?.forEach(acc => {
+      const prefix = acc.number.split('-')[0];
+      if (!accountNamesMap.has(prefix)) {
+        accountNamesMap.set(prefix, acc.name);
+      }
+    });
+
     // Zakres dat
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
     const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
     const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Pobranie transakcji
+    // Oblicz datę końca poprzedniego miesiąca dla sald otwarcia
+    const prevMonthEnd = month === 1 
+      ? new Date(year - 1, 11, 31) 
+      : new Date(year, month - 1, 0);
+    const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
+
+    // Pobierz transakcje do końca poprzedniego miesiąca dla sald otwarcia
+    const { data: prevTransactions } = await supabase
+      .from('transactions')
+      .select(`
+        debit_amount, credit_amount,
+        debit_account:accounts!transactions_debit_account_id_fkey(number),
+        credit_account:accounts!transactions_credit_account_id_fkey(number)
+      `)
+      .eq('location_id', location_id)
+      .lte('date', prevMonthEndStr);
+
+    // Oblicz salda otwarcia
+    const openingBalances = new Map<string, number>();
+    prevTransactions?.forEach(tx => {
+      if (tx.debit_account?.number) {
+        const prefix = tx.debit_account.number.split('-')[0];
+        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + (tx.debit_amount || 0));
+      }
+      if (tx.credit_account?.number) {
+        const prefix = tx.credit_account.number.split('-')[0];
+        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) - (tx.credit_amount || 0));
+      }
+    });
+
+    // Pobranie transakcji za bieżący miesiąc
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select(`
@@ -210,6 +190,19 @@ const handleExport = async () => {
       }
     });
 
+    // Helper function to get opening balance for a category
+    const getCategoryOpeningBalance = (accounts: string[]): number => {
+      let total = 0;
+      accounts.forEach(acc => {
+        openingBalances.forEach((balance, prefix) => {
+          if (prefix.startsWith(acc)) {
+            total += balance;
+          }
+        });
+      });
+      return total;
+    };
+
     // Tworzenie skoroszytu
     const wb = XLSX.utils.book_new();
 
@@ -244,7 +237,7 @@ const handleExport = async () => {
           categoryCredits += data.credits;
         }
       });
-      const opening = 0; // brak danych historycznych
+      const opening = getCategoryOpeningBalance(category.accounts);
       const closing = opening + categoryDebits - categoryCredits;
 
       totalOpening += opening;
@@ -261,7 +254,7 @@ const handleExport = async () => {
     // B. Intencje
     sheet1Data.push(['B. Intencje']);
     sheet1Data.push(['', 'Początek miesiąca', 'Odprawione i oddane', 'Przyjęte', 'Stan końcowy']);
-    const intentionsOpening = 0;
+    const intentionsOpening = openingBalances.get('210') || 0;
     const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
     sheet1Data.push(['1. Intencje', intentionsOpening, intentions210CelebratedGiven, intentions210Received, intentionsClosing]);
     sheet1Data.push(['']);
@@ -280,7 +273,7 @@ const handleExport = async () => {
           liabilities += data.liabilities;
         }
       });
-      const opening = 0;
+      const opening = getCategoryOpeningBalance(category.accounts);
       const closing = opening + receivables - liabilities;
       sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
     });
@@ -339,25 +332,27 @@ const handleExport = async () => {
     sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
 
     let totalIncome = 0;
-    INCOME_ACCOUNTS.forEach(acc => {
-      totalIncome += incomeMap.get(acc.number) || 0;
+    INCOME_ACCOUNT_PREFIXES.forEach(prefix => {
+      totalIncome += incomeMap.get(prefix) || 0;
     });
 
     let totalExpense = 0;
-    EXPENSE_ACCOUNTS.forEach(acc => {
-      totalExpense += expenseMap.get(acc.number) || 0;
+    EXPENSE_ACCOUNT_PREFIXES.forEach(prefix => {
+      totalExpense += expenseMap.get(prefix) || 0;
     });
 
-    const maxLen = Math.max(INCOME_ACCOUNTS.length, EXPENSE_ACCOUNTS.length);
+    const maxLen = Math.max(INCOME_ACCOUNT_PREFIXES.length, EXPENSE_ACCOUNT_PREFIXES.length);
     for (let i = 0; i < maxLen; i++) {
-      const incAcc = i < INCOME_ACCOUNTS.length ? INCOME_ACCOUNTS[i] : { number: null, name: null };
-      const expAcc = i < EXPENSE_ACCOUNTS.length ? EXPENSE_ACCOUNTS[i] : { number: null, name: null };
-      const incAmount = incomeMap.get(incAcc.number) || 0;
-      const expAmount = expenseMap.get(expAcc.number) || 0;
+      const incPrefix = i < INCOME_ACCOUNT_PREFIXES.length ? INCOME_ACCOUNT_PREFIXES[i] : null;
+      const expPrefix = i < EXPENSE_ACCOUNT_PREFIXES.length ? EXPENSE_ACCOUNT_PREFIXES[i] : null;
+      const incAmount = incPrefix ? (incomeMap.get(incPrefix) || 0) : 0;
+      const expAmount = expPrefix ? (expenseMap.get(expPrefix) || 0) : 0;
+      const incName = incPrefix ? (accountNamesMap.get(incPrefix) || incPrefix) : null;
+      const expName = expPrefix ? (accountNamesMap.get(expPrefix) || expPrefix) : null;
 
       sheet2Data.push([
-        incAcc.number, incAcc.name, incAmount, null,
-        expAcc.number, expAcc.name, expAmount
+        incPrefix, incName, incAmount, null,
+        expPrefix, expName, expAmount
       ]);
     }
 
