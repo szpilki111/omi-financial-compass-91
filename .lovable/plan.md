@@ -1,207 +1,176 @@
 
-# Plan naprawy: 4 problemy z raportami miesięcznymi
 
-## Podsumowanie zgłoszonych problemów
+# Plan naprawy: Dynamiczne pobieranie nazw kont z bazy danych
 
-1. **Nazwy kont na raporcie są hardcoded** - Np. konto 402 w bazie nazywa się "Poczta", ale w raporcie pokazuje "Alkohol"
-2. **Brak funkcji odblokowania raportu przez admina** - Zatwierdzony raport nie może być cofnięty do edycji
-3. **Brak automatycznego pobierania salda otwarcia** - Raport nie pobiera końcowego salda z poprzedniego miesiąca
-4. **Raport za styczeń bierze dane z poprzednich miesięcy** - Powinien brać tylko dane za styczeń
+## Podsumowanie problemu
 
----
+Raporty używają zahardcodowanych list prefiksów kont zamiast pobierać je dynamicznie z bazy danych. Powoduje to:
+- Konta bez odpowiednika w bazie (np. 707, 708, 409) pokazują numer zamiast nazwy
+- Konta które istnieją w bazie ale nie są w hardcoded liście (np. 439, 460) są pomijane
+- Konto 701 pokazuje "701" zamiast "Intencje odprawione"
 
-## Analiza techniczna
+### Dowód z analizy bazy danych
 
-### Problem 1: Hardcoded nazwy kont
+**Prefiksy przychodów (7xx) w bazie:**
+701, 702, 703, 704, 705, 706, 710, 711, 712, 713, 714, 715, 716, 717, 718, 719, 720, 724, 725, 727, 728, 730
 
-**Lokalizacja problemu:**
-- `ReportIncomeSection.tsx` - linia 5-32: `INCOME_ACCOUNTS` array z hardcoded nazwami
-- `ReportExpenseSection.tsx` - linia 5-52: `EXPENSE_ACCOUNTS` array z hardcoded nazwami  
-- `ExportToExcelFull.tsx` - linie 14-92: te same hardcoded tablice
+**Hardcoded w raporcie (brakujące w bazie):**
+707, 708, 709, 721, 722 - te NIE istnieją w bazie
 
-**Dowód:**
-```sql
--- Zapytanie pokazało:
-SELECT number, name FROM accounts WHERE number LIKE '402%'
-→ 402-1: "Poczta", 402-2-1: "Poczta", itd.
--- A w kodzie jest: { number: '402', name: 'Alkohol' }
-```
+**Prefiksy kosztów (4xx) w bazie:**
+401-408, 410-414, 416, 420-424, 430-431, 435, 439-442, 444-449, 450-459, 460-463
 
-**Rozwiązanie:** Pobrać nazwy kont z bazy danych zamiast używać hardcoded tablicy
-
-### Problem 2: Brak odblokowania raportu
-
-**Lokalizacja problemu:**
-- `ReportApprovalActions.tsx` - brak przycisku "Odblokuj" dla admina
-- `ReportDetails.tsx` - linia 127: `isReportLocked = status === 'submitted' || status === 'approved'`
-
-**Rozwiązanie:** Dodać przycisk "Cofnij zatwierdzenie" widoczny tylko dla admina gdy raport jest zatwierdzony
-
-### Problem 3: Saldo otwarcia nie jest pobierane
-
-**Lokalizacja problemu:**
-- `ReportViewFull.tsx` - linie 180-212: pobiera `report_details` z poprzedniego raportu ale:
-  - Używa tylko `closing_balance` który często jest 0
-  - Nie oblicza rzeczywistego stanu końcowego kont 1xx z transakcji
-
-**Dowód:**
-```sql
-SELECT opening_balance, closing_balance FROM report_details WHERE report_id = '...'
-→ opening_balance: 0, closing_balance: 0 (dane nie są prawidłowo zapisywane)
-```
-
-**Rozwiązanie:** Obliczać saldo otwarcia na podstawie skumulowanych obrotów kont 1xx do końca poprzedniego miesiąca
-
-### Problem 4: Dane z poprzednich miesięcy
-
-**Lokalizacja problemu:**
-- `ReportViewFull.tsx` - linie 36-51: zapytanie używa `gte('date', dateFrom)` i `lte('date', dateTo)` 
-- To powinno działać poprawnie... ale sprawdzenie danych pokazuje że działa OK
-
-**Weryfikacja:** Sprawdziłem i filtry dat działają poprawnie. Problem może być w wyświetlaniu salda otwarcia które jest obliczane na podstawie całej historii.
+**Hardcoded w raporcie (brakujące w bazie):**
+409, 415, 417, 418, 419, 425, 443 - te NIE istnieją w bazie
 
 ---
 
-## Plan implementacji
+## Rozwiązanie
 
-### Krok 1: Napraw błąd buildu (ExportToExcel.tsx)
+Zamiast hardcoded listy prefiksów, pobierać dynamicznie z bazy danych unikalne prefiksy kont 4xx i 7xx, i pokazywać **tylko te które istnieją w bazie**.
+
+---
+
+## Szczegóły implementacji
+
+### 1. Modyfikacja ReportViewFull.tsx
+
+**Zmiana w zapytaniu o konta (linie 33-54):**
+
 ```typescript
-// Linia 233 - zmienić variant="transparent" na variant="outline"
-return <Button variant="outline"></Button>;
-```
+// Zamiast budować mapę prefix -> name z pierwszego znalezionego
+// Pobierz WSZYSTKIE unikalne prefiksy i ich nazwy
 
-### Krok 2: Pobieraj nazwy kont z bazy danych
-
-**Modyfikacja `ReportViewFull.tsx`:**
-```typescript
-// Dodać nowe zapytanie o konta z bazy:
-const { data: dbAccounts } = useQuery({
-  queryKey: ['accounts-for-report', locationId],
+const { data: accountPrefixes } = useQuery({
+  queryKey: ['account-prefixes-for-report', locationId],
   queryFn: async () => {
     const { data, error } = await supabase
       .from('accounts')
       .select('number, name')
       .or('number.like.4%,number.like.7%');
     if (error) throw error;
-    return data;
-  }
-});
-
-// Funkcja do uzyskania nazwy konta z bazy:
-const getAccountName = (prefix: string): string => {
-  // Szukaj dokładnego dopasowania lub pierwszego konta pasującego do prefiksu
-  const exactMatch = dbAccounts?.find(acc => acc.number === prefix);
-  if (exactMatch) return exactMatch.name;
-  
-  const prefixMatch = dbAccounts?.find(acc => acc.number.startsWith(prefix + '-'));
-  return prefixMatch?.name || prefix;
-};
-```
-
-**Modyfikacja `ReportIncomeSection.tsx` i `ReportExpenseSection.tsx`:**
-- Dodać prop `accountNames: Map<string, string>` pobierany z bazy
-- Używać przekazanej mapy zamiast hardcoded tablicy
-- Fallback do prefiksu jeśli brak nazwy w bazie
-
-**Modyfikacja `ExportToExcelFull.tsx`:**
-- Pobierać nazwy kont przed eksportem
-- Zastąpić hardcoded `INCOME_ACCOUNTS` i `EXPENSE_ACCOUNTS` danymi z bazy
-
-### Krok 3: Dodaj przycisk "Odblokuj raport" dla admina
-
-**Modyfikacja `ReportApprovalActions.tsx`:**
-```typescript
-// Dodać nową funkcję:
-const handleUnlock = async () => {
-  const { error } = await supabase
-    .from('reports')
-    .update({
-      status: 'draft',
-      reviewed_at: null,
-      reviewed_by: null,
-      comments: null
-    })
-    .eq('id', reportId);
     
-  // Odblokuj też dokumenty (usuń validation_errors z locked_by_report)
-  await supabase
-    .from('documents')
-    .update({ validation_errors: null })
-    .eq('location_id', locationId)
-    .gte('document_date', startDateStr)
-    .lte('document_date', endDateStr);
-};
-```
-
-**Modyfikacja `ReportDetails.tsx`:**
-- Dodać sekcję dla admina gdy raport jest zatwierdzony:
-```tsx
-{canApproveReports && report?.status === 'approved' && (
-  <Card>
-    <CardContent>
-      <Button onClick={handleUnlock} variant="outline">
-        <Unlock className="mr-2 h-4 w-4" />
-        Odblokuj raport do edycji
-      </Button>
-    </CardContent>
-  </Card>
-)}
-```
-
-### Krok 4: Napraw pobieranie salda otwarcia
-
-**Modyfikacja `ReportViewFull.tsx`:**
-```typescript
-// Nowe zapytanie o skumulowane obroty do końca poprzedniego miesiąca:
-const { data: openingBalances } = useQuery({
-  queryKey: ['report-opening-balances', locationId, month, year],
-  queryFn: async () => {
-    // Oblicz datę końca poprzedniego miesiąca
-    const prevMonthEnd = month === 1 
-      ? new Date(year - 1, 11, 31) 
-      : new Date(year, month - 1, 0);
-    const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
-
-    // Pobierz WSZYSTKIE transakcje do końca poprzedniego miesiąca
-    const { data: allTransactions } = await supabase
-      .from('transactions')
-      .select(`
-        debit_amount, credit_amount,
-        debit_account:accounts!transactions_debit_account_id_fkey(number),
-        credit_account:accounts!transactions_credit_account_id_fkey(number)
-      `)
-      .eq('location_id', locationId)
-      .lte('date', prevMonthEndStr);
-
-    // Oblicz skumulowane saldo dla każdej kategorii kont 1xx, 2xx
-    const balances = new Map<string, number>();
+    // Build maps: prefix -> name, and sets of existing prefixes
+    const incomeNames = new Map<string, string>();
+    const expenseNames = new Map<string, string>();
+    const incomePrefixes = new Set<string>();
+    const expensePrefixes = new Set<string>();
     
-    allTransactions?.forEach(tx => {
-      // Dla kont 1xx: saldo = suma Wn - suma Ma
-      if (tx.debit_account?.number?.startsWith('1')) {
-        const prefix = tx.debit_account.number.split('-')[0];
-        balances.set(prefix, (balances.get(prefix) || 0) + (tx.debit_amount || 0));
+    data?.forEach(acc => {
+      const prefix = acc.number.split('-')[0];
+      
+      if (prefix.startsWith('7')) {
+        incomePrefixes.add(prefix);
+        if (!incomeNames.has(prefix)) {
+          incomeNames.set(prefix, acc.name);
+        }
+      } else if (prefix.startsWith('4')) {
+        expensePrefixes.add(prefix);
+        if (!expenseNames.has(prefix)) {
+          expenseNames.set(prefix, acc.name);
+        }
       }
-      if (tx.credit_account?.number?.startsWith('1')) {
-        const prefix = tx.credit_account.number.split('-')[0];
-        balances.set(prefix, (balances.get(prefix) || 0) - (tx.credit_amount || 0));
-      }
-      // Analogicznie dla 2xx...
     });
-
-    return { 
-      financialBalances: balances,
-      intentionsBalance: balances.get('210') || 0 
+    
+    // Sort prefixes numerically
+    const sortedIncome = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+    const sortedExpense = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+    
+    return {
+      incomePrefixes: sortedIncome,
+      expensePrefixes: sortedExpense,
+      incomeNames,
+      expenseNames
     };
-  }
+  },
+  enabled: !!locationId
 });
 ```
 
-### Krok 5: Upewnij się że dane są tylko za wybrany miesiąc
+**Przekazanie do komponentów:**
 
-**Weryfikacja:** Zapytania w `ReportViewFull.tsx` już używają poprawnych filtrów `.gte('date', dateFrom).lte('date', dateTo)`.
+```tsx
+<ReportIncomeSection 
+  accountsData={transactionData?.incomeAccounts || []}
+  totalIncome={transactionData?.totalIncome || 0}
+  accountNamesFromDb={accountPrefixes?.incomeNames}
+  accountPrefixesFromDb={accountPrefixes?.incomePrefixes}  // NOWY PROP
+/>
 
-Problem mógł być w tym, że `openingBalances` (saldo z poprzedniego miesiąca) było błędnie interpretowane jako dane bieżącego miesiąca. Rozwiązanie z kroku 4 to naprawia.
+<ReportExpenseSection 
+  accountsData={transactionData?.expenseAccounts || []}
+  totalExpense={transactionData?.totalExpense || 0}
+  accountNamesFromDb={accountPrefixes?.expenseNames}
+  accountPrefixesFromDb={accountPrefixes?.expensePrefixes}  // NOWY PROP
+/>
+```
+
+### 2. Modyfikacja ReportIncomeSection.tsx
+
+**Usunąć hardcoded tablicę i używać dynamicznej:**
+
+```typescript
+// USUNĄĆ:
+const INCOME_ACCOUNT_PREFIXES = [
+  '701', '702', '703', '704', ...
+];
+
+// ZMIENIĆ interface:
+interface ReportIncomeSectionProps {
+  accountsData: AccountData[];
+  totalIncome: number;
+  className?: string;
+  accountNamesFromDb?: Map<string, string>;
+  accountPrefixesFromDb?: string[];  // NOWY PROP
+}
+
+// ZMIENIĆ render:
+const prefixesToRender = accountPrefixesFromDb || [];
+
+// W render:
+{prefixesToRender.map((prefix) => {
+  const amount = getAccountAmount(prefix);
+  const name = accountNamesFromDb?.get(prefix) || prefix;
+  return (
+    <TableRow key={prefix}>
+      <TableCell>{prefix}</TableCell>
+      <TableCell>{name}</TableCell>
+      <TableCell>{formatCurrency(amount)}</TableCell>
+    </TableRow>
+  );
+})}
+```
+
+### 3. Modyfikacja ReportExpenseSection.tsx
+
+**Analogiczne zmiany jak dla przychodów:**
+
+- Usunąć hardcoded `EXPENSE_ACCOUNT_PREFIXES`
+- Dodać prop `accountPrefixesFromDb?: string[]`
+- Iterować po dynamicznej liście zamiast hardcoded
+
+### 4. Modyfikacja ExportToExcelFull.tsx
+
+**Podobna logika - pobierać dynamicznie:**
+
+```typescript
+// W handleExport, po pobraniu dbAccounts:
+
+// Build dynamic lists of prefixes that exist in DB
+const incomePrefixes = new Set<string>();
+const expensePrefixes = new Set<string>();
+
+dbAccounts?.forEach(acc => {
+  const prefix = acc.number.split('-')[0];
+  if (prefix.startsWith('7')) incomePrefixes.add(prefix);
+  else if (prefix.startsWith('4')) expensePrefixes.add(prefix);
+});
+
+const sortedIncomePrefixes = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+const sortedExpensePrefixes = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+
+// Użyć sortedIncomePrefixes i sortedExpensePrefixes zamiast INCOME_ACCOUNT_PREFIXES
+```
 
 ---
 
@@ -209,64 +178,54 @@ Problem mógł być w tym, że `openingBalances` (saldo z poprzedniego miesiąca
 
 | Plik | Zmiana |
 |------|--------|
-| `src/components/reports/ExportToExcel.tsx` | Napraw variant="transparent" |
-| `src/components/reports/ReportViewFull.tsx` | Pobierz nazwy kont z bazy, napraw saldo otwarcia |
-| `src/components/reports/ReportIncomeSection.tsx` | Przyjmij nazwy kont jako prop zamiast hardcoded |
-| `src/components/reports/ReportExpenseSection.tsx` | Przyjmij nazwy kont jako prop zamiast hardcoded |
-| `src/components/reports/ExportToExcelFull.tsx` | Pobierz nazwy kont z bazy przed eksportem |
-| `src/components/reports/ReportApprovalActions.tsx` | Dodaj funkcję odblokowania raportu |
-| `src/pages/Reports/ReportDetails.tsx` | Dodaj przycisk "Odblokuj" dla admina |
+| `src/components/reports/ReportViewFull.tsx` | Pobieranie unikalnych prefiksów z bazy, przekazanie do komponentów |
+| `src/components/reports/ReportIncomeSection.tsx` | Usunięcie hardcoded listy, dynamiczne renderowanie |
+| `src/components/reports/ReportExpenseSection.tsx` | Usunięcie hardcoded listy, dynamiczne renderowanie |
+| `src/components/reports/ExportToExcelFull.tsx` | Dynamiczne budowanie list prefiksów |
 
 ---
 
-## Diagram przepływu - Odblokowanie raportu
+## Diagram przepływu danych
 
 ```text
-Admin widzi zatwierdzony raport
-         ↓
-Klika "Odblokuj raport"
-         ↓
-┌─────────────────────────────────────┐
-│ 1. UPDATE reports SET status='draft'│
-│ 2. Wyczyść reviewed_at, reviewed_by │
-│ 3. UPDATE documents - usuń blokadę  │
-└─────────────────────────────────────┘
-         ↓
-Raport wraca do statusu "Roboczy"
-         ↓
-Ekonom może edytować dokumenty
+┌─────────────────────────────────────────────────────────┐
+│ BAZA DANYCH: accounts                                   │
+│ 701-2-1 "Intencje odprawione"                           │
+│ 701-2-2 "Intencje odprawione"                           │
+│ 402-2-1 "Poczta"                                        │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ Zapytanie: pobierz unikalne prefiksy                    │
+│ SELECT DISTINCT split_part(number, '-', 1) as prefix    │
+│ GROUP BY prefix                                         │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ Wynik:                                                  │
+│ incomePrefixes: [701, 702, 703, 704, 705, 706, 710...]  │
+│ incomeNames: Map {701 → "Intencje odprawione", ...}     │
+│ expensePrefixes: [401, 402, 403, ...]                   │
+│ expenseNames: Map {401 → "Biurowe", 402 → "Poczta",...} │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ RAPORT wyświetla TYLKO konta istniejące w bazie:        │
+│ 701 | Intencje odprawione | 1 234,56                    │
+│ 702 | Duszpasterstwo OMI  | 567,89                      │
+│ ...                                                     │
+│ (bez 707, 708, 709 - nie istnieją w bazie)              │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Diagram przepływu - Saldo otwarcia
+## Oczekiwany rezultat
 
-```text
-Użytkownik otwiera raport za STYCZEŃ 2026
-         ↓
-System pobiera:
-1. Transakcje TYLKO za styczeń 2026 (bieżące obroty)
-2. Skumulowane obroty do 31.12.2025 (saldo otwarcia)
-         ↓
-┌─────────────────────────────────────────────┐
-│ Saldo otwarcia dla kasy (100-109):          │
-│   = Σ(Wn) - Σ(Ma) dla wszystkich tx         │
-│     gdzie date ≤ 2025-12-31                 │
-└─────────────────────────────────────────────┘
-         ↓
-Wyświetl w tabeli:
-| Kasa domu | Początek: X | Uznania: Y | Obciążenia: Z | Koniec: X+Y-Z |
-```
+Po implementacji:
+- Konto 701 pokaże nazwę "Intencje odprawione" (z bazy)
+- Konto 402 pokaże nazwę "Poczta" (z bazy) zamiast "Alkohol"
+- Konta 707, 708, 709 nie będą wyświetlane (nie istnieją w bazie)
+- Konta 439, 448, 460 itp. zostaną dodane (istnieją w bazie)
+- Excel eksport będzie spójny z widokiem raportu
 
----
-
-## Szacowany czas realizacji
-
-| Etap | Czas |
-|------|------|
-| Naprawa błędu buildu | 5 min |
-| Pobieranie nazw kont z bazy | 1.5h |
-| Przycisk odblokowania raportu | 1h |
-| Naprawa salda otwarcia | 2h |
-| Testy i poprawki | 1h |
-| **Razem** | **~5.5 godzin** |
