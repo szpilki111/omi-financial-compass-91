@@ -29,9 +29,9 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
-  // Fetch account names from database for 4xx and 7xx accounts
-  const { data: dbAccounts } = useQuery({
-    queryKey: ['accounts-for-report', locationId],
+  // Fetch account prefixes and names dynamically from database for 4xx and 7xx accounts
+  const { data: accountPrefixes } = useQuery({
+    queryKey: ['account-prefixes-for-report', locationId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('accounts')
@@ -39,16 +39,38 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         .or('number.like.4%,number.like.7%');
       if (error) throw error;
       
-      // Build a map of account prefix -> name
-      const accountNamesMap = new Map<string, string>();
+      // Build maps: prefix -> name, and sets of existing prefixes
+      const incomeNames = new Map<string, string>();
+      const expenseNames = new Map<string, string>();
+      const incomePrefixes = new Set<string>();
+      const expensePrefixes = new Set<string>();
+      
       data?.forEach(acc => {
         const prefix = acc.number.split('-')[0];
-        // Only set if not already set (prefer first match)
-        if (!accountNamesMap.has(prefix)) {
-          accountNamesMap.set(prefix, acc.name);
+        
+        if (prefix.startsWith('7')) {
+          incomePrefixes.add(prefix);
+          if (!incomeNames.has(prefix)) {
+            incomeNames.set(prefix, acc.name);
+          }
+        } else if (prefix.startsWith('4')) {
+          expensePrefixes.add(prefix);
+          if (!expenseNames.has(prefix)) {
+            expenseNames.set(prefix, acc.name);
+          }
         }
       });
-      return accountNamesMap;
+      
+      // Sort prefixes numerically
+      const sortedIncome = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+      const sortedExpense = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+      
+      return {
+        incomePrefixes: sortedIncome,
+        expensePrefixes: sortedExpense,
+        incomeNames,
+        expenseNames
+      };
     },
     enabled: !!locationId
   });
@@ -376,24 +398,26 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       <Separator />
 
-      {/* Section I - Income - pass account names from database */}
+      {/* Section I - Income - pass account names and prefixes from database */}
       <Card>
         <CardContent className="pt-6">
           <ReportIncomeSection 
             accountsData={transactionData?.incomeAccounts || []}
             totalIncome={transactionData?.totalIncome || 0}
-            accountNamesFromDb={dbAccounts}
+            accountNamesFromDb={accountPrefixes?.incomeNames}
+            accountPrefixesFromDb={accountPrefixes?.incomePrefixes}
           />
         </CardContent>
       </Card>
 
-      {/* Section II - Expenses - pass account names from database */}
+      {/* Section II - Expenses - pass account names and prefixes from database */}
       <Card>
         <CardContent className="pt-6">
           <ReportExpenseSection 
             accountsData={transactionData?.expenseAccounts || []}
             totalExpense={transactionData?.totalExpense || 0}
-            accountNamesFromDb={dbAccounts}
+            accountNamesFromDb={accountPrefixes?.expenseNames}
+            accountPrefixesFromDb={accountPrefixes?.expensePrefixes}
           />
         </CardContent>
       </Card>
