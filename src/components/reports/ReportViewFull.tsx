@@ -1,7 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
 import { Report } from '@/types/reports';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -30,22 +29,14 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
-  const { user } = useAuth();
-
-  // Fetch ALL account prefixes using RPC with p_skip_restrictions=true to bypass RLS
-  // This ensures the report shows ALL 4xx and 7xx accounts from the entire organization
+  // Fetch account prefixes and names dynamically from database for 4xx and 7xx accounts
   const { data: accountPrefixes } = useQuery({
-    queryKey: ['account-prefixes-for-report-all', user?.id],
+    queryKey: ['account-prefixes-for-report', locationId],
     queryFn: async () => {
-      if (!user?.id) return null;
-      
-      // Use RPC function with p_skip_restrictions=true to get ALL accounts
-      const { data, error } = await supabase.rpc('get_user_filtered_accounts_with_analytics', {
-        p_user_id: user.id,
-        p_include_inactive: false,
-        p_skip_restrictions: true  // KEY: bypasses location filtering
-      });
-      
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('number, name')
+        .or('number.like.4%,number.like.7%');
       if (error) throw error;
       
       // Build maps: prefix -> name, and sets of existing prefixes
@@ -54,7 +45,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       const incomePrefixes = new Set<string>();
       const expensePrefixes = new Set<string>();
       
-      data?.forEach((acc: { number: string; name: string }) => {
+      data?.forEach(acc => {
         const prefix = acc.number.split('-')[0];
         
         if (prefix.startsWith('7')) {
@@ -70,11 +61,6 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         }
       });
       
-      console.log('📊 Pobrano wszystkie prefiksy kont z bazy:', {
-        income: incomePrefixes.size,
-        expense: expensePrefixes.size
-      });
-      
       // Sort prefixes numerically
       const sortedIncome = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
       const sortedExpense = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
@@ -86,7 +72,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         expenseNames
       };
     },
-    enabled: !!user?.id
+    enabled: !!locationId
   });
 
   // Fetch opening balances from ALL transactions BEFORE this month

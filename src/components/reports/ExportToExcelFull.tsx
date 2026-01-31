@@ -4,8 +4,8 @@ import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
 import { Report } from '@/types/reports';
+
 interface ExportToExcelFullProps {
   report: Report;
   locationName: string;
@@ -32,7 +32,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({
   report,
   locationName
 }) => {
-  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
 
   const getMonthName = (m: number) => {
@@ -55,20 +54,18 @@ const handleExport = async () => {
       .eq('id', location_id)
       .single();
 
-    // Use RPC with p_skip_restrictions=true to get ALL accounts from the database
-    // This bypasses RLS and ensures Excel export includes all organization accounts
-    const { data: dbAccounts } = await supabase.rpc('get_user_filtered_accounts_with_analytics', {
-      p_user_id: user?.id,
-      p_include_inactive: false,
-      p_skip_restrictions: true  // KEY: bypasses location filtering
-    });
+    // Pobranie nazw kont z bazy danych i budowanie dynamicznych list prefiksów
+    const { data: dbAccounts } = await supabase
+      .from('accounts')
+      .select('number, name')
+      .or('number.like.4%,number.like.7%');
     
     // Build account names map and dynamic prefix lists
     const accountNamesMap = new Map<string, string>();
     const incomePrefixesSet = new Set<string>();
     const expensePrefixesSet = new Set<string>();
     
-    dbAccounts?.forEach((acc: { number: string; name: string }) => {
+    dbAccounts?.forEach(acc => {
       const prefix = acc.number.split('-')[0];
       if (!accountNamesMap.has(prefix)) {
         accountNamesMap.set(prefix, acc.name);
@@ -78,11 +75,6 @@ const handleExport = async () => {
       } else if (prefix.startsWith('4')) {
         expensePrefixesSet.add(prefix);
       }
-    });
-    
-    console.log('📊 Excel export - pobrano prefiksy:', {
-      income: incomePrefixesSet.size,
-      expense: expensePrefixesSet.size
     });
     
     // Sort prefixes numerically
