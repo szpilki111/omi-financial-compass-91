@@ -1,13 +1,6 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-// Lista prefiksów kont przychodów - tylko 7xx zgodnie z planem
-const INCOME_ACCOUNT_PREFIXES = [
-  '701', '702', '703', '704', '705', '706', '707', '708', '709', '710',
-  '711', '712', '713', '714', '715', '716', '717', '718', '719', '720',
-  '721', '722', '725', '727', '728', '730'
-];
-
 interface AccountData {
   accountNumber: string;
   accountName: string;
@@ -19,13 +12,15 @@ interface ReportIncomeSectionProps {
   totalIncome: number;
   className?: string;
   accountNamesFromDb?: Map<string, string>;
+  accountPrefixesFromDb?: string[];
 }
 
 export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   accountsData,
   totalIncome,
   className = '',
-  accountNamesFromDb
+  accountNamesFromDb,
+  accountPrefixesFromDb
 }) => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pl-PL', {
@@ -34,7 +29,10 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
     }).format(value);
   };
 
-  // Get account name - prefer database name, fallback to transaction data
+  // Use dynamic prefixes from database, or empty array if not available
+  const prefixesToRender = accountPrefixesFromDb || [];
+
+  // Get account name from database map
   const getAccountName = (prefix: string): string => {
     if (accountNamesFromDb?.has(prefix)) {
       return accountNamesFromDb.get(prefix)!;
@@ -53,8 +51,8 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
     return matchingAccounts.reduce((sum, acc) => sum + acc.amount, 0);
   };
 
-  // Oblicz sumę tylko dla kont 7xx
-  const calculated7xxTotal = INCOME_ACCOUNT_PREFIXES.reduce((sum, prefix) => {
+  // Oblicz sumę tylko dla kont 7xx z bazy
+  const calculated7xxTotal = prefixesToRender.reduce((sum, prefix) => {
     return sum + getAccountAmount(prefix);
   }, 0);
 
@@ -70,7 +68,7 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {INCOME_ACCOUNT_PREFIXES.map((prefix) => {
+          {prefixesToRender.map((prefix) => {
             const amount = getAccountAmount(prefix);
             const name = getAccountName(prefix);
             return (
@@ -91,5 +89,4 @@ export const ReportIncomeSection: React.FC<ReportIncomeSectionProps> = ({
   );
 };
 
-export { INCOME_ACCOUNT_PREFIXES };
 export default ReportIncomeSection;

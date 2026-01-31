@@ -11,20 +11,7 @@ interface ExportToExcelFullProps {
   locationName: string;
 }
 
-// Lista prefiksów kont - nazwy pobierane z bazy danych
-const INCOME_ACCOUNT_PREFIXES = [
-  '701', '702', '703', '704', '705', '706', '707', '708', '709', '710',
-  '711', '712', '713', '714', '715', '716', '717', '718', '719', '720',
-  '721', '722', '725', '727', '728', '730'
-];
-
-const EXPENSE_ACCOUNT_PREFIXES = [
-  '401', '402', '403', '404', '405', '406', '407', '408', '409', '410',
-  '411', '412', '413', '414', '415', '416', '417', '418', '419', '420',
-  '421', '422', '423', '424', '425', '430', '431', '435', '440', '441',
-  '442', '443', '444', '445', '446', '447', '449', '450', '451', '452',
-  '453', '455', '456', '457', '458', '459'
-];
+// Account prefixes are now fetched dynamically from the database
 
 // Nowa struktura kategorii stanu finansowego
 const FINANCIAL_STATUS_CATEGORIES = [
@@ -67,20 +54,32 @@ const handleExport = async () => {
       .eq('id', location_id)
       .single();
 
-    // Pobranie nazw kont z bazy danych
+    // Pobranie nazw kont z bazy danych i budowanie dynamicznych list prefiksów
     const { data: dbAccounts } = await supabase
       .from('accounts')
       .select('number, name')
       .or('number.like.4%,number.like.7%');
     
-    // Build account names map
+    // Build account names map and dynamic prefix lists
     const accountNamesMap = new Map<string, string>();
+    const incomePrefixesSet = new Set<string>();
+    const expensePrefixesSet = new Set<string>();
+    
     dbAccounts?.forEach(acc => {
       const prefix = acc.number.split('-')[0];
       if (!accountNamesMap.has(prefix)) {
         accountNamesMap.set(prefix, acc.name);
       }
+      if (prefix.startsWith('7')) {
+        incomePrefixesSet.add(prefix);
+      } else if (prefix.startsWith('4')) {
+        expensePrefixesSet.add(prefix);
+      }
     });
+    
+    // Sort prefixes numerically
+    const INCOME_ACCOUNT_PREFIXES = Array.from(incomePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
+    const EXPENSE_ACCOUNT_PREFIXES = Array.from(expensePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
 
     // Zakres dat
     const firstDayOfMonth = new Date(year, month - 1, 1);
