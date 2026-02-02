@@ -30,14 +30,44 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   year
 }) => {
   // Fetch account prefixes and names dynamically from database for 4xx and 7xx accounts
+  // Uses pagination to overcome Supabase's 1000 row limit
   const { data: accountPrefixes } = useQuery({
     queryKey: ['account-prefixes-for-report', locationId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('number, name')
-        .or('number.like.4%,number.like.7%');
-      if (error) throw error;
+      // Pagination helper to fetch all accounts for a given prefix
+      const fetchAccountsWithPagination = async (prefix: string): Promise<{ number: string; name: string }[]> => {
+        const allData: { number: string; name: string }[] = [];
+        let offset = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('accounts')
+            .select('number, name')
+            .like('number', `${prefix}%`)
+            .range(offset, offset + pageSize - 1);
+          
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allData.push(...data);
+            offset += data.length;
+            hasMore = data.length === pageSize;
+          } else {
+            hasMore = false;
+          }
+        }
+        return allData;
+      };
+
+      // Fetch 4xx and 7xx accounts separately in parallel
+      const [data4xx, data7xx] = await Promise.all([
+        fetchAccountsWithPagination('4'),
+        fetchAccountsWithPagination('7')
+      ]);
+
+      const allData = [...data4xx, ...data7xx];
+      console.log('📊 Pobrano kont 4xx:', data4xx.length, ', kont 7xx:', data7xx.length);
       
       // Build maps: prefix -> name, and sets of existing prefixes
       const incomeNames = new Map<string, string>();
@@ -45,7 +75,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       const incomePrefixes = new Set<string>();
       const expensePrefixes = new Set<string>();
       
-      data?.forEach(acc => {
+      allData.forEach(acc => {
         const prefix = acc.number.split('-')[0];
         
         if (prefix.startsWith('7')) {
@@ -64,6 +94,9 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       // Sort prefixes numerically
       const sortedIncome = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
       const sortedExpense = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
+      
+      console.log('📊 Unikalne prefiksy przychodów (7xx):', sortedIncome.length, sortedIncome);
+      console.log('📊 Unikalne prefiksy kosztów (4xx):', sortedExpense.length);
       
       return {
         incomePrefixes: sortedIncome,
