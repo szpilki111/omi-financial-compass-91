@@ -54,11 +54,40 @@ const handleExport = async () => {
       .eq('id', location_id)
       .single();
 
-    // Pobranie nazw kont z bazy danych i budowanie dynamicznych list prefiksów
-    const { data: dbAccounts } = await supabase
-      .from('accounts')
-      .select('number, name')
-      .or('number.like.4%,number.like.7%');
+    // Pobranie nazw kont z bazy danych z paginacją (obejście limitu 1000 wierszy Supabase)
+    const fetchAccountsWithPagination = async (prefix: string): Promise<{ number: string; name: string }[]> => {
+      const allData: { number: string; name: string }[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('number, name')
+          .like('number', `${prefix}%`)
+          .range(offset, offset + pageSize - 1);
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData.push(...data);
+          offset += data.length;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return allData;
+    };
+
+    // Pobierz konta 4xx i 7xx osobno, aby uniknąć limitu 1000 wierszy
+    const [data4xx, data7xx] = await Promise.all([
+      fetchAccountsWithPagination('4'),
+      fetchAccountsWithPagination('7')
+    ]);
+
+    const dbAccounts = [...data4xx, ...data7xx];
+    console.log('📊 Excel: Pobrano kont 4xx:', data4xx.length, ', kont 7xx:', data7xx.length);
     
     // Build account names map and dynamic prefix lists
     const accountNamesMap = new Map<string, string>();
@@ -80,6 +109,9 @@ const handleExport = async () => {
     // Sort prefixes numerically
     const INCOME_ACCOUNT_PREFIXES = Array.from(incomePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
     const EXPENSE_ACCOUNT_PREFIXES = Array.from(expensePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
+    
+    console.log('📊 Excel: Unikalne prefiksy przychodów (7xx):', INCOME_ACCOUNT_PREFIXES.length, INCOME_ACCOUNT_PREFIXES);
+    console.log('📊 Excel: Unikalne prefiksy kosztów (4xx):', EXPENSE_ACCOUNT_PREFIXES.length);
 
     // Zakres dat
     const firstDayOfMonth = new Date(year, month - 1, 1);

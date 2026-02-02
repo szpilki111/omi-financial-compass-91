@@ -102,6 +102,36 @@ const AccountSearchPage = () => {
     enabled: !!selectedAccount
   });
 
+  // Fetch opening balance for the year (all transactions BEFORE the selected year)
+  const { data: openingBalanceForYear = 0 } = useQuery({
+    queryKey: ['account-opening-balance', selectedAccount?.id, selectedYear],
+    queryFn: async () => {
+      if (!selectedAccount) return 0;
+      const endOfPrevYear = `${selectedYear - 1}-12-31`;
+      
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount')
+        .or(`debit_account_id.eq.${selectedAccount.id},credit_account_id.eq.${selectedAccount.id}`)
+        .lte('date', endOfPrevYear);
+      
+      if (error) throw error;
+      
+      let balance = 0;
+      data?.forEach(tx => {
+        if (tx.debit_account_id === selectedAccount.id) {
+          balance += tx.debit_amount ?? tx.amount ?? 0;
+        }
+        if (tx.credit_account_id === selectedAccount.id) {
+          balance -= tx.credit_amount ?? tx.amount ?? 0;
+        }
+      });
+      
+      return balance;
+    },
+    enabled: !!selectedAccount
+  });
+
   // Fetch document for editing
   const { data: documentData } = useQuery({
     queryKey: ['document', editingDocument?.id],
@@ -504,7 +534,8 @@ const AccountSearchPage = () => {
                 onViewMonth={month => {
                   setSelectedMonth(month);
                   setShowTurnover(false);
-                }} 
+                }}
+                openingBalanceForYear={openingBalanceForYear}
               />
             ) : (
               <TransactionsList 
