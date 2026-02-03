@@ -553,12 +553,21 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
+  // Przechowaj oryginalny miesiąc/rok dokumentu przy edycji
+  const originalDocumentDate = useRef<{ month: number; year: number } | null>(null);
+
   useEffect(() => {
     if (document) {
+      const docDate = new Date(document.document_date);
+      originalDocumentDate.current = {
+        month: docDate.getMonth(),
+        year: docDate.getFullYear()
+      };
+      
       form.reset({
         document_number: document.document_number,
         document_name: document.document_name,
-        document_date: new Date(document.document_date),
+        document_date: docDate,
         currency: document.currency || "PLN",
       });
       
@@ -568,6 +577,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       loadTransactions(document.id);
       setHasUnsavedChanges(false);
     } else {
+      originalDocumentDate.current = null;
       form.reset({
         document_number: "",
         document_name: "",
@@ -588,6 +598,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   }, [isOpen, document]);
 
+  // Generuj numer dokumentu przy zmianie daty dla NOWYCH dokumentów
   useEffect(() => {
     if (!document && isOpen) {
       const subscription = form.watch((value, { name }) => {
@@ -602,6 +613,33 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       return () => subscription.unsubscribe();
     }
   }, [document, isOpen, form]);
+
+  // Generuj nowy numer dokumentu przy zmianie miesiąca/roku dla EDYTOWANYCH dokumentów
+  useEffect(() => {
+    if (document && isOpen && user?.location) {
+      const subscription = form.watch((value, { name }) => {
+        if (name === "document_date" && value.document_date && originalDocumentDate.current) {
+          const newDate = new Date(value.document_date);
+          const newMonth = newDate.getMonth();
+          const newYear = newDate.getFullYear();
+          
+          // Sprawdź czy zmienił się miesiąc lub rok
+          if (newMonth !== originalDocumentDate.current.month || 
+              newYear !== originalDocumentDate.current.year) {
+            // Wygeneruj nowy numer dokumentu
+            generateDocumentNumber(newDate).then((generatedNumber) => {
+              if (generatedNumber) {
+                form.setValue("document_number", generatedNumber);
+                // Zaktualizuj referencję do nowego miesiąca/roku
+                originalDocumentDate.current = { month: newMonth, year: newYear };
+              }
+            });
+          }
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [document, isOpen, form, user?.location]);
 
   useEffect(() => {
     if (!document && isOpen && user?.location) {

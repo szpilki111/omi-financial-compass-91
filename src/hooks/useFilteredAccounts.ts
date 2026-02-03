@@ -87,7 +87,21 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
 
       console.log(`[useFilteredAccounts] Total fetched: ${allAccounts.length} accounts in ${iterations} pages`);
 
-      return allAccounts;
+      // Dynamicznie oblicz has_analytics dla WSZYSTKICH poziomów zagłębienia
+      // Konto ma has_analytics=true jeśli istnieje jakiekolwiek inne konto zaczynające się od "number-"
+      const accountNumbers = new Set(allAccounts.map(acc => acc.number));
+      const processedAccounts = allAccounts.map(acc => {
+        // Sprawdź czy istnieje jakiekolwiek konto zaczynające się od tego numeru + "-"
+        const hasSubAccounts = allAccounts.some(sub => 
+          sub.number.startsWith(acc.number + '-')
+        );
+        return {
+          ...acc,
+          has_analytics: hasSubAccounts || (acc.has_analytics ?? false)
+        };
+      });
+
+      return processedAccounts;
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minut cache

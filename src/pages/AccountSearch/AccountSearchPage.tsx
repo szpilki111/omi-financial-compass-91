@@ -148,9 +148,15 @@ const AccountSearchPage = () => {
     enabled: !!editingDocument?.id
   });
 
-  // Calculate totals - NAPRAWIONE zliczanie
+  // Calculate totals with opening and closing balance
   const totals = useMemo(() => {
-    if (!transactions || !selectedAccount) return { debit: 0, credit: 0, balance: 0 };
+    if (!transactions || !selectedAccount) return { 
+      debit: 0, 
+      credit: 0, 
+      balance: 0,
+      openingBalance: 0,
+      closingBalance: 0
+    };
     let debitTotal = 0;
     let creditTotal = 0;
     transactions.forEach(transaction => {
@@ -163,12 +169,18 @@ const AccountSearchPage = () => {
         creditTotal += amount;
       }
     });
+    
+    const openingBalance = openingBalanceForYear;
+    const closingBalance = openingBalance + debitTotal - creditTotal;
+    
     return {
       debit: debitTotal,
       credit: creditTotal,
-      balance: debitTotal - creditTotal
+      balance: debitTotal - creditTotal,
+      openingBalance,
+      closingBalance
     };
-  }, [transactions, selectedAccount]);
+  }, [transactions, selectedAccount, openingBalanceForYear]);
 
   // Group transactions by month - NAPRAWIONE zliczanie
   const monthlyData = useMemo(() => {
@@ -309,21 +321,27 @@ const AccountSearchPage = () => {
 
       if (docError) throw docError;
 
-      // Utwórz transakcje bez przypisanych kont
-      const transactionsToInsert = selectedTransactions.map((t, index) => ({
-        document_id: newDocument.id,
-        date: today.toISOString().split('T')[0],
-        description: t.description || '',
-        debit_amount: t.debit_amount ?? t.amount ?? 0,
-        credit_amount: t.credit_amount ?? t.amount ?? 0,
-        debit_account_id: null,
-        credit_account_id: null,
-        currency: 'PLN',
-        user_id: user.id,
-        location_id: user.location,
-        display_order: index + 1,
-        is_parallel: false
-      }));
+      // Utwórz transakcje bez przypisanych kont - dla rozbitych operacji odblokowujemy obie strony
+      const transactionsToInsert = selectedTransactions.map((t, index) => {
+        // Użyj większej kwoty jako wartości dla obu stron (dla rozbitych operacji)
+        const amount = Math.max(t.debit_amount ?? 0, t.credit_amount ?? 0, t.amount ?? 0);
+        
+        return {
+          document_id: newDocument.id,
+          date: today.toISOString().split('T')[0],
+          description: t.description || '',
+          debit_amount: amount,   // ZAWSZE obie kwoty równe
+          credit_amount: amount,  // Nie kopiuj "rozbitej" struktury
+          debit_account_id: null,
+          credit_account_id: null,
+          currency: 'PLN',
+          user_id: user.id,
+          location_id: user.location,
+          display_order: index + 1,
+          is_parallel: false
+          // NIE kopiuj is_split_transaction, parent_transaction_id itp.
+        };
+      });
 
       const { error: transError } = await supabase
         .from('transactions')
@@ -526,6 +544,38 @@ const AccountSearchPage = () => {
               </div>
             </div>
 
+            {/* Summary card at TOP */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Saldo początkowe</p>
+                    <p className={`text-2xl font-bold ${totals.openingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {totals.openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Obroty Wn</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Obroty Ma</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Saldo końcowe</p>
+                    <p className={`text-2xl font-bold ${totals.closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {totals.closingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Content based on view mode */}
             {showTurnover ? (
               <MonthlyTurnoverView 
@@ -550,26 +600,32 @@ const AccountSearchPage = () => {
               />
             )}
 
-            {/* Account totals at the bottom */}
+            {/* Summary card at BOTTOM */}
             <Card>
               <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty debetowe (Wn)</p>
+                    <p className="text-sm text-muted-foreground">Saldo początkowe</p>
+                    <p className={`text-2xl font-bold ${totals.openingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {totals.openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Obroty Wn</p>
                     <p className="text-2xl font-bold text-red-600">
                       {totals.debit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-600">Obroty kredytowe (Ma)</p>
+                    <p className="text-sm text-muted-foreground">Obroty Ma</p>
                     <p className="text-2xl font-bold text-green-600">
                       {totals.credit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-600">Saldo ({selectedYear})</p>
-                    <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {totals.balance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
+                    <p className="text-sm text-muted-foreground">Saldo końcowe</p>
+                    <p className={`text-2xl font-bold ${totals.closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {totals.closingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}
                     </p>
                   </div>
                 </div>

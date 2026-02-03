@@ -5,13 +5,12 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { Report } from '@/types/reports';
+import { INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, INCOME_PREFIXES, EXPENSE_PREFIXES, getIncomeAccountName, getExpenseAccountName } from '@/constants/accountNames';
 
 interface ExportToExcelFullProps {
   report: Report;
   locationName: string;
 }
-
-// Account prefixes are now fetched dynamically from the database
 
 // Nowa struktura kategorii stanu finansowego
 const FINANCIAL_STATUS_CATEGORIES = [
@@ -54,64 +53,8 @@ const handleExport = async () => {
       .eq('id', location_id)
       .single();
 
-    // Pobranie nazw kont z bazy danych z paginacją (obejście limitu 1000 wierszy Supabase)
-    const fetchAccountsWithPagination = async (prefix: string): Promise<{ number: string; name: string }[]> => {
-      const allData: { number: string; name: string }[] = [];
-      let offset = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('number, name')
-          .like('number', `${prefix}%`)
-          .range(offset, offset + pageSize - 1);
-        
-        if (error) throw error;
-        if (data && data.length > 0) {
-          allData.push(...data);
-          offset += data.length;
-          hasMore = data.length === pageSize;
-        } else {
-          hasMore = false;
-        }
-      }
-      return allData;
-    };
-
-    // Pobierz konta 4xx i 7xx osobno, aby uniknąć limitu 1000 wierszy
-    const [data4xx, data7xx] = await Promise.all([
-      fetchAccountsWithPagination('4'),
-      fetchAccountsWithPagination('7')
-    ]);
-
-    const dbAccounts = [...data4xx, ...data7xx];
-    console.log('📊 Excel: Pobrano kont 4xx:', data4xx.length, ', kont 7xx:', data7xx.length);
-    
-    // Build account names map and dynamic prefix lists
-    const accountNamesMap = new Map<string, string>();
-    const incomePrefixesSet = new Set<string>();
-    const expensePrefixesSet = new Set<string>();
-    
-    dbAccounts?.forEach(acc => {
-      const prefix = acc.number.split('-')[0];
-      if (!accountNamesMap.has(prefix)) {
-        accountNamesMap.set(prefix, acc.name);
-      }
-      if (prefix.startsWith('7')) {
-        incomePrefixesSet.add(prefix);
-      } else if (prefix.startsWith('4')) {
-        expensePrefixesSet.add(prefix);
-      }
-    });
-    
-    // Sort prefixes numerically
-    const INCOME_ACCOUNT_PREFIXES = Array.from(incomePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
-    const EXPENSE_ACCOUNT_PREFIXES = Array.from(expensePrefixesSet).sort((a, b) => parseInt(a) - parseInt(b));
-    
-    console.log('📊 Excel: Unikalne prefiksy przychodów (7xx):', INCOME_ACCOUNT_PREFIXES.length, INCOME_ACCOUNT_PREFIXES);
-    console.log('📊 Excel: Unikalne prefiksy kosztów (4xx):', EXPENSE_ACCOUNT_PREFIXES.length);
+    // Nazwy kont są teraz zahardcodowane - nie pobieramy z bazy
+    // Używamy stałych INCOME_PREFIXES i EXPENSE_PREFIXES
 
     // Zakres dat
     const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -363,23 +306,23 @@ const handleExport = async () => {
     sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
 
     let totalIncome = 0;
-    INCOME_ACCOUNT_PREFIXES.forEach(prefix => {
+    INCOME_PREFIXES.forEach(prefix => {
       totalIncome += incomeMap.get(prefix) || 0;
     });
 
     let totalExpense = 0;
-    EXPENSE_ACCOUNT_PREFIXES.forEach(prefix => {
+    EXPENSE_PREFIXES.forEach(prefix => {
       totalExpense += expenseMap.get(prefix) || 0;
     });
 
-    const maxLen = Math.max(INCOME_ACCOUNT_PREFIXES.length, EXPENSE_ACCOUNT_PREFIXES.length);
+    const maxLen = Math.max(INCOME_PREFIXES.length, EXPENSE_PREFIXES.length);
     for (let i = 0; i < maxLen; i++) {
-      const incPrefix = i < INCOME_ACCOUNT_PREFIXES.length ? INCOME_ACCOUNT_PREFIXES[i] : null;
-      const expPrefix = i < EXPENSE_ACCOUNT_PREFIXES.length ? EXPENSE_ACCOUNT_PREFIXES[i] : null;
+      const incPrefix = i < INCOME_PREFIXES.length ? INCOME_PREFIXES[i] : null;
+      const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
       const incAmount = incPrefix ? (incomeMap.get(incPrefix) || 0) : 0;
       const expAmount = expPrefix ? (expenseMap.get(expPrefix) || 0) : 0;
-      const incName = incPrefix ? (accountNamesMap.get(incPrefix) || incPrefix) : null;
-      const expName = expPrefix ? (accountNamesMap.get(expPrefix) || expPrefix) : null;
+      const incName = incPrefix ? getIncomeAccountName(incPrefix) : null;
+      const expName = expPrefix ? getExpenseAccountName(expPrefix) : null;
 
       sheet2Data.push([
         incPrefix, incName, incAmount, null,
