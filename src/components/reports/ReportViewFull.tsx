@@ -29,84 +29,8 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
-  // Fetch account prefixes and names dynamically from database for 4xx and 7xx accounts
-  // Uses pagination to overcome Supabase's 1000 row limit
-  const { data: accountPrefixes } = useQuery({
-    queryKey: ['account-prefixes-for-report', locationId],
-    queryFn: async () => {
-      // Pagination helper to fetch all accounts for a given prefix
-      const fetchAccountsWithPagination = async (prefix: string): Promise<{ number: string; name: string }[]> => {
-        const allData: { number: string; name: string }[] = [];
-        let offset = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data, error } = await supabase
-            .from('accounts')
-            .select('number, name')
-            .like('number', `${prefix}%`)
-            .range(offset, offset + pageSize - 1);
-          
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allData.push(...data);
-            offset += data.length;
-            hasMore = data.length === pageSize;
-          } else {
-            hasMore = false;
-          }
-        }
-        return allData;
-      };
-
-      // Fetch 4xx and 7xx accounts separately in parallel
-      const [data4xx, data7xx] = await Promise.all([
-        fetchAccountsWithPagination('4'),
-        fetchAccountsWithPagination('7')
-      ]);
-
-      const allData = [...data4xx, ...data7xx];
-      console.log('📊 Pobrano kont 4xx:', data4xx.length, ', kont 7xx:', data7xx.length);
-      
-      // Build maps: prefix -> name, and sets of existing prefixes
-      const incomeNames = new Map<string, string>();
-      const expenseNames = new Map<string, string>();
-      const incomePrefixes = new Set<string>();
-      const expensePrefixes = new Set<string>();
-      
-      allData.forEach(acc => {
-        const prefix = acc.number.split('-')[0];
-        
-        if (prefix.startsWith('7')) {
-          incomePrefixes.add(prefix);
-          if (!incomeNames.has(prefix)) {
-            incomeNames.set(prefix, acc.name);
-          }
-        } else if (prefix.startsWith('4')) {
-          expensePrefixes.add(prefix);
-          if (!expenseNames.has(prefix)) {
-            expenseNames.set(prefix, acc.name);
-          }
-        }
-      });
-      
-      // Sort prefixes numerically
-      const sortedIncome = Array.from(incomePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
-      const sortedExpense = Array.from(expensePrefixes).sort((a, b) => parseInt(a) - parseInt(b));
-      
-      console.log('📊 Unikalne prefiksy przychodów (7xx):', sortedIncome.length, sortedIncome);
-      console.log('📊 Unikalne prefiksy kosztów (4xx):', sortedExpense.length);
-      
-      return {
-        incomePrefixes: sortedIncome,
-        expensePrefixes: sortedExpense,
-        incomeNames,
-        expenseNames
-      };
-    },
-    enabled: !!locationId
-  });
+  // Nazwy kont są teraz zahardcodowane w komponentach ReportIncomeSection i ReportExpenseSection
+  // Nie ma potrzeby pobierania ich z bazy danych
 
   // Fetch opening balances from ALL transactions BEFORE this month
   const { data: openingBalances } = useQuery({
@@ -431,26 +355,22 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       <Separator />
 
-      {/* Section I - Income - pass account names and prefixes from database */}
+      {/* Section I - Income - hardcoded account names */}
       <Card>
         <CardContent className="pt-6">
           <ReportIncomeSection 
             accountsData={transactionData?.incomeAccounts || []}
             totalIncome={transactionData?.totalIncome || 0}
-            accountNamesFromDb={accountPrefixes?.incomeNames}
-            accountPrefixesFromDb={accountPrefixes?.incomePrefixes}
           />
         </CardContent>
       </Card>
 
-      {/* Section II - Expenses - pass account names and prefixes from database */}
+      {/* Section II - Expenses - hardcoded account names */}
       <Card>
         <CardContent className="pt-6">
           <ReportExpenseSection 
             accountsData={transactionData?.expenseAccounts || []}
             totalExpense={transactionData?.totalExpense || 0}
-            accountNamesFromDb={accountPrefixes?.expenseNames}
-            accountPrefixesFromDb={accountPrefixes?.expensePrefixes}
           />
         </CardContent>
       </Card>

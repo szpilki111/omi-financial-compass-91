@@ -237,7 +237,28 @@ export const AccountsSettingsTab: React.FC = () => {
     // Check if this prefix is marked as analytical_required
     return accountRestrictions.some(restriction => restriction.account_number_prefix === accountPrefix && restriction.analytical_required);
   };
-  const handleAddAnalytical = (account: FilteredAccount) => {
+  const handleAddAnalytical = async (account: FilteredAccount) => {
+    // Sprawdź czy konto ma jakiekolwiek operacje
+    const { data: transactionsData, error: txError } = await supabase
+      .from('transactions')
+      .select('id')
+      .or(`debit_account_id.eq.${account.id},credit_account_id.eq.${account.id}`)
+      .limit(1);
+    
+    if (txError) {
+      console.error('Error checking transactions:', txError);
+      toast.error('Błąd podczas sprawdzania operacji na koncie');
+      return;
+    }
+    
+    if (transactionsData && transactionsData.length > 0) {
+      toast.error(
+        'Nie można dodać analityki do konta z operacjami. ' +
+        'Najpierw usuń lub przenieś wszystkie operacje z tego konta.'
+      );
+      return;
+    }
+    
     setEditMode(false);
     setEditingAnalytical(null);
     setSelectedAccount(account);

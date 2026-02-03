@@ -265,19 +265,24 @@ const parseAmount = (amountStr: string): number => {
                 continue;
               }
               
-              // Znajdź konto Winien na podstawie numeru
-              const debitAccount = accounts.find(acc => 
-                acc.number === debitAccountNumber || 
-                acc.number.startsWith(debitAccountNumber) ||
-                debitAccountNumber.startsWith(acc.number)
-              );
+              // Znajdź konto Winien - priorytet dla dokładnego dopasowania
+              const findAccount = (accountNumber: string): typeof accounts[0] | undefined => {
+                if (!accountNumber) return undefined;
+                // 1. Szukaj dokładnego dopasowania
+                const exactMatch = accounts.find(acc => acc.number === accountNumber);
+                if (exactMatch) return exactMatch;
+                
+                // 2. Jeśli nie ma dokładnego, szukaj najdłuższego pasującego prefiksu
+                // (ale tylko jeśli accountNumber jest dłuższy od numeru konta)
+                const matchingByPrefix = accounts
+                  .filter(acc => accountNumber.startsWith(acc.number + '-'))
+                  .sort((a, b) => b.number.length - a.number.length); // Najdłuższy najpierw
+                
+                return matchingByPrefix[0];
+              };
               
-              // Znajdź konto Ma na podstawie numeru
-              const creditAccount = accounts.find(acc => 
-                acc.number === creditAccountNumber || 
-                acc.number.startsWith(creditAccountNumber) ||
-                creditAccountNumber.startsWith(acc.number)
-              );
+              const debitAccount = findAccount(debitAccountNumber);
+              const creditAccount = findAccount(creditAccountNumber);
               
               // Użyj kwoty (preferuj debitAmount, fallback do creditAmount)
               const amount = debitAmount || creditAmount;
