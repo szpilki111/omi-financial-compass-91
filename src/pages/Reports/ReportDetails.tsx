@@ -120,8 +120,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
     enabled: !!reportId && !!report
   });
 
-  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy
-  const canResubmit = user?.role === 'ekonom' && report?.status === 'to_be_corrected';
+  // Sprawdź, czy użytkownik może ponownie złożyć raport do poprawy (ekonom LUB proboszcz)
+  const canResubmit = (user?.role === 'ekonom' || user?.role === 'proboszcz') && report?.status === 'to_be_corrected';
 
   // Sprawdź, czy raport jest zablokowany (złożony lub zatwierdzony)
   const isReportLocked = report?.status === 'submitted' || report?.status === 'approved';

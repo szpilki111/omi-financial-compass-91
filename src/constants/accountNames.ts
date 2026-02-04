@@ -40,6 +40,7 @@ export const EXPENSE_ACCOUNTS = [
   { prefix: '412', name: 'Utrzymanie samochodu oraz zakup nowego' },
   { prefix: '413', name: 'Noclegi' },
   { prefix: '414', name: 'Honoraria duszpasterskie' },
+  { prefix: '416', name: 'Wydawnictwa' },
   { prefix: '420', name: 'Pensje osób zatrudnionych' },
   { prefix: '421', name: 'Osobiste, higiena osobista' },
   { prefix: '422', name: 'Formacja pierwsza' },
