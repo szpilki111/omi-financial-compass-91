@@ -48,18 +48,30 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
 
   const extractDescription = (detailsLine: string): string => {
     let description = 'Operacja bankowa';
-    if (!detailsLine || !detailsLine.includes('^')) {
+    
+    // Wykryj format (^ lub ~ jako separator podpól)
+    // PKO BP używa ~ z podpolami 20-25, inne banki używają ^
+    const useTilde = detailsLine.includes('~');
+    const separator = useTilde ? '~' : '^';
+    
+    if (!detailsLine || !detailsLine.includes(separator)) {
       console.log('No tags or empty line:', detailsLine);
       return description;
     }
 
-    const parts = detailsLine.split(/(?=\^[0-9]{2})/);
+    // Dla formatu z tyldą (PKO BP) dzielimy po ~XX gdzie XX to numer pola
+    const parts = detailsLine.split(new RegExp(`(?=${separator}[0-9]{2})`));
     let descParts: string[] = [];
 
     for (const part of parts) {
-      if (part.match(/^\^[2][0-9]|^3[2-3]|^00/)) {
-        const content = part.replace(/^\^[0-9]{2}/, '').trim();
-        if (content) descParts.push(content);
+      // Podpola 20-25 = tytuł operacji (dla obu formatów)
+      const match = part.match(new RegExp(`^${useTilde ? '~' : '\\^'}(2[0-5])(.*)`, 's'));
+      if (match) {
+        const content = match[2].trim();
+        // Ignoruj "ÿ" (ASCII 255) - puste pole w PKO BP
+        if (content && content !== 'ÿ' && content.charCodeAt(0) !== 255) {
+          descParts.push(content);
+        }
       }
     }
 
@@ -69,6 +81,37 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
 
     console.log('Extracted:', description, 'from:', descParts);
     return description;
+  };
+
+  // Wyodrębnij dane kontrahenta z pola :86: (obsługuje format ^ i ~)
+  const extractCounterparty = (detailsLine: string): { name: string; account: string } => {
+    const useTilde = detailsLine.includes('~');
+    const separator = useTilde ? '~' : '^';
+    const parts = detailsLine.split(new RegExp(`(?=${separator}[0-9]{2})`));
+    
+    let counterparty = '';
+    let accountNumber = '';
+
+    for (const part of parts) {
+      const fieldMatch = part.match(new RegExp(`^${useTilde ? '~' : '\\^'}([0-9]{2})(.*)`));
+      if (!fieldMatch) continue;
+      
+      const fieldNum = fieldMatch[1];
+      const content = fieldMatch[2].trim();
+      
+      // Ignoruj puste pola (ÿ - ASCII 255)
+      if (!content || content === 'ÿ' || content.charCodeAt(0) === 255) continue;
+      
+      if (fieldNum === '32' || fieldNum === '33') {
+        // Podpola 32-33 = nazwa kontrahenta
+        counterparty += (counterparty ? ' ' : '') + content;
+      } else if (fieldNum === '38') {
+        // Podpole 38 = IBAN kontrahenta
+        accountNumber = content;
+      }
+    }
+
+    return { name: counterparty, account: accountNumber };
   };
 
   const parseMt940File = (content: string): Mt940Data => {
@@ -107,24 +150,10 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
             console.log('Processing final details for previous transaction:', currentDetails);
             currentTransaction.description = extractDescription(currentDetails);
             
-            // Wyodrębnij kontrahenta i numer konta
-            const parts = currentDetails.split('^');
-            let counterparty = '';
-            let accountNumber = '';
-
-            for (const part of parts) {
-              if (part.startsWith('32') || part.startsWith('33')) {
-                const namePart = part.substring(2).trim();
-                if (namePart) {
-                  counterparty += (counterparty ? ' ' : '') + namePart;
-                }
-              } else if (part.startsWith('38')) {
-                accountNumber = part.substring(2).trim();
-              }
-            }
-
-            currentTransaction.counterparty = counterparty;
-            currentTransaction.accountNumber = accountNumber;
+            // Wyodrębnij kontrahenta i numer konta używając uniwersalnej funkcji
+            const counterpartyData = extractCounterparty(currentDetails);
+            currentTransaction.counterparty = counterpartyData.name;
+            currentTransaction.accountNumber = counterpartyData.account;
           }
           console.log('Final transaction before adding new:', currentTransaction);
           transactions.push(currentTransaction as Mt940Transaction);
@@ -178,24 +207,10 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
           console.log('Processing complete details:', currentDetails);
           currentTransaction.description = extractDescription(currentDetails);
 
-          // Wyodrębnij kontrahenta i numer konta
-          const parts = currentDetails.split('^');
-          let counterparty = '';
-          let accountNumber = '';
-
-          for (const part of parts) {
-            if (part.startsWith('32') || part.startsWith('33')) {
-              const namePart = part.substring(2).trim();
-              if (namePart) {
-                counterparty += (counterparty ? ' ' : '') + namePart;
-              }
-            } else if (part.startsWith('38')) {
-              accountNumber = part.substring(2).trim();
-            }
-          }
-
-          currentTransaction.counterparty = counterparty;
-          currentTransaction.accountNumber = accountNumber;
+          // Wyodrębnij kontrahenta i numer konta używając uniwersalnej funkcji
+          const counterpartyData = extractCounterparty(currentDetails);
+          currentTransaction.counterparty = counterpartyData.name;
+          currentTransaction.accountNumber = counterpartyData.account;
           console.log('Updated transaction with details:', currentTransaction);
         }
         
@@ -217,23 +232,10 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         console.log('Processing final details for last transaction:', currentDetails);
         currentTransaction.description = extractDescription(currentDetails);
         
-        const parts = currentDetails.split('^');
-        let counterparty = '';
-        let accountNumber = '';
-
-        for (const part of parts) {
-          if (part.startsWith('32') || part.startsWith('33')) {
-            const namePart = part.substring(2).trim();
-            if (namePart) {
-              counterparty += (counterparty ? ' ' : '') + namePart;
-            }
-          } else if (part.startsWith('38')) {
-            accountNumber = part.substring(2).trim();
-          }
-        }
-
-        currentTransaction.counterparty = counterparty;
-        currentTransaction.accountNumber = accountNumber;
+        // Wyodrębnij kontrahenta i numer konta używając uniwersalnej funkcji
+        const counterpartyData = extractCounterparty(currentDetails);
+        currentTransaction.counterparty = counterpartyData.name;
+        currentTransaction.accountNumber = counterpartyData.account;
       }
       console.log('Final last transaction:', currentTransaction);
       transactions.push(currentTransaction as Mt940Transaction);

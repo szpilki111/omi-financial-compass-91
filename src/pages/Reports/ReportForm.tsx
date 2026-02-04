@@ -464,7 +464,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                         <SelectValue placeholder="Wybierz miesiąc" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {months.map((month) => (
                         <SelectItem key={month.value} value={month.value}>
                           {month.label}

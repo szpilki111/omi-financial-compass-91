@@ -249,6 +249,25 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
                   }
                 }, 0);
               } else if (e.key === 'Enter') {
+                // Pobierz aktualnie podświetlony element przez cmdk
+                const selectedElement = document.querySelector('[cmdk-item][data-selected="true"]');
+                if (selectedElement) {
+                  const selectedId = selectedElement.getAttribute('data-value');
+                  if (selectedId) {
+                    e.preventDefault();
+                    onChange(selectedId);
+                    setOpen(false);
+                    setSearchTerm('');
+                    setShouldAutoOpen(false);
+                    if (onAccountSelected) {
+                      setTimeout(() => {
+                        onAccountSelected();
+                      }, 100);
+                    }
+                    return;
+                  }
+                }
+                // Fallback: jeśli nie ma podświetlonego, wybierz pierwszy
                 e.preventDefault();
                 const firstAccount = filteredAccounts[0];
                 if (firstAccount) {

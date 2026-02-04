@@ -77,13 +77,37 @@ const AccountSearchPage = () => {
     );
   }, [allFilteredAccounts, searchTerm, selectedAccount]);
 
-  // Fetch transactions for selected account
-  const { data: transactions, isLoading: transactionsLoading } = useQuery({
-    queryKey: ['account-transactions', selectedAccount?.id, selectedYear],
+  // Fetch all related accounts (including analytical sub-accounts) for the selected account
+  const { data: relatedAccountIds = [] } = useQuery({
+    queryKey: ['related-accounts', selectedAccount?.number],
     queryFn: async () => {
-      if (!selectedAccount) return [];
+      if (!selectedAccount) return [selectedAccount?.id];
+      
+      // Pobierz wszystkie konta zaczynające się od wybranego numeru (w tym samo konto i podkonta analityczne)
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id')
+        .or(`number.eq.${selectedAccount.number},number.like.${selectedAccount.number}-%`);
+      
+      if (error) throw error;
+      return data?.map(a => a.id) || [selectedAccount.id];
+    },
+    enabled: !!selectedAccount
+  });
+
+  // Fetch transactions for selected account AND all its analytical sub-accounts
+  const { data: transactions, isLoading: transactionsLoading } = useQuery({
+    queryKey: ['account-transactions', selectedAccount?.id, selectedYear, relatedAccountIds],
+    queryFn: async () => {
+      if (!selectedAccount || relatedAccountIds.length === 0) return [];
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
+      
+      // Buduj warunek OR dla wszystkich powiązanych kont
+      const orConditions = relatedAccountIds
+        .flatMap(id => [`debit_account_id.eq.${id}`, `credit_account_id.eq.${id}`])
+        .join(',');
+      
       const { data, error } = await supabase
         .from('transactions')
         .select(`
@@ -92,44 +116,52 @@ const AccountSearchPage = () => {
           debitAccount:accounts!transactions_debit_account_id_fkey(id, number, name, type),
           creditAccount:accounts!transactions_credit_account_id_fkey(id, number, name, type)
         `)
-        .or(`debit_account_id.eq.${selectedAccount.id},credit_account_id.eq.${selectedAccount.id}`)
+        .or(orConditions)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false });
       if (error) throw error;
       return data as Transaction[];
     },
-    enabled: !!selectedAccount
+    enabled: !!selectedAccount && relatedAccountIds.length > 0
   });
 
-  // Fetch opening balance for the year (all transactions BEFORE the selected year)
+  // Fetch opening balance for the year (all transactions BEFORE the selected year) - including analytical sub-accounts
   const { data: openingBalanceForYear = 0 } = useQuery({
-    queryKey: ['account-opening-balance', selectedAccount?.id, selectedYear],
+    queryKey: ['account-opening-balance', selectedAccount?.id, selectedYear, relatedAccountIds],
     queryFn: async () => {
-      if (!selectedAccount) return 0;
+      if (!selectedAccount || relatedAccountIds.length === 0) return 0;
       const endOfPrevYear = `${selectedYear - 1}-12-31`;
+      
+      // Buduj warunek OR dla wszystkich powiązanych kont
+      const orConditions = relatedAccountIds
+        .flatMap(id => [`debit_account_id.eq.${id}`, `credit_account_id.eq.${id}`])
+        .join(',');
       
       const { data, error } = await supabase
         .from('transactions')
         .select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount')
-        .or(`debit_account_id.eq.${selectedAccount.id},credit_account_id.eq.${selectedAccount.id}`)
+        .or(orConditions)
         .lte('date', endOfPrevYear);
       
       if (error) throw error;
       
+      // Tworzymy Set dla szybkiego sprawdzania
+      const relatedAccountIdsSet = new Set(relatedAccountIds);
+      
       let balance = 0;
       data?.forEach(tx => {
-        if (tx.debit_account_id === selectedAccount.id) {
+        if (relatedAccountIdsSet.has(tx.debit_account_id)) {
           balance += tx.debit_amount ?? tx.amount ?? 0;
         }
-        if (tx.credit_account_id === selectedAccount.id) {
+        if (relatedAccountIdsSet.has(tx.credit_account_id)) {
           balance -= tx.credit_amount ?? tx.amount ?? 0;
         }
       });
       
       return balance;
     },
-    enabled: !!selectedAccount
+    enabled: !!selectedAccount && relatedAccountIds.length > 0
   });
 
   // Fetch document for editing
@@ -148,7 +180,7 @@ const AccountSearchPage = () => {
     enabled: !!editingDocument?.id
   });
 
-  // Calculate totals with opening and closing balance
+  // Calculate totals with opening and closing balance - uwzględnia wszystkie podkonta analityczne
   const totals = useMemo(() => {
     if (!transactions || !selectedAccount) return { 
       debit: 0, 
@@ -157,14 +189,19 @@ const AccountSearchPage = () => {
       openingBalance: 0,
       closingBalance: 0
     };
+    
+    // Tworzymy Set dla szybkiego sprawdzania
+    const relatedAccountIdsSet = new Set(relatedAccountIds);
+    
     let debitTotal = 0;
     let creditTotal = 0;
     transactions.forEach(transaction => {
-      if (transaction.debit_account_id === selectedAccount.id) {
+      // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
         const amount = transaction.debit_amount ?? transaction.amount ?? 0;
         debitTotal += amount;
       }
-      if (transaction.credit_account_id === selectedAccount.id) {
+      if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
         const amount = transaction.credit_amount ?? transaction.amount ?? 0;
         creditTotal += amount;
       }
@@ -180,11 +217,15 @@ const AccountSearchPage = () => {
       openingBalance,
       closingBalance
     };
-  }, [transactions, selectedAccount, openingBalanceForYear]);
+  }, [transactions, selectedAccount, openingBalanceForYear, relatedAccountIds]);
 
-  // Group transactions by month - NAPRAWIONE zliczanie
+  // Group transactions by month - uwzględnia wszystkie podkonta analityczne
   const monthlyData = useMemo(() => {
     if (!transactions || !selectedAccount) return [];
+    
+    // Tworzymy Set dla szybkiego sprawdzania
+    const relatedAccountIdsSet = new Set(relatedAccountIds);
+    
     const grouped = transactions.reduce((acc, transaction) => {
       const month = format(parseISO(transaction.date), 'yyyy-MM');
       if (!acc[month]) {
@@ -198,16 +239,17 @@ const AccountSearchPage = () => {
       }
       acc[month].transactions.push(transaction);
 
-      if (transaction.debit_account_id === selectedAccount.id) {
+      // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
         acc[month].debit += transaction.debit_amount ?? transaction.amount ?? 0;
       }
-      if (transaction.credit_account_id === selectedAccount.id) {
+      if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
         acc[month].credit += transaction.credit_amount ?? transaction.amount ?? 0;
       }
       return acc;
     }, {} as Record<string, any>);
     return Object.values(grouped).sort((a: any, b: any) => b.month.localeCompare(a.month));
-  }, [transactions, selectedAccount]);
+  }, [transactions, selectedAccount, relatedAccountIds]);
 
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
