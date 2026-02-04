@@ -172,20 +172,30 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   const handleExportToExcel = () => {
     const formData = form.getValues();
-    
+
     // Połącz transakcje główne i równoległe - NAPRAWKA: obsługa ujemnych kwot
     // Filtruj transakcje które mają jakąkolwiek kwotę (dodatnią lub ujemną, ale nie zero)
-    const allTransactions = [...transactions, ...parallelTransactions].filter(t => 
-      (t.debit_amount && t.debit_amount !== 0) || (t.credit_amount && t.credit_amount !== 0)
+    const allTransactions = [...transactions, ...parallelTransactions].filter(
+      (t) => (t.debit_amount && t.debit_amount !== 0) || (t.credit_amount && t.credit_amount !== 0),
     );
 
     // Funkcja pomocnicza do pobierania numeru konta - użyj danych z transakcji lub lookup w accounts
     const getDebitAccountNumber = (t: Transaction) => {
-      return t.debitAccountNumber || t.debitAccount?.number || accounts?.find(a => a.id === t.debit_account_id)?.number || '';
+      return (
+        t.debitAccountNumber ||
+        t.debitAccount?.number ||
+        accounts?.find((a) => a.id === t.debit_account_id)?.number ||
+        ""
+      );
     };
-    
+
     const getCreditAccountNumber = (t: Transaction) => {
-      return t.creditAccountNumber || t.creditAccount?.number || accounts?.find(a => a.id === t.credit_account_id)?.number || '';
+      return (
+        t.creditAccountNumber ||
+        t.creditAccount?.number ||
+        accounts?.find((a) => a.id === t.credit_account_id)?.number ||
+        ""
+      );
     };
 
     // Sumy - zachowaj ujemne wartości
@@ -194,67 +204,63 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
     // Buduj dane arkusza
     const wsData: (string | number | undefined)[][] = [];
-    
+
     // Nagłówek dokumentu
     wsData.push([`POLECENIE KSIĘGOWANIA nr ${formData.document_number}`]);
     wsData.push([formData.document_name]);
     wsData.push([]);
     wsData.push([
-      `Data dokumentu: ${format(formData.document_date, 'dd.MM.yyyy')}`,
-      '',
-      `Data operacji: ${format(formData.document_date, 'dd.MM.yyyy')}`
+      `Data dokumentu: ${format(formData.document_date, "dd.MM.yyyy")}`,
+      "",
+      `Data operacji: ${format(formData.document_date, "dd.MM.yyyy")}`,
     ]);
-    wsData.push([
-      `Okres: ${format(formData.document_date, 'MM/yyyy')}`,
-      '',
-      `Waluta: ${formData.currency}`
-    ]);
+    wsData.push([`Okres: ${format(formData.document_date, "MM/yyyy")}`, "", `Waluta: ${formData.currency}`]);
     wsData.push([]);
-    
+
     // Nagłówki tabeli transakcji
-    wsData.push(['Lp', 'Treść zapisu', 'Kwota Wn', 'Konto Wn', 'Kwota Ma', 'Konto Ma']);
-    
+    wsData.push(["Lp", "Treść zapisu", "Kwota Wn", "Konto Wn", "Kwota Ma", "Konto Ma"]);
+
     // Transakcje - NAPRAWKA: wyświetlaj wartości nawet gdy są ujemne lub zero
     allTransactions.forEach((t, idx) => {
       // Dla kwot: wyświetl wartość lub pusty string jeśli brak konta
-      const debitValue = t.debit_amount !== undefined && t.debit_amount !== null ? t.debit_amount : '';
-      const creditValue = t.credit_amount !== undefined && t.credit_amount !== null ? t.credit_amount : '';
-      
+      const debitValue = t.debit_amount !== undefined && t.debit_amount !== null ? t.debit_amount : "";
+      const creditValue = t.credit_amount !== undefined && t.credit_amount !== null ? t.credit_amount : "";
+
       wsData.push([
         idx + 1,
-        t.description || '-',
+        t.description || "-",
         debitValue,
         getDebitAccountNumber(t),
         creditValue,
-        getCreditAccountNumber(t)
+        getCreditAccountNumber(t),
       ]);
     });
-    
+
     // Wiersz podsumowania
-    wsData.push(['', 'Razem:', totalDebit, '', totalCredit, '']);
+    wsData.push(["", "Razem:", totalDebit, "", totalCredit, ""]);
 
     // Utwórz arkusz i skoroszyt
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    
+
     // Ustaw szerokości kolumn
-    ws['!cols'] = [
-      { wch: 5 },   // Lp
-      { wch: 40 },  // Treść zapisu
-      { wch: 15 },  // Kwota Wn
-      { wch: 15 },  // Konto Wn
-      { wch: 15 },  // Kwota Ma
-      { wch: 15 }   // Konto Ma
+    ws["!cols"] = [
+      { wch: 5 }, // Lp
+      { wch: 40 }, // Treść zapisu
+      { wch: 15 }, // Kwota Wn
+      { wch: 15 }, // Konto Wn
+      { wch: 15 }, // Kwota Ma
+      { wch: 15 }, // Konto Ma
     ];
-    
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Dokument');
-    
+    XLSX.utils.book_append_sheet(wb, ws, "Dokument");
+
     // Eksportuj plik
-    const fileName = `${formData.document_number.replace(/\//g, '-')}_${format(formData.document_date, 'yyyy-MM-dd')}.xlsx`;
+    const fileName = `${formData.document_number.replace(/\//g, "-")}_${format(formData.document_date, "yyyy-MM-dd")}.xlsx`;
     XLSX.writeFile(wb, fileName);
-    
+
     toast({
-      title: 'Eksport zakończony',
+      title: "Eksport zakończony",
       description: `Plik ${fileName} został pobrany`,
     });
   };
@@ -265,32 +271,32 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       // Przechwytuj tylko zawartość dialogu, nie całe body
       const dialogElement = window.document.querySelector('[role="dialog"]') as HTMLElement;
       const targetElement = dialogElement || window.document.body;
-      
+
       // Pobierz rzeczywiste wymiary dialogu
       const rect = targetElement.getBoundingClientRect();
-      
+
       const canvas = await html2canvas(targetElement, {
         allowTaint: true,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         scale: 1,
         width: rect.width,
         height: rect.height,
         onclone: (clonedDoc, clonedElement) => {
           // Usuń ciemne overlay z klonu
-          const overlays = clonedDoc.querySelectorAll('[data-radix-dialog-overlay]');
-          overlays.forEach(el => el.remove());
-          
+          const overlays = clonedDoc.querySelectorAll("[data-radix-dialog-overlay]");
+          overlays.forEach((el) => el.remove());
+
           // Usuń transformacje i pozycjonowanie fixed z klonowanego dialogu
           if (clonedElement) {
-            clonedElement.style.position = 'static';
-            clonedElement.style.transform = 'none';
-            clonedElement.style.left = 'auto';
-            clonedElement.style.top = 'auto';
-            clonedElement.style.margin = '0';
+            clonedElement.style.position = "static";
+            clonedElement.style.transform = "none";
+            clonedElement.style.left = "auto";
+            clonedElement.style.top = "auto";
+            clonedElement.style.margin = "0";
           }
-        }
+        },
       });
       const dataUrl = canvas.toDataURL("image/png");
       setErrorScreenshot(dataUrl);
@@ -561,16 +567,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const docDate = new Date(document.document_date);
       originalDocumentDate.current = {
         month: docDate.getMonth(),
-        year: docDate.getFullYear()
+        year: docDate.getFullYear(),
       };
-      
+
       form.reset({
         document_number: document.document_number,
         document_name: document.document_name,
         document_date: docDate,
         currency: document.currency || "PLN",
       });
-      
+
       // Ustaw kurs wymiany z dokumentu
       setExchangeRate(document.exchange_rate || 1);
 
@@ -622,10 +628,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           const newDate = new Date(value.document_date);
           const newMonth = newDate.getMonth();
           const newYear = newDate.getFullYear();
-          
+
           // Sprawdź czy zmienił się miesiąc lub rok
-          if (newMonth !== originalDocumentDate.current.month || 
-              newYear !== originalDocumentDate.current.year) {
+          if (newMonth !== originalDocumentDate.current.month || newYear !== originalDocumentDate.current.year) {
             // Wygeneruj nowy numer dokumentu
             generateDocumentNumber(newDate).then((generatedNumber) => {
               if (generatedNumber) {
@@ -656,11 +661,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     try {
       const { data, error } = await supabase
         .from("transactions")
-        .select(`
+        .select(
+          `
           *,
           debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
           credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-        `)
+        `,
+        )
         .eq("document_id", documentId)
         .order("display_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
@@ -678,10 +685,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       );
 
       // Mapuj transakcje aby dołączyć numery kont
-      const mappedTransactions = (data || []).map(t => ({
+      const mappedTransactions = (data || []).map((t) => ({
         ...t,
-        debitAccountNumber: t.debit_account?.number || '',
-        creditAccountNumber: t.credit_account?.number || '',
+        debitAccountNumber: t.debit_account?.number || "",
+        creditAccountNumber: t.credit_account?.number || "",
         debitAccount: t.debit_account,
         creditAccount: t.credit_account,
       }));
@@ -794,14 +801,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Function to count missing fields in a transaction - supports negative amounts
     const countMissingFields = (transaction: Transaction) => {
       let count = 0;
-      
+
       // Check if this is a split transaction (one side empty, other filled) - use !== 0 for negative amounts
       const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
       const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
       const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
-      
+
       if (!transaction.description || transaction.description.trim() === "") count++;
-      
+
       // For split transactions, only validate the filled side
       if (isSplitTransaction) {
         if (hasDebit && !transaction.debit_account_id) count++;
@@ -813,7 +820,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         if (!transaction.debit_account_id) count++;
         if (!transaction.credit_account_id) count++;
       }
-      
+
       return count;
     };
 
@@ -823,14 +830,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
       if (missingCount > 0) {
         const missingFields: ValidationError["missingFields"] = {};
-        
+
         // Check if this is a split transaction - use !== 0 for negative amounts
         const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
         const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
         const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
 
         if (!transaction.description || transaction.description.trim() === "") missingFields.description = true;
-        
+
         if (isSplitTransaction) {
           // For split transactions, only validate the filled side
           if (hasDebit && !transaction.debit_account_id) missingFields.debit_account_id = true;
@@ -926,7 +933,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_name: data.document_name,
             document_date: format(data.document_date, "yyyy-MM-dd"),
             currency: data.currency,
-            exchange_rate: data.currency !== 'PLN' ? exchangeRate : 1,
+            exchange_rate: data.currency !== "PLN" ? exchangeRate : 1,
             validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null,
           })
           .eq("id", document.id);
@@ -941,7 +948,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             location_id: user.location,
             user_id: user.id,
             currency: data.currency,
-            exchange_rate: data.currency !== 'PLN' ? exchangeRate : 1,
+            exchange_rate: data.currency !== "PLN" ? exchangeRate : 1,
             validation_errors: errors.length > 0 ? JSON.parse(JSON.stringify(errors)) : null,
           })
           .select()
@@ -1205,7 +1212,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     // Pobierz AKTUALNĄ transakcję ze stanu, nie z closure - naprawia problem "stale closure"
     const transactionList = isParallel ? parallelTransactions : transactions;
     const transaction = transactionList[transactionIndex];
-    
+
     if (!transaction) {
       toast({
         title: "Błąd",
@@ -1214,7 +1221,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       });
       return;
     }
-    
+
     const debitAmount = transaction.debit_amount || 0;
     const creditAmount = transaction.credit_amount || 0;
 
@@ -1346,7 +1353,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues("currency")}`,
       });
     }
-    
+
     setHasUnsavedChanges(true);
   };
 
@@ -1482,8 +1489,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                Nie można zapisać dokumentu na datę {format(documentDate, "dd.MM.yyyy")}, ponieważ raport za ten okres
-                został już złożony lub zatwierdzony.
+                Nie można zapisać dokumentu na datę {format(documentDate, "dd.MM.yyyy")}, ponieważ istnieje raport za
+                ten okres.
                 {!document && " Możesz wybrać inną datę."}
               </AlertDescription>
             </Alert>
@@ -1507,9 +1514,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       <FormLabel>Numer dokumentu</FormLabel>
                       <div className="flex gap-2">
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="np. DOM/2024/01/001" 
+                          <Input
+                            {...field}
+                            placeholder="np. DOM/2024/01/001"
                             readOnly
                             className="bg-muted cursor-not-allowed"
                           />
@@ -1559,16 +1566,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <CurrencySelector value={field.value} onChange={field.onChange} disabled={isEditingBlocked} />
+                            <CurrencySelector
+                              value={field.value}
+                              onChange={field.onChange}
+                              disabled={isEditingBlocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    {form.watch('currency') !== 'PLN' && (
+                    {form.watch("currency") !== "PLN" && (
                       <div className="col-span-full">
                         <ExchangeRateManager
-                          currency={form.watch('currency')}
+                          currency={form.watch("currency")}
                           value={exchangeRate}
                           onChange={setExchangeRate}
                           disabled={isEditingBlocked}
@@ -1927,7 +1938,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
             <div className="flex justify-end space-x-2">
               {document && (
-                <Button type="button" variant="outline" onClick={handleExportToExcel} className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleExportToExcel}
+                  className="flex items-center gap-2"
+                >
                   <FileSpreadsheet className="h-4 w-4" />
                   Drukuj
                 </Button>
@@ -2086,13 +2102,13 @@ const EditableTransactionRow = React.forwardRef<
     ref,
   ) => {
     const { user } = useAuth();
-    
+
     // Store TRULY original amounts at mount time - never changes during editing
     const originalTransactionRef = useRef({
       debit_amount: transaction.debit_amount,
       credit_amount: transaction.credit_amount,
     });
-    
+
     const [formData, setFormData] = useState({
       description: transaction.description || "",
       debit_account_id: transaction.debit_account_id || "",
@@ -2100,24 +2116,24 @@ const EditableTransactionRow = React.forwardRef<
       debit_amount: transaction.debit_amount || 0,
       credit_amount: transaction.credit_amount || 0,
     });
-    
+
     // Local state for amount input fields to allow free typing
     const [debitAmountInput, setDebitAmountInput] = useState<string>(
-      transaction.debit_amount ? transaction.debit_amount.toFixed(2) : ""
+      transaction.debit_amount ? transaction.debit_amount.toFixed(2) : "",
     );
     const [creditAmountInput, setCreditAmountInput] = useState<string>(
-      transaction.credit_amount ? transaction.credit_amount.toFixed(2) : ""
+      transaction.credit_amount ? transaction.credit_amount.toFixed(2) : "",
     );
     const [isDebitFocused, setIsDebitFocused] = useState(false);
     const [isCreditFocused, setIsCreditFocused] = useState(false);
-    
+
     // Sync local input state with formData when not focused
     useEffect(() => {
       if (!isDebitFocused) {
         setDebitAmountInput(formData.debit_amount ? formData.debit_amount.toFixed(2) : "");
       }
     }, [formData.debit_amount, isDebitFocused]);
-    
+
     useEffect(() => {
       if (!isCreditFocused) {
         setCreditAmountInput(formData.credit_amount ? formData.credit_amount.toFixed(2) : "");
@@ -2126,12 +2142,15 @@ const EditableTransactionRow = React.forwardRef<
 
     // Determine if this is a split transaction based on TRULY ORIGINAL values from ref (not prop)
     // This prevents fields from becoming readonly when user temporarily clears an amount
-    const originalDebitEmpty = !originalTransactionRef.current.debit_amount || originalTransactionRef.current.debit_amount === 0;
-    const originalCreditEmpty = !originalTransactionRef.current.credit_amount || originalTransactionRef.current.credit_amount === 0;
-    const isSplitTransaction = (originalDebitEmpty && !originalCreditEmpty) || (originalCreditEmpty && !originalDebitEmpty);
+    const originalDebitEmpty =
+      !originalTransactionRef.current.debit_amount || originalTransactionRef.current.debit_amount === 0;
+    const originalCreditEmpty =
+      !originalTransactionRef.current.credit_amount || originalTransactionRef.current.credit_amount === 0;
+    const isSplitTransaction =
+      (originalDebitEmpty && !originalCreditEmpty) || (originalCreditEmpty && !originalDebitEmpty);
     const isDebitReadOnly = isSplitTransaction && originalDebitEmpty;
     const isCreditReadOnly = isSplitTransaction && originalCreditEmpty;
-    
+
     // Debug logging
     console.log("📊 EditableTransactionRow readonly check:", {
       transactionId: transaction.id,
@@ -2141,7 +2160,7 @@ const EditableTransactionRow = React.forwardRef<
       isSplitTransaction,
       isDebitReadOnly,
       isCreditReadOnly,
-      isEditingBlocked
+      isEditingBlocked,
     });
 
     useEffect(() => {
@@ -2200,9 +2219,7 @@ const EditableTransactionRow = React.forwardRef<
             <GripVertical className="h-4 w-4 text-gray-400" />
           </div>
         </TableCell>
-        <TableCell className="text-center font-mono text-sm text-muted-foreground">
-          {orderNumber}
-        </TableCell>
+        <TableCell className="text-center font-mono text-sm text-muted-foreground">{orderNumber}</TableCell>
         <TableCell>
           <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
         </TableCell>
@@ -2227,12 +2244,12 @@ const EditableTransactionRow = React.forwardRef<
               onChange={(e) => {
                 const inputValue = e.target.value;
                 setDebitAmountInput(inputValue);
-                
+
                 if (inputValue === "" || inputValue === "-") {
                   setFormData((prev) => ({ ...prev, debit_amount: 0 }));
                   return;
                 }
-                
+
                 const normalizedValue = inputValue.replace(",", ".");
                 const numValue = parseFloat(normalizedValue);
                 if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
@@ -2285,12 +2302,12 @@ const EditableTransactionRow = React.forwardRef<
               onChange={(e) => {
                 const inputValue = e.target.value;
                 setCreditAmountInput(inputValue);
-                
+
                 if (inputValue === "" || inputValue === "-") {
                   setFormData((prev) => ({ ...prev, credit_amount: 0 }));
                   return;
                 }
-                
+
                 const normalizedValue = inputValue.replace(",", ".");
                 const numValue = parseFloat(normalizedValue);
                 if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
