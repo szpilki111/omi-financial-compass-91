@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
 export interface FilteredAccount {
   id: string;
@@ -18,57 +18,59 @@ interface UseFilteredAccountsOptions {
 
 /**
  * Centralny hook do pobierania kont z uwzględnieniem restrykcji widoczności.
- * 
+ *
  * UWAGA: Admin ZAWSZE widzi wszystkie konta bez żadnych filtrów i ograniczeń.
- * 
+ *
  * Wykorzystuje funkcję SQL `get_user_filtered_accounts_with_analytics` do filtrowania server-side:
  * - Identyfikator lokalizacji (np. "1-3") to 2 liczby po pierwszym myślniku
  * - np. "100-1-3" = prefix "100", identifier "1-3"
  * - np. "100-1-3-5" = prefix "100", identifier "1-3", analityka "5"
  * - Jednoczęściowy identyfikator (np. "1" dla Prowincji) też jest obsługiwany
- * 
+ *
  * Konta z zaznaczonymi restrykcjami są CAŁKOWICIE niewidoczne dla użytkowników danej kategorii placówki
  * (nie dotyczy admina).
- * 
+ *
  * Konta z has_analytics=true mają podkonta analityczne i nie powinny być bezpośrednio wybierane do operacji.
  */
 export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   // Admin ZAWSZE widzi wszystkie konta bez ograniczeń
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === "admin";
   const skipRestrictions = isAdmin || (options?.skipRestrictions ?? false);
   const includeInactive = options?.includeInactive ?? false;
 
   return useQuery({
-    queryKey: ['filtered-accounts', user?.id, skipRestrictions, includeInactive],
+    queryKey: ["filtered-accounts", user?.id, skipRestrictions, includeInactive],
     queryFn: async (): Promise<FilteredAccount[]> => {
       if (!user?.id) return [];
 
       // Supabase ma domyślny limit 1000 rekordów per request (db-max-rows)
       // Musimy paginować po 1000, by pobrać wszystkie konta
       const allAccounts: FilteredAccount[] = [];
-      const pageSize = 1000; // Limit Supabase per request
+      const pageSize = 20; // Limit Supabase per request
       let offset = 0;
       let hasMore = true;
       let iterations = 0;
       const maxIterations = 50; // Bezpiecznik - max 50000 kont
 
-      console.log('[useFilteredAccounts] Starting pagination fetch...');
+      console.log("[useFilteredAccounts] Starting pagination fetch...");
 
       while (hasMore && iterations < maxIterations) {
         iterations++;
-        
+
         // Używamy nowej funkcji z flagą has_analytics
-        const { data, error } = await supabase.rpc('get_user_filtered_accounts_with_analytics', {
-          p_user_id: user.id,
-          p_include_inactive: includeInactive,
-          p_skip_restrictions: skipRestrictions
-        }).range(offset, offset + pageSize - 1);
+        const { data, error } = await supabase
+          .rpc("get_user_filtered_accounts_with_analytics", {
+            p_user_id: user.id,
+            p_include_inactive: includeInactive,
+            p_skip_restrictions: skipRestrictions,
+          })
+          .range(offset, offset + pageSize - 1);
 
         if (error) {
-          console.error('Error fetching filtered accounts:', error);
+          console.error("Error fetching filtered accounts:", error);
           throw error;
         }
 
@@ -89,15 +91,13 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
 
       // Dynamicznie oblicz has_analytics dla WSZYSTKICH poziomów zagłębienia
       // Konto ma has_analytics=true jeśli istnieje jakiekolwiek inne konto zaczynające się od "number-"
-      const accountNumbers = new Set(allAccounts.map(acc => acc.number));
-      const processedAccounts = allAccounts.map(acc => {
+      const accountNumbers = new Set(allAccounts.map((acc) => acc.number));
+      const processedAccounts = allAccounts.map((acc) => {
         // Sprawdź czy istnieje jakiekolwiek konto zaczynające się od tego numeru + "-"
-        const hasSubAccounts = allAccounts.some(sub => 
-          sub.number.startsWith(acc.number + '-')
-        );
+        const hasSubAccounts = allAccounts.some((sub) => sub.number.startsWith(acc.number + "-"));
         return {
           ...acc,
-          has_analytics: hasSubAccounts || (acc.has_analytics ?? false)
+          has_analytics: hasSubAccounts || (acc.has_analytics ?? false),
         };
       });
 
@@ -113,8 +113,8 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
  */
 export const useInvalidateFilteredAccounts = () => {
   const queryClient = useQueryClient();
-  
+
   return () => {
-    queryClient.invalidateQueries({ queryKey: ['filtered-accounts'] });
+    queryClient.invalidateQueries({ queryKey: ["filtered-accounts"] });
   };
 };
