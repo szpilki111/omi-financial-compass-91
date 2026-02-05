@@ -41,7 +41,10 @@ const YearToDateAccountsBreakdown: React.FC<YearToDateAccountsBreakdownProps> = 
         year={year}
         dateRange={{
           from: `${year}-01-01`,
-          to: new Date(year, month, 0).toISOString().split('T')[0] // Ostatni dzień wybranego miesiąca
+          to: (() => {
+            const lastDay = new Date(year, month, 0);
+            return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+          })()
         }}
       />
     </div>

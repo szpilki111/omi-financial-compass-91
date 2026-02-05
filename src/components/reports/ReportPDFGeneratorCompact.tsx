@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+ import React, { useRef } from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { FileTextIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -58,11 +59,8 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
   const { data: reportData } = useQuery({
     queryKey: ['pdf_report_data', report.id, report.location_id, report.month, report.year],
     queryFn: async () => {
-      const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
-      const lastDayOfMonth = new Date(report.year, report.month, 0);
-      
-      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      const dateFrom = getFirstDayOfMonth(report.year, report.month);
+      const dateTo = getLastDayOfMonth(report.year, report.month);
 
       const { data: transactions, error } = await supabase
         .from('transactions')

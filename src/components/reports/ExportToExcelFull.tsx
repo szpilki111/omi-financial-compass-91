@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+ import React, { useState } from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth, formatDateForDB } from '@/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,16 +58,14 @@ const handleExport = async () => {
     // Używamy stałych INCOME_PREFIXES i EXPENSE_PREFIXES
 
     // Zakres dat
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const lastDayOfMonth = new Date(year, month, 0);
-    const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-    const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+    const dateFrom = getFirstDayOfMonth(year, month);
+    const dateTo = getLastDayOfMonth(year, month);
 
     // Oblicz datę końca poprzedniego miesiąca dla sald otwarcia
     const prevMonthEnd = month === 1 
       ? new Date(year - 1, 11, 31) 
       : new Date(year, month - 1, 0);
-    const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
+    const prevMonthEndStr = formatDateForDB(prevMonthEnd);
 
     // Pobierz transakcje do końca poprzedniego miesiąca dla sald otwarcia
     const { data: prevTransactions } = await supabase

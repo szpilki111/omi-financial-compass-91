@@ -1,4 +1,5 @@
-import React from 'react';
+ import React from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Spinner } from '@/components/ui/Spinner';
@@ -72,11 +73,8 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
     queryKey: ['cash_flow_breakdown', locationId, month, year, restrictionData?.restrictedPrefixes],
     queryFn: async () => {
       // Oblicz daty na podstawie miesiąca i roku
-      const firstDayOfMonth = new Date(year, month - 1, 1);
-      const lastDayOfMonth = new Date(year, month, 0);
-      
-      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+      const dateFrom = getFirstDayOfMonth(year, month);
+      const dateTo = getLastDayOfMonth(year, month);
 
       // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
       const { data: transactions, error } = await supabase
