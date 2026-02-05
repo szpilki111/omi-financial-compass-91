@@ -11,10 +11,10 @@ import { useInvalidateFilteredAccounts } from "@/hooks/useFilteredAccounts";
 // Category definitions based on location identifier prefix
 const LOCATION_CATEGORIES = {
   "1": "Administracja prowincjalna",
-  "2": "Dom zakonny", 
+  "2": "Dom zakonny",
   "3": "Parafia",
   "4": "Apostolat",
-  "5": "Spółki, działalność gospodarcza"
+  "5": "Spółki, działalność gospodarcza",
 };
 
 interface Account {
@@ -38,85 +38,93 @@ const AccountRestrictionsManagement = () => {
 
   // Fetch all accounts with pagination to ensure we get all 5000+ accounts
   const { data: accounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['accounts-for-restrictions'],
+    queryKey: ["accounts-for-restrictions"],
     queryFn: async () => {
       let allAccounts: Account[] = [];
       let page = 0;
-      const pageSize = 1000;
+      const pageSize = 20;
 
       while (true) {
         const { data, error } = await supabase
-          .from('accounts')
-          .select('id, number, name, type')
-          .order('number')
+          .from("accounts")
+          .select("id, number, name, type")
+          .order("number")
           .range(page * pageSize, (page + 1) * pageSize - 1);
-        
+
         if (error) throw error;
         if (!data || data.length === 0) break;
-        
+
         allAccounts = [...allAccounts, ...data];
         if (data.length < pageSize) break; // Last page
         page++;
       }
 
-      console.log('Total accounts fetched:', allAccounts.length);
+      console.log("Total accounts fetched:", allAccounts.length);
       return allAccounts as Account[];
-    }
+    },
   });
 
   // Get unique account number prefixes (only first part before first hyphen)
-  const uniqueAccountPrefixes = accounts ? [...new Set(
-    accounts.map(account => {
-      // Extract only the first part before the first hyphen
-      const parts = account.number.split('-');
-      return parts[0];
-    })
-  )].sort() : [];
+  const uniqueAccountPrefixes = accounts
+    ? [
+        ...new Set(
+          accounts.map((account) => {
+            // Extract only the first part before the first hyphen
+            const parts = account.number.split("-");
+            return parts[0];
+          }),
+        ),
+      ].sort()
+    : [];
 
   // Fetch existing restrictions
   const { data: restrictions, isLoading: restrictionsLoading } = useQuery({
-    queryKey: ['account-restrictions'],
+    queryKey: ["account-restrictions"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('account_category_restrictions')
-        .select('*');
+      const { data, error } = await supabase.from("account_category_restrictions").select("*");
 
       if (error) throw error;
       return data as AccountRestriction[];
-    }
+    },
   });
 
   // Update restriction mutation
   const updateRestrictionMutation = useMutation({
-    mutationFn: async ({ accountPrefix, categoryPrefix, isRestricted, analyticalRequired }: {
+    mutationFn: async ({
+      accountPrefix,
+      categoryPrefix,
+      isRestricted,
+      analyticalRequired,
+    }: {
       accountPrefix: string;
       categoryPrefix: string;
       isRestricted?: boolean;
       analyticalRequired?: boolean;
     }) => {
-      const { error } = await supabase
-        .from('account_category_restrictions')
-        .upsert({
+      const { error } = await supabase.from("account_category_restrictions").upsert(
+        {
           account_number_prefix: accountPrefix,
           category_prefix: categoryPrefix,
           ...(isRestricted !== undefined && { is_restricted: isRestricted }),
-          ...(analyticalRequired !== undefined && { analytical_required: analyticalRequired })
-        }, {
-          onConflict: 'account_number_prefix,category_prefix'
-        });
+          ...(analyticalRequired !== undefined && { analytical_required: analyticalRequired }),
+        },
+        {
+          onConflict: "account_number_prefix,category_prefix",
+        },
+      );
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['account-restrictions'] });
+      queryClient.invalidateQueries({ queryKey: ["account-restrictions"] });
       // Invalidacja centralnego hooka kont - wszystkie komponenty natychmiast zobaczą zmianę
       invalidateFilteredAccounts();
       toast.success("Ograniczenie zostało zaktualizowane");
     },
     onError: (error) => {
-      console.error('Error updating restriction:', error);
+      console.error("Error updating restriction:", error);
       toast.error("Błąd podczas aktualizacji ograniczenia");
-    }
+    },
   });
 
   const handleRestrictionChange = (accountPrefix: string, categoryPrefix: string, isRestricted: boolean) => {
@@ -124,19 +132,19 @@ const AccountRestrictionsManagement = () => {
   };
 
   const handleAnalyticalChange = (accountPrefix: string, analyticalRequired: boolean) => {
-    updateRestrictionMutation.mutate({ accountPrefix, categoryPrefix: 'analytical', analyticalRequired });
+    updateRestrictionMutation.mutate({ accountPrefix, categoryPrefix: "analytical", analyticalRequired });
   };
 
   const isRestricted = (accountPrefix: string, categoryPrefix: string): boolean => {
-    const restriction = restrictions?.find(r => 
-      r.account_number_prefix === accountPrefix && r.category_prefix === categoryPrefix
+    const restriction = restrictions?.find(
+      (r) => r.account_number_prefix === accountPrefix && r.category_prefix === categoryPrefix,
     );
     return restriction?.is_restricted || false;
   };
 
   const isAnalyticalRequired = (accountPrefix: string): boolean => {
-    const restriction = restrictions?.find(r => 
-      r.account_number_prefix === accountPrefix && r.category_prefix === 'analytical'
+    const restriction = restrictions?.find(
+      (r) => r.account_number_prefix === accountPrefix && r.category_prefix === "analytical",
     );
     return restriction?.analytical_required || false;
   };
@@ -152,9 +160,9 @@ const AccountRestrictionsManagement = () => {
           <CardTitle>Zarządzanie ograniczeniami dostępu do kont</CardTitle>
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii.
-              Kategorie są określane na podstawie pierwszej części identyfikatora placówki.
-              W kolumnie "Analityka obowiązkowa" można oznaczyć które konta wymagają obowiązkowego tworzenia podkont analitycznych.
+              Zaznacz checkbox aby ograniczyć dostęp do konta dla placówek z danej kategorii. Kategorie są określane na
+              podstawie pierwszej części identyfikatora placówki. W kolumnie "Analityka obowiązkowa" można oznaczyć
+              które konta wymagają obowiązkowego tworzenia podkont analitycznych.
             </p>
           </div>
         </CardHeader>
@@ -180,30 +188,26 @@ const AccountRestrictionsManagement = () => {
               <TableBody>
                 {uniqueAccountPrefixes.map((accountPrefix) => (
                   <TableRow key={accountPrefix}>
-                    <TableCell className="font-medium">
-                      {accountPrefix}
-                    </TableCell>
-                     {Object.keys(LOCATION_CATEGORIES).map((categoryPrefix) => (
-                       <TableCell key={categoryPrefix} className="text-center">
-                         <Checkbox
-                           checked={isRestricted(accountPrefix, categoryPrefix)}
-                           onCheckedChange={(checked) => 
-                             handleRestrictionChange(accountPrefix, categoryPrefix, !!checked)
-                           }
-                           disabled={updateRestrictionMutation.isPending}
-                         />
-                       </TableCell>
-                     ))}
-                     <TableCell className="text-center">
+                    <TableCell className="font-medium">{accountPrefix}</TableCell>
+                    {Object.keys(LOCATION_CATEGORIES).map((categoryPrefix) => (
+                      <TableCell key={categoryPrefix} className="text-center">
                         <Checkbox
-                          checked={isAnalyticalRequired(accountPrefix)}
-                          onCheckedChange={(checked) => 
-                            handleAnalyticalChange(accountPrefix, !!checked)
+                          checked={isRestricted(accountPrefix, categoryPrefix)}
+                          onCheckedChange={(checked) =>
+                            handleRestrictionChange(accountPrefix, categoryPrefix, !!checked)
                           }
                           disabled={updateRestrictionMutation.isPending}
                         />
                       </TableCell>
-                   </TableRow>
+                    ))}
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={isAnalyticalRequired(accountPrefix)}
+                        onCheckedChange={(checked) => handleAnalyticalChange(accountPrefix, !!checked)}
+                        disabled={updateRestrictionMutation.isPending}
+                      />
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
