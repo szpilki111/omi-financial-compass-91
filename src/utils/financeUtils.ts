@@ -1,5 +1,5 @@
-
-import { KpirTransaction } from "@/types/kpir";
+ import { KpirTransaction } from "@/types/kpir";
+ import { getFirstDayOfMonth, getLastDayOfMonth } from "./dateUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -320,8 +320,8 @@ export const calculateAndSaveReportSummary = async (
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
     
-    const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-    const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+    const dateFrom = getFirstDayOfMonth(year, month);
+    const dateTo = getLastDayOfMonth(year, month);
     
     // Pobierz saldo otwarcia
     const openingBalance = await getOpeningBalance(locationId, month, year);

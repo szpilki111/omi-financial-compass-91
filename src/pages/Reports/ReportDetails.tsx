@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+ import React, { useState } from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,7 @@ import ReportApprovalActions from '@/components/reports/ReportApprovalActions';
 import ReportAccountsBreakdown from '@/components/reports/ReportAccountsBreakdown';
 import ReportPDFGenerator from '@/components/reports/ReportPDFGenerator';
 import YearToDateCashFlowBreakdown from '@/components/reports/YearToDateCashFlowBreakdown';
-import ExportToExcel from '@/components/reports/ExportToExcel';
-import ExportToExcelFull from '@/components/reports/ExportToExcelFull';
+ import ExportToExcelFull from '@/components/reports/ExportToExcelFull';
 import ReportViewFull from '@/components/reports/ReportViewFull';
 import { Report } from '@/types/reports';
 
@@ -93,8 +93,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           const firstDayOfMonth = new Date(reportData.year, reportData.month - 1, 1);
           const lastDayOfMonth = new Date(reportData.year, reportData.month, 0);
           
-          const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-          const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+          const dateFrom = getFirstDayOfMonth(reportData.year, reportData.month);
+          const dateTo = getLastDayOfMonth(reportData.year, reportData.month);
           
           // Pobierz saldo otwarcia
           const openingBalance = await getOpeningBalance(reportData.location_id, reportData.month, reportData.year);
@@ -170,8 +170,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       const firstDayOfMonth = new Date(report.year, report.month - 1, 1);
       const lastDayOfMonth = new Date(report.year, report.month, 0);
       
-      const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-      const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+          const dateFrom = getFirstDayOfMonth(report.year, report.month);
+          const dateTo = getLastDayOfMonth(report.year, report.month);
       
       console.log('📅 Okres przeliczania:', dateFrom, 'do', dateTo);
       console.log('📍 Lokalizacja:', report.location_id);
@@ -358,15 +358,6 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
           <ExportToExcelFull
             report={report}
             locationName={report.location?.name || 'Nieznana'}
-          />
-          <ExportToExcel
-            reportId={reportId!}
-            reportTitle={report.title}
-            locationName={report.location?.name || 'Nieznana'}
-            period={report.period}
-            year={report.year}
-            month={report.month}
-            locationId={report.location_id}
           />
           {(report.status === 'draft' || canResubmit) && (user?.role === 'ekonom' || user?.role === 'proboszcz') && (
             <Button onClick={handleSubmitReport} disabled={isSubmitting}>

@@ -1,5 +1,6 @@
 
-import React from 'react';
+ import React from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -90,11 +91,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         dateTo = dateRange.to;
       } else {
         // W przeciwnym razie oblicz daty na podstawie miesiąca i roku
-        const firstDayOfMonth = new Date(year, month - 1, 1);
-        const lastDayOfMonth = new Date(year, month, 0);
-        
-        dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-        dateTo = lastDayOfMonth.toISOString().split('T')[0];
+        dateFrom = getFirstDayOfMonth(year, month);
+        dateTo = getLastDayOfMonth(year, month);
       }
 
       // Pobierz wszystkie transakcje dla danej lokalizacji w okresie

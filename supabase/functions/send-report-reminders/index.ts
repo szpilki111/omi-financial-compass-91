@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
-    const deadlineDay = 10;
+    const deadlineDay = 11;
 
     const deadline = new Date(currentYear, currentMonth - 1, deadlineDay);
     const daysUntilDeadline = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

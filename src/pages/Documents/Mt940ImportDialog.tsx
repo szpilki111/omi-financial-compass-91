@@ -32,13 +32,14 @@ interface Mt940Data {
   transactions: Mt940Transaction[];
 }
 
-interface Mt940ImportDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onImportComplete: (count: number) => void;
-}
+ interface Mt940ImportDialogProps {
+   open: boolean;
+   onClose: () => void;
+   onImportComplete: (count: number) => void;
+   variant?: 'pko' | 'other';
+ }
 
-const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, onImportComplete }) => {
+ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, onImportComplete, variant = 'other' }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<Mt940Data | null>(null);
@@ -574,11 +575,13 @@ const Mt940ImportDialog: React.FC<Mt940ImportDialogProps> = ({ open, onClose, on
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Import plików MT940
+            {variant === 'pko' ? 'Import MT940 (PKO BP)' : 'Import MT940 (inne banki)'}
           </DialogTitle>
         </DialogHeader>
-        <p id="mt940-description" className="sr-only">
-          Import plików bankowych w formacie MT940
+        <p id="mt940-description" className="text-sm text-muted-foreground mb-4">
+          {variant === 'pko' 
+            ? 'Format PKO BP z podpolami ~20-~63 (separator tylda)' 
+            : 'Standardowy format SWIFT z polami ^20-^63 (separator ^)'}
         </p>
         
         <div className="space-y-6">

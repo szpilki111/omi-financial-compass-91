@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+ import React, { useState } from 'react';
+ import { getFirstDayOfMonth, getLastDayOfMonth, formatDateForDB } from '@/utils/dateUtils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -165,16 +166,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
           const q = parseInt(quarter || '1');
           const startMonth = (q - 1) * 3 + 1;
           const endMonth = q * 3;
-          dateFrom = new Date(year, startMonth - 1, 1).toISOString().split('T')[0];
-          dateTo = new Date(year, endMonth, 0).toISOString().split('T')[0];
+          dateFrom = getFirstDayOfMonth(year, startMonth);
+          dateTo = getLastDayOfMonth(year, endMonth);
           month = startMonth;
         } else {
           // month
           month = parseInt(selectedMonth!);
-          const firstDayOfMonth = new Date(year, month - 1, 1);
-          const lastDayOfMonth = new Date(year, month, 0);
-          dateFrom = firstDayOfMonth.toISOString().split('T')[0];
-          dateTo = lastDayOfMonth.toISOString().split('T')[0];
+          dateFrom = getFirstDayOfMonth(year, month);
+          dateTo = getLastDayOfMonth(year, month);
         }
         
         // Pobierz saldo otwarcia
@@ -217,8 +216,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
         const openingBalance = await getOpeningBalance(locationIds, 1, year);
         
         const dateFrom = `${year}-01-01`;
-        const lastDayOfMonth = new Date(year, month, 0);
-        const dateTo = lastDayOfMonth.toISOString().split('T')[0];
+        const dateTo = getLastDayOfMonth(year, month);
         
         const summary = await calculateFinancialSummary(locationIds, dateFrom, dateTo);
         
@@ -244,8 +242,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
       .from('documents')
       .select('id, document_number, document_name, validation_errors')
       .eq('location_id', locationId)
-      .gte('document_date', startDate.toISOString().split('T')[0])
-      .lte('document_date', endDate.toISOString().split('T')[0])
+      .gte('document_date', formatDateForDB(startDate))
+      .lte('document_date', formatDateForDB(endDate))
       .not('validation_errors', 'is', null);
     
     if (error) {
@@ -603,8 +601,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onSuccess, onCancel }
                 month={parseInt(quarter) * 3}
                 year={parseInt(selectedYear)}
                 dateRange={{
-                  from: new Date(parseInt(selectedYear), (parseInt(quarter) - 1) * 3, 1).toISOString().split('T')[0],
-                  to: new Date(parseInt(selectedYear), parseInt(quarter) * 3, 0).toISOString().split('T')[0]
+                  from: getFirstDayOfMonth(parseInt(selectedYear), (parseInt(quarter) - 1) * 3 + 1),
+                  to: getLastDayOfMonth(parseInt(selectedYear), parseInt(quarter) * 3)
                 }}
               />
             )}
