@@ -60,27 +60,54 @@ interface Mt940Data {
       return description;
     }
 
-    // Dla formatu z tyldą (PKO BP) dzielimy po ~XX gdzie XX to numer pola
-    const parts = detailsLine.split(new RegExp(`(?=${separator}[0-9]{2})`));
+    // Escape separator dla regex
+    const escapedSep = separator === '^' ? '\\^' : separator;
+    
+    // Rozdziel na pola - lookahead dla separatora + 2 cyfry
+    const parts = detailsLine.split(new RegExp(`(?=${escapedSep}[0-9]{2})`));
     let descParts: string[] = [];
+    let field00Content = '';
 
     for (const part of parts) {
-      // Podpola 20-25 = tytuł operacji (dla obu formatów)
-      const match = part.match(new RegExp(`^${useTilde ? '~' : '\\^'}(2[0-5])(.*)`, 's'));
+      // Regex dla pól 20-25 (tytuł operacji) i 00 (typ operacji w formacie ^)
+      const match = part.match(new RegExp(`^${escapedSep}(2[0-5]|00)(.*)`, 's'));
+      
       if (match) {
-        const content = match[2].trim();
-        // Ignoruj "ÿ" (ASCII 255) - puste pole w PKO BP
-        if (content && content !== 'ÿ' && content.charCodeAt(0) !== 255) {
+        const fieldNum = match[1];
+        let content = match[2].trim();
+        
+        // Usuń końcowe spacje i znaki ASCII 255 (puste pola PKO)
+        content = content.replace(/\s+$/, '').replace(/[\u00FF]+/g, '');
+        
+        // Ignoruj puste lub zbyt krótkie wartości
+        if (!content || content.length < 2 || content.charCodeAt(0) === 255) continue;
+        
+        // Pole 00 często zawiera typ przelewu (np. "PRZELEW INTERNET M/B")
+        if (fieldNum === '00') {
+          // Wyciągnij opis z pola 00 przed pierwszym separatorem lub wieloma spacjami
+          const cleanedContent = content.split(/\s{2,}/)[0].trim();
+          if (cleanedContent.length > 5 && !cleanedContent.match(/^\d+$/)) {
+            field00Content = cleanedContent;
+          }
+        } else if (fieldNum >= '20' && fieldNum <= '25') {
           descParts.push(content);
         }
       }
     }
 
+    // Złóż opis: najpierw pola 20-25, a jeśli puste to pole 00
     if (descParts.length > 0) {
       description = descParts.join(' ').replace(/\s+/g, ' ').trim();
+    } else if (field00Content) {
+      description = field00Content;
+    }
+    
+    // Ogranicz długość opisu
+    if (description.length > 200) {
+      description = description.substring(0, 197) + '...';
     }
 
-    console.log('Extracted:', description, 'from:', descParts);
+    console.log('Extracted:', description, 'from fields 20-25:', descParts, 'field 00:', field00Content);
     return description;
   };
 
