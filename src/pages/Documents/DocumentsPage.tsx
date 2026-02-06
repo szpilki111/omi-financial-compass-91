@@ -45,7 +45,13 @@ const DocumentsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
- const [mt940Dialog, setMt940Dialog] = useState<{ open: boolean; variant: 'pko' | 'other' }>({ open: false, variant: 'other' });
+  const [mt940Dialog, setMt940Dialog] = useState<{
+    open: boolean;
+    variant: 'pko' | 'other';
+  }>({
+    open: false,
+    variant: 'other'
+  });
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [isExcelFormImportOpen, setIsExcelFormImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -218,7 +224,10 @@ const DocumentsPage = () => {
   };
   const handleMt940ImportComplete = (count: number) => {
     refetch();
-    setMt940Dialog({ open: false, variant: 'other' });
+    setMt940Dialog({
+      open: false,
+      variant: 'other'
+    });
     toast({
       title: "Sukces",
       description: `Zaimportowano ${count} dokumentów z pliku MT940`
@@ -452,14 +461,14 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
                 <Download className="h-4 w-4" />
                 Szablon CSV
               </Button>
-              <Button onClick={() => setMt940Dialog({ open: true, variant: 'pko' })} variant="outline" size="sm" className="flex items-center gap-2">
+              <Button onClick={() => setMt940Dialog({
+            open: true,
+            variant: 'pko'
+          })} variant="outline" size="sm" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                Import MT940 PKO BP
+                Import MT940 
               </Button>
-              <Button onClick={() => setMt940Dialog({ open: true, variant: 'other' })} variant="outline" size="sm" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Import MT940 (inne banki)
-              </Button>
+              
               <Button onClick={downloadMt940Template} variant="outline" size="sm" className="flex items-center gap-2">
                 <Download className="h-4 w-4" />
                 Szablon MT940
@@ -506,7 +515,10 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
       setSelectedDocument(null);
     }} onDocumentCreated={handleDocumentCreated} document={selectedDocument} />
 
-      <Mt940ImportDialog open={mt940Dialog.open} variant={mt940Dialog.variant} onClose={() => setMt940Dialog({ open: false, variant: 'other' })} onImportComplete={handleMt940ImportComplete} />
+      <Mt940ImportDialog open={mt940Dialog.open} variant={mt940Dialog.variant} onClose={() => setMt940Dialog({
+      open: false,
+      variant: 'other'
+    })} onImportComplete={handleMt940ImportComplete} />
 
       <CsvImportDialog open={isCsvImportOpen} onClose={() => setIsCsvImportOpen(false)} onImportComplete={handleCsvImportComplete} />
 
