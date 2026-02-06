@@ -49,7 +49,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
       // Supabase ma domyślny limit 1000 rekordów per request (db-max-rows)
       // Musimy paginować po 1000, by pobrać wszystkie konta
       const allAccounts: FilteredAccount[] = [];
-      const pageSize = 20; // Limit Supabase per request
+      const pageSize = 1000; // Limit Supabase per request - KRYTYCZNE: nie zmieniać na mniejszą wartość!
       let offset = 0;
       let hasMore = true;
       let iterations = 0;

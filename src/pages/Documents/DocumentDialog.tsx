@@ -90,6 +90,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const [hasParallelInlineFormData, setHasParallelInlineFormData] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [showInPLN, setShowInPLN] = useState(false);
   const [errorReportDialogOpen, setErrorReportDialogOpen] = useState(false);
   const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
   const [isCapturingError, setIsCapturingError] = useState(false);
@@ -1425,6 +1426,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     })} ${symbol}`;
   };
 
+  const selectedCurrency = form.watch("currency");
+
   const mainDebitSum = transactions.reduce((sum, transaction) => {
     const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : 0;
     return sum + (debitAmount || 0);
@@ -1448,6 +1451,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const totalDebitSum = mainDebitSum + parallelDebitSum;
   const totalCreditSum = mainCreditSum + parallelCreditSum;
   const grandTotalSum = totalDebitSum + totalCreditSum;
+  
+  // Sumy przeliczone na PLN (dla walut obcych)
+  const isForeignCurrency = selectedCurrency !== "PLN";
+  const plnMultiplier = isForeignCurrency ? exchangeRate : 1;
+  const totalDebitSumPLN = totalDebitSum * plnMultiplier;
+  const totalCreditSumPLN = totalCreditSum * plnMultiplier;
+  const grandTotalSumPLN = grandTotalSum * plnMultiplier;
+  
+  // Używane do wyświetlania (zależnie od toggle showInPLN)
+  const displayMultiplier = showInPLN && isForeignCurrency ? exchangeRate : 1;
+  const displayCurrency = showInPLN && isForeignCurrency ? "PLN" : selectedCurrency;
 
   if (checkingBlock) {
     return (
@@ -1462,7 +1476,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     );
   }
 
-  const selectedCurrency = form.watch("currency");
+  
 
   return (
     <>
@@ -1624,7 +1638,26 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
           <div className="space-y-4 border-t pt-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Operacje główne</h3>
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-medium">Operacje główne</h3>
+                {selectedCurrency !== "PLN" && (
+                  <Button
+                    type="button"
+                    variant={showInPLN ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowInPLN(!showInPLN)}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    {showInPLN ? `Pokaż w ${selectedCurrency}` : 'Pokaż w PLN'}
+                  </Button>
+                )}
+                {showInPLN && selectedCurrency !== "PLN" && (
+                  <span className="text-sm text-muted-foreground">
+                    Kurs: {exchangeRate.toFixed(4)} PLN/{selectedCurrency}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 {selectedTransactions.length > 0 && (
                   <>
@@ -1735,7 +1768,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                       )}
                     </TableBody>
                     <TableFooter>
-                      <TableRow className="bg-gray-50 font-medium">
+                      <TableRow className="bg-muted font-medium">
                         <TableCell colSpan={4} className="text-right font-bold">
                           RAZEM:
                         </TableCell>
@@ -1893,7 +1926,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                         )}
                       </TableBody>
                       <TableFooter>
-                        <TableRow className="bg-gray-50 font-medium">
+                        <TableRow className="bg-muted font-medium">
                           <TableCell colSpan={4} className="text-right font-bold">
                             RAZEM:
                           </TableCell>
@@ -1918,22 +1951,32 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
           )}
 
           <div className="border-t pt-4 space-y-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="bg-muted p-4 rounded-lg">
               <h4 className="font-bold text-lg mb-2">Podsumowanie dokumentu</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-sm text-gray-600">Winien razem</div>
-                  <div className="font-bold text-lg">{formatAmount(totalDebitSum, selectedCurrency)}</div>
+                  <div className="text-sm text-muted-foreground">Winien razem</div>
+                  <div className="font-bold text-lg">{formatAmount(totalDebitSum * displayMultiplier, displayCurrency)}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Ma razem</div>
-                  <div className="font-bold text-lg">{formatAmount(totalCreditSum, selectedCurrency)}</div>
+                  <div className="text-sm text-muted-foreground">Ma razem</div>
+                  <div className="font-bold text-lg">{formatAmount(totalCreditSum * displayMultiplier, displayCurrency)}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Suma całkowita</div>
-                  <div className="font-bold text-lg">{formatAmount(grandTotalSum, selectedCurrency)}</div>
+                  <div className="text-sm text-muted-foreground">Suma całkowita</div>
+                  <div className="font-bold text-lg">{formatAmount(grandTotalSum * displayMultiplier, displayCurrency)}</div>
                 </div>
               </div>
+              {isForeignCurrency && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="text-sm text-muted-foreground mb-2">Równowartość w PLN (kurs: {exchangeRate.toFixed(4)})</div>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="font-semibold">{formatAmount(totalDebitSumPLN, "PLN")}</div>
+                    <div className="font-semibold">{formatAmount(totalCreditSumPLN, "PLN")}</div>
+                    <div className="font-semibold">{formatAmount(grandTotalSumPLN, "PLN")}</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-2">

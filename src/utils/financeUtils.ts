@@ -22,6 +22,7 @@ export const calculateFinancialSummary = async (
         id,
         date,
         document_number,
+        document_id,
         description,
         amount,
         debit_account_id,
@@ -33,7 +34,8 @@ export const calculateFinancialSummary = async (
         debit_amount,
         credit_amount,
         debit_account:accounts!debit_account_id(number, name),
-        credit_account:accounts!credit_account_id(number, name)
+        credit_account:accounts!credit_account_id(number, name),
+        document:documents!document_id(currency, exchange_rate)
       `)
       .order('date', { ascending: false });
 
@@ -84,27 +86,35 @@ export const calculateFinancialSummary = async (
     // Analiza każdej transakcji
     // PRZYCHODY: tylko 7xx MA (zgodnie z nowym planem - usunięto 2xx)
     // KOSZTY: tylko 4xx WN (zgodnie z nowym planem - usunięto 2xx)
+    // WAŻNE: Dla walut obcych przeliczamy po kursie z dokumentu!
     transactions.forEach((transaction: any, index: number) => {
       const debitNum = transaction.debit_account?.number || '';
       const creditNum = transaction.credit_account?.number || '';
       const baseDebit = getBaseAccount(debitNum);
       const baseCredit = getBaseAccount(creditNum);
+      
+      // Pobierz kurs z dokumentu (jeśli waluta obca) - PRZELICZENIE NA PLN
+      const docCurrency = transaction.document?.currency || transaction.currency || 'PLN';
+      const docExchangeRate = transaction.document?.exchange_rate || transaction.exchange_rate || 1;
+      const multiplier = docCurrency !== 'PLN' ? docExchangeRate : 1;
 
-      // PRZYCHODY: tylko 7xx MA
+      // PRZYCHODY: tylko 7xx MA - przeliczone na PLN
       if (baseCredit && baseCredit.startsWith('7')) {
-        const amount = transaction.credit_amount ?? transaction.amount ?? 0;
-        if (amount > 0) {
+        const rawAmount = transaction.credit_amount ?? transaction.amount ?? 0;
+        const amount = rawAmount * multiplier;
+        if (rawAmount > 0) {
           income += amount;
-          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) → ${amount} PLN`);
+          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) → ${rawAmount} ${docCurrency} × ${multiplier} = ${amount.toFixed(2)} PLN`);
         }
       }
 
-      // KOSZTY: tylko 4xx WN
+      // KOSZTY: tylko 4xx WN - przeliczone na PLN
       if (baseDebit && baseDebit.startsWith('4')) {
-        const amount = transaction.debit_amount ?? transaction.amount ?? 0;
-        if (amount > 0) {
+        const rawAmount = transaction.debit_amount ?? transaction.amount ?? 0;
+        const amount = rawAmount * multiplier;
+        if (rawAmount > 0) {
           expense += amount;
-          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) → ${amount} PLN`);
+          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) → ${rawAmount} ${docCurrency} × ${multiplier} = ${amount.toFixed(2)} PLN`);
         }
       }
     });
