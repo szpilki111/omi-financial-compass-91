@@ -1,491 +1,279 @@
 
+# Plan naprawy 3 krytycznych problemów
 
-# Plan naprawy 7 zgłoszonych problemów (zaktualizowany)
-
-## Podsumowanie problemów
+## Podsumowanie
 
 | # | Problem | Priorytet | Pliki do modyfikacji |
 |---|---------|-----------|---------------------|
-| 1 | Ostatni dzień miesiąca kwalifikowany na następny miesiąc (strefa czasowa) | KRYTYCZNY | Wiele plików z `toISOString()` |
-| 2 | Przycisk przeliczania waluta/PLN na dokumencie walutowym + integracja z raportami | WYSOKI | `DocumentDialog.tsx`, `InlineTransactionRow.tsx` |
-| 3 | Data powiadomień email ustawiona na 11. każdego miesiąca | NISKI | `send-report-reminders/index.ts` |
-| 4 | Unikalny numer dokumentu w bazie danych | WYSOKI | Migracja SQL |
-| 5 | Admin nie widzi żadnych kont - TIMEOUT SQL (~40M operacji) | KRYTYCZNY | Migracja SQL - zoptymalizowana funkcja |
-| 6 | Usunąć przycisk "Excel (skrócony)" z raportu | NISKI | `ReportDetails.tsx` |
-| 7 | Dwa przyciski importu MT940: PKO BP vs reszta banków | ŚREDNI | `Mt940ImportDialog.tsx`, `DocumentDialog.tsx` |
+| 1 | Bardzo wolne ładowanie kont dla admina (pageSize=20 zamiast 1000!) | KRYTYCZNY | `src/hooks/useFilteredAccounts.ts` |
+| 2 | MT940 format z separatorem `^` nie wyciąga poprawnie nazw operacji | WYSOKI | `src/pages/Documents/Mt940ImportDialog.tsx` |
+| 3 | Przycisk przeliczania waluta/PLN na dokumentach walutowych | WYSOKI | `src/pages/Documents/DocumentDialog.tsx`, `InlineTransactionRow.tsx`, `src/utils/financeUtils.ts` |
 
 ---
 
-## Problem 1: Ostatni dzień miesiąca jest przesuwany (KRYTYCZNY)
+## Problem 1: Bardzo wolne ładowanie kont dla admina (KRYTYCZNY)
 
-### Przyczyna główna
-Kod używa `new Date(year, month, 0).toISOString().split('T')[0]` do obliczenia ostatniego dnia miesiąca.
+### Przyczyna
 
-**Problem:** `toISOString()` konwertuje lokalną datę na UTC. Dla stref czasowych CET/CEST (Polska), godzina 00:00:00 lokalna to 23:00:00 UTC poprzedniego dnia.
-
-**Przykład:**
-```javascript
-// Dla strefy CET (+1)
-const date = new Date(2025, 11, 31); // 31 grudnia 2025, 00:00:00 CET
-date.toISOString();                   // "2025-12-30T23:00:00.000Z" ← PRZESUNIĘCIE!
-date.toISOString().split('T')[0];     // "2025-12-30" ← ZŁY DZIEŃ!
+W pliku `useFilteredAccounts.ts` linia 52:
+```typescript
+const pageSize = 20; // ← PROBLEM! Było 1000, ktoś zmienił na 20!
 ```
 
+**Obliczenia:**
+- Liczba aktywnych kont: **6486**
+- Przy pageSize = 20: potrzeba **325 zapytań sekwencyjnych**
+- Przy pageSize = 1000: potrzeba tylko **7 zapytań**
+
+To oznacza ~46× więcej zapytań HTTP! Każde zapytanie ma overhead sieci (RTT ~50-100ms), więc:
+- Przy 20: 325 × 100ms = **32+ sekund** (timeout!)
+- Przy 1000: 7 × 100ms = **~0.7 sekundy**
+
 ### Rozwiązanie
-Stworzyć centralną funkcję do bezpiecznego formatowania dat:
+
+Przywrócić `pageSize` na 1000 (jak było oryginalnie, zgodnie z limitem Supabase):
 
 ```typescript
-// src/utils/dateUtils.ts
-export const formatDateForDB = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-export const getLastDayOfMonth = (year: number, month: number): string => {
-  // month is 1-12 (January=1, December=12)
-  const lastDay = new Date(year, month, 0); // 0 = ostatni dzień poprzedniego miesiąca
-  return formatDateForDB(lastDay);
-};
-
-export const getFirstDayOfMonth = (year: number, month: number): string => {
-  const firstDay = new Date(year, month - 1, 1);
-  return formatDateForDB(firstDay);
-};
+// Linia 52:
+const pageSize = 1000; // Przywrócono poprawną wartość - limit Supabase per request
 ```
 
-### Pliki do modyfikacji
-Zastąpić wszystkie wystąpienia `toISOString().split('T')[0]` nową funkcją:
-- `src/pages/Reports/ReportDetails.tsx`
-- `src/pages/Reports/ReportForm.tsx`
-- `src/components/reports/ReportViewFull.tsx`
-- `src/components/reports/ExportToExcel.tsx`
-- `src/components/reports/ExportToExcelFull.tsx`
-- `src/components/reports/YearToDateCashFlowBreakdown.tsx`
-- `src/components/reports/ReportAccountsBreakdown.tsx`
-- `src/components/reports/ReportApprovalActions.tsx`
-- `src/utils/financeUtils.ts`
-- `src/pages/Dashboard.tsx`
-- `src/pages/Documents/CsvImportDialog.tsx`
-- `src/pages/Documents/Mt940ImportDialog.tsx`
-- I inne pliki wykryte w wyszukiwaniu
+### Dodatkowa optymalizacja
+
+W administracji konta ładują się szybko, bo `AccountsManagement.tsx` (linie 106-130) używa **bezpośredniego zapytania** do tabeli `accounts` z filtrami po stronie serwera:
+
+```typescript
+const { data: accounts } = useQuery({
+  queryKey: ['accounts', debouncedSearchQuery, showInactive],
+  queryFn: async () => {
+    let query = supabase
+      .from('accounts')
+      .select('id, number, name, type, is_active, ...')
+      .order('number');
+    // ... filtry server-side
+    return data;
+  },
+});
+```
+
+**Różnica:**
+- **Administracja**: bezpośrednie zapytanie do tabeli → szybkie
+- **Wyszukiwanie/Ustawienia**: RPC `get_user_filtered_accounts_with_analytics` + paginacja → wolne
+
+Można rozważyć:
+1. Dla admina użyć bezpośredniego zapytania (jak w administracji)
+2. Lub poprawić pageSize i zostawić RPC
+
+Proponuję opcję 1 jako rozwiązanie długoterminowe - dla admina pominąć RPC i użyć bezpośredniego zapytania.
 
 ---
 
-## Problem 2: Przycisk przeliczania waluta/PLN na dokumentach walutowych
+## Problem 2: MT940 format z separatorem `^` nie wyciąga nazw operacji
 
-### Opis wymagania
-1. Na dokumentach walutowych (gdzie waluta != PLN) dodać przycisk toggle do przełączania widoku między walutą a PLN
-2. Wyświetlać kwoty operacji albo w walucie oryginalnej albo przeliczone na PLN (kwota × kurs)
-3. Na końcu dokumentu pokazywać podsumowanie zawsze w PLN
-4. Raporty mają automatycznie pobierać wartości przeliczone na PLN
+### Analiza formatu
+
+**Przykład pliku z `^` (inne banki):**
+```
+:86:172^00PRZELEW                    ^34000
+^3012404416^38PL95124044161111001083941985
+^20Przelew środków
+^32DOM ZAKONNY MISJONARZY OBLA^33TÓW     ŚWIĘTY KRZYŻ 1
+^6226-006    NOWA SŁUPIA      ^63   PL
+```
+
+**Problem w kodzie (linia 64-76):**
+```typescript
+const parts = detailsLine.split(new RegExp(`(?=${separator}[0-9]{2})`));
+for (const part of parts) {
+  const match = part.match(new RegExp(`^${useTilde ? '~' : '\\^'}(2[0-5])(.*)`, 's'));
+  // ...
+}
+```
+
+**Przyczyna błędu:**
+W formacie z `^` podpola często **zlewają się w jednej linii** bez nowej linii między nimi. Np.:
+- `^20Przelew środków` - poprawnie wykrywane
+- `^32DOM ZAKONNY MISJONARZY OBLA^33TÓW` - wartość pola 32 jest ucięta przez ^33!
+
+Dodatkowo, format z `^` ma **inne kodowanie znaków polskich** (CP852/Mazovia) które może powodować problemy.
 
 ### Rozwiązanie
 
-**1. Dodać stan `showInPLN` do `DocumentDialog.tsx`:**
+Poprawić funkcję `extractDescription()` aby lepiej obsługiwać format z `^`:
+
+```typescript
+const extractDescription = (detailsLine: string): string => {
+  let description = 'Operacja bankowa';
+  
+  const useTilde = detailsLine.includes('~');
+  const separator = useTilde ? '~' : '^';
+  
+  if (!detailsLine || !detailsLine.includes(separator)) {
+    return description;
+  }
+
+  // Rozdziel na pola - lookahead dla separatora + 2 cyfry
+  const parts = detailsLine.split(new RegExp(`(?=${separator.replace('^', '\\^')}[0-9]{2})`));
+  let descParts: string[] = [];
+
+  for (const part of parts) {
+    // Regex dla pól 20-25 (tytuł operacji) i 00 (typ operacji w formacie ^)
+    const escapedSep = separator === '^' ? '\\^' : separator;
+    const match = part.match(new RegExp(`^${escapedSep}(2[0-5]|00)(.*)`, 's'));
+    
+    if (match) {
+      const fieldNum = match[1];
+      let content = match[2].trim();
+      
+      // Usuń końcowe spacje i znaki ASCII 255 (puste pola PKO)
+      content = content.replace(/\s+$/, '').replace(/[\u00FF]+/g, '');
+      
+      // Ignoruj puste lub zbyt krótkie wartości
+      if (!content || content.length < 2 || content.charCodeAt(0) === 255) continue;
+      
+      // Pole 00 często zawiera typ przelewu (np. "PRZELEW INTERNET M/B")
+      if (fieldNum === '00') {
+        // Wyciągnij opis z pola 00 przed pierwszym separatorem lub spacją
+        const cleanedContent = content.split(/\s{2,}/)[0].trim();
+        if (cleanedContent.length > 5 && !cleanedContent.match(/^\d+$/)) {
+          descParts.unshift(cleanedContent); // Na początek
+        }
+      } else if (fieldNum >= '20' && fieldNum <= '25') {
+        descParts.push(content);
+      }
+    }
+  }
+
+  if (descParts.length > 0) {
+    description = descParts.join(' ').replace(/\s+/g, ' ').trim();
+    // Ogranicz długość opisu
+    if (description.length > 200) {
+      description = description.substring(0, 197) + '...';
+    }
+  }
+
+  return description;
+};
+```
+
+### Dodatkowe usprawnienie - pole `^00`
+
+W formacie z `^` pole `^00` zawiera typ operacji (np. "PRZELEW INTERNET M/B"). To może być użyteczne jako część opisu, gdy pola 20-25 są puste lub zawierają tylko krótki tekst.
+
+---
+
+## Problem 3: Przycisk przeliczania waluta/PLN na dokumentach walutowych
+
+### Opis wymagania
+
+1. Na dokumentach walutowych (currency != 'PLN') dodać przycisk toggle
+2. Po przełączeniu na PLN → kwoty operacji wyświetlane jako `kwota × kurs`
+3. Po przełączeniu na walutę → kwoty oryginalne + info o kursie
+4. Podsumowanie dokumentu zawsze w PLN
+5. Raporty mają automatycznie pobierać wartości w PLN (przeliczone po kursie dokumentu)
+
+### Rozwiązanie
+
+**1. Dodać stan w `DocumentDialog.tsx`:**
 ```typescript
 const [showInPLN, setShowInPLN] = useState(false);
 const watchedCurrency = form.watch('currency');
 const isForeignCurrency = watchedCurrency && watchedCurrency !== 'PLN';
 ```
 
-**2. Dodać przycisk toggle w nagłówku tabeli operacji:**
+**2. Dodać przycisk toggle nad tabelą operacji:**
 ```tsx
 {isForeignCurrency && (
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => setShowInPLN(!showInPLN)}
-  >
-    {showInPLN ? `Pokaż w ${watchedCurrency}` : 'Pokaż w PLN'}
-  </Button>
+  <div className="flex items-center gap-2 mb-2">
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setShowInPLN(!showInPLN)}
+      className="flex items-center gap-2"
+    >
+      <RefreshCw className="h-4 w-4" />
+      {showInPLN ? `Pokaż w ${watchedCurrency}` : 'Pokaż w PLN'}
+    </Button>
+    {showInPLN && (
+      <span className="text-sm text-muted-foreground">
+        Kurs: {exchangeRate.toFixed(4)} PLN/{watchedCurrency}
+      </span>
+    )}
+  </div>
 )}
 ```
 
-**3. Przekazać props do `InlineTransactionRow`:**
-```tsx
-<InlineTransactionRow
-  showInPLN={showInPLN}
-  exchangeRate={exchangeRate}
-  // ...existing props
-/>
+**3. Przekazać props do wyświetlania transakcji:**
+Zaktualizować miejsca gdzie wyświetlane są kwoty operacji, aby przeliczać:
+```typescript
+const displayAmount = showInPLN && exchangeRate 
+  ? amount * exchangeRate 
+  : amount;
 ```
 
-**4. W `InlineTransactionRow.tsx` przeliczać kwoty:**
+**4. Podsumowanie dokumentu zawsze w PLN:**
 ```typescript
-const displayAmount = showInPLN 
-  ? (amount * exchangeRate).toFixed(2) 
-  : amount.toFixed(2);
-```
-
-**5. Podsumowanie dokumentu zawsze w PLN:**
-```typescript
-// Na dole tabeli
-const totalPLN = transactions.reduce((sum, t) => {
+const totalInPLN = transactions.reduce((sum, t) => {
   const amount = Math.max(t.debit_amount || 0, t.credit_amount || 0);
   return sum + (amount * exchangeRate);
 }, 0);
+
+// Na dole tabeli operacji:
+<div className="mt-4 p-3 bg-gray-100 rounded-lg">
+  <span className="font-semibold">Suma w PLN: </span>
+  <span className="text-lg font-bold">{formatNumber(totalInPLN)} zł</span>
+  {isForeignCurrency && (
+    <span className="text-sm text-muted-foreground ml-2">
+      (kurs: {exchangeRate.toFixed(4)})
+    </span>
+  )}
+</div>
 ```
 
-**6. Raporty - już używają PLN:**
-W `financeUtils.ts` i `ReportViewFull.tsx` kwoty są pobierane bezpośrednio z bazy, więc jeśli chcemy automatyczne przeliczanie, musimy zmodyfikować zapytania aby mnożyły przez kurs dokumentu. To wymaga dodania joina z documents.
+**5. Raporty - przeliczanie walut:**
+W `financeUtils.ts` zmodyfikować logikę pobierania transakcji, aby uwzględniała kurs z dokumentu:
 
-### Pliki do modyfikacji
-- `src/pages/Documents/DocumentDialog.tsx` - dodać przycisk toggle i stan
-- `src/pages/Documents/InlineTransactionRow.tsx` - wyświetlanie przeliczonych kwot
-- `src/utils/financeUtils.ts` - przeliczanie walutowe w obliczeniach raportu
-
----
-
-## Problem 3: Data powiadomień email na 11. każdego miesiąca
-
-### Przyczyna
-W pliku `send-report-reminders/index.ts` (linia 86):
 ```typescript
-const deadlineDay = 10;
-```
+// Dodać join z documents dla exchange_rate
+const query = supabase
+  .from('transactions')
+  .select(`
+    *,
+    document:documents!document_id(currency, exchange_rate),
+    debit_account:accounts!debit_account_id(number, name),
+    credit_account:accounts!credit_account_id(number, name)
+  `);
 
-### Rozwiązanie
-Zmienić wartość na 11:
-```typescript
-const deadlineDay = 11;
-```
-
-### Plik do modyfikacji
-- `supabase/functions/send-report-reminders/index.ts`
-
----
-
-## Problem 4: Unikalny numer dokumentu w bazie danych
-
-### Przyczyna
-Brak ograniczenia UNIQUE na kolumnie `document_number` w tabeli `documents`.
-
-### Rozwiązanie
-Utworzyć migrację SQL z:
-1. Funkcją do normalizacji numeru dokumentu (usunięcie białych znaków)
-2. Unikalnym indeksem na znormalizowanym numerze
-
-```sql
--- Unikany indeks na znormalizowanym numerze per lokalizacja
-CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_unique_number 
-ON documents (TRIM(BOTH FROM document_number), location_id);
-```
-
-### Uwagi
-- Indeks jest per location_id, bo różne lokalizacje mogą mieć ten sam format numeru
-- Przed utworzeniem indeksu trzeba sprawdzić czy nie ma już duplikatów
-
-### Plik do modyfikacji
-- Nowa migracja SQL
-
----
-
-## Problem 5: Admin nie widzi żadnych kont - TIMEOUT SQL (KRYTYCZNY - ZAKTUALIZOWANY)
-
-### Zdiagnozowany problem
-
-Po analizie logów i testach SQL:
-
-**Błąd:** `canceling statement due to statement timeout` (kod 57014)
-
-**Przyczyna główna:** Funkcja `get_user_filtered_accounts_with_analytics` wykonuje dla admina korelowane podzapytanie EXISTS dla KAŻDEGO z **6475 kont**:
-
-```sql
-EXISTS(SELECT 1 FROM accounts sub WHERE sub.number LIKE (a.number || '-%') AND sub.is_active = true) as has_analytics
-```
-
-**Statystyki z EXPLAIN ANALYZE:**
-- Nested Loop Semi Join z **~40 milionów porównań** (39,870,698)
-- Czas wykonania: **8271 ms** (8+ sekund)
-- Domyślny timeout Supabase: 8 sekund
-- Rezultat: timeout i błąd 500
-
-### Rozwiązanie - zoptymalizowana funkcja SQL
-
-Zamiast korelowanego podzapytania (N×N operacji), użyjemy **pojedynczego przejścia z materializacją** poprzez CTE:
-
-```sql
-CREATE OR REPLACE FUNCTION public.get_user_filtered_accounts_with_analytics(
-  p_user_id uuid, 
-  p_include_inactive boolean DEFAULT false, 
-  p_skip_restrictions boolean DEFAULT false
-)
-RETURNS TABLE(id uuid, number text, name text, type text, is_active boolean, analytical boolean, has_analytics boolean)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_user_role text;
-  v_location_ids uuid[];
-  v_location_identifiers text[];
-  v_category_prefixes text[];
-  v_restricted_prefixes text[];
-BEGIN
-  -- Pobierz rolę użytkownika
-  SELECT p.role INTO v_user_role
-  FROM profiles p
-  WHERE p.id = p_user_id;
-
-  -- Dla adminów i prowincjałów zwróć wszystkie konta - ZOPTYMALIZOWANE
-  IF v_user_role IN ('admin', 'prowincjal') OR p_skip_restrictions THEN
-    RETURN QUERY
-    WITH 
-    -- Krok 1: Pobierz wszystkie aktywne konta
-    base_accounts AS (
-      SELECT a.id, a.number, a.name, a.type, a.is_active, a.analytical
-      FROM accounts a
-      WHERE (p_include_inactive OR a.is_active = true)
-    ),
-    -- Krok 2: Znajdź wszystkie numery kont które są RODZICAMI (mają podkonta)
-    -- Używamy split na myślnikach i budujemy zbiór prefiksów
-    parent_numbers AS (
-      SELECT DISTINCT 
-        -- Dla konta 100-2-3-1 rodzice to: 100-2-3, 100-2, 100
-        -- Wyciągamy wszystkie możliwe prefiksy
-        regexp_replace(ba.number, '-[^-]+$', '') as parent_prefix
-      FROM base_accounts ba
-      WHERE ba.number LIKE '%-%'  -- Ma co najmniej jeden myślnik = może mieć rodzica
-    )
-    SELECT 
-      ba.id,
-      ba.number,
-      ba.name,
-      ba.type,
-      ba.is_active,
-      ba.analytical,
-      -- Konto ma has_analytics jeśli jego numer jest w zbiorze parent_numbers
-      EXISTS(SELECT 1 FROM parent_numbers pn WHERE pn.parent_prefix = ba.number) as has_analytics
-    FROM base_accounts ba
-    ORDER BY ba.number;
-    RETURN;
-  END IF;
-
-  -- Dla pozostałych ról - standardowa logika z ograniczeniami lokalizacji
-  -- [reszta kodu bez zmian - dla ekonomów/proboszczów działa poprawnie]
+// Przy obliczaniu sum:
+transactions.forEach((transaction: any) => {
+  const docCurrency = transaction.document?.currency || 'PLN';
+  const docExchangeRate = transaction.document?.exchange_rate || 1;
   
-  -- Pobierz lokalizacje użytkownika z user_locations
-  SELECT ARRAY_AGG(ul.location_id) INTO v_location_ids
-  FROM user_locations ul
-  WHERE ul.user_id = p_user_id;
-
-  -- Fallback do profiles.location_id
-  IF v_location_ids IS NULL OR array_length(v_location_ids, 1) IS NULL THEN
-    SELECT ARRAY[p.location_id] INTO v_location_ids
-    FROM profiles p
-    WHERE p.id = p_user_id AND p.location_id IS NOT NULL;
-  END IF;
-
-  -- Brak lokalizacji = brak kont
-  IF v_location_ids IS NULL OR array_length(v_location_ids, 1) IS NULL THEN
-    RETURN;
-  END IF;
-
-  -- Pobierz identyfikatory lokalizacji (np. '5-3')
-  SELECT ARRAY_AGG(DISTINCT l.location_identifier) INTO v_location_identifiers
-  FROM locations l
-  WHERE l.id = ANY(v_location_ids) AND l.location_identifier IS NOT NULL;
-
-  IF v_location_identifiers IS NULL OR array_length(v_location_identifiers, 1) IS NULL THEN
-    RETURN;
-  END IF;
-
-  -- Pobierz kategorie lokalizacji (pierwsza cyfra location_identifier)
-  SELECT ARRAY_AGG(DISTINCT LEFT(li, 1)) INTO v_category_prefixes
-  FROM unnest(v_location_identifiers) AS li
-  WHERE LEFT(li, 1) != '';
-
-  -- Pobierz ograniczone prefiksy kont dla kategorii użytkownika
-  IF v_category_prefixes IS NOT NULL AND array_length(v_category_prefixes, 1) > 0 THEN
-    SELECT ARRAY_AGG(DISTINCT acr.account_number_prefix) INTO v_restricted_prefixes
-    FROM account_category_restrictions acr
-    WHERE acr.category_prefix = ANY(v_category_prefixes)
-      AND acr.is_restricted = true;
-  END IF;
-
-  IF v_restricted_prefixes IS NULL THEN
-    v_restricted_prefixes := ARRAY[]::text[];
-  END IF;
-
-  -- Zwróć konta dla użytkownika z lokalizacją
-  RETURN QUERY
-  WITH 
-  location_matched_accounts AS (
-    SELECT a.id
-    FROM accounts a
-    CROSS JOIN UNNEST(v_location_identifiers) AS loc_id
-    WHERE (p_include_inactive OR a.is_active = true)
-      AND a.number LIKE '%-%'
-      AND split_part(a.number, '-', 2) || '-' || split_part(a.number, '-', 3) = loc_id
-      AND NOT (split_part(a.number, '-', 1) = ANY(v_restricted_prefixes))
-    
-    UNION
-    
-    SELECT la.account_id
-    FROM location_accounts la
-    INNER JOIN accounts acc ON acc.id = la.account_id
-    WHERE la.location_id = ANY(v_location_ids)
-      AND NOT (split_part(acc.number, '-', 1) = ANY(v_restricted_prefixes))
-  ),
-  base_accounts AS (
-    SELECT DISTINCT a.id, a.number, a.name, a.type, a.is_active, a.analytical
-    FROM accounts a
-    INNER JOIN location_matched_accounts lma ON a.id = lma.id
-  ),
-  parent_numbers AS (
-    SELECT DISTINCT regexp_replace(ba.number, '-[^-]+$', '') as parent_prefix
-    FROM base_accounts ba
-    WHERE ba.number LIKE '%-%'
-  )
-  SELECT 
-    ba.id,
-    ba.number,
-    ba.name,
-    ba.type,
-    ba.is_active,
-    ba.analytical,
-    EXISTS(SELECT 1 FROM parent_numbers pn WHERE pn.parent_prefix = ba.number) as has_analytics
-  FROM base_accounts ba
-  ORDER BY ba.number;
-END;
-$function$;
+  // Przelicz na PLN jeśli waluta obca
+  const multiplier = docCurrency !== 'PLN' ? docExchangeRate : 1;
+  
+  if (baseCredit && baseCredit.startsWith('7')) {
+    const amount = (transaction.credit_amount ?? transaction.amount ?? 0) * multiplier;
+    income += amount;
+  }
+  
+  if (baseDebit && baseDebit.startsWith('4')) {
+    const amount = (transaction.debit_amount ?? transaction.amount ?? 0) * multiplier;
+    expense += amount;
+  }
+});
 ```
-
-### Dlaczego to rozwiązanie jest szybsze
-
-**Przed (stary algorytm):**
-```text
-┌─────────────────────────────────────────┐
-│ Dla KAŻDEGO z 6475 kont:                │
-│   → Przeskanuj WSZYSTKIE 6475 kont      │
-│   → Sprawdź LIKE (number || '-%')       │
-│ = 6475 × 6475 = ~42 miliony operacji    │
-│ Czas: 8+ sekund → TIMEOUT               │
-└─────────────────────────────────────────┘
-```
-
-**Po (nowy algorytm):**
-```text
-┌─────────────────────────────────────────┐
-│ Krok 1: Pobierz 6475 kont (1 skan)      │
-│ Krok 2: Wyciągnij prefiksy rodziców     │
-│         (regexp_replace na 6475 kont)   │
-│ Krok 3: JOIN na zbiorze prefiksów       │
-│         (set lookup - O(1) per konto)   │
-│ = 6475 + 6475 + 6475 = ~20k operacji    │
-│ Czas: <500ms                            │
-└─────────────────────────────────────────┘
-```
-
-### Pliki do modyfikacji
-- Nowa migracja SQL z poprawioną funkcją `get_user_filtered_accounts_with_analytics`
-
----
-
-## Problem 6: Usunąć przycisk "Excel (skrócony)"
-
-### Lokalizacja
-W pliku `src/pages/Reports/ReportDetails.tsx` (linie 362-370):
-```tsx
-<ExportToExcel
-  reportId={reportId!}
-  reportTitle={report.title}
-  locationName={report.location?.name || 'Nieznana'}
-  period={report.period}
-  year={report.year}
-  month={report.month}
-  locationId={report.location_id}
-/>
-```
-
-### Rozwiązanie
-Usunąć komponent `ExportToExcel` z `ReportDetails.tsx`, pozostawiając tylko `ExportToExcelFull`.
-
-### Pliki do modyfikacji
-- `src/pages/Reports/ReportDetails.tsx` - usunąć import i użycie ExportToExcel
-
----
-
-## Problem 7: Dwa przyciski importu MT940
-
-### Opis
-Obecny parser MT940 obsługuje oba formaty (separator `^` i `~`), ale użytkownik chce osobne przyciski dla jasności.
-
-### Rozwiązanie
-
-**1. W `DocumentDialog.tsx` zastąpić jeden przycisk MT940 dwoma:**
-```tsx
-<Button onClick={() => setMt940Dialog({ open: true, variant: 'pko' })}>
-  <Upload className="mr-2 h-4 w-4" />
-  Import MT940 PKO BP
-</Button>
-<Button onClick={() => setMt940Dialog({ open: true, variant: 'other' })}>
-  <Upload className="mr-2 h-4 w-4" />
-  Import MT940 (inne banki)
-</Button>
-```
-
-**2. Przekazać wariant do `Mt940ImportDialog`:**
-```tsx
-<Mt940ImportDialog
-  open={mt940Dialog.open}
-  variant={mt940Dialog.variant} // 'pko' | 'other'
-  onClose={() => setMt940Dialog({ open: false, variant: 'other' })}
-  onImportComplete={handleMt940Complete}
-/>
-```
-
-**3. W `Mt940ImportDialog.tsx` dodać informację o formacie:**
-```tsx
-interface Mt940ImportDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onImportComplete: (count: number) => void;
-  variant?: 'pko' | 'other'; // Nowy prop
-}
-
-// W komponencie
-<DialogTitle>
-  Import wyciągu MT940 {variant === 'pko' ? '(PKO BP)' : '(inne banki)'}
-</DialogTitle>
-
-{variant === 'pko' ? (
-  <p className="text-sm text-muted-foreground">
-    Format PKO BP z podpolami ~20-~63
-  </p>
-) : (
-  <p className="text-sm text-muted-foreground">
-    Standardowy format SWIFT z polami ^20-^63
-  </p>
-)}
-```
-
-Parser już obsługuje oba formaty automatycznie, więc nie trzeba zmieniać logiki parsowania - tylko UI.
-
-### Pliki do modyfikacji
-- `src/pages/Documents/DocumentDialog.tsx` - dwa przyciski
-- `src/pages/Documents/Mt940ImportDialog.tsx` - nowy prop `variant`
 
 ---
 
 ## Kolejność implementacji
 
-1. **KRYTYCZNE (natychmiast):**
-   - Problem 5: Zoptymalizowana funkcja SQL dla admina (timeout)
-   - Problem 1: Naprawa stref czasowych (wpływa na całą aplikację)
+1. **KRYTYCZNY (natychmiast):**
+   - Problem 1: Zmiana `pageSize` z 20 na 1000 (1 linia kodu!)
 
-2. **WYSOKIE (szybko):**
-   - Problem 4: Unikalne numery dokumentów (migracja SQL)
-   - Problem 2: Waluta/PLN toggle
-
-3. **ŚREDNIE:**
-   - Problem 7: Dwa przyciski MT940
-
-4. **NISKIE:**
-   - Problem 3: Termin powiadomień (11. dzień)
-   - Problem 6: Usunięcie Excel skrócony
+2. **WYSOKI (szybko):**
+   - Problem 2: Naprawa parsera MT940 dla formatu z `^`
+   - Problem 3: Toggle waluta/PLN (wymaga więcej zmian)
 
 ---
 
@@ -493,63 +281,19 @@ Parser już obsługuje oba formaty automatycznie, więc nie trzeba zmieniać log
 
 | Problem | Czas |
 |---------|------|
-| 5 - Zoptymalizowana funkcja SQL | 1h |
-| 1 - Strefy czasowe (nowy moduł + refactor wielu plików) | 3h |
-| 2 - Toggle waluta/PLN | 2h |
-| 3 - Data powiadomień | 0.25h |
-| 4 - Unikalne numery dokumentów | 0.5h |
-| 6 - Usunięcie Excel skrócony | 0.25h |
-| 7 - Dwa przyciski MT940 | 1h |
-| **RAZEM** | **~8 godzin** |
+| 1 - pageSize (1 linia!) | 5 min |
+| 2 - Parser MT940 | 1.5h |
+| 3 - Toggle waluta/PLN + integracja z raportami | 3h |
+| **RAZEM** | **~5 godzin** |
 
 ---
 
-## Diagram - Optymalizacja problemu 5 (admin timeout)
+## Pliki do modyfikacji
 
-```text
-PRZED (stary algorytm - TIMEOUT):
-┌─────────────────────────────────────────┐
-│ SELECT ... FROM accounts a              │
-│ WHERE EXISTS(                           │
-│   SELECT 1 FROM accounts sub            │
-│   WHERE sub.number LIKE (a.number||'-%')│
-│ )                                       │
-└─────────────────────────────────────────┘
-              ↓
-┌─────────────────────────────────────────┐
-│ EXPLAIN ANALYZE:                        │
-│ Nested Loop Semi Join                   │
-│ - 6475 × 6475 = 41,925,625 porównań     │
-│ - Rows removed by join filter: 39.8M    │
-│ - Execution Time: 8271 ms → TIMEOUT     │
-└─────────────────────────────────────────┘
-
-PO (nowy algorytm - SZYBKI):
-┌─────────────────────────────────────────┐
-│ WITH                                    │
-│   base_accounts AS (                    │
-│     SELECT * FROM accounts              │
-│   ),                                    │
-│   parent_numbers AS (                   │
-│     SELECT DISTINCT                     │
-│       regexp_replace(number, '-[^-]+$', │
-│       '') as parent_prefix              │
-│     FROM base_accounts                  │
-│     WHERE number LIKE '%-%'             │
-│   )                                     │
-│ SELECT ba.*,                            │
-│   EXISTS(SELECT 1 FROM parent_numbers   │
-│          WHERE parent_prefix = ba.number│
-│   ) as has_analytics                    │
-│ FROM base_accounts ba                   │
-└─────────────────────────────────────────┘
-              ↓
-┌─────────────────────────────────────────┐
-│ PRZEWIDYWANY EXPLAIN:                   │
-│ - 1 pełny skan accounts (6475 rows)     │
-│ - 1 agregacja regexp na ~4000 rows      │
-│ - 1 hash join na prefiksach             │
-│ - Execution Time: <500 ms ✓             │
-└─────────────────────────────────────────┘
-```
-
+| Problem | Plik |
+|---------|------|
+| 1 | `src/hooks/useFilteredAccounts.ts` - linia 52 |
+| 2 | `src/pages/Documents/Mt940ImportDialog.tsx` - funkcja `extractDescription()` |
+| 3 | `src/pages/Documents/DocumentDialog.tsx` - stan `showInPLN`, przycisk toggle |
+| 3 | `src/pages/Documents/InlineTransactionRow.tsx` - opcjonalnie wyświetlanie PLN |
+| 3 | `src/utils/financeUtils.ts` - join z documents, przeliczanie walut |
