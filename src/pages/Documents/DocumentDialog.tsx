@@ -1004,6 +1004,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                 credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
                 description: t.description,
                 currency: t.currency,
+                exchange_rate: data.currency !== "PLN" ? exchangeRate : 1, // DODANO: zapisz kurs do transakcji
                 date: format(data.document_date, "yyyy-MM-dd"),
                 document_number: data.document_number,
                 display_order: t.display_order,
@@ -1031,6 +1032,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             credit_amount: t.credit_amount !== undefined ? t.credit_amount : 0,
             description: t.description,
             currency: t.currency,
+            exchange_rate: data.currency !== "PLN" ? exchangeRate : 1, // DODANO: zapisz kurs do transakcji
             date: format(data.document_date, "yyyy-MM-dd"),
             location_id: user.location,
             user_id: user.id,
@@ -1752,6 +1754,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                               onSelect={(checked) => handleSelectTransaction(index, checked)}
                               hasValidationError={!!errorInfo}
                               missingFields={errorInfo?.missingFields}
+                              showInPLN={showInPLN}
+                              exchangeRate={exchangeRate}
                             />
                           );
                         })}
@@ -1910,6 +1914,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                                 onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
                                 hasValidationError={!!errorInfo}
                                 missingFields={errorInfo?.missingFields}
+                                showInPLN={showInPLN}
+                                exchangeRate={exchangeRate}
                               />
                             );
                           })}
@@ -2061,6 +2067,8 @@ const SortableTransactionRow: React.FC<{
   onSelect?: (checked: boolean) => void;
   hasValidationError?: boolean;
   missingFields?: ValidationError["missingFields"];
+  showInPLN?: boolean;
+  exchangeRate?: number;
 }> = ({
   id,
   index,
@@ -2076,6 +2084,8 @@ const SortableTransactionRow: React.FC<{
   onSelect,
   hasValidationError = false,
   missingFields,
+  showInPLN = false,
+  exchangeRate = 1,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -2098,6 +2108,8 @@ const SortableTransactionRow: React.FC<{
       onSplit={onSplit}
       currency={currency}
       isEditingBlocked={isEditingBlocked}
+      showInPLN={showInPLN}
+      exchangeRate={exchangeRate}
       isSelected={isSelected}
       onSelect={onSelect}
       hasValidationError={hasValidationError}
@@ -2123,6 +2135,8 @@ const EditableTransactionRow = React.forwardRef<
     style?: React.CSSProperties;
     dragHandleProps?: any;
     orderNumber?: number;
+    showInPLN?: boolean;
+    exchangeRate?: number;
   }
 >(
   (
@@ -2141,6 +2155,8 @@ const EditableTransactionRow = React.forwardRef<
       style,
       dragHandleProps,
       orderNumber,
+      showInPLN = false,
+      exchangeRate = 1,
     },
     ref,
   ) => {
@@ -2231,7 +2247,7 @@ const EditableTransactionRow = React.forwardRef<
       enabled: !!user?.id,
     });
 
-    const getCurrencySymbol = (currency: string = "PLN") => {
+    const getCurrencySymbol = (curr: string = "PLN") => {
       const currencySymbols: { [key: string]: string } = {
         PLN: "zł",
         EUR: "€",
@@ -2242,7 +2258,17 @@ const EditableTransactionRow = React.forwardRef<
         NOK: "kr",
         SEK: "kr",
       };
-      return currencySymbols[currency] || currency;
+      return currencySymbols[curr] || curr;
+    };
+
+    // Oblicz wyświetlaną walutę i mnożnik dla przeliczenia PLN
+    const displayCurrency = showInPLN && currency !== "PLN" ? "PLN" : currency;
+    const displayMultiplier = showInPLN && currency !== "PLN" && exchangeRate ? exchangeRate : 1;
+    
+    // Funkcja do formatowania wyświetlanej kwoty (przeliczonej lub oryginalnej)
+    const getDisplayAmount = (amount: number): string => {
+      const displayValue = amount * displayMultiplier;
+      return displayValue ? displayValue.toFixed(2) : "";
     };
 
     return (
@@ -2280,46 +2306,55 @@ const EditableTransactionRow = React.forwardRef<
         </TableCell>
         <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
-            <Input
-              type="text"
-              inputMode="decimal"
-              value={debitAmountInput}
-              onChange={(e) => {
-                const inputValue = e.target.value;
-                setDebitAmountInput(inputValue);
+            <div className="flex flex-col">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={showInPLN && currency !== "PLN" ? getDisplayAmount(formData.debit_amount) : debitAmountInput}
+                onChange={(e) => {
+                  if (showInPLN && currency !== "PLN") return; // Read-only w trybie PLN
+                  const inputValue = e.target.value;
+                  setDebitAmountInput(inputValue);
 
-                if (inputValue === "" || inputValue === "-") {
-                  setFormData((prev) => ({ ...prev, debit_amount: 0 }));
-                  return;
-                }
+                  if (inputValue === "" || inputValue === "-") {
+                    setFormData((prev) => ({ ...prev, debit_amount: 0 }));
+                    return;
+                  }
 
-                const normalizedValue = inputValue.replace(",", ".");
-                const numValue = parseFloat(normalizedValue);
-                if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                  const normalizedValue = inputValue.replace(",", ".");
+                  const numValue = parseFloat(normalizedValue);
+                  if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                    setFormData((prev) => ({ ...prev, debit_amount: numValue }));
+                  }
+                }}
+                onFocus={() => setIsDebitFocused(true)}
+                onBlur={() => {
+                  setIsDebitFocused(false);
+                  const normalizedValue = debitAmountInput.replace(",", ".");
+                  const numValue = parseFloat(normalizedValue) || 0;
                   setFormData((prev) => ({ ...prev, debit_amount: numValue }));
-                }
-              }}
-              onFocus={() => setIsDebitFocused(true)}
-              onBlur={() => {
-                setIsDebitFocused(false);
-                const normalizedValue = debitAmountInput.replace(",", ".");
-                const numValue = parseFloat(normalizedValue) || 0;
-                setFormData((prev) => ({ ...prev, debit_amount: numValue }));
-                setDebitAmountInput(numValue ? numValue.toFixed(2) : "");
-              }}
-              placeholder="0.00"
-              style={{
-                width: `${Math.max(60, (debitAmountInput.length || 3) + 130)}px`,
-              }}
-              className={cn(
-                "text-right",
-                isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
-                missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
+                  setDebitAmountInput(numValue ? numValue.toFixed(2) : "");
+                }}
+                placeholder="0.00"
+                style={{
+                  width: `${Math.max(60, (debitAmountInput.length || 3) + 130)}px`,
+                }}
+                className={cn(
+                  "text-right",
+                  isDebitReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
+                  missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
+                  showInPLN && currency !== "PLN" && "bg-muted",
+                )}
+                disabled={isEditingBlocked || isDebitReadOnly || (showInPLN && currency !== "PLN")}
+                readOnly={isDebitReadOnly || (showInPLN && currency !== "PLN")}
+              />
+              {showInPLN && currency !== "PLN" && formData.debit_amount > 0 && (
+                <span className="text-xs text-muted-foreground mt-0.5">
+                  ({formData.debit_amount.toFixed(2)} {getCurrencySymbol(currency)})
+                </span>
               )}
-              disabled={isEditingBlocked || isDebitReadOnly}
-              readOnly={isDebitReadOnly}
-            />
-            <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
+            </div>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{getCurrencySymbol(displayCurrency)}</span>
           </div>
         </TableCell>
         <TableCell>
@@ -2338,46 +2373,55 @@ const EditableTransactionRow = React.forwardRef<
         </TableCell>
         <TableCell className="w-auto">
           <div className="flex items-center space-x-2">
-            <Input
-              type="text"
-              inputMode="decimal"
-              value={creditAmountInput}
-              onChange={(e) => {
-                const inputValue = e.target.value;
-                setCreditAmountInput(inputValue);
+            <div className="flex flex-col">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={showInPLN && currency !== "PLN" ? getDisplayAmount(formData.credit_amount) : creditAmountInput}
+                onChange={(e) => {
+                  if (showInPLN && currency !== "PLN") return; // Read-only w trybie PLN
+                  const inputValue = e.target.value;
+                  setCreditAmountInput(inputValue);
 
-                if (inputValue === "" || inputValue === "-") {
-                  setFormData((prev) => ({ ...prev, credit_amount: 0 }));
-                  return;
-                }
+                  if (inputValue === "" || inputValue === "-") {
+                    setFormData((prev) => ({ ...prev, credit_amount: 0 }));
+                    return;
+                  }
 
-                const normalizedValue = inputValue.replace(",", ".");
-                const numValue = parseFloat(normalizedValue);
-                if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                  const normalizedValue = inputValue.replace(",", ".");
+                  const numValue = parseFloat(normalizedValue);
+                  if (!isNaN(numValue) && Math.abs(numValue) < 10000000000) {
+                    setFormData((prev) => ({ ...prev, credit_amount: numValue }));
+                  }
+                }}
+                onFocus={() => setIsCreditFocused(true)}
+                onBlur={() => {
+                  setIsCreditFocused(false);
+                  const normalizedValue = creditAmountInput.replace(",", ".");
+                  const numValue = parseFloat(normalizedValue) || 0;
                   setFormData((prev) => ({ ...prev, credit_amount: numValue }));
-                }
-              }}
-              onFocus={() => setIsCreditFocused(true)}
-              onBlur={() => {
-                setIsCreditFocused(false);
-                const normalizedValue = creditAmountInput.replace(",", ".");
-                const numValue = parseFloat(normalizedValue) || 0;
-                setFormData((prev) => ({ ...prev, credit_amount: numValue }));
-                setCreditAmountInput(numValue ? numValue.toFixed(2) : "");
-              }}
-              placeholder="0.00"
-              style={{
-                width: `${Math.max(70, (creditAmountInput.length || 4) + 130)}px`,
-              }}
-              className={cn(
-                "text-right",
-                isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
-                missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
+                  setCreditAmountInput(numValue ? numValue.toFixed(2) : "");
+                }}
+                placeholder="0.00"
+                style={{
+                  width: `${Math.max(70, (creditAmountInput.length || 4) + 130)}px`,
+                }}
+                className={cn(
+                  "text-right",
+                  isCreditReadOnly && "bg-muted text-muted-foreground cursor-not-allowed",
+                  missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
+                  showInPLN && currency !== "PLN" && "bg-muted",
+                )}
+                disabled={isEditingBlocked || isCreditReadOnly || (showInPLN && currency !== "PLN")}
+                readOnly={isCreditReadOnly || (showInPLN && currency !== "PLN")}
+              />
+              {showInPLN && currency !== "PLN" && formData.credit_amount > 0 && (
+                <span className="text-xs text-muted-foreground mt-0.5">
+                  ({formData.credit_amount.toFixed(2)} {getCurrencySymbol(currency)})
+                </span>
               )}
-              disabled={isEditingBlocked || isCreditReadOnly}
-              readOnly={isCreditReadOnly}
-            />
-            <span className="text-sm text-gray-500 whitespace-nowrap">{getCurrencySymbol(currency)}</span>
+            </div>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{getCurrencySymbol(displayCurrency)}</span>
           </div>
         </TableCell>
         <TableCell>

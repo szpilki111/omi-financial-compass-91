@@ -112,7 +112,7 @@ const AccountSearchPage = () => {
         .from('transactions')
         .select(`
           *,
-          document:documents(id, document_number, document_name),
+          document:documents(id, document_number, document_name, currency, exchange_rate),
           debitAccount:accounts!transactions_debit_account_id_fkey(id, number, name, type),
           creditAccount:accounts!transactions_credit_account_id_fkey(id, number, name, type)
         `)
