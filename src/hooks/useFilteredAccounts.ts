@@ -46,8 +46,65 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
     queryFn: async (): Promise<FilteredAccount[]> => {
       if (!user?.id) return [];
 
-      // Supabase ma domyślny limit 1000 rekordów per request (db-max-rows)
-      // Musimy paginować po 1000, by pobrać wszystkie konta
+      // OPTYMALIZACJA: Dla admina użyj bezpośredniego zapytania (jak w Administracji)
+      // Jest znacznie szybsze niż RPC z paginacją (~0.5s vs ~30s dla 6000+ kont)
+      if (isAdmin) {
+        console.log("[useFilteredAccounts] Admin detected - using fast direct query");
+        
+        const allAccounts: FilteredAccount[] = [];
+        const pageSize = 1000; // Limit Supabase per request
+        let offset = 0;
+        let hasMore = true;
+        let iterations = 0;
+        const maxIterations = 20; // Bezpiecznik
+
+        while (hasMore && iterations < maxIterations) {
+          iterations++;
+          
+          let query = supabase
+            .from('accounts')
+            .select('id, number, name, type, is_active, analytical')
+            .order('number')
+            .range(offset, offset + pageSize - 1);
+          
+          if (!includeInactive) {
+            query = query.eq('is_active', true);
+          }
+          
+          const { data, error } = await query;
+          
+          if (error) {
+            console.error("Error fetching accounts for admin:", error);
+            throw error;
+          }
+          
+          const fetchedCount = data?.length ?? 0;
+          console.log(`[useFilteredAccounts] Admin page ${iterations}: fetched ${fetchedCount} accounts`);
+          
+          if (data && fetchedCount > 0) {
+            allAccounts.push(...(data as FilteredAccount[]));
+            offset += fetchedCount;
+            hasMore = fetchedCount === pageSize;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        console.log(`[useFilteredAccounts] Admin total: ${allAccounts.length} accounts in ${iterations} pages`);
+
+        // Oblicz has_analytics client-side
+        const processedAccounts = allAccounts.map((acc) => {
+          const hasSubAccounts = allAccounts.some((sub) => sub.number.startsWith(acc.number + "-"));
+          return {
+            ...acc,
+            has_analytics: hasSubAccounts || (acc.analytical ?? false),
+          };
+        });
+
+        return processedAccounts;
+      }
+
+      // Dla innych ról - użyj RPC z paginacją
       const allAccounts: FilteredAccount[] = [];
       const pageSize = 1000; // Limit Supabase per request - KRYTYCZNE: nie zmieniać na mniejszą wartość!
       let offset = 0;
@@ -55,7 +112,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
       let iterations = 0;
       const maxIterations = 50; // Bezpiecznik - max 50000 kont
 
-      console.log("[useFilteredAccounts] Starting pagination fetch...");
+      console.log("[useFilteredAccounts] Starting pagination fetch via RPC...");
 
       while (hasMore && iterations < maxIterations) {
         iterations++;
@@ -91,7 +148,6 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
 
       // Dynamicznie oblicz has_analytics dla WSZYSTKICH poziomów zagłębienia
       // Konto ma has_analytics=true jeśli istnieje jakiekolwiek inne konto zaczynające się od "number-"
-      const accountNumbers = new Set(allAccounts.map((acc) => acc.number));
       const processedAccounts = allAccounts.map((acc) => {
         // Sprawdź czy istnieje jakiekolwiek konto zaczynające się od tego numeru + "-"
         const hasSubAccounts = allAccounts.some((sub) => sub.number.startsWith(acc.number + "-"));

@@ -35,10 +35,14 @@ interface Transaction {
   credit_account_id: string;
   settlement_type: string;
   document_id: string | null;
+  currency?: string;
+  exchange_rate?: number;
   document?: {
     id: string;
     document_number: string;
     document_name: string;
+    currency?: string;
+    exchange_rate?: number;
   };
   debitAccount?: Account;
   creditAccount?: Account;
@@ -71,6 +75,24 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
       currency: 'PLN',
       minimumFractionDigits: 2,
     }).format(amount);
+  };
+
+  // Funkcja do przeliczania kwot walutowych na PLN
+  const getAmountInPLN = (transaction: Transaction): number => {
+    const rawAmount = transaction.debit_account_id === selectedAccount.id
+      ? transaction.debit_amount || transaction.amount
+      : transaction.credit_amount || transaction.amount;
+    
+    // Pobierz kurs - najpierw z transakcji, potem z dokumentu
+    const currency = transaction.currency || transaction.document?.currency || 'PLN';
+    const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
+    
+    // Przelicz na PLN jeśli waluta obca
+    if (currency !== 'PLN' && exchangeRate > 0) {
+      return rawAmount * exchangeRate;
+    }
+    
+    return rawAmount;
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -217,12 +239,18 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <div className="flex items-center justify-end gap-1">
-                          <Calculator className="h-4 w-4 text-gray-500" />
-                          {formatAmount(
-                            transaction.debit_account_id === selectedAccount.id
-                              ? transaction.debit_amount || transaction.amount
-                              : transaction.credit_amount || transaction.amount
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <Calculator className="h-4 w-4 text-muted-foreground" />
+                            {formatAmount(getAmountInPLN(transaction))}
+                          </div>
+                          {transaction.currency && transaction.currency !== 'PLN' && (
+                            <span className="text-xs text-muted-foreground">
+                              ({(transaction.debit_account_id === selectedAccount.id
+                                ? transaction.debit_amount || transaction.amount
+                                : transaction.credit_amount || transaction.amount
+                              ).toFixed(2)} {transaction.currency})
+                            </span>
                           )}
                         </div>
                       </TableCell>
