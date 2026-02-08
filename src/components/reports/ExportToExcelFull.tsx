@@ -47,12 +47,22 @@ const handleExport = async () => {
   try {
     const { month, year, location_id } = report;
 
+    // Helper do przeliczania kwot walutowych na PLN
+    const getAmountInPLN = (amount: number, currency?: string, exchangeRate?: number): number => {
+      if (!currency || currency === 'PLN' || !exchangeRate || exchangeRate === 1) return amount;
+      return amount * exchangeRate;
+    };
+
     // Pobranie danych lokalizacji
     const { data: locationData } = await supabase
       .from('locations')
-      .select('*')
+      .select('*, location_identifier')
       .eq('id', location_id)
       .single();
+
+    // Wykryj typ lokalizacji: dom (2-*) vs parafia (3-*)
+    const isDom = locationData?.location_identifier?.startsWith('2');
+    const isParafia = locationData?.location_identifier?.startsWith('3');
 
     // Nazwy kont są teraz zahardcodowane - nie pobieramy z bazy
     // Używamy stałych INCOME_PREFIXES i EXPENSE_PREFIXES
@@ -71,23 +81,30 @@ const handleExport = async () => {
     const { data: prevTransactions } = await supabase
       .from('transactions')
       .select(`
-        debit_amount, credit_amount,
+        debit_amount, credit_amount, currency, exchange_rate,
         debit_account:accounts!transactions_debit_account_id_fkey(number),
         credit_account:accounts!transactions_credit_account_id_fkey(number)
       `)
       .eq('location_id', location_id)
       .lte('date', prevMonthEndStr);
 
-    // Oblicz salda otwarcia
+    // Oblicz salda otwarcia Z PRZELICZENIEM NA PLN
     const openingBalances = new Map<string, number>();
     prevTransactions?.forEach(tx => {
+      const rate = tx.exchange_rate || 1;
+      const curr = tx.currency || 'PLN';
+      
       if (tx.debit_account?.number) {
         const prefix = tx.debit_account.number.split('-')[0];
-        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + (tx.debit_amount || 0));
+        const rawAmount = tx.debit_amount || 0;
+        const amount = getAmountInPLN(rawAmount, curr, rate);
+        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + amount);
       }
       if (tx.credit_account?.number) {
         const prefix = tx.credit_account.number.split('-')[0];
-        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) - (tx.credit_amount || 0));
+        const rawAmount = tx.credit_amount || 0;
+        const amount = getAmountInPLN(rawAmount, curr, rate);
+        openingBalances.set(prefix, (openingBalances.get(prefix) || 0) - amount);
       }
     });
 
@@ -113,12 +130,19 @@ const handleExport = async () => {
     let intentions210Received = 0;
     let intentions210CelebratedGiven = 0;
 
+    // Mapa dla świadczeń na prowincję (tylko dla domów)
+    const provinceTurnovers = new Map<string, number>();
+
     transactions?.forEach(tx => {
+      const rate = tx.exchange_rate || 1;
+      const curr = tx.currency || 'PLN';
+
       // Strona Ma (credit)
       if (tx.credit_account) {
         const accNum = tx.credit_account.number;
         const prefix = accNum.split('-')[0];
-        const amount = tx.credit_amount || tx.amount || 0;
+        const rawAmount = tx.credit_amount || tx.amount || 0;
+        const amount = getAmountInPLN(rawAmount, curr, rate);
 
         if (prefix.startsWith('7')) {
           incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amount);
@@ -132,6 +156,16 @@ const handleExport = async () => {
           const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
           existing.liabilities += amount;
           liabilitiesMap.set(prefix, existing);
+          
+          // Dla domów: zbierz obroty Ma kont 200-{location}-*
+          if (isDom && accNum.startsWith(`200-${locationData?.location_identifier}-`)) {
+            // Wyciągnij suffix konta (np. 200-2-3-2 -> "2", 200-2-3-12 -> "12")
+            const parts = accNum.split('-');
+            if (parts.length >= 4) {
+              const suffix = parts[3];
+              provinceTurnovers.set(suffix, (provinceTurnovers.get(suffix) || 0) + amount);
+            }
+          }
         }
         if (prefix === '210') {
           intentions210CelebratedGiven += amount;
@@ -142,7 +176,8 @@ const handleExport = async () => {
       if (tx.debit_account) {
         const accNum = tx.debit_account.number;
         const prefix = accNum.split('-')[0];
-        const amount = tx.debit_amount || tx.amount || 0;
+        const rawAmount = tx.debit_amount || tx.amount || 0;
+        const amount = getAmountInPLN(rawAmount, curr, rate);
 
         if (prefix.startsWith('4')) {
           expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amount);
@@ -252,10 +287,46 @@ const handleExport = async () => {
     });
     sheet1Data.push(['']);
 
-    // Podpisy
-    sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
-    sheet1Data.push(['']);
-    sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
+    // Sekcja świadczeń na prowincję - TYLKO dla domów (location_identifier zaczyna się od 2)
+    if (isDom) {
+      sheet1Data.push(['']);
+      sheet1Data.push(['', '', 'Świadczenia na prowincję']);
+      
+      // Definicja świadczeń na prowincję
+      const PROVINCE_CONTRIBUTIONS = [
+        { suffix: '2', name: 'kontrybucje' },
+        { suffix: '3', name: 'duszp. OMI' },
+        { suffix: '4', name: 'ZUS OMI' },
+        { suffix: '5', name: 'III filar' },
+        { suffix: '6', name: 'dzierżawa przech.' },
+        { suffix: '7', name: 'zast. zagraniczne' },
+        { suffix: '8', name: 'rekolekcjonista' },
+        { suffix: '9', name: 'binacje' },
+        { suffix: '10', name: 'kalendarze' },
+        { suffix: '11', name: 'podatek sąnkt.' },
+        { suffix: '12', name: 'pensje opodatk.' },
+      ];
+      
+      PROVINCE_CONTRIBUTIONS.forEach(item => {
+        const amount = provinceTurnovers.get(item.suffix) || 0;
+        if (amount > 0) {
+          sheet1Data.push([`(obroty Ma 200-${locationData?.location_identifier}-${item.suffix})`, item.name, amount]);
+        } else {
+          sheet1Data.push(['', item.name, 0]);
+        }
+      });
+      
+      sheet1Data.push(['']);
+      sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
+      sheet1Data.push(['']);
+      sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
+    } else {
+      // Dla parafii - prostsze podpisy bez sekcji świadczeń
+      sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
+      sheet1Data.push(['']);
+      sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ']);
+    }
+    
     sheet1Data.push(['']);
     sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ''}`]);
 
