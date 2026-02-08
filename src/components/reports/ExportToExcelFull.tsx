@@ -305,7 +305,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         intentionsClosing,
       ]);
       sheet1Data.push([""]);
-      sheet1Data.push(["C. Należności i zobowiązania"]);
       sheet1Data.push([
         {
           v: `C. Należności i zobowiązania`,
