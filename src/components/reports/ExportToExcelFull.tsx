@@ -236,7 +236,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       ]);
       sheet1Data.push([""]);
       sheet1Data.push([
-        "",
         {
           v: `A. Stan finansowy domu`,
           t: "s",
@@ -280,7 +279,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push(["SALDO", totalOpening, totalDebits, totalCredits, totalClosing]);
       sheet1Data.push([""]);
       sheet1Data.push([
-        "",
         {
           v: `B. Intencje`,
           t: "s",
@@ -309,7 +307,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push([""]);
       sheet1Data.push(["C. Należności i zobowiązania"]);
       sheet1Data.push([
-        "",
         {
           v: `C. Należności i zobowiązania`,
           t: "s",
@@ -345,7 +342,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       if (isDom) {
         sheet1Data.push([
-          "",
           "",
           {
             v: `Świadczenia na prowincję`,
