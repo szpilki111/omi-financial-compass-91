@@ -219,15 +219,15 @@ const handleExport = async () => {
     // ────────────────────────────────────────────────
     const sheet1Data: (string | number | null)[][] = [];
 
+    // Nagłówek lokalizacji
     sheet1Data.push([locationData?.name || '']);
-    sheet1Data.push([`${locationData?.postal_code || ''} ${locationData?.city || ''}`]);
-    sheet1Data.push([locationData?.address || '']);
+    sheet1Data.push([locationData?.address ? `${locationData.address}, ${locationData.postal_code || ''} ${locationData.city || ''}` : '']);
     sheet1Data.push(['']);
     sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
     sheet1Data.push(['']);
 
-    // A. Stan finansowy domu
-    sheet1Data.push(['A. Stan finansowy domu']);
+    // A. Stan finansowy
+    sheet1Data.push(['A. Stan finansowy']);
     sheet1Data.push(['', 'Początek miesiąca', 'Uznania', 'Obciążenia', 'Koniec miesiąca']);
 
     let totalOpening = 0;
@@ -285,61 +285,74 @@ const handleExport = async () => {
       const closing = opening + receivables - liabilities;
       sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
     });
-    sheet1Data.push(['']);
 
     // Sekcja świadczeń na prowincję - TYLKO dla domów (location_identifier zaczyna się od 2)
     if (isDom) {
       sheet1Data.push(['']);
-      sheet1Data.push(['', '', 'Świadczenia na prowincję']);
+      sheet1Data.push(['(domy)', '', 'Świadczenia na prowincję']);
       
       // Definicja świadczeń na prowincję
       const PROVINCE_CONTRIBUTIONS = [
-        { suffix: '2', name: 'kontrybucje' },
-        { suffix: '3', name: 'duszp. OMI' },
-        { suffix: '4', name: 'ZUS OMI' },
-        { suffix: '5', name: 'III filar' },
-        { suffix: '6', name: 'dzierżawa przech.' },
-        { suffix: '7', name: 'zast. zagraniczne' },
-        { suffix: '8', name: 'rekolekcjonista' },
-        { suffix: '9', name: 'binacje' },
-        { suffix: '10', name: 'kalendarze' },
-        { suffix: '11', name: 'podatek sąnkt.' },
-        { suffix: '12', name: 'pensje opodatk.' },
+        { suffix: '2', label: `(obroty MA 200-${locationData?.location_identifier}-2)`, name: 'kontrybucje' },
+        { suffix: '3', label: `(obroty MA 200-${locationData?.location_identifier}-3)`, name: 'duszp. OMI' },
+        { suffix: '4', label: '', name: 'ZUS OMI' },
+        { suffix: '5', label: '', name: 'III filar' },
+        { suffix: '6', label: '', name: 'dzierżawa przech.' },
+        { suffix: '7', label: '', name: 'zast. zagraniczne' },
+        { suffix: '8', label: '', name: 'rekolekcjonista' },
+        { suffix: '9', label: '', name: 'binacje' },
+        { suffix: '10', label: '', name: 'kalendarze' },
+        { suffix: '11', label: '', name: 'podatek sąnkt.' },
+        { suffix: '12', label: `(obroty MA 200-${locationData?.location_identifier}-12)`, name: 'pensje opodatk.' },
       ];
       
       PROVINCE_CONTRIBUTIONS.forEach(item => {
         const amount = provinceTurnovers.get(item.suffix) || 0;
-        if (amount > 0) {
-          sheet1Data.push([`(obroty Ma 200-${locationData?.location_identifier}-${item.suffix})`, item.name, amount]);
-        } else {
-          sheet1Data.push(['', item.name, 0]);
-        }
+        sheet1Data.push([item.label, item.name, amount]);
       });
       
       sheet1Data.push(['']);
-      sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
+      sheet1Data.push([`Przyjęto na radzie domowej dnia ................................... r.`]);
       sheet1Data.push(['']);
-      sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'I Radny', 'II Radny']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ', 'RADNI']);
     } else {
       // Dla parafii - prostsze podpisy bez sekcji świadczeń
-      sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push([`Sporządzono dnia ................................... r.`]);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
+      sheet1Data.push(['']);
       sheet1Data.push(['']);
       sheet1Data.push(['SUPERIOR', 'EKONOM', 'PROBOSZCZ']);
     }
-    
-    sheet1Data.push(['']);
-    sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ''}`]);
 
     const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
+    // Szerokości kolumn dopasowane do orientacji pionowej A4 (szerokość ~21cm)
+    // Czcionka 11pt, marginesy 1cm = około 19cm użytecznej szerokości
     sheet1['!cols'] = [
-      { wch: 30.84 },
-      { wch: 18.83 },
-      { wch: 18.83 },
-      { wch: 18.83 },
-      { wch: 18.83 }
+      { wch: 24 },  // A - nazwy wierszy
+      { wch: 16 },  // B - Początek miesiąca
+      { wch: 16 },  // C - Uznania/Należności
+      { wch: 16 },  // D - Obciążenia/Zobowiązania
+      { wch: 16 }   // E - Koniec miesiąca
     ];
 
+    // Marginesy 1 cm
     sheet1['!margins'] = {
       left: 0.39,
       right: 0.39,
@@ -349,18 +362,20 @@ const handleExport = async () => {
       footer: 0.3
     };
 
+    // Orientacja PIONOWA
     sheet1['!pageSetup'] = {
-      orientation: 'landscape'
+      orientation: 'portrait',
+      scale: 100
     };
 
-    // Czcionka 12 dla całego arkusza 1
-    const range1 = XLSX.utils.decode_range(sheet1['!ref']);
+    // Czcionka 11pt dla całego arkusza 1
+    const range1 = XLSX.utils.decode_range(sheet1['!ref'] || 'A1');
     for (let R = range1.s.r; R <= range1.e.r; ++R) {
       for (let C = range1.s.c; C <= range1.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
         if (!sheet1[cell_ref]) continue;
         sheet1[cell_ref].s = sheet1[cell_ref].s || {};
-        sheet1[cell_ref].s.font = { sz: 12 };
+        sheet1[cell_ref].s.font = { sz: 11 };
       }
     }
 
@@ -371,9 +386,10 @@ const handleExport = async () => {
     // ────────────────────────────────────────────────
     const sheet2Data: (string | number | null)[][] = [];
 
+    // Nagłówek
     sheet2Data.push(['I. PRZYCHODY', null, null, null, 'II. ROZCHODY', null, null]);
-    sheet2Data.push([null, null, null, null, null, null, null]);
-    sheet2Data.push(['Nr. konta', 'Treść', 'kwota', null, 'Nr. konta', 'Treść', 'kwota']);
+    sheet2Data.push(['']);
+    sheet2Data.push(['Konto', 'Nazwa', 'kwota', null, 'Konto', 'Nazwa', 'kwota']);
 
     let totalIncome = 0;
     INCOME_PREFIXES.forEach(prefix => {
@@ -389,8 +405,8 @@ const handleExport = async () => {
     for (let i = 0; i < maxLen; i++) {
       const incPrefix = i < INCOME_PREFIXES.length ? INCOME_PREFIXES[i] : null;
       const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
-      const incAmount = incPrefix ? (incomeMap.get(incPrefix) || 0) : 0;
-      const expAmount = expPrefix ? (expenseMap.get(expPrefix) || 0) : 0;
+      const incAmount = incPrefix ? (incomeMap.get(incPrefix) || 0) : null;
+      const expAmount = expPrefix ? (expenseMap.get(expPrefix) || 0) : null;
       const incName = incPrefix ? getIncomeAccountName(incPrefix) : null;
       const expName = expPrefix ? getExpenseAccountName(expPrefix) : null;
 
@@ -400,17 +416,24 @@ const handleExport = async () => {
       ]);
     }
 
-    sheet2Data.push([null, null, null, null, null, null, null]);
-    sheet2Data.push([null, 'PRZYCHODY RAZEM:', totalIncome, null, null, 'ROZCHODY RAZEM:', totalExpense]);
+    sheet2Data.push(['']);
+    sheet2Data.push(['', 'PRZYCHODY RAZEM:', totalIncome, null, null, 'ROZCHODY RAZEM:', totalExpense]);
 
     const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
 
+    // Szerokości kolumn dopasowane do orientacji pionowej A4
+    // Dwie sekcje obok siebie: Przychody (3 kolumny) i Rozchody (3 kolumny)
     sheet2['!cols'] = [
-      { wch: 7.59 }, { wch: 22.69 }, { wch: 5.82 }, { wch: 3.25 },
-      { wch: 8.97 }, { wch: 20.91 }, { wch: 16.47 }
+      { wch: 5 },   // A - Konto przychody
+      { wch: 24 },  // B - Nazwa przychody
+      { wch: 12 },  // C - kwota przychody
+      { wch: 2 },   // D - separator
+      { wch: 5 },   // E - Konto rozchody
+      { wch: 24 },  // F - Nazwa rozchody
+      { wch: 14 }   // G - kwota rozchody
     ];
 
-    // Marginesy 1 cm (≈ 0.3937 cala)
+    // Marginesy 1 cm
     sheet2['!margins'] = {
       left: 0.39,
       right: 0.39,
@@ -420,19 +443,22 @@ const handleExport = async () => {
       footer: 0.3
     };
 
-    // Czcionka 10 dla całego arkusza 2
-    const range2 = XLSX.utils.decode_range(sheet2['!ref']);
+    // Orientacja PIONOWA
+    sheet2['!pageSetup'] = {
+      orientation: 'portrait',
+      scale: 100
+    };
+
+    // Czcionka 9pt dla całego arkusza 2 (mniejsza bo więcej danych)
+    const range2 = XLSX.utils.decode_range(sheet2['!ref'] || 'A1');
     for (let R = range2.s.r; R <= range2.e.r; ++R) {
       for (let C = range2.s.c; C <= range2.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
         if (!sheet2[cell_ref]) continue;
         sheet2[cell_ref].s = sheet2[cell_ref].s || {};
-        sheet2[cell_ref].s.font = { sz: 10 };
+        sheet2[cell_ref].s.font = { sz: 9 };
       }
     }
-
-    // Orientacja pionowa (domyślna) – możesz zmienić na 'landscape' jeśli chcesz
-    // sheet2['!pageSetup'] = { orientation: 'portrait' };
 
     XLSX.utils.book_append_sheet(wb, sheet2, 'Strona 2');
 
