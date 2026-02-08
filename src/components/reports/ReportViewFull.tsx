@@ -45,11 +45,17 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       console.log('📅 Obliczam saldo otwarcia na podstawie transakcji do:', prevMonthEndStr);
 
+      // Helper do przeliczania kwot walutowych na PLN
+      const getAmountInPLN = (amount: number, currency?: string, exchangeRate?: number): number => {
+        if (!currency || currency === 'PLN' || !exchangeRate || exchangeRate === 1) return amount;
+        return amount * exchangeRate;
+      };
+
       // Fetch ALL transactions up to end of previous month
       const { data: allTransactions, error } = await supabase
         .from('transactions')
         .select(`
-          debit_amount, credit_amount,
+          debit_amount, credit_amount, currency, exchange_rate,
           debit_account:accounts!transactions_debit_account_id_fkey(number),
           credit_account:accounts!transactions_credit_account_id_fkey(number)
         `)
@@ -64,17 +70,22 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       const balances = new Map<string, number>();
       
       allTransactions?.forEach(tx => {
+        const rate = tx.exchange_rate || 1;
+        const curr = tx.currency || 'PLN';
+        
         // Debit side (Wn) - increases balance
         if (tx.debit_account?.number) {
           const prefix = tx.debit_account.number.split('-')[0];
-          const amount = tx.debit_amount || 0;
+          const rawAmount = tx.debit_amount || 0;
+          const amount = getAmountInPLN(rawAmount, curr, rate);
           balances.set(prefix, (balances.get(prefix) || 0) + amount);
         }
         
         // Credit side (Ma) - decreases balance
         if (tx.credit_account?.number) {
           const prefix = tx.credit_account.number.split('-')[0];
-          const amount = tx.credit_amount || 0;
+          const rawAmount = tx.credit_amount || 0;
+          const amount = getAmountInPLN(rawAmount, curr, rate);
           balances.set(prefix, (balances.get(prefix) || 0) - amount);
         }
       });
@@ -134,12 +145,22 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       let intentions210Received = 0; // Wn - przyjęte
       let intentions210CelebratedGiven = 0; // Ma - odprawione i oddane
 
+      // Helper do przeliczania kwot walutowych na PLN
+      const getAmountInPLN = (amount: number, currency?: string, exchangeRate?: number): number => {
+        if (!currency || currency === 'PLN' || !exchangeRate || exchangeRate === 1) return amount;
+        return amount * exchangeRate;
+      };
+
       transactions?.forEach(tx => {
+        const rate = tx.exchange_rate || 1;
+        const curr = tx.currency || 'PLN';
+
         // Credit side processing
         if (tx.credit_account) {
           const accNum = tx.credit_account.number;
           const prefix = accNum.split('-')[0];
-          const amount = tx.credit_amount || tx.amount || 0;
+          const rawAmount = tx.credit_amount || tx.amount || 0;
+          const amount = getAmountInPLN(rawAmount, curr, rate);
           
           // Income - only 7xx accounts
           if (prefix.startsWith('7')) {
@@ -180,7 +201,8 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         if (tx.debit_account) {
           const accNum = tx.debit_account.number;
           const prefix = accNum.split('-')[0];
-          const amount = tx.debit_amount || tx.amount || 0;
+          const rawAmount = tx.debit_amount || tx.amount || 0;
+          const amount = getAmountInPLN(rawAmount, curr, rate);
           
           // Expenses - only 4xx accounts
           if (prefix.startsWith('4')) {
