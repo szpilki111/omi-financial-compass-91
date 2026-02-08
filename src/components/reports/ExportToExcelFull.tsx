@@ -306,15 +306,26 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         sheet1Data.push([""]);
         sheet1Data.push([`Przyjęto na radzie domowej dnia ................${year} r.`]);
         sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
         sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ", "I Radny", "II Radny"]);
       } else {
         sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
         sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
+        sheet1Data.push([""]);
         sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ"]);
       }
-
-      sheet1Data.push([""]);
-      sheet1Data.push([`Prowincja Misjonarzy Oblatów M.N. PEKAO S.A. ${locationData?.bank_account || ""}`]);
 
       const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
