@@ -82,9 +82,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const isDom = locationData?.location_identifier?.startsWith("2");
       const isParafia = locationData?.location_identifier?.startsWith("3");
 
-      // Nazwy kont są teraz zahardcodowane - nie pobieramy z bazy
-      // Używamy stałych INCOME_PREFIXES i EXPENSE_PREFIXES
-
       // Zakres dat
       const dateFrom = getFirstDayOfMonth(year, month);
       const dateTo = getLastDayOfMonth(year, month);
@@ -93,20 +90,20 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const prevMonthEnd = month === 1 ? new Date(year - 1, 11, 31) : new Date(year, month - 1, 0);
       const prevMonthEndStr = formatDateForDB(prevMonthEnd);
 
-      // Pobierz transakcje do końca poprzedniego miesiąca dla sald otwarcia
+      // Pobranie transakcji do końca poprzedniego miesiąca
       const { data: prevTransactions } = await supabase
         .from("transactions")
         .select(
           `
-        debit_amount, credit_amount, currency, exchange_rate,
-        debit_account:accounts!transactions_debit_account_id_fkey(number),
-        credit_account:accounts!transactions_credit_account_id_fkey(number)
-      `,
+          debit_amount, credit_amount, currency, exchange_rate,
+          debit_account:accounts!transactions_debit_account_id_fkey(number),
+          credit_account:accounts!transactions_credit_account_id_fkey(number)
+        `,
         )
         .eq("location_id", location_id)
         .lte("date", prevMonthEndStr);
 
-      // Oblicz salda otwarcia Z PRZELICZENIEM NA PLN
+      // Oblicz salda otwarcia
       const openingBalances = new Map<string, number>();
       prevTransactions?.forEach((tx) => {
         const rate = tx.exchange_rate || 1;
@@ -114,27 +111,25 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
         if (tx.debit_account?.number) {
           const prefix = tx.debit_account.number.split("-")[0];
-          const rawAmount = tx.debit_amount || 0;
-          const amount = getAmountInPLN(rawAmount, curr, rate);
+          const amount = getAmountInPLN(tx.debit_amount || 0, curr, rate);
           openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + amount);
         }
         if (tx.credit_account?.number) {
           const prefix = tx.credit_account.number.split("-")[0];
-          const rawAmount = tx.credit_amount || 0;
-          const amount = getAmountInPLN(rawAmount, curr, rate);
+          const amount = getAmountInPLN(tx.credit_amount || 0, curr, rate);
           openingBalances.set(prefix, (openingBalances.get(prefix) || 0) - amount);
         }
       });
 
-      // Pobranie transakcji za bieżący miesiąc
+      // Pobranie transakcji bieżącego miesiąca
       const { data: transactions, error } = await supabase
         .from("transactions")
         .select(
           `
-        *,
-        debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-        credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-      `,
+          *,
+          debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+          credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
+        `,
         )
         .eq("location_id", location_id)
         .gte("date", dateFrom)
@@ -149,139 +144,114 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const liabilitiesMap = new Map<string, { receivables: number; liabilities: number }>();
       let intentions210Received = 0;
       let intentions210CelebratedGiven = 0;
-
-      // Mapa dla świadczeń na prowincję (tylko dla domów)
       const provinceTurnovers = new Map<string, number>();
 
       transactions?.forEach((tx) => {
         const rate = tx.exchange_rate || 1;
         const curr = tx.currency || "PLN";
+        const amountCredit = getAmountInPLN(tx.credit_amount || tx.amount || 0, curr, rate);
+        const amountDebit = getAmountInPLN(tx.debit_amount || tx.amount || 0, curr, rate);
 
-        // Strona Ma (credit)
+        // Credit side
         if (tx.credit_account) {
-          const accNum = tx.credit_account.number;
-          const prefix = accNum.split("-")[0];
-          const rawAmount = tx.credit_amount || tx.amount || 0;
-          const amount = getAmountInPLN(rawAmount, curr, rate);
-
-          if (prefix.startsWith("7")) {
-            incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amount);
-          }
+          const prefix = tx.credit_account.number.split("-")[0];
+          if (prefix.startsWith("7")) incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amountCredit);
           if (prefix.startsWith("1")) {
-            const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
-            existing.credits += amount;
-            financialStatusMap.set(prefix, existing);
+            const ex = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
+            ex.credits += amountCredit;
+            financialStatusMap.set(prefix, ex);
           }
           if (prefix.startsWith("2")) {
-            const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
-            existing.liabilities += amount;
-            liabilitiesMap.set(prefix, existing);
+            const ex = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
+            ex.liabilities += amountCredit;
+            liabilitiesMap.set(prefix, ex);
 
-            // Dla domów: zbierz obroty Ma kont 200-{location}-*
-            if (isDom && accNum.startsWith(`200-${locationData?.location_identifier}-`)) {
-              // Wyciągnij suffix konta (np. 200-2-3-2 -> "2", 200-2-3-12 -> "12")
-              const parts = accNum.split("-");
+            if (isDom && tx.credit_account.number.startsWith(`200-${locationData?.location_identifier}-`)) {
+              const parts = tx.credit_account.number.split("-");
               if (parts.length >= 4) {
                 const suffix = parts[3];
-                provinceTurnovers.set(suffix, (provinceTurnovers.get(suffix) || 0) + amount);
+                provinceTurnovers.set(suffix, (provinceTurnovers.get(suffix) || 0) + amountCredit);
               }
             }
           }
-          if (prefix === "210") {
-            intentions210CelebratedGiven += amount;
-          }
+          if (prefix === "210") intentions210CelebratedGiven += amountCredit;
         }
 
-        // Strona Wn (debit)
+        // Debit side
         if (tx.debit_account) {
-          const accNum = tx.debit_account.number;
-          const prefix = accNum.split("-")[0];
-          const rawAmount = tx.debit_amount || tx.amount || 0;
-          const amount = getAmountInPLN(rawAmount, curr, rate);
-
-          if (prefix.startsWith("4")) {
-            expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amount);
-          }
+          const prefix = tx.debit_account.number.split("-")[0];
+          if (prefix.startsWith("4")) expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amountDebit);
           if (prefix.startsWith("1")) {
-            const existing = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
-            existing.debits += amount;
-            financialStatusMap.set(prefix, existing);
+            const ex = financialStatusMap.get(prefix) || { debits: 0, credits: 0 };
+            ex.debits += amountDebit;
+            financialStatusMap.set(prefix, ex);
           }
           if (prefix.startsWith("2")) {
-            const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
-            existing.receivables += amount;
-            liabilitiesMap.set(prefix, existing);
+            const ex = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
+            ex.receivables += amountDebit;
+            liabilitiesMap.set(prefix, ex);
           }
-          if (prefix === "210") {
-            intentions210Received += amount;
-          }
+          if (prefix === "210") intentions210Received += amountDebit;
         }
       });
 
-      // Helper function to get opening balance for a category
       const getCategoryOpeningBalance = (accounts: string[]): number => {
         let total = 0;
         accounts.forEach((acc) => {
           openingBalances.forEach((balance, prefix) => {
-            if (prefix.startsWith(acc)) {
-              total += balance;
-            }
+            if (prefix.startsWith(acc)) total += balance;
           });
         });
         return total;
       };
 
+      // ────────────────────────────────────────────────
       // Tworzenie skoroszytu
+      // ────────────────────────────────────────────────
       const wb = XLSX.utils.book_new();
 
       // ────────────────────────────────────────────────
-      // ARKUSZ 1 – Strona 1 (Stan finansowy, Intencje, Należności)
+      // ARKUSZ 1 – Strona 1
       // ────────────────────────────────────────────────
-      const sheet1Data: (string | number | null)[][] = [];
-
+      const sheet1Data: any[][] = [];
       sheet1Data.push([locationData?.name || ""]);
       sheet1Data.push([`${locationData?.postal_code || ""} ${locationData?.city || ""}`]);
       sheet1Data.push([locationData?.address || ""]);
       sheet1Data.push([""]);
       sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
       sheet1Data.push([""]);
-
-      // A. Stan finansowy domu
       sheet1Data.push(["A. Stan finansowy domu"]);
       sheet1Data.push(["", "Początek miesiąca", "Uznania", "Obciążenia", "Koniec miesiąca"]);
 
-      let totalOpening = 0;
-      let totalDebits = 0;
-      let totalCredits = 0;
-      let totalClosing = 0;
+      let totalOpening = 0,
+        totalDebits = 0,
+        totalCredits = 0,
+        totalClosing = 0;
 
       FINANCIAL_STATUS_CATEGORIES.forEach((category) => {
-        let categoryDebits = 0;
-        let categoryCredits = 0;
+        let debits = 0,
+          credits = 0;
         category.accounts.forEach((acc) => {
           const data = financialStatusMap.get(acc);
           if (data) {
-            categoryDebits += data.debits;
-            categoryCredits += data.credits;
+            debits += data.debits;
+            credits += data.credits;
           }
         });
         const opening = getCategoryOpeningBalance(category.accounts);
-        const closing = opening + categoryDebits - categoryCredits;
-
+        const closing = opening + debits - credits;
         totalOpening += opening;
-        totalDebits += categoryDebits;
-        totalCredits += categoryCredits;
+        totalDebits += debits;
+        totalCredits += credits;
         totalClosing += closing;
-
-        sheet1Data.push([category.name, opening, categoryDebits, categoryCredits, closing]);
+        sheet1Data.push([category.name, opening, debits, credits, closing]);
       });
 
       sheet1Data.push(["SALDO", totalOpening, totalDebits, totalCredits, totalClosing]);
       sheet1Data.push([""]);
-
-      // B. Intencje
       sheet1Data.push(["B. Intencje"]);
       sheet1Data.push(["", "Początek miesiąca", "Odprawione i oddane", "Przyjęte", "Stan końcowy"]);
+
       const intentionsOpening = openingBalances.get("210") || 0;
       const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
       sheet1Data.push([
@@ -292,14 +262,12 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         intentionsClosing,
       ]);
       sheet1Data.push([""]);
-
-      // C. Należności i zobowiązania
       sheet1Data.push(["C. Należności i zobowiązania"]);
       sheet1Data.push(["", "Początek miesiąca", "Należności", "Zobowiązania", "Koniec miesiąca"]);
 
       LIABILITY_CATEGORIES.forEach((category) => {
-        let receivables = 0;
-        let liabilities = 0;
+        let receivables = 0,
+          liabilities = 0;
         category.accounts.forEach((acc) => {
           const data = liabilitiesMap.get(acc);
           if (data) {
@@ -311,14 +279,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const closing = opening + receivables - liabilities;
         sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
       });
+
       sheet1Data.push([""]);
 
-      // Sekcja świadczeń na prowincję - TYLKO dla domów (location_identifier zaczyna się od 2)
       if (isDom) {
-        sheet1Data.push([""]);
         sheet1Data.push(["", "", "Świadczenia na prowincję"]);
-
-        // Definicja świadczeń na prowincję
         const PROVINCE_CONTRIBUTIONS = [
           { suffix: "2", name: "kontrybucje" },
           { suffix: "3", name: "duszp. OMI" },
@@ -335,11 +300,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
         PROVINCE_CONTRIBUTIONS.forEach((item) => {
           const amount = provinceTurnovers.get(item.suffix) || 0;
-          if (amount > 0) {
-            sheet1Data.push([`(obroty Ma 200-${locationData?.location_identifier}-${item.suffix})`, item.name, amount]);
-          } else {
-            sheet1Data.push(["", item.name, 0]);
-          }
+          sheet1Data.push([`(obroty Ma 200-${locationData?.location_identifier}-${item.suffix})`, item.name, amount]);
         });
 
         sheet1Data.push([""]);
@@ -347,7 +308,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         sheet1Data.push([""]);
         sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ", "I Radny", "II Radny"]);
       } else {
-        // Dla parafii - prostsze podpisy bez sekcji świadczeń
         sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
         sheet1Data.push([""]);
         sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ"]);
@@ -358,29 +318,31 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
-      sheet1["!cols"] = [{ wch: 30.84 }, { wch: 18.83 }, { wch: 18.83 }, { wch: 18.83 }, { wch: 18.83 }];
+      // ─── USTAWIENIA ARKUSZA 1 ───
+      sheet1["!cols"] = [{ wch: 27 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
 
       sheet1["!margins"] = {
-        left: 0.39,
-        right: 0.39,
-        top: 0.39,
-        bottom: 0.39,
-        header: 0.3,
-        footer: 0.3,
+        left: 0.3,
+        right: 0.3,
+        top: 0.3,
+        bottom: 0.3,
+        header: 0.2,
+        footer: 0.2,
       };
 
       sheet1["!pageSetup"] = {
         orientation: "landscape",
+        fitTo: { width: 1, height: 1 },
       };
 
-      // Czcionka 12 dla całego arkusza 1
-      const range1 = XLSX.utils.decode_range(sheet1["!ref"]);
+      // Czcionka 11 zamiast 12
+      const range1 = XLSX.utils.decode_range(sheet1["!ref"]!);
       for (let R = range1.s.r; R <= range1.e.r; ++R) {
         for (let C = range1.s.c; C <= range1.e.c; ++C) {
-          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          if (!sheet1[cell_ref]) continue;
-          sheet1[cell_ref].s = sheet1[cell_ref].s || {};
-          sheet1[cell_ref].s.font = { sz: 12 };
+          const cell = XLSX.utils.encode_cell({ c: C, r: R });
+          if (!sheet1[cell]) continue;
+          sheet1[cell].s = sheet1[cell].s || {};
+          sheet1[cell].s.font = { sz: 11 };
         }
       }
 
@@ -389,32 +351,31 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       // ────────────────────────────────────────────────
       // ARKUSZ 2 – Strona 2 (Przychody i Rozchody)
       // ────────────────────────────────────────────────
-      const sheet2Data: (string | number | null)[][] = [];
-
+      const sheet2Data: any[][] = [];
       sheet2Data.push(["I. PRZYCHODY", null, null, null, "II. ROZCHODY", null, null]);
       sheet2Data.push([null, null, null, null, null, null, null]);
       sheet2Data.push(["Nr. konta", "Treść", "kwota", null, "Nr. konta", "Treść", "kwota"]);
 
       let totalIncome = 0;
-      INCOME_PREFIXES.forEach((prefix) => {
-        totalIncome += incomeMap.get(prefix) || 0;
-      });
+      INCOME_PREFIXES.forEach((p) => (totalIncome += incomeMap.get(p) || 0));
 
       let totalExpense = 0;
-      EXPENSE_PREFIXES.forEach((prefix) => {
-        totalExpense += expenseMap.get(prefix) || 0;
-      });
+      EXPENSE_PREFIXES.forEach((p) => (totalExpense += expenseMap.get(p) || 0));
 
       const maxLen = Math.max(INCOME_PREFIXES.length, EXPENSE_PREFIXES.length);
+
       for (let i = 0; i < maxLen; i++) {
         const incPrefix = i < INCOME_PREFIXES.length ? INCOME_PREFIXES[i] : null;
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
-        const incAmount = incPrefix ? incomeMap.get(incPrefix) || 0 : 0;
-        const expAmount = expPrefix ? expenseMap.get(expPrefix) || 0 : 0;
-        const incName = incPrefix ? getIncomeAccountName(incPrefix) : null;
-        const expName = expPrefix ? getExpenseAccountName(expPrefix) : null;
-
-        sheet2Data.push([incPrefix, incName, incAmount, null, expPrefix, expName, expAmount]);
+        sheet2Data.push([
+          incPrefix,
+          incPrefix ? getIncomeAccountName(incPrefix) : null,
+          incPrefix ? incomeMap.get(incPrefix) || 0 : null,
+          null,
+          expPrefix,
+          expPrefix ? getExpenseAccountName(expPrefix) : null,
+          expPrefix ? expenseMap.get(expPrefix) || 0 : null,
+        ]);
       }
 
       sheet2Data.push([null, null, null, null, null, null, null]);
@@ -422,50 +383,49 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       const sheet2 = XLSX.utils.aoa_to_sheet(sheet2Data);
 
+      // ─── USTAWIENIA ARKUSZA 2 ───
       sheet2["!cols"] = [
-        { wch: 7.59 },
-        { wch: 22.69 },
-        { wch: 5.82 },
-        { wch: 3.25 },
-        { wch: 8.97 },
-        { wch: 20.91 },
-        { wch: 16.47 },
+        { wch: 7.0 }, // nr konta przychód
+        { wch: 19.0 }, // treść przychód
+        { wch: 11.5 }, // kwota przychód
+        { wch: 2.0 }, // odstęp
+        { wch: 7.5 }, // nr konta rozchód
+        { wch: 18.0 }, // treść rozchód
+        { wch: 13.0 }, // kwota rozchód
       ];
 
-      // Marginesy 1 cm (≈ 0.3937 cala)
       sheet2["!margins"] = {
-        left: 0.39,
-        right: 0.39,
-        top: 0.39,
-        bottom: 0.39,
-        header: 0.3,
-        footer: 0.3,
+        left: 0.3,
+        right: 0.3,
+        top: 0.3,
+        bottom: 0.3,
+        header: 0.2,
+        footer: 0.2,
       };
 
-      // Czcionka 10 dla całego arkusza 2
-      const range2 = XLSX.utils.decode_range(sheet2["!ref"]);
+      sheet2["!pageSetup"] = {
+        orientation: "portrait",
+        fitTo: { width: 1, height: 1 },
+      };
+
+      // Czcionka 9.5 zamiast 10
+      const range2 = XLSX.utils.decode_range(sheet2["!ref"]!);
       for (let R = range2.s.r; R <= range2.e.r; ++R) {
         for (let C = range2.s.c; C <= range2.e.c; ++C) {
-          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          if (!sheet2[cell_ref]) continue;
-          sheet2[cell_ref].s = sheet2[cell_ref].s || {};
-          sheet2[cell_ref].s.font = { sz: 10 };
+          const cell = XLSX.utils.encode_cell({ c: C, r: R });
+          if (!sheet2[cell]) continue;
+          sheet2[cell].s = sheet2[cell].s || {};
+          sheet2[cell].s.font = { sz: 9.5 };
         }
       }
 
-      // Orientacja pionowa (domyślna) – możesz zmienić na 'landscape' jeśli chcesz
-      // sheet2['!pageSetup'] = { orientation: 'portrait' };
-
       XLSX.utils.book_append_sheet(wb, sheet2, "Strona 2");
 
-      // ────────────────────────────────────────────────
-      // Zapis pliku
-      // ────────────────────────────────────────────────
+      // ─── ZAPIS PLIKU ───
       const monthNames = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paz", "lis", "gru"];
       const filename = `sprawozdanie_${(locationData?.name || "lokalizacja").replace(/\s+/g, "_")}_${monthNames[month - 1]}_${year}.xlsx`;
 
       XLSX.writeFile(wb, filename);
-
       toast.success("Raport wyeksportowany do Excel zgodnie ze wzorem");
     } catch (error: any) {
       console.error("Export error:", error);
@@ -478,7 +438,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
   return (
     <Button variant="outline" onClick={handleExport} disabled={isExporting} className="gap-2">
       {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-      Drukuj
+      Eksport do Excel (pełny)
     </Button>
   );
 };
