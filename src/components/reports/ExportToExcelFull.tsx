@@ -218,9 +218,39 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push([`${locationData?.postal_code || ""} ${locationData?.city || ""}`]);
       sheet1Data.push([locationData?.address || ""]);
       sheet1Data.push([""]);
-      sheet1Data.push([`SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`]);
+      sheet1Data.push([
+        "",
+        {
+          v: `SPRAWOZDANIE MIESIĘCZNE ZA OKRES: ${getMonthName(month).toUpperCase()} ${year} r.`,
+          t: "s",
+          s: {
+            font: {
+              bold: true,
+              sz: 12,
+            },
+            alignment: {
+              horizontal: "left", // lub "center"
+            },
+          },
+        },
+      ]);
       sheet1Data.push([""]);
-      sheet1Data.push(["A. Stan finansowy domu"]);
+      sheet1Data.push([
+        "",
+        {
+          v: `A. Stan finansowy domu`,
+          t: "s",
+          s: {
+            font: {
+              bold: true,
+              sz: 12,
+            },
+            alignment: {
+              horizontal: "left", // lub "center"
+            },
+          },
+        },
+      ]);
       sheet1Data.push(["", "Początek miesiąca", "Uznania", "Obciążenia", "Koniec miesiąca"]);
 
       let totalOpening = 0,
@@ -249,7 +279,22 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       sheet1Data.push(["SALDO", totalOpening, totalDebits, totalCredits, totalClosing]);
       sheet1Data.push([""]);
-      sheet1Data.push(["B. Intencje"]);
+      sheet1Data.push([
+        "",
+        {
+          v: `B. Intencje`,
+          t: "s",
+          s: {
+            font: {
+              bold: true,
+              sz: 12,
+            },
+            alignment: {
+              horizontal: "left", // lub "center"
+            },
+          },
+        },
+      ]);
       sheet1Data.push(["", "Początek miesiąca", "Odprawione i oddane", "Przyjęte", "Stan końcowy"]);
 
       const intentionsOpening = openingBalances.get("210") || 0;
@@ -263,6 +308,22 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       ]);
       sheet1Data.push([""]);
       sheet1Data.push(["C. Należności i zobowiązania"]);
+      sheet1Data.push([
+        "",
+        {
+          v: `C. Należności i zobowiązania`,
+          t: "s",
+          s: {
+            font: {
+              bold: true,
+              sz: 12,
+            },
+            alignment: {
+              horizontal: "left", // lub "center"
+            },
+          },
+        },
+      ]);
       sheet1Data.push(["", "Początek miesiąca", "Należności", "Zobowiązania", "Koniec miesiąca"]);
 
       LIABILITY_CATEGORIES.forEach((category) => {
@@ -283,7 +344,23 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push([""]);
 
       if (isDom) {
-        sheet1Data.push(["", "", "Świadczenia na prowincję"]);
+        sheet1Data.push([
+          "",
+          "",
+          {
+            v: `Świadczenia na prowincję`,
+            t: "s",
+            s: {
+              font: {
+                bold: true,
+                sz: 12,
+              },
+              alignment: {
+                horizontal: "left", // lub "center"
+              },
+            },
+          },
+        ]);
         const PROVINCE_CONTRIBUTIONS = [
           { suffix: "2", name: "kontrybucje" },
           { suffix: "3", name: "duszp. OMI" },
@@ -300,7 +377,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
         PROVINCE_CONTRIBUTIONS.forEach((item) => {
           const amount = provinceTurnovers.get(item.suffix) || 0;
-          sheet1Data.push([`(obroty Ma 200-${locationData?.location_identifier}-${item.suffix})`, item.name, amount]);
+          sheet1Data.push([``, item.name, amount]);
         });
 
         sheet1Data.push([""]);
@@ -313,7 +390,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         sheet1Data.push([""]);
         sheet1Data.push([""]);
         sheet1Data.push([""]);
-        sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ", "I Radny", "II Radny"]);
+        sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ", "Radni"]);
       } else {
         sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
         sheet1Data.push([""]);
