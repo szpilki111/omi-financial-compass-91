@@ -193,6 +193,10 @@ export const AccountCombobox: React.FC<AccountComboboxProps> = ({
       </PopoverTrigger>
       <PopoverContent 
         className="min-w-[450px] w-auto max-w-[600px] p-0"
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        avoidCollisions={false}
         onWheel={(e) => {
           const list = e.currentTarget.querySelector('[cmdk-list]') as HTMLElement;
           if (list) {

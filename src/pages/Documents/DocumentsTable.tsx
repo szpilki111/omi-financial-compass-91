@@ -39,7 +39,7 @@ interface Document {
 interface DocumentsTableProps {
   documents: Document[];
   onDocumentClick: (document: Document) => void;
-  onDocumentDelete: (documentId: string) => void;
+  onDocumentDelete: (documentId: string, documentDate?: string, locationId?: string) => void;
   isLoading: boolean;
 }
 
@@ -212,7 +212,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDocumentDelete(document.id);
+                            onDocumentDelete(document.id, document.document_date, document.location_id);
                           }}
                           title="Usuń"
                         >

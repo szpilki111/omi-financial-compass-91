@@ -3,7 +3,7 @@ import { getFirstDayOfMonth, getLastDayOfMonth, formatDateForDB } from "@/utils/
 import { Button } from "@/components/ui/button";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { supabase } from "@/integrations/supabase/client";
 import { Report } from "@/types/reports";
 import {
@@ -293,15 +293,15 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
           },
         },
       ]);
-      sheet1Data.push(["", "Początek miesiąca", "Odprawione i oddane", "Przyjęte", "Stan końcowy"]);
+      sheet1Data.push(["", "Początek miesiąca", "Przyjęte", "Odprawione i oddane", "Stan końcowy"]);
 
       const intentionsOpening = openingBalances.get("210") || 0;
       const intentionsClosing = intentionsOpening + intentions210Received - intentions210CelebratedGiven;
       sheet1Data.push([
         "1. Intencje",
         intentionsOpening,
-        intentions210CelebratedGiven,
-        intentions210Received,
+        intentions210Received,  // najpierw przyjęte
+        intentions210CelebratedGiven, // potem odprawione
         intentionsClosing,
       ]);
       sheet1Data.push([""]);
@@ -418,14 +418,28 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         fitTo: { width: 1, height: 1 },
       };
 
-      // Czcionka 11 zamiast 12
+      // Czcionka 11 i pogrubienia dla nagłówków
+      const boldHeaders1 = [
+        "SPRAWOZDANIE MIESIĘCZNE ZA OKRES",
+        "A. Stan finansowy domu",
+        "B. Intencje",
+        "C. Należności i zobowiązania",
+        "Świadczenia na prowincję",
+        "SALDO"
+      ];
+      
       const range1 = XLSX.utils.decode_range(sheet1["!ref"]!);
       for (let R = range1.s.r; R <= range1.e.r; ++R) {
         for (let C = range1.s.c; C <= range1.e.c; ++C) {
           const cell = XLSX.utils.encode_cell({ c: C, r: R });
           if (!sheet1[cell]) continue;
-          sheet1[cell].s = sheet1[cell].s || {};
-          sheet1[cell].s.font = { sz: 11 };
+          
+          const cellValue = String(sheet1[cell].v || "");
+          const isBold = boldHeaders1.some(h => cellValue.includes(h));
+          
+          sheet1[cell].s = {
+            font: { sz: 11, bold: isBold }
+          };
         }
       }
 
@@ -491,14 +505,21 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         fitTo: { width: 1, height: 1 },
       };
 
-      // Czcionka 9.5 zamiast 10
+      // Czcionka 9.5 i pogrubienia dla nagłówków Strona 2
+      const boldHeaders2 = ["I. PRZYCHODY", "II. ROZCHODY", "PRZYCHODY RAZEM:", "ROZCHODY RAZEM:"];
+      
       const range2 = XLSX.utils.decode_range(sheet2["!ref"]!);
       for (let R = range2.s.r; R <= range2.e.r; ++R) {
         for (let C = range2.s.c; C <= range2.e.c; ++C) {
           const cell = XLSX.utils.encode_cell({ c: C, r: R });
           if (!sheet2[cell]) continue;
-          sheet2[cell].s = sheet2[cell].s || {};
-          sheet2[cell].s.font = { sz: 9.5 };
+          
+          const cellValue = String(sheet2[cell].v || "");
+          const isBold = boldHeaders2.some(h => cellValue.includes(h));
+          
+          sheet2[cell].s = {
+            font: { sz: 9.5, bold: isBold }
+          };
         }
       }
 

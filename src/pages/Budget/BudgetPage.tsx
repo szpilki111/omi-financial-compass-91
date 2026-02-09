@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Plus, BarChart, BarChart3, Search } from 'lucide-react';
+import { ArrowLeft, Plus, BarChart, BarChart3, Search, FileUp } from 'lucide-react';
 import BudgetList from './BudgetList';
 import BudgetForm from './BudgetForm';
 import BudgetView from './BudgetView';
 import BudgetDeviationReport from './BudgetDeviationReport';
 import BudgetMultiYearComparison from './BudgetMultiYearComparison';
+import BudgetImportDialog from './BudgetImportDialog';
 
 type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations' | 'multi-year';
 
@@ -27,6 +28,7 @@ const BudgetPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   // Filter states
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -119,6 +121,10 @@ const BudgetPage = () => {
                 <Button onClick={handleViewMultiYear} variant="outline">
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Porównanie wieloletnie
+                </Button>
+                <Button onClick={() => setIsImportDialogOpen(true)} variant="outline">
+                  <FileUp className="mr-2 h-4 w-4" />
+                  Import z pliku
                 </Button>
                 <Button onClick={handleCreateNew}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -252,6 +258,12 @@ const BudgetPage = () => {
         {viewMode === 'multi-year' && (
           <BudgetMultiYearComparison />
         )}
+
+        <BudgetImportDialog 
+          open={isImportDialogOpen} 
+          onClose={() => setIsImportDialogOpen(false)} 
+          onImportComplete={() => setRefreshKey(prev => prev + 1)} 
+        />
       </div>
     </MainLayout>
   );

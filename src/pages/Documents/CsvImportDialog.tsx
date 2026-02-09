@@ -197,6 +197,22 @@ const parseAmount = (amountStr: string): number => {
     setLoading(true);
     
     try {
+      // Sprawdź czy raport blokuje import
+      const { data: blockingReport } = await supabase.rpc('check_report_editing_blocked', {
+        p_location_id: user.location,
+        p_document_date: documentDate.toISOString().split('T')[0]
+      });
+
+      if (blockingReport) {
+        toast({
+          title: "Import zablokowany",
+          description: "Nie można zaimportować pliku - raport za ten okres jest już złożony lub zatwierdzony. Najpierw cofnij raport.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
       // Wygeneruj numer dokumentu
       const { data: documentNumber, error: numberError } = await supabase
         .rpc('generate_document_number', {
@@ -247,6 +263,9 @@ const parseAmount = (amountStr: string): number => {
             const creditAccountColIndex = mappings.codeColumn ? 
               parseInt(mappings.codeColumn.split(' ')[1]) - 1 : -1;
             
+            const missingAccountNumbers: string[] = [];
+            const syntheticAccountNumbers: string[] = [];
+            
             for (let rowIndex = 0; rowIndex < results.data.length; rowIndex++) {
               const row = results.data[rowIndex] as string[];
               
@@ -265,29 +284,65 @@ const parseAmount = (amountStr: string): number => {
                 continue;
               }
               
-              // Znajdź konto Winien - priorytet dla dokładnego dopasowania
-              const findAccount = (accountNumber: string): typeof accounts[0] | undefined => {
-                if (!accountNumber) return undefined;
+              // Znajdź konto z sprawdzeniem czy jest syntetyczne (ma podkonta)
+              const findAccountWithValidation = (accountNumber: string): { 
+                account: typeof accounts[0] | undefined; 
+                isSynthetic: boolean;
+                isMissing: boolean;
+              } => {
+                if (!accountNumber) return { account: undefined, isSynthetic: false, isMissing: false };
+                
                 // 1. Szukaj dokładnego dopasowania
                 const exactMatch = accounts.find(acc => acc.number === accountNumber);
-                if (exactMatch) return exactMatch;
+                if (exactMatch) {
+                  // Sprawdź czy konto ma podkonta (jest syntetyczne)
+                  const hasSub = accounts.some(acc => acc.number.startsWith(accountNumber + '-'));
+                  return { account: exactMatch, isSynthetic: hasSub, isMissing: false };
+                }
                 
                 // 2. Jeśli nie ma dokładnego, szukaj najdłuższego pasującego prefiksu
-                // (ale tylko jeśli accountNumber jest dłuższy od numeru konta)
                 const matchingByPrefix = accounts
                   .filter(acc => accountNumber.startsWith(acc.number + '-'))
-                  .sort((a, b) => b.number.length - a.number.length); // Najdłuższy najpierw
+                  .sort((a, b) => b.number.length - a.number.length);
                 
-                return matchingByPrefix[0];
+                if (matchingByPrefix.length > 0) {
+                  const hasSub = accounts.some(acc => acc.number.startsWith(matchingByPrefix[0].number + '-'));
+                  return { account: matchingByPrefix[0], isSynthetic: hasSub, isMissing: false };
+                }
+                
+                return { account: undefined, isSynthetic: false, isMissing: true };
               };
               
-              const debitAccount = findAccount(debitAccountNumber);
-              const creditAccount = findAccount(creditAccountNumber);
+              const debitResult = findAccountWithValidation(debitAccountNumber);
+              const creditResult = findAccountWithValidation(creditAccountNumber);
+              
+              // Zbieraj informacje o błędach
+              if (debitAccountNumber && debitResult.isMissing) {
+                if (!missingAccountNumbers.includes(debitAccountNumber)) {
+                  missingAccountNumbers.push(debitAccountNumber);
+                }
+              }
+              if (creditAccountNumber && creditResult.isMissing) {
+                if (!missingAccountNumbers.includes(creditAccountNumber)) {
+                  missingAccountNumbers.push(creditAccountNumber);
+                }
+              }
+              if (debitResult.isSynthetic) {
+                if (!syntheticAccountNumbers.includes(debitAccountNumber)) {
+                  syntheticAccountNumbers.push(debitAccountNumber);
+                }
+              }
+              if (creditResult.isSynthetic) {
+                if (!syntheticAccountNumbers.includes(creditAccountNumber)) {
+                  syntheticAccountNumbers.push(creditAccountNumber);
+                }
+              }
               
               // Użyj kwoty (preferuj debitAmount, fallback do creditAmount)
               const amount = debitAmount || creditAmount;
               
-              if (debitAccount?.id || creditAccount?.id) {
+              // Dodaj transakcję nawet jeśli brakuje jednego konta - zostanie uzupełnione ręcznie
+              if (debitResult.account?.id || creditResult.account?.id) {
                 transactionsToImport.push({
                   document_id: document.id,
                   document_number: documentNumber,
@@ -295,8 +350,8 @@ const parseAmount = (amountStr: string): number => {
                   description: description,
                   debit_amount: amount,
                   credit_amount: amount,
-                  debit_account_id: debitAccount?.id || null,
-                  credit_account_id: creditAccount?.id || null,
+                  debit_account_id: debitResult.account?.id || null,
+                  credit_account_id: creditResult.account?.id || null,
                   currency: 'PLN',
                   exchange_rate: 1,
                   settlement_type: 'Bank',
@@ -336,17 +391,38 @@ const parseAmount = (amountStr: string): number => {
                   .eq('id', document.id);
               }
               
+              // Buduj szczegółowy komunikat
+              let toastMessage = `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami.`;
+              if (incompleteCount > 0) {
+                toastMessage += ` ${incompleteCount} wymaga uzupełnienia kont.`;
+              }
+              if (missingAccountNumbers.length > 0) {
+                toastMessage += ` Nieznane konta: ${missingAccountNumbers.slice(0, 5).join(', ')}${missingAccountNumbers.length > 5 ? '...' : ''}.`;
+              }
+              if (syntheticAccountNumbers.length > 0) {
+                toastMessage += ` Konta syntetyczne (wybierz podkonto): ${syntheticAccountNumbers.slice(0, 3).join(', ')}${syntheticAccountNumbers.length > 3 ? '...' : ''}.`;
+              }
+              
               toast({
                 title: "Sukces",
-                description: `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami.${incompleteCount > 0 ? ` ${incompleteCount} wymaga uzupełnienia kont.` : ''}`,
+                description: toastMessage,
               });
               
               onImportComplete(1);
               onClose();
             } else {
+              // Buduj szczegółowy komunikat o błędzie
+              let errorMessage = "Nie znaleziono żadnych poprawnych danych do importu.";
+              if (missingAccountNumbers.length > 0) {
+                errorMessage = `Brakujące konta w systemie: ${missingAccountNumbers.slice(0, 5).join(', ')}${missingAccountNumbers.length > 5 ? ` i ${missingAccountNumbers.length - 5} innych` : ''}.`;
+              }
+              if (syntheticAccountNumbers.length > 0) {
+                errorMessage += ` Konta syntetyczne wymagające podkont: ${syntheticAccountNumbers.slice(0, 3).join(', ')}${syntheticAccountNumbers.length > 3 ? '...' : ''}.`;
+              }
+              
               toast({
-                title: "Uwaga",
-                description: "Nie znaleziono żadnych poprawnych danych do importu. Sprawdź czy numery kont w pliku CSV odpowiadają kontom w systemie.",
+                title: "Import nieudany",
+                description: errorMessage,
                 variant: "destructive",
               });
             }
