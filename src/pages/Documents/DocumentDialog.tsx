@@ -1407,15 +1407,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   };
 
   const getCurrencySymbol = (currency: string = "PLN") => {
-    const currencySymbols: { [key: string]: string } = {
+    const symbols: { [key: string]: string } = {
       PLN: "zł",
       EUR: "€",
       USD: "$",
-      GBP: "£",
-      CHF: "CHF",
-      CZK: "Kč",
-      NOK: "kr",
-      SEK: "kr",
+      CAD: "CAD",
+      NOK: "NOK",
+      AUD: "AUD",
     };
     return currencySymbols[currency] || currency;
   };
@@ -1453,14 +1451,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   const totalDebitSum = mainDebitSum + parallelDebitSum;
   const totalCreditSum = mainCreditSum + parallelCreditSum;
   const grandTotalSum = totalDebitSum + totalCreditSum;
-  
+
   // Sumy przeliczone na PLN (dla walut obcych)
   const isForeignCurrency = selectedCurrency !== "PLN";
   const plnMultiplier = isForeignCurrency ? exchangeRate : 1;
   const totalDebitSumPLN = totalDebitSum * plnMultiplier;
   const totalCreditSumPLN = totalCreditSum * plnMultiplier;
   const grandTotalSumPLN = grandTotalSum * plnMultiplier;
-  
+
   // Używane do wyświetlania (zależnie od toggle showInPLN)
   const displayMultiplier = showInPLN && isForeignCurrency ? exchangeRate : 1;
   const displayCurrency = showInPLN && isForeignCurrency ? "PLN" : selectedCurrency;
@@ -1477,8 +1475,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       </Dialog>
     );
   }
-
-  
 
   return (
     <>
@@ -1651,7 +1647,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                     className="flex items-center gap-2"
                   >
                     <RefreshCw className="h-4 w-4" />
-                    {showInPLN ? `Pokaż w ${selectedCurrency}` : 'Pokaż w PLN'}
+                    {showInPLN ? `Pokaż w ${selectedCurrency}` : "Pokaż w PLN"}
                   </Button>
                 )}
                 {showInPLN && selectedCurrency !== "PLN" && (
@@ -1962,20 +1958,28 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
                   <div className="text-sm text-muted-foreground">Winien razem</div>
-                  <div className="font-bold text-lg">{formatAmount(totalDebitSum * displayMultiplier, displayCurrency)}</div>
+                  <div className="font-bold text-lg">
+                    {formatAmount(totalDebitSum * displayMultiplier, displayCurrency)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Ma razem</div>
-                  <div className="font-bold text-lg">{formatAmount(totalCreditSum * displayMultiplier, displayCurrency)}</div>
+                  <div className="font-bold text-lg">
+                    {formatAmount(totalCreditSum * displayMultiplier, displayCurrency)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Suma całkowita</div>
-                  <div className="font-bold text-lg">{formatAmount(grandTotalSum * displayMultiplier, displayCurrency)}</div>
+                  <div className="font-bold text-lg">
+                    {formatAmount(grandTotalSum * displayMultiplier, displayCurrency)}
+                  </div>
                 </div>
               </div>
               {isForeignCurrency && (
                 <div className="mt-4 pt-4 border-t border-border">
-                  <div className="text-sm text-muted-foreground mb-2">Równowartość w PLN (kurs: {exchangeRate.toFixed(4)})</div>
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Równowartość w PLN (kurs: {exchangeRate.toFixed(4)})
+                  </div>
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="font-semibold">{formatAmount(totalDebitSumPLN, "PLN")}</div>
                     <div className="font-semibold">{formatAmount(totalCreditSumPLN, "PLN")}</div>
@@ -2248,15 +2252,13 @@ const EditableTransactionRow = React.forwardRef<
     });
 
     const getCurrencySymbol = (curr: string = "PLN") => {
-      const currencySymbols: { [key: string]: string } = {
+      const symbols: { [key: string]: string } = {
         PLN: "zł",
         EUR: "€",
         USD: "$",
-        GBP: "£",
-        CHF: "CHF",
-        CZK: "Kč",
-        NOK: "kr",
-        SEK: "kr",
+        CAD: "CAD",
+        NOK: "NOK",
+        AUD: "AUD",
       };
       return currencySymbols[curr] || curr;
     };
@@ -2264,7 +2266,7 @@ const EditableTransactionRow = React.forwardRef<
     // Oblicz wyświetlaną walutę i mnożnik dla przeliczenia PLN
     const displayCurrency = showInPLN && currency !== "PLN" ? "PLN" : currency;
     const displayMultiplier = showInPLN && currency !== "PLN" && exchangeRate ? exchangeRate : 1;
-    
+
     // Funkcja do formatowania wyświetlanej kwoty (przeliczonej lub oryginalnej)
     const getDisplayAmount = (amount: number): string => {
       const displayValue = amount * displayMultiplier;
@@ -2354,7 +2356,9 @@ const EditableTransactionRow = React.forwardRef<
                 </span>
               )}
             </div>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">{getCurrencySymbol(displayCurrency)}</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {getCurrencySymbol(displayCurrency)}
+            </span>
           </div>
         </TableCell>
         <TableCell>
@@ -2421,7 +2425,9 @@ const EditableTransactionRow = React.forwardRef<
                 </span>
               )}
             </div>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">{getCurrencySymbol(displayCurrency)}</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {getCurrencySymbol(displayCurrency)}
+            </span>
           </div>
         </TableCell>
         <TableCell>

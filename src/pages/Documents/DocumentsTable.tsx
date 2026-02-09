@@ -1,19 +1,11 @@
-
-import React from 'react';
-import { 
-  Table, 
-  TableHeader, 
-  TableBody, 
-  TableRow, 
-  TableHead, 
-  TableCell 
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, AlertTriangle, Lock } from 'lucide-react';
-import { format } from 'date-fns';
-import { useAuth } from '@/context/AuthContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import React from "react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Pencil, Trash2, AlertTriangle, Lock } from "lucide-react";
+import { format } from "date-fns";
+import { useAuth } from "@/context/AuthContext";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Document {
   id: string;
@@ -43,18 +35,13 @@ interface DocumentsTableProps {
   isLoading: boolean;
 }
 
-const DocumentsTable: React.FC<DocumentsTableProps> = ({
-  documents,
-  onDocumentClick,
-  onDocumentDelete,
-  isLoading
-}) => {
+const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, isLoading }) => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'prowincjal' || user?.role === 'admin';
+  const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
 
   const isDocumentLocked = (doc: Document): boolean => {
     if (!doc.validation_errors || !Array.isArray(doc.validation_errors)) return false;
-    return doc.validation_errors.some((error: any) => error.type === 'locked_by_report');
+    return doc.validation_errors.some((error: any) => error.type === "locked_by_report");
   };
 
   if (isLoading) {
@@ -68,35 +55,29 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
   if (!documents || documents.length === 0) {
     return (
       <div className="text-center py-12">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          Brak dokumentów do wyświetlenia
-        </h3>
-        <p className="text-gray-600">
-          Dodaj swój pierwszy dokument, aby rozpocząć
-        </p>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Brak dokumentów do wyświetlenia</h3>
+        <p className="text-gray-600">Dodaj swój pierwszy dokument, aby rozpocząć</p>
       </div>
     );
   }
 
-  const getCurrencySymbol = (currency: string = 'PLN') => {
-    const currencySymbols: { [key: string]: string } = {
-      'PLN': 'zł',
-      'EUR': '€',
-      'USD': '$',
-      'GBP': '£',
-      'CHF': 'CHF',
-      'CZK': 'Kč',
-      'NOK': 'kr',
-      'SEK': 'kr',
+  const getCurrencySymbol = (currency: string = "PLN") => {
+    const symbols: { [key: string]: string } = {
+      PLN: "zł",
+      EUR: "€",
+      USD: "$",
+      CAD: "CAD",
+      NOK: "NOK",
+      AUD: "AUD",
     };
     return currencySymbols[currency] || currency;
   };
 
-  const formatAmount = (amount: number, currency: string = 'PLN') => {
+  const formatAmount = (amount: number, currency: string = "PLN") => {
     const symbol = getCurrencySymbol(currency);
-    return `${amount.toLocaleString('pl-PL', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+    return `${amount.toLocaleString("pl-PL", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })} ${symbol}`;
   };
 
@@ -118,22 +99,23 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
           <TableBody>
             {documents.map((document) => {
               const locked = isDocumentLocked(document);
-              const hasErrors = document.validation_errors && 
-                Array.isArray(document.validation_errors) && 
-                document.validation_errors.filter((e: any) => e.type !== 'locked_by_report').length > 0;
-              
+              const hasErrors =
+                document.validation_errors &&
+                Array.isArray(document.validation_errors) &&
+                document.validation_errors.filter((e: any) => e.type !== "locked_by_report").length > 0;
+
               // Count total missing fields including import errors
               let totalMissingFields = 0;
               let hasMissingAccountsError = false;
               if (hasErrors) {
                 document.validation_errors
-                  .filter((error: any) => error.type !== 'locked_by_report')
+                  .filter((error: any) => error.type !== "locked_by_report")
                   .forEach((error: any) => {
-                    if (error.missingFields && typeof error.missingFields === 'object') {
+                    if (error.missingFields && typeof error.missingFields === "object") {
                       totalMissingFields += Object.keys(error.missingFields).length;
                     }
                     // Obsłuż błędy z importu MT940/CSV
-                    if (error.type === 'missing_accounts') {
+                    if (error.type === "missing_accounts") {
                       hasMissingAccountsError = true;
                       // Wyciągnij liczbę z message, np. "5 operacji wymaga uzupełnienia kont"
                       const match = error.message?.match(/^(\d+)/);
@@ -145,11 +127,11 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                     }
                   });
               }
-              
+
               return (
-                <TableRow 
-                  key={document.id} 
-                  className={`hover:bg-gray-50 cursor-pointer ${locked ? 'opacity-75 bg-gray-50' : ''}`}
+                <TableRow
+                  key={document.id}
+                  className={`hover:bg-gray-50 cursor-pointer ${locked ? "opacity-75 bg-gray-50" : ""}`}
                   onClick={() => onDocumentClick(document)}
                 >
                   <TableCell className="font-medium">
@@ -159,16 +141,14 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                           <TooltipTrigger>
                             <Lock className="h-4 w-4 text-muted-foreground" />
                           </TooltipTrigger>
-                          <TooltipContent>
-                            Dokument zablokowany - raport zatwierdzony
-                          </TooltipContent>
+                          <TooltipContent>Dokument zablokowany - raport zatwierdzony</TooltipContent>
                         </Tooltip>
                       )}
                       {document.document_number}
                     </div>
                   </TableCell>
                   <TableCell>{document.document_name}</TableCell>
-                  <TableCell>{format(new Date(document.document_date), 'dd.MM.yyyy')}</TableCell>
+                  <TableCell>{format(new Date(document.document_date), "dd.MM.yyyy")}</TableCell>
                   <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
                   <TableCell className="text-right font-medium">
                     {formatAmount(document.total_amount || 0, document.currency)}
@@ -182,10 +162,9 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
                     ) : hasErrors && totalMissingFields > 0 ? (
                       <Badge variant="destructive" className="flex items-center gap-1 w-fit">
                         <AlertTriangle className="h-3 w-3" />
-                        {hasMissingAccountsError 
-                          ? `${totalMissingFields} ${totalMissingFields === 1 ? 'brak konta' : 'brak kont'}`
-                          : `${totalMissingFields} ${totalMissingFields === 1 ? 'puste pole' : 'pustych pól'}`
-                        }
+                        {hasMissingAccountsError
+                          ? `${totalMissingFields} ${totalMissingFields === 1 ? "brak konta" : "brak kont"}`
+                          : `${totalMissingFields} ${totalMissingFields === 1 ? "puste pole" : "pustych pól"}`}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">

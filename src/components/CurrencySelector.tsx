@@ -1,10 +1,9 @@
-
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface CurrencySelectorProps {
   value: string;
@@ -16,31 +15,32 @@ interface CurrencySelectorProps {
   locationId?: string; // Add locationId prop to check specific location settings
 }
 
-const ALL_CURRENCIES = [{
-  code: 'PLN',
-  name: 'Polski złoty'
-}, {
-  code: 'EUR',
-  name: 'Euro'
-}, {
-  code: 'USD',
-  name: 'Dolar amerykański'
-}, {
-  code: 'GBP',
-  name: 'Funt brytyjski'
-}, {
-  code: 'CHF',
-  name: 'Frank szwajcarski'
-}, {
-  code: 'CZK',
-  name: 'Korona czeska'
-}, {
-  code: 'NOK',
-  name: 'Korona norweska'
-}, {
-  code: 'SEK',
-  name: 'Korona szwedzka'
-}];
+const ALL_CURRENCIES = [
+  {
+    code: "PLN",
+    name: "Polski złoty",
+  },
+  {
+    code: "EUR",
+    name: "Euro",
+  },
+  {
+    code: "USD",
+    name: "Dolar amerykański",
+  },
+  {
+    code: "CAD",
+    name: "Dolar kanadyjski",
+  },
+  {
+    code: "NOK",
+    name: "Korona norweska",
+  },
+  {
+    code: "AUD",
+    name: "Dolar australijski",
+  },
+];
 
 export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
   value,
@@ -49,31 +49,31 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
   required = false,
   disabled = false,
   className = "",
-  locationId
+  locationId,
 }) => {
   const { user } = useAuth();
 
   // Fetch location settings to check if foreign currencies are allowed
   const { data: locationSettings } = useQuery({
-    queryKey: ['location-settings', locationId || user?.location],
+    queryKey: ["location-settings", locationId || user?.location],
     queryFn: async () => {
       const targetLocationId = locationId || user?.location;
       if (!targetLocationId) return null;
 
       const { data, error } = await supabase
-        .from('location_settings')
-        .select('allow_foreign_currencies')
-        .eq('location_id', targetLocationId)
+        .from("location_settings")
+        .select("allow_foreign_currencies")
+        .eq("location_id", targetLocationId)
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching location settings:', error);
+        console.error("Error fetching location settings:", error);
         return null;
       }
 
       return data;
     },
-    enabled: !!(locationId || user?.location)
+    enabled: !!(locationId || user?.location),
   });
 
   // Determine which currencies to show
@@ -111,13 +111,13 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
       <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
         {label}
       </Label>
-      
+
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger id="currency-select" className="mt-[10px]">
           <SelectValue placeholder="Wybierz walutę" />
         </SelectTrigger>
         <SelectContent>
-          {availableCurrencies.map(currency => (
+          {availableCurrencies.map((currency) => (
             <SelectItem key={currency.code} value={currency.code}>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm">{currency.code}</span>
