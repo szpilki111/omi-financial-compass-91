@@ -121,7 +121,7 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
           'Pożyczki udzielone': ['212', '213'],
           'Pożyczki zaciągnięte': ['215'],
           'Sumy przechodnie': ['149', '150'],
-          'Rozliczenia z innymi': ['202', '208']
+          'Rozliczenia z innymi': ['202', '208', '217']
         }
       };
 

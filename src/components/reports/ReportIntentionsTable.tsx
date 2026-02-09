@@ -35,8 +35,8 @@ export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
           <TableRow className="bg-muted/50">
             <TableHead className="font-semibold"></TableHead>
             <TableHead className="w-32 text-right font-semibold">Początek miesiąca</TableHead>
-            <TableHead className="w-32 text-right font-semibold">Odprawione i oddane</TableHead>
             <TableHead className="w-32 text-right font-semibold">Przyjęte</TableHead>
+            <TableHead className="w-32 text-right font-semibold">Odprawione i oddane</TableHead>
             <TableHead className="w-32 text-right font-semibold">Stan końcowy</TableHead>
           </TableRow>
         </TableHeader>
@@ -44,8 +44,8 @@ export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
           <TableRow>
             <TableCell className="font-medium">1. Intencje</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(data.openingBalance)}</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(data.celebratedAndGiven)}</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(data.received)}</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(data.celebratedAndGiven)}</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(calculatedClosing)}</TableCell>
           </TableRow>
         </TableBody>

@@ -185,7 +185,34 @@ const DocumentsPage = () => {
     setSelectedDocument(document);
     setIsDialogOpen(true);
   };
-  const handleDocumentDelete = async (documentId: string) => {
+  const handleDocumentDelete = async (documentId: string, documentDate?: string, locationId?: string) => {
+    // Jeśli mamy datę i lokalizację, sprawdź czy raport blokuje usunięcie
+    if (documentDate && locationId) {
+      const docDateObj = new Date(documentDate);
+      const { data: blockingReport } = await supabase
+        .from('reports')
+        .select('id, status, month, year')
+        .eq('location_id', locationId)
+        .eq('month', docDateObj.getMonth() + 1)
+        .eq('year', docDateObj.getFullYear())
+        .in('status', ['submitted', 'approved', 'draft'])
+        .maybeSingle();
+
+      if (blockingReport) {
+        const statusMap: Record<string, string> = { 
+          draft: 'w wersji roboczej', 
+          submitted: 'złożony', 
+          approved: 'zatwierdzony' 
+        };
+        toast({
+          title: "Nie można usunąć dokumentu",
+          description: `Raport za ${blockingReport.month}/${blockingReport.year} jest ${statusMap[blockingReport.status]}. Najpierw cofnij raport, aby móc usunąć dokumenty z tego okresu.`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     if (!confirm('Czy na pewno chcesz usunąć ten dokument? Wszystkie powiązane operacje również zostaną usunięte.')) {
       return;
     }
