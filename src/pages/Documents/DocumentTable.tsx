@@ -228,7 +228,7 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
       NOK: "NOK",
       AUD: "AUD",
     };
-    return currencySymbols[currency] || currency;
+    return symbols[currency] || currency;
   };
 
   const formatAmount = (amount: number, currency: string = "PLN") => {

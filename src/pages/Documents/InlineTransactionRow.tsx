@@ -274,7 +274,7 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         NOK: "NOK",
         AUD: "AUD",
       };
-      return currencySymbols[currency] || currency;
+      return symbols[currency] || currency;
     };
 
     const handleSaveWithBalancing = () => {

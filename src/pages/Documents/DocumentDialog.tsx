@@ -1415,7 +1415,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       NOK: "NOK",
       AUD: "AUD",
     };
-    return currencySymbols[currency] || currency;
+    return symbols[currency] || currency;
   };
 
   const formatAmount = (amount: number, currency: string = "PLN") => {
@@ -2260,7 +2260,7 @@ const EditableTransactionRow = React.forwardRef<
         NOK: "NOK",
         AUD: "AUD",
       };
-      return currencySymbols[curr] || curr;
+      return symbols[curr] || curr;
     };
 
     // Oblicz wyświetlaną walutę i mnożnik dla przeliczenia PLN
