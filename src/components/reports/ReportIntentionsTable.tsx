@@ -1,10 +1,10 @@
-import React from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import React from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface IntentionsData {
   openingBalance: number;
-  celebratedAndGiven: number; // Odprawione i oddane (Ma)
   received: number; // Przyjęte (Wn)
+  celebratedAndGiven: number; // Odprawione i oddane (Ma)
   closingBalance: number; // Wzór: początek + przyjęte - odprawione
 }
 
@@ -13,14 +13,11 @@ interface ReportIntentionsTableProps {
   className?: string;
 }
 
-export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
-  data,
-  className = ''
-}) => {
+export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({ data, className = "" }) => {
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pl-PL', {
+    return new Intl.NumberFormat("pl-PL", {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(value);
   };
 
@@ -35,8 +32,8 @@ export const ReportIntentionsTable: React.FC<ReportIntentionsTableProps> = ({
           <TableRow className="bg-muted/50">
             <TableHead className="font-semibold"></TableHead>
             <TableHead className="w-32 text-right font-semibold">Początek miesiąca</TableHead>
-            <TableHead className="w-32 text-right font-semibold">Przyjęte</TableHead>
             <TableHead className="w-32 text-right font-semibold">Odprawione i oddane</TableHead>
+            <TableHead className="w-32 text-right font-semibold">Przyjęte</TableHead>
             <TableHead className="w-32 text-right font-semibold">Stan końcowy</TableHead>
           </TableRow>
         </TableHeader>
