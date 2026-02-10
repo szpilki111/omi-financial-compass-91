@@ -300,8 +300,8 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push([
         "1. Intencje",
         intentionsOpening,
-        intentions210Received, // najpierw przyjęte
         intentions210CelebratedGiven, // potem odprawione
+        intentions210Received, // najpierw przyjęte
         intentionsClosing,
       ]);
       sheet1Data.push([""]);
