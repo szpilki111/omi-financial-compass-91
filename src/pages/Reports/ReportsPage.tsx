@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import PageTitle from '@/components/ui/PageTitle';
 import ReportsList from './ReportsList';
@@ -12,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const ReportsPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { canCreateReports } = useAuth();
   const [searchParams] = useSearchParams();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
@@ -31,7 +33,8 @@ const ReportsPage = () => {
   const handleReportCreated = () => {
     setIsCreatingReport(false);
     setViewMode('list');
-    setRefreshKey(prev => prev + 1); // Trigger refresh of reports list
+    setRefreshKey(prev => prev + 1);
+    queryClient.invalidateQueries({ queryKey: ['reports'] });
     // Usuń parametr z URL
     navigate('/reports', { replace: true });
     toast({

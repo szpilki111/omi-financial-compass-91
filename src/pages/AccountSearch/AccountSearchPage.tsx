@@ -39,10 +39,14 @@ interface Transaction {
   credit_account_id: string;
   settlement_type: string;
   document_id: string | null;
+  currency?: string;
+  exchange_rate?: number;
   document?: {
     id: string;
     document_number: string;
     document_name: string;
+    currency?: string;
+    exchange_rate?: number;
   };
   debitAccount?: Account;
   creditAccount?: Account;
@@ -218,6 +222,30 @@ const AccountSearchPage = () => {
       closingBalance
     };
   }, [transactions, selectedAccount, openingBalanceForYear, relatedAccountIds]);
+
+  // Calculate currency-specific totals for non-PLN transactions
+  const currencyTotals = useMemo(() => {
+    if (!transactions || !selectedAccount) return new Map<string, { debit: number; credit: number }>();
+    const relatedAccountIdsSet = new Set(relatedAccountIds);
+    const map = new Map<string, { debit: number; credit: number }>();
+    
+    transactions.forEach(tx => {
+      const currency = tx.currency || tx.document?.currency || 'PLN';
+      if (currency === 'PLN') return;
+      
+      if (!map.has(currency)) map.set(currency, { debit: 0, credit: 0 });
+      const entry = map.get(currency)!;
+      
+      if (relatedAccountIdsSet.has(tx.debit_account_id)) {
+        entry.debit += tx.debit_amount ?? tx.amount ?? 0;
+      }
+      if (relatedAccountIdsSet.has(tx.credit_account_id)) {
+        entry.credit += tx.credit_amount ?? tx.amount ?? 0;
+      }
+    });
+    
+    return map;
+  }, [transactions, selectedAccount, relatedAccountIds]);
 
   // Group transactions by month - uwzględnia wszystkie podkonta analityczne
   const monthlyData = useMemo(() => {
@@ -617,6 +645,41 @@ const AccountSearchPage = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Currency-specific summaries */}
+            {currencyTotals.size > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from(currencyTotals.entries()).map(([currency, data]) => (
+                  <Card key={currency}>
+                    <CardContent className="pt-4">
+                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                        Podsumowanie w {currency}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Wn</p>
+                          <p className="text-sm font-bold text-red-600">
+                            {data.debit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Ma</p>
+                          <p className="text-sm font-bold text-green-600">
+                            {data.credit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Saldo</p>
+                          <p className={`text-sm font-bold ${(data.debit - data.credit) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                            {(data.debit - data.credit).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {/* Content based on view mode */}
             {showTurnover ? (

@@ -270,9 +270,9 @@ const InlineTransactionRow = forwardRef<InlineTransactionRowRef, InlineTransacti
         PLN: "zł",
         EUR: "€",
         USD: "$",
-        CAD: "CAD",
-        NOK: "NOK",
-        AUD: "AUD",
+        CAD: "C$",
+        NOK: "kr",
+        AUD: "A$",
       };
       return symbols[currency] || currency;
     };

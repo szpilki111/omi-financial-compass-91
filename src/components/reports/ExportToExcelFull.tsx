@@ -461,16 +461,21 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       const maxLen = Math.max(INCOME_PREFIXES.length, EXPENSE_PREFIXES.length);
 
+      const truncateName = (name: string, maxLen: number = 22): string => {
+        if (name.length <= maxLen) return name;
+        return name.substring(0, maxLen - 1) + '.';
+      };
+
       for (let i = 0; i < maxLen; i++) {
         const incPrefix = i < INCOME_PREFIXES.length ? INCOME_PREFIXES[i] : null;
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
         sheet2Data.push([
           incPrefix,
-          incPrefix ? getIncomeAccountName(incPrefix) : null,
+          incPrefix ? truncateName(getIncomeAccountName(incPrefix)) : null,
           incPrefix ? incomeMap.get(incPrefix) || 0 : null,
           null,
           expPrefix,
-          expPrefix ? getExpenseAccountName(expPrefix) : null,
+          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 20) : null,
           expPrefix ? expenseMap.get(expPrefix) || 0 : null,
         ]);
       }

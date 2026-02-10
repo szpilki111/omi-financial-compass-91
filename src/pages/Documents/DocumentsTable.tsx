@@ -66,9 +66,9 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
       PLN: "zł",
       EUR: "€",
       USD: "$",
-      CAD: "CAD",
-      NOK: "NOK",
-      AUD: "AUD",
+      CAD: "C$",
+      NOK: "kr",
+      AUD: "A$",
     };
     return symbols[currency] || currency;
   };

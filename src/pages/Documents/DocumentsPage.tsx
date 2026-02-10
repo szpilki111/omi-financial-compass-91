@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Calculator, FileText, FileUp, Download, ChevronDown, ChevronUp, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import DocumentDialog from './DocumentDialog';
 import DocumentsTable from './DocumentsTable';
@@ -15,6 +15,8 @@ import ExcelFormImportDialog from './ExcelFormImportDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const PAGE_SIZE = 50;
 interface Document {
   id: string;
   document_number: string;
@@ -56,6 +58,7 @@ const DocumentsPage = () => {
   const [isExcelFormImportOpen, setIsExcelFormImportOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isImportSectionOpen, setIsImportSectionOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
   // Fetch locations for filter (only for admin/prowincjal)
@@ -76,103 +79,96 @@ const DocumentsPage = () => {
     enabled: isAdminOrProvincial
   });
 
-  // Fetch documents with related data
+  // Fetch documents with related data - paginated
   const {
-    data: documents,
+    data: documentsResult,
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents'],
+    queryKey: ['documents', currentPage, selectedLocationId],
     queryFn: async () => {
-      console.log('Fetching documents for user:', user?.id);
-      const {
-        data,
-        error
-      } = await supabase.from('documents').select(`
+      console.log('Fetching documents page:', currentPage);
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let query = supabase.from('documents').select(`
           *,
           locations(name),
           profiles!documents_user_id_fkey(name)
-        `).order('document_number', {
+        `, { count: 'exact' }).order('document_number', {
         ascending: false
-      }); // Sortowanie od najnowszych
+      });
+
+      // Filter by location if selected
+      if (isAdminOrProvincial && selectedLocationId !== 'all') {
+        query = query.eq('location_id', selectedLocationId);
+      }
+
+      const { data, error, count } = await query.range(from, to);
 
       if (error) {
         console.error('Error fetching documents:', error);
         throw error;
       }
-      console.log('Raw documents data:', data);
 
-      // Get transaction counts and total amounts for each document
-      const documentsWithCounts = await Promise.all((data || []).map(async doc => {
-        // Get transaction count
-        const {
-          count
-        } = await supabase.from('transactions').select('*', {
-          count: 'exact',
-          head: true
-        }).eq('document_id', doc.id);
+      // Bulk fetch transactions for all documents on this page
+      const docIds = (data || []).map(d => d.id);
+      let allTransactions: any[] = [];
+      if (docIds.length > 0) {
+        const { data: txData } = await supabase
+          .from('transactions')
+          .select('document_id, debit_amount, credit_amount, amount, currency, exchange_rate')
+          .in('document_id', docIds);
+        allTransactions = txData || [];
+      }
 
-        // Get all transactions for this document to calculate total amount
-        const {
-          data: transactions,
-          error: transactionsError
-        } = await supabase.from('transactions').select('debit_amount, credit_amount, amount, currency, exchange_rate').eq('document_id', doc.id);
-        if (transactionsError) {
-          console.error('Error fetching transactions for document:', doc.id, transactionsError);
-        }
+      // Group transactions by document_id
+      const txByDoc = new Map<string, typeof allTransactions>();
+      allTransactions.forEach(tx => {
+        const list = txByDoc.get(tx.document_id) || [];
+        list.push(tx);
+        txByDoc.set(tx.document_id, list);
+      });
 
-        // Calculate total amount using the same logic as in DocumentDialog
-        // Convert transactions to document currency and sum them
-        const totalAmount = transactions?.reduce((sum, transaction) => {
+      const documentsWithCounts = (data || []).map(doc => {
+        const transactions = txByDoc.get(doc.id) || [];
+        const totalAmount = transactions.reduce((sum, transaction) => {
           const debitAmount = transaction.debit_amount !== undefined ? transaction.debit_amount : transaction.amount;
           const creditAmount = transaction.credit_amount !== undefined ? transaction.credit_amount : transaction.amount;
           const exchangeRate = Number(transaction.exchange_rate) || 1;
-
-          // Convert to document currency if transaction currency is different
           let debitInDocCurrency = debitAmount;
           let creditInDocCurrency = creditAmount;
           if (transaction.currency !== doc.currency) {
-            // Convert from transaction currency to PLN first, then to document currency
             if (transaction.currency !== 'PLN') {
               debitInDocCurrency = debitAmount * exchangeRate;
               creditInDocCurrency = creditAmount * exchangeRate;
             }
-            // If document currency is not PLN, convert from PLN to document currency
-            // This would require exchange rates, for now we keep it simple
           }
           return sum + debitInDocCurrency + creditInDocCurrency;
-        }, 0) || 0;
-        console.log(`Document ${doc.document_number}: ${transactions?.length || 0} transactions, total amount: ${totalAmount} ${doc.currency}`);
+        }, 0);
         return {
           ...doc,
-          // Handle the profiles array by taking the first element or null
           profiles: Array.isArray(doc.profiles) && doc.profiles.length > 0 ? doc.profiles[0] : null,
-          transaction_count: count || 0,
+          transaction_count: transactions.length,
           total_amount: totalAmount
         };
-      }));
-      console.log('Documents with counts and totals:', documentsWithCounts);
-      return documentsWithCounts;
+      });
+      return { documents: documentsWithCounts, totalCount: count || 0 };
     }
   });
 
-  // Filter documents based on search term and location
+  const documents = documentsResult?.documents || [];
+  const totalCount = documentsResult?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Filter documents based on search term only (location filter is now server-side)
   const filteredDocuments = useMemo(() => {
     if (!documents) return [];
-    let filtered = documents;
+    if (!searchTerm.trim()) return documents;
 
-    // Filter by location (for admin/prowincjal)
-    if (isAdminOrProvincial && selectedLocationId !== 'all') {
-      filtered = filtered.filter(doc => doc.location_id === selectedLocationId);
-    }
-
-    // Filter by search term
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(doc => doc.document_number.toLowerCase().includes(search) || doc.document_name.toLowerCase().includes(search) || doc.locations?.name?.toLowerCase().includes(search) || format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search));
-    }
-    return filtered;
-  }, [documents, searchTerm, selectedLocationId, isAdminOrProvincial]);
+    const search = searchTerm.toLowerCase();
+    return documents.filter(doc => doc.document_number.toLowerCase().includes(search) || doc.document_name.toLowerCase().includes(search) || doc.locations?.name?.toLowerCase().includes(search) || format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search));
+  }, [documents, searchTerm]);
   const handleDocumentCreated = () => {
     refetch();
     setIsDialogOpen(false);
@@ -195,14 +191,16 @@ const DocumentsPage = () => {
         .eq('location_id', locationId)
         .eq('month', docDateObj.getMonth() + 1)
         .eq('year', docDateObj.getFullYear())
-        .in('status', ['submitted', 'approved', 'draft'])
+        .limit(1)
         .maybeSingle();
 
       if (blockingReport) {
         const statusMap: Record<string, string> = { 
           draft: 'w wersji roboczej', 
           submitted: 'złożony', 
-          approved: 'zatwierdzony' 
+          approved: 'zatwierdzony',
+          rejected: 'odrzucony',
+          to_be_corrected: 'do poprawy'
         };
         toast({
           title: "Nie można usunąć dokumentu",
@@ -506,7 +504,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
         {/* Filters */}
         <div className="flex gap-4">
           {isAdminOrProvincial && <div className="w-64">
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <Select value={selectedLocationId} onValueChange={(val) => { setSelectedLocationId(val); setCurrentPage(1); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Wszystkie placówki" />
                 </SelectTrigger>
@@ -526,6 +524,35 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
 
         {/* Documents table */}
         <DocumentsTable documents={filteredDocuments} onDocumentClick={handleDocumentClick} onDocumentDelete={handleDocumentDelete} isLoading={isLoading} />
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between py-4">
+            <p className="text-sm text-muted-foreground">
+              Strona {currentPage} z {totalPages} ({totalCount} dokumentów)
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Poprzednia
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Następna
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {filteredDocuments.length === 0 && !isLoading && searchTerm && <div className="text-center py-12">
             <h3 className="text-lg font-medium text-gray-900 mb-2">

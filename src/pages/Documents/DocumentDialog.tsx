@@ -1411,9 +1411,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       PLN: "zł",
       EUR: "€",
       USD: "$",
-      CAD: "CAD",
-      NOK: "NOK",
-      AUD: "AUD",
+      CAD: "C$",
+      NOK: "kr",
+      AUD: "A$",
     };
     return symbols[currency] || currency;
   };
