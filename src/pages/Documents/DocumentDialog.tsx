@@ -517,14 +517,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   const handleRegenerateNumber = async () => {
     const currentDate = form.getValues("document_date");
-    const generatedNumber = await generateDocumentNumber(currentDate);
+    const generatedNumber = await generateDocumentNumber(currentDate, document?.location_id);
     if (generatedNumber) {
       form.setValue("document_number", generatedNumber);
     }
   };
 
-  const generateDocumentNumber = async (date: Date) => {
-    if (!user?.location) {
+  const generateDocumentNumber = async (date: Date, locationIdOverride?: string) => {
+    const locationId = locationIdOverride || document?.location_id || user?.location;
+    if (!locationId) {
       toast({
         title: "Błąd",
         description: "Nie można określić lokalizacji użytkownika",
@@ -538,7 +539,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const month = date.getMonth() + 1;
 
       const { data, error } = await supabase.rpc("generate_document_number", {
-        p_location_id: user.location,
+        p_location_id: locationId,
         p_year: year,
         p_month: month,
       });
@@ -623,7 +624,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
   // Generuj nowy numer dokumentu przy zmianie miesiąca/roku dla EDYTOWANYCH dokumentów
   useEffect(() => {
-    if (document && isOpen && user?.location) {
+    if (document && isOpen && (user?.location || document?.location_id)) {
       const subscription = form.watch((value, { name }) => {
         if (name === "document_date" && value.document_date && originalDocumentDate.current) {
           const newDate = new Date(value.document_date);
@@ -632,8 +633,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
 
           // Sprawdź czy zmienił się miesiąc lub rok
           if (newMonth !== originalDocumentDate.current.month || newYear !== originalDocumentDate.current.year) {
-            // Wygeneruj nowy numer dokumentu
-            generateDocumentNumber(newDate).then((generatedNumber) => {
+            // Wygeneruj nowy numer dokumentu - użyj lokalizacji dokumentu
+            generateDocumentNumber(newDate, document.location_id).then((generatedNumber) => {
               if (generatedNumber) {
                 form.setValue("document_number", generatedNumber);
                 // Zaktualizuj referencję do nowego miesiąca/roku

@@ -230,17 +230,27 @@ const AccountSearchPage = () => {
     const map = new Map<string, { debit: number; credit: number }>();
     
     transactions.forEach(tx => {
-      const currency = tx.currency || tx.document?.currency || 'PLN';
+      // Priorytet: waluta z dokumentu (autorytatywna), potem z transakcji
+      const docCurrency = tx.document?.currency;
+      const txCurrency = tx.currency;
+      const currency = (docCurrency && docCurrency !== 'PLN') ? docCurrency 
+                      : (txCurrency && txCurrency !== 'PLN') ? txCurrency 
+                      : 'PLN';
       if (currency === 'PLN') return;
       
       if (!map.has(currency)) map.set(currency, { debit: 0, credit: 0 });
       const entry = map.get(currency)!;
       
+      // Kwoty w oryginalnej walucie = kwota PLN / kurs wymiany
+      const exchangeRate = tx.exchange_rate || tx.document?.exchange_rate || 1;
+      
       if (relatedAccountIdsSet.has(tx.debit_account_id)) {
-        entry.debit += tx.debit_amount ?? tx.amount ?? 0;
+        const plnAmount = tx.debit_amount ?? tx.amount ?? 0;
+        entry.debit += exchangeRate !== 1 ? plnAmount / exchangeRate : plnAmount;
       }
       if (relatedAccountIdsSet.has(tx.credit_account_id)) {
-        entry.credit += tx.credit_amount ?? tx.amount ?? 0;
+        const plnAmount = tx.credit_amount ?? tx.amount ?? 0;
+        entry.credit += exchangeRate !== 1 ? plnAmount / exchangeRate : plnAmount;
       }
     });
     
@@ -646,40 +656,39 @@ const AccountSearchPage = () => {
               </CardContent>
             </Card>
 
-            {/* Currency-specific summaries */}
-            {currencyTotals.size > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from(currencyTotals.entries()).map(([currency, data]) => (
-                  <Card key={currency}>
-                    <CardContent className="pt-4">
-                      <div className="text-sm font-medium text-muted-foreground mb-2">
-                        Podsumowanie w {currency}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Wn</p>
-                          <p className="text-sm font-bold text-red-600">
-                            {data.debit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Ma</p>
-                          <p className="text-sm font-bold text-green-600">
-                            {data.credit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Saldo</p>
-                          <p className={`text-sm font-bold ${(data.debit - data.credit) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                            {(data.debit - data.credit).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            {/* Currency-specific summaries - same 4-column layout as PLN */}
+            {currencyTotals.size > 0 && Array.from(currencyTotals.entries()).map(([currency, data]) => (
+              <Card key={currency}>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Saldo początkowe ({currency})</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        — {currency}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Obroty Wn ({currency})</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {data.debit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Obroty Ma ({currency})</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {data.credit.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Saldo końcowe ({currency})</p>
+                      <p className={`text-2xl font-bold ${(data.debit - data.credit) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(data.debit - data.credit).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
 
             {/* Content based on view mode */}
             {showTurnover ? (
