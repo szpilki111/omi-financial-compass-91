@@ -97,7 +97,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
           const hasSubAccounts = allAccounts.some((sub) => sub.number.startsWith(acc.number + "-"));
           return {
             ...acc,
-            has_analytics: hasSubAccounts || (acc.analytical ?? false),
+            has_analytics: hasSubAccounts,
           };
         });
 
@@ -153,7 +153,7 @@ export const useFilteredAccounts = (options?: UseFilteredAccountsOptions) => {
         const hasSubAccounts = allAccounts.some((sub) => sub.number.startsWith(acc.number + "-"));
         return {
           ...acc,
-          has_analytics: hasSubAccounts || (acc.has_analytics ?? false),
+          has_analytics: hasSubAccounts,
         };
       });
 

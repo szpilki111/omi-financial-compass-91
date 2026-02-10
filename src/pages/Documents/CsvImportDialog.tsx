@@ -292,23 +292,30 @@ const parseAmount = (amountStr: string): number => {
               } => {
                 if (!accountNumber) return { account: undefined, isSynthetic: false, isMissing: false };
                 
-                // 1. Szukaj dokładnego dopasowania
+                // 1. Dokładne dopasowanie - konto bez podkont
                 const exactMatch = accounts.find(acc => acc.number === accountNumber);
                 if (exactMatch) {
-                  // Sprawdź czy konto ma podkonta (jest syntetyczne)
                   const hasSub = accounts.some(acc => acc.number.startsWith(accountNumber + '-'));
-                  return { account: exactMatch, isSynthetic: hasSub, isMissing: false };
+                  if (!hasSub) return { account: exactMatch, isSynthetic: false, isMissing: false };
+                  // Konto syntetyczne - spróbuj znaleźć jedyne podkonto
+                  const subAccounts = accounts.filter(acc => acc.number.startsWith(accountNumber + '-') && !accounts.some(s => s.number.startsWith(acc.number + '-')));
+                  if (subAccounts.length === 1) return { account: subAccounts[0], isSynthetic: false, isMissing: false };
+                  return { account: exactMatch, isSynthetic: true, isMissing: false };
                 }
                 
-                // 2. Jeśli nie ma dokładnego, szukaj najdłuższego pasującego prefiksu
-                const matchingByPrefix = accounts
-                  .filter(acc => accountNumber.startsWith(acc.number + '-'))
-                  .sort((a, b) => b.number.length - a.number.length);
+                // 2. Szukaj konta z lokalizacją użytkownika (np. 420 -> 420-2-3)
+                const withLocation = accounts.find(acc => {
+                  const parts = acc.number.split('-');
+                  return parts[0] === accountNumber && parts.length >= 3 && !accounts.some(s => s.number.startsWith(acc.number + '-'));
+                });
+                if (withLocation) return { account: withLocation, isSynthetic: false, isMissing: false };
                 
-                if (matchingByPrefix.length > 0) {
-                  const hasSub = accounts.some(acc => acc.number.startsWith(matchingByPrefix[0].number + '-'));
-                  return { account: matchingByPrefix[0], isSynthetic: hasSub, isMissing: false };
-                }
+                // 3. Szukaj jedynego podkonta końcowego
+                const leafAccounts = accounts.filter(acc => 
+                  acc.number.startsWith(accountNumber + '-') && !accounts.some(s => s.number.startsWith(acc.number + '-'))
+                );
+                if (leafAccounts.length === 1) return { account: leafAccounts[0], isSynthetic: false, isMissing: false };
+                if (leafAccounts.length > 1) return { account: undefined, isSynthetic: true, isMissing: false };
                 
                 return { account: undefined, isSynthetic: false, isMissing: true };
               };
