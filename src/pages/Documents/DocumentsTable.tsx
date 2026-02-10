@@ -70,7 +70,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
       NOK: "NOK",
       AUD: "AUD",
     };
-    return currencySymbols[currency] || currency;
+    return symbols[currency] || currency;
   };
 
   const formatAmount = (amount: number, currency: string = "PLN") => {
