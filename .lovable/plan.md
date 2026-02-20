@@ -1,337 +1,165 @@
 
-# Plan wdrożenia 8 poprawek systemu
 
-## Podsumowanie zadań
+# Plan aktualizacji Bazy Wiedzy - uzupelnienie brakow i rozbieznosci
 
-| # | Opis | Priorytet | Pliki |
-|---|------|-----------|-------|
-| 0 | Admin nie widzi kont 149-1, 200-2-8-1 - blad w has_analytics | KRYTYCZNY | `useFilteredAccounts.ts` |
-| 1 | Paginacja listy dokumentow dla admina | Wysoki | `DocumentsPage.tsx` |
-| 2 | Logistyka szablonow importu CSV | Sredni | `CsvImportDialog.tsx` |
-| 3 | Nazwy kont na stronie 2 Excel sie nie mieszcza | Sredni | `ExportToExcelFull.tsx` |
-| 4 | Auto-odswiezenie po dodaniu raportu | Niski | `ReportsPage.tsx` |
-| 5 | Odrzucony raport nadal blokuje usuwanie dokumentow | Wysoki | `DocumentsPage.tsx` |
-| 6 | Dodac waluty CAD, NOK, AUD | Sredni | `CurrencySelector.tsx`, `fetch-nbp-rates` |
-| 7 | Podsumowanie walutowe w wyszukiwaniu kont | Sredni | `AccountSearchPage.tsx`, `TransactionsList.tsx` |
+## Analiza obecnego stanu
 
----
+Baza wiedzy zawiera **21 notatek** (w tym 1 testowa do usuniecia) w 7 kategoriach. Po porownaniu z aktualnym stanem aplikacji zidentyfikowano nastepujace braki i rozbieznosci:
 
-## 0. Admin nie widzi niektorych kont (KRYTYCZNY)
+### Rozbieznosci w istniejacych artykuldach
 
-### Diagnoza
+| Artykul | Problem |
+|---------|---------|
+| Dokumenty - Kompletny Podrecznik | Brak informacji o walutach (PLN/EUR/USD/CAD/NOK/AUD), brak opisu blokady dokumentow gdy istnieje raport, brak opisu importu z Excel (ExcelFormImportDialog), numery dokumentow opisane jako edytowalne (a sa read-only) |
+| Import Danych - CSV i MT940 | Nie wspomina o automatycznym mapowaniu kont syntetycznych na analityczne, brak info o walidacji pre-importowej (blokady raportow, brakujace konta) |
+| Planowanie Budzetu | Brak informacji o imporcie budzetu z pliku Excel, brak opisu eksportu do Excela |
+| Raporty | Brak informacji o statusie "do poprawy" (to_be_corrected), brak opisu funkcji "Odblokuj raport" dla admina, brak info o eksporcie 2-stronicowym |
+| Wyszukiwanie Kont | Brak informacji o podsumowaniu walutowym (nowa funkcja), brak opisu kont analitycznych w kontekscie wyszukiwania |
+| FAQ | Brak pytan o waluty, import budzetu, kalendarz, wizualizacje, KPiR, blokady raportow |
+| Slownik | Brak terminow: konto analityczne, konto syntetyczne, identyfikator lokalizacji, kurs wymiany, saldo poczatkowe/koncowe |
+| Role i Uprawnienia | Brak roli "asystent", brak informacji o wielu lokalizacjach per uzytkownik |
+| Dashboard | Nie wspomina o kafelkach: status budzetu, powiadomienia, szybki dostep |
 
-Problem lezy w `useFilteredAccounts.ts` linia 100:
+### Calkowicie brakujace tematy
 
-```typescript
-has_analytics: hasSubAccounts || (acc.analytical ?? false),
-```
-
-Flaga `analytical` oznacza ze konto JEST kontem analitycznym (podkontem), NIE ze ma podkonta. Ale kod traktuje `analytical: true` jako `has_analytics: true`, co powoduje ze AccountCombobox filtruje takie konta (linia w AccountCombobox: `filtered = filtered.filter(account => !account.has_analytics)`).
-
-Konto `200-2-8-1` ma `analytical: true` i nie ma podkont -- powinno byc widoczne, ale jest blokowane.
-Konto `149-1` ma `analytical: true` i MA podkonto `149-1-1` -- slusznie ukryte (trzeba wybrac 149-1-1).
-
-### Rozwiazanie
-
-W `useFilteredAccounts.ts` (linie 96-101 i 151-157) zmienic:
-
-```typescript
-// PRZED (bledne):
-has_analytics: hasSubAccounts || (acc.analytical ?? false),
-
-// PO (poprawne):
-has_analytics: hasSubAccounts,
-```
-
-Flaga `has_analytics` powinna byc `true` TYLKO gdy konto faktycznie posiada podkonta w systemie. Sam fakt bycia kontem analitycznym (`analytical: true`) nie oznacza ze nie mozna na nim ksiegowac.
-
-### Pliki do modyfikacji
-- `src/hooks/useFilteredAccounts.ts` (2 miejsca: linia 100 i linia 156)
+| Temat | Kategoria | Priorytet |
+|-------|-----------|-----------|
+| Obsluga walut obcych (EUR/USD/CAD/NOK/AUD) | dokumenty | Wysoki |
+| Kalendarz i wydarzenia | wprowadzenie | Sredni |
+| KPiR - Ksiega Przychodow i Rozchodow | dokumenty | Wysoki |
+| Wizualizacja danych i wykresy | raporty | Sredni |
+| Konta analityczne - tworzenie i zarzadzanie | konta | Wysoki |
+| Import budzetu z pliku Excel | budzet | Wysoki |
+| Ustawienia uzytkownika (profil, zaufane urzadzenia, konta) | wprowadzenie | Sredni |
+| Zglaszanie bledow w systemie | faq | Niski |
 
 ---
 
-## 1. Paginacja listy dokumentow dla admina
+## Plan zmian
 
-### Problem
-`DocumentsPage.tsx` pobiera WSZYSTKIE dokumenty naraz (brak `.range()`), a potem dla kazdego robi dodatkowe zapytanie o transakcje (N+1 problem). Dla admina z dostepem do wszystkich lokalizacji to moze byc setki dokumentow.
+### FAZA 1: Usuniecie smieci i aktualizacja dat
+1. Usunac notatke testowa "test tytul" (id: `013e5822-...`)
+2. Zaktualizowac daty "Ostatnia aktualizacja" we wszystkich artykulach na "Luty 2026"
 
-### Rozwiazanie
+### FAZA 2: Aktualizacja istniejacych artykulow (8 UPDATE)
 
-1. Dodac `currentPage` i `pageSize = 50` state
-2. Uzyc `.range(from, to)` z `{ count: 'exact' }` w zapytaniu glownym
-3. Zoptymalizowac N+1: zamiast osobnego zapytania per dokument, pobrac transakcje hurtowo
-4. Dodac komponent paginacji na dole listy
+**2.1 Dokumenty - Kompletny Podrecznik** (id: `ec15da5b-...`)
+Dodac:
+- Sekcja "Waluty obce": opis obslugiwanych walut (PLN, EUR, USD, CAD, NOK, AUD), przelaczanie widoku PLN/waluta, kurs wymiany
+- Sekcja "Blokady dokumentow": kiedy dokument jest zablokowany (istnieje raport za dany okres niezaleznie od statusu), co robic gdy trzeba edytowac
+- Poprawka: numer dokumentu jest generowany automatycznie i NIE mozna go edytowac (read-only)
+- Dodac informacje o datach przyszlych (dozwolone)
 
-```typescript
-const [currentPage, setCurrentPage] = useState(1);
-const PAGE_SIZE = 50;
+**2.2 Import Danych - CSV i MT940** (id: `bbd23048-...`)
+Dodac:
+- Automatyczne mapowanie kont syntetycznych na analityczne (np. 420 -> 420-2-3)
+- Walidacja pre-importowa: sprawdzanie blokad raportow, brakujacych kont, kont syntetycznych
+- Precyzyjne komunikaty bledow i ich znaczenie
+- Obsluga kodowania polskich znakow (UTF-8, Windows-1250, ISO-8859-2)
 
-// W queryFn:
-const from = (currentPage - 1) * PAGE_SIZE;
-const to = from + PAGE_SIZE - 1;
+**2.3 Planowanie Budzetu - Kompletny Przewodnik** (id: `a03c3df0-...`)
+Dodac:
+- Nowa sekcja "Import budzetu z pliku Excel": opis szablonu (5 kolumn), procedura importu, wymagania
+- Eksport budzetu i porownan wieloletnich do Excela
+- Informacja o paginacji listy budzetow
 
-const { data, count, error } = await supabase
-  .from('documents')
-  .select('*, locations(name), profiles!documents_user_id_fkey(name)', { count: 'exact' })
-  .order('document_number', { ascending: false })
-  .range(from, to);
+**2.4 Raporty - Od Tworzenia do Zatwierdzenia** (id: `5fd2e6f7-...`)
+Dodac:
+- Status "Do poprawy" (to_be_corrected) w tabeli statusow
+- Funkcja "Odblokuj raport" dostepna dla admina
+- Eksport dwustronicowy: Strona 1 (bilans, intencje, naleznosci), Strona 2 (przychody 7xx, rozchody 4xx)
+- Informacja ze raport z DOWOLNYM statusem blokuje edycje/usuwanie dokumentow
 
-// Pobierz transakcje hurtowo dla wszystkich dokumentow na stronie
-const docIds = data.map(d => d.id);
-const { data: allTransactions } = await supabase
-  .from('transactions')
-  .select('document_id, debit_amount, credit_amount, amount, currency, exchange_rate')
-  .in('document_id', docIds);
+**2.5 Wyszukiwanie Kont - Mistrzowski Przewodnik** (id: `6535dcef-...`)
+Dodac:
+- Podsumowanie walutowe: gdy na koncie sa operacje w walutach obcych, pojawia sie dodatkowy pasek z podsumowaniem Wn/Ma/Saldo w kazdej walucie
+- Wyjasnienie roznic: kwoty w PLN (glowne podsumowanie) vs kwoty w walucie oryginalnej (dodatkowe podsumowanie)
 
-// Grupuj po document_id i oblicz sumy
-```
+**2.6 FAQ** (id: `11f68cde-...`)
+Dodac pytania:
+- P: Jak korzystac z walut obcych? (EUR, USD, CAD, NOK, AUD)
+- P: Jak zaimportowac budzet z pliku Excel?
+- P: Co to jest KPiR i jak go uzyc?
+- P: Jak korzystac z kalendarza?
+- P: Nie moge usunac dokumentu - dlaczego? (blokada raportu)
+- P: Jak stworzyc konto analityczne?
+- P: Jak zmienic nazwe konta analitycznego?
+- P: Jak zglosic blad w systemie?
+- P: Co oznacza ikona 📊 przy koncie? (konto z podkontami)
 
-5. Dodac `queryKey: ['documents', currentPage, selectedLocationId]`
-6. Wyswietlic nawigacje stron: "Strona X z Y" + przyciski Poprzednia/Nastepna
+**2.7 Slownik Pojec** (id: `bb071398-...`)
+Dodac terminy:
+- Konto syntetyczne / Konto analityczne (podkonto)
+- Identyfikator lokalizacji (np. 2-3)
+- Kurs wymiany / Roznice kursowe
+- Saldo poczatkowe / Saldo koncowe
+- KPiR (Ksiega Przychodow i Rozchodow)
+- 2FA (weryfikacja dwuetapowa)
+- Bateria realizacji (wizualizacja % wykonania budzetu)
 
-### Pliki do modyfikacji
-- `src/pages/Documents/DocumentsPage.tsx`
+**2.8 Role i Uprawnienia** (id: `8f037534-...`)
+Dodac:
+- Wiele lokalizacji na jednego uzytkownika (ekonom obslugujacy kilka placowek)
+- Informacja o funkcji "Odblokuj raport" dla admina
+- Prowincjal: dostep do wizualizacji danych miedzy placowkami
 
----
+### FAZA 3: Nowe artykuly (5 INSERT)
 
-## 2. Logistyka szablonow importu CSV
+**3.1 NOWY: "💱 Obsluga Walut Obcych - Przewodnik"** (kategoria: `dokumenty`)
+Zawartosc:
+- Obslugiwane waluty: PLN, EUR, USD, CAD, NOK, AUD
+- Jak utworzyc dokument walutowy: wybor waluty, kurs wymiany (reczny lub z NBP)
+- Przelaczanie widoku: kwoty w walucie vs kwoty w PLN
+- Kurs wymiany zapisywany per transakcja
+- Wplyw na raporty: wszystko przeliczane na PLN
+- Podsumowanie walutowe w wyszukiwaniu kont
+- Gdzie sprawdzic kursy: ExchangeRateManager, tabela NBP
 
-### Problem
-Szablon CSV uzywa kont z lokalizacja `1-1` (np. `420-1-1-1`), co nie pasuje do innych lokalizacji. Konta syntetyczne (np. `100`) sa blokowane.
+**3.2 NOWY: "📒 KPiR - Ksiega Przychodow i Rozchodow"** (kategoria: `dokumenty`)
+Zawartosc:
+- Co to jest KPiR i kto z niego korzysta (tylko ekonomowie)
+- Tworzenie nowej operacji KPiR
+- Import operacji do KPiR
+- Edycja i usuwanie wpisow
+- Podsumowanie miesieczne
+- Przejscie do edycji dokumentu zrodlowego
 
-### Rozwiazanie
+**3.3 NOWY: "📅 Kalendarz - Planowanie Wydarzen"** (kategoria: `wprowadzenie`)
+Zawartosc:
+- Widok miesieczny: nawigacja, oznaczenia dni z wydarzeniami
+- Typy wydarzen: termin raportu, spotkanie, wizytacja, inne
+- Priorytety: wysoki, sredni, niski
+- Tworzenie wydarzenia: data, tytul, opis, typ, priorytet
+- Wydarzenia globalne vs lokalne
+- Filtrowanie po lokalizacji (admin/prowincjal)
+- Nadchodzace wydarzenia: widget z listą
 
-1. Dynamiczny szablon: pobrac konta uzytkownika i wygenerowac szablon z prawdziwymi numerami kont dla jego lokalizacji
-2. Automatyczne mapowanie: jesli uzytkownik poda konto syntetyczne (np. `420`), system szuka konta `420-{location_identifier}` lub `420-{location_identifier}-*`
-3. Jesli dla konta syntetycznego istnieje dokladnie 1 konto analityczne, uzyj go automatycznie
+**3.4 NOWY: "📊 Wizualizacja Danych - Wykresy i Porownania"** (kategoria: `raporty`)
+Zawartosc (rozszerzenie istniejacego krotkiego artykulu `d82c17d4-...`):
+- Porownanie przychodow i rozchodow miedzy placowkami
+- Wykresy liniowe trendow miesiecznych
+- Wykresy slupkowe budzetow
+- Tabela zbiorcza ze wskaznikami finansowymi
+- Filtrowanie po roku i lokalizacji
+- Trendy wieloletnie: analiza zmian rok do roku
 
-```typescript
-const resolveAccount = (accountNumber: string): string | null => {
-  // Dokladne dopasowanie
-  const exact = accounts.find(a => a.number === accountNumber && !a.has_analytics);
-  if (exact) return exact.id;
-  
-  // Szukaj konta z lokalizacja
-  const withLocation = accounts.find(a => 
-    a.number === `${accountNumber}-${locationIdentifier}` && !a.has_analytics
-  );
-  if (withLocation) return withLocation.id;
-  
-  // Szukaj jedynego podkonta
-  const subAccounts = accounts.filter(a => 
-    a.number.startsWith(accountNumber + '-') && !a.has_analytics
-  );
-  if (subAccounts.length === 1) return subAccounts[0].id;
-  
-  return null;
-};
-```
-
-### Pliki do modyfikacji
-- `src/pages/Documents/CsvImportDialog.tsx`
-
----
-
-## 3. Nazwy kont na stronie 2 Excel sie urywaja
-
-### Problem
-Na stronie 2 raportu Excel kolumna "Tresc" ma `wch: 19` / `wch: 18`, co moze byc za malo dla dlugich nazw kont.
-
-### Rozwiazanie
-Dodac funkcje skracajaca nazwy do limitu znakow z kropka na koncu:
-
-```typescript
-const truncateName = (name: string, maxLen: number = 22): string => {
-  if (name.length <= maxLen) return name;
-  return name.substring(0, maxLen - 1) + '.';
-};
-
-// Uzycie:
-incPrefix ? truncateName(getIncomeAccountName(incPrefix)) : null,
-expPrefix ? truncateName(getExpenseAccountName(expPrefix)) : null,
-```
-
-### Pliki do modyfikacji
-- `src/components/reports/ExportToExcelFull.tsx`
-
----
-
-## 4. Auto-odswiezenie po dodaniu raportu
-
-### Problem
-Po utworzeniu raportu w `ReportsPage.tsx` uzytkownik musi recznie odswiezyc strone.
-
-### Analiza
-`handleReportCreated` (linia 31) juz wywoluje `setRefreshKey(prev => prev + 1)`, a `ReportsList` otrzymuje `refreshKey`. Problem moze byc w tym, ze `ReportsList` nie reaguje na zmiane `refreshKey` odpowiednio.
-
-### Rozwiazanie
-1. W `ReportsPage.tsx` po `handleReportCreated` dodac invalidacje queries
-2. Lub w `ReportsList` dodac `useEffect` reagujacy na `refreshKey` ktory wywola `refetch()`
-
-```typescript
-// W ReportsPage.tsx
-const queryClient = useQueryClient();
-
-const handleReportCreated = () => {
-  setIsCreatingReport(false);
-  setViewMode('list');
-  queryClient.invalidateQueries({ queryKey: ['reports'] });
-  // ...
-};
-```
-
-### Pliki do modyfikacji
-- `src/pages/Reports/ReportsPage.tsx`
+**3.5 NOWY: "⚙️ Ustawienia Uzytkownika"** (kategoria: `wprowadzenie`)
+Zawartosc:
+- Zakladka "Profil": informacje o przypisanych lokalizacjach, dane uzytkownika
+- Zakladka "Konta": przegladanie kont przypisanych do lokalizacji, wyszukiwanie po numerze/nazwie
+- Zakladka "Zaufane urzadzenia": lista zalogowanych urzadzen, usuwanie nieuzywanych
+- Tryb Windows 98: wlaczanie/wylaczanie retro stylu
 
 ---
 
-## 5. Odrzucony raport blokuje usuwanie dokumentow
+## Techniczne wykonanie
 
-### Problem
-W `DocumentsPage.tsx` linia 198, status `rejected` nie jest w liscie blokujacych:
-```typescript
-.in('status', ['submitted', 'approved', 'draft'])
-```
+Wszystkie zmiany beda wykonane jako operacje SQL (UPDATE/INSERT/DELETE) na tabeli `admin_notes` z uzyciem narzedzia insert.
 
-Uzytkownik chce blokady dla KAZDEGO statusu raportu, dopoki raport istnieje.
+- **1 DELETE**: notatka testowa
+- **8 UPDATE**: istniejace artykuly z rozszerzona trescia
+- **5 INSERT**: nowe artykuly
+- Wszystkie notatki: `visible_to = ['ekonom', 'proboszcz', 'prowincjal', 'admin']`, `pinned = false` (chyba ze glowne przewodniki)
 
-### Rozwiazanie
-Zmienic zapytanie:
+Szacowany rozmiar nowej tresci: ~25 000 znakow (laczna tresc bazy wiedzy wzrosnie z ~60 000 do ~85 000 znakow).
 
-```typescript
-// PRZED:
-.in('status', ['submitted', 'approved', 'draft'])
-
-// PO - sprawdz czy jakikolwiek raport istnieje:
-// Usunac .in() -- kazdy istniejacy raport blokuje
-const { data: blockingReport } = await supabase
-  .from('reports')
-  .select('id, status, month, year')
-  .eq('location_id', locationId)
-  .eq('month', docDateObj.getMonth() + 1)
-  .eq('year', docDateObj.getFullYear())
-  .maybeSingle();
-```
-
-Dodatkowo zaktualizowac `statusMap` o brakujace statusy (`to_be_corrected`, `rejected`).
-
-### Pliki do modyfikacji
-- `src/pages/Documents/DocumentsPage.tsx`
-
----
-
-## 6. Dodac waluty CAD, NOK, AUD
-
-### Analiza
-`CurrencySelector.tsx` juz zawiera wszystkie 6 walut (PLN, EUR, USD, CAD, NOK, AUD) -- to jest OK.
-
-`fetch-nbp-rates/index.ts` linia 9 juz ma:
-```typescript
-const SUPPORTED_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD'];
-```
-
-Wiec CAD, NOK, AUD sa juz obslugiwane. Trzeba sprawdzic inne miejsca w aplikacji.
-
-### Sprawdzenie
-Inne miejsca gdzie waluty moga byc zahardcodowane:
-- `DocumentDialog.tsx` - symbole walut (getCurrencySymbol)
-- `InlineTransactionRow.tsx` - symbole walut
-- `DocumentTable.tsx` - symbole walut
-- `DocumentsTable.tsx` - symbole walut
-- `ExchangeRateManager.tsx` - lista walut
-- `CurrencyAmountInput.tsx` - formatowanie
-
-### Rozwiazanie
-Przegladnac wszystkie pliki i upewnic sie ze `getCurrencySymbol` obsluguje CAD, NOK, AUD. Najprawdopodobniej wystarczy dodac je do mapy symboli:
-
-```typescript
-const symbols: Record<string, string> = {
-  PLN: 'zł',
-  EUR: '€',
-  USD: '$',
-  CAD: 'C$',
-  NOK: 'kr',
-  AUD: 'A$',
-  // ewentualnie inne
-};
-```
-
-### Pliki do modyfikacji
-- `src/pages/Documents/DocumentDialog.tsx` (getCurrencySymbol)
-- `src/pages/Documents/InlineTransactionRow.tsx`
-- `src/pages/Documents/DocumentTable.tsx`
-- `src/pages/Documents/DocumentsTable.tsx`
-- `src/components/ExchangeRateManager.tsx`
-
----
-
-## 7. Podsumowanie walutowe w wyszukiwaniu kont
-
-### Problem
-W `AccountSearchPage.tsx` podsumowanie pokazuje tylko PLN. Jesli na koncie sa operacje walutowe, powinno byc dodatkowe podsumowanie w kazdej walucie.
-
-### Rozwiazanie
-
-1. Rozszerzyc zapytanie o transakcje w `AccountSearchPage.tsx` aby pobieralo `currency` i `exchange_rate`
-2. W `totals` (useMemo, linia 184) dodac grupowanie po walucie:
-
-```typescript
-const currencyTotals = useMemo(() => {
-  if (!transactions) return new Map();
-  const map = new Map<string, { debit: number; credit: number }>();
-  
-  transactions.forEach(tx => {
-    const currency = tx.currency || tx.document?.currency || 'PLN';
-    if (currency === 'PLN') return; // PLN juz jest w glownym podsumowaniu
-    
-    if (!map.has(currency)) map.set(currency, { debit: 0, credit: 0 });
-    const entry = map.get(currency)!;
-    
-    if (relatedAccountIdsSet.has(tx.debit_account_id)) {
-      entry.debit += tx.debit_amount ?? tx.amount ?? 0;
-    }
-    if (relatedAccountIdsSet.has(tx.credit_account_id)) {
-      entry.credit += tx.credit_amount ?? tx.amount ?? 0;
-    }
-  });
-  
-  return map;
-}, [transactions, relatedAccountIds]);
-```
-
-3. Wyswietlic pod glownym podsumowaniem dodatkowe karty dla kazdej waluty:
-
-```typescript
-{Array.from(currencyTotals.entries()).map(([currency, data]) => (
-  <Card key={currency}>
-    <CardContent className="pt-4">
-      <div className="text-sm font-medium text-muted-foreground mb-2">
-        Podsumowanie w {currency}
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div>Wn: {data.debit.toFixed(2)} {currency}</div>
-        <div>Ma: {data.credit.toFixed(2)} {currency}</div>
-        <div>Saldo: {(data.debit - data.credit).toFixed(2)} {currency}</div>
-      </div>
-    </CardContent>
-  </Card>
-))}
-```
-
-4. Transakcja musi miec pole `currency` -- zapytanie (linia 111) uzywa `*` wiec juz pobiera te dane. Ale interfejs `Transaction` (linia 30) nie ma `currency` ani `exchange_rate` -- trzeba dodac.
-
-### Pliki do modyfikacji
-- `src/pages/AccountSearch/AccountSearchPage.tsx` (interfejs Transaction, totals, UI)
-
----
-
-## Kolejnosc wdrozenia
-
-1. **#0** - has_analytics bug (KRYTYCZNY, natychmiast)
-2. **#5** - Blokada usuwania z odrzuconym raportem
-3. **#1** - Paginacja dokumentow
-4. **#4** - Auto-odswiezenie raportow
-5. **#3** - Skracanie nazw w Excel
-6. **#6** - Waluty CAD/NOK/AUD
-7. **#7** - Podsumowanie walutowe
-8. **#2** - Logistyka szablonow CSV
