@@ -1,73 +1,38 @@
 
-# Plan naprawy 4 problemow w raportach i dokumentach
 
-## Problem 1: Kolumny w Excelu za waskie -- tekst sie ucina
+# Poprawki formatowania Excel - 3 problemy
 
-**Przyczyna:** Sztywne szerokosci kolumn w ExportToExcelFull.tsx:
-- Strona 1: kolumna nazw = 27 znakow, kolumny kwot = 14 znakow
-- Strona 2: kolumna nazw przychodow = 19 znakow, rozchodow = 18 znakow
+## Problem 1: Brak funkcji skracania nazw kont
 
-**Rozwiazanie:**
-- Strona 1: Poszerzyc kolumne nazw z 27 do 32, kolumny kwot z 14 do 16
-- Strona 2: Poszerzyc kolumny nazw z 19/18 do 24/22, kolumny kwot z 11.5/13 do 14
-- Usunac funkcje `truncateName()` ktora obcina nazwy kont -- po poszerzeniu kolumn nie bedzie potrzebna
+Na Stronie 2 nazwy takie jak "Sprzedaz z dzialalnosci gospodarcz..." sa obcinane przez kolumne bez zadnego oznaczenia. Trzeba dodac funkcje `truncateName()` ktora skraca tekst do okreslonej dlugosci i dodaje kropke na koncu, np. "Sprzedaz z dzialal. gosp." -> czytelne skrocenie.
 
-## Problem 2: Kwoty jako zwykle liczby zamiast wartosci walutowych
+**Zmiana w ExportToExcelFull.tsx:**
+- Dodac helper `truncateName(name, maxLen)` ktory skraca nazwe do maxLen znakow z kropka na koncu
+- Zastosowac na Stronie 2: nazwy przychodow do 22 znakow, nazwy rozchodow do 20 znakow
+- Na Stronie 1 nazwy sa krotsze (np. "1. Kasa domu") wiec nie potrzebuja skracania
 
-**Przyczyna:** Dane numeryczne wstawiane sa jako surowe liczby (np. `97138`) bez formatowania walutowego.
+## Problem 2: Brak "zl" przy kwotach
 
-**Rozwiazanie:** Ustawic format walutowy `#,##0.00` na wszystkich komorkach z kwotami w obu arkuszach. Uzyc xlsx-js-style property `numFmt` na komorkach numerycznych:
-```
-{ numFmt: '#,##0.00', font: { sz: 11 } }
-```
-Dzieki temu Excel wyswietli np. `97 138,00` zamiast `97138`.
+Format `#,##0.00` wyswietla liczby jak `151 366,20` ale bez oznaczenia waluty. Uzytkownik oczekuje `zl` przy kwotach.
 
-## Problem 3: Swiadczenia na prowincje pokazuja same zera
+**Zmiana:** Zamienic `numFmt: '#,##0.00'` na `numFmt: '#,##0.00 "zł"'` we wszystkich komorkach numerycznych na obu arkuszach (linie 455 i 537).
 
-**Przyczyna:** Kod w ExportToExcelFull.tsx (linia 169) szuka kont `200-2-15-*` tylko po stronie **Ma (credit)**, ale faktyczne transakcje prowincyjne ksieguja sie po stronie **Wn (debit)**:
-```
-200-2-15-2 (Wn) -> 201-2-15-1 (Ma)  // kontrybucje = 10200
-200-2-15-4 (Wn) -> 201-2-15-1 (Ma)  // ZUS OMI = 8500
-```
+## Problem 3: Strona 1 - kolumna ucina sie
 
-**Rozwiazanie:** Dodac analogiczna logike sledzenia obrotow prowincjalnych rowniez po stronie debit (Wn). Konta `200-*` na stronie Wn reprezentuja naliczenie swiadczen na prowincje.
+Na zrzucie ekranu widac ze kolumna E (Koniec miesiaca) jest lekko ucieta. Pierwsza kolumna (A) ma 32 znaki co jest za szerokie - nazwy w niej to np. "1. Kasa domu", "SALDO", "1. Intencje" - maks ~30 znakow wystarczy.
 
-## Problem 4: Podpisy w domu -- "PROBOSZCZ" zamiast "Radni"
-
-**Przyczyna:** W ExportToExcelFull.tsx (linia 388) podpisy dla domu to:
-```
-["SUPERIOR", "EKONOM", "PROBOSZCZ", "Radni"]
-```
-Wedlug wydruku referencyjnego ze zdjecia, dom powinien miec:
-```
-SUPERIOR | EKONOM | Radni
-```
-(bez PROBOSZCZ). Proboszcz jest tylko w parafii.
-
-**Rozwiazanie:**
-- Dom (isDom): `["SUPERIOR", "", "EKONOM", "", "Radni"]` -- 3 podpisy rozmieszczone z odstepami
-- Parafia (!isDom): `["SUPERIOR", "EKONOM", "PROBOSZCZ"]` -- jak jest teraz
-
-Rowniez poprawic podpisy w ReportPDFGeneratorCompact.tsx (PDF), ktory tez ma "Proboszcz" w podpisach (linia 442) zamiast warunkowego wyswietlania.
-
-## Problem 5: Nie wszystkie dokumenty ze stycznia sa blokowane po zlozeniu raportu
-
-**Przyczyna:** Blokada dokumentow (ustawianie `validation_errors`) dzieje sie TYLKO przy zatwierdzeniu raportu (akcja `approved` w ReportApprovalActions.tsx, linia 110). Problem z datami -- `new Date(2026, 0, 1).toISOString().split('T')[0]` w strefie UTC+1 daje `"2025-12-31"` zamiast `"2026-01-01"`, wiec dokumenty z poczatku miesiaca moga nie byc objete zakresem.
-
-**Rozwiazanie:** Zamiast `new Date().toISOString().split('T')[0]`, uzyc bezpiecznego formatu dat:
-```typescript
-const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
-const lastDay = new Date(reportYear, reportMonth, 0).getDate();
-const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-```
-To eliminuje problem stref czasowych. Poprawic zarowno w `handleApproval` jak i `handleUnlock`.
-
----
+**Zmiana:**
+- Zmniejszyc kolumne A z 32 do 28 znakow (wystarczajace dla najdluzszych nazw)
+- Zmniejszyc marginesy z 0.3 do 0.2 (lewa/prawa) -- zyskujemy dodatkowa przestrzen
+- Dzieki temu kolumny B-E (po 16 znakow) zmieszcza sie na stronie
 
 ## Podsumowanie zmian technicznych
 
-| Plik | Zmiana |
-|------|--------|
-| `src/components/reports/ExportToExcelFull.tsx` | Poszerzyc kolumny, dodac format walutowy `numFmt`, naprawic logike swiadczen prowincjalnych (debit), poprawic podpisy domu |
-| `src/components/reports/ReportApprovalActions.tsx` | Naprawic generowanie dat (timezone bug) w handleApproval i handleUnlock |
-| `src/components/reports/ReportPDFGeneratorCompact.tsx` | Poprawic podpisy -- warunkowo dom vs parafia |
+| Zmiana | Lokalizacja |
+|--------|------------|
+| Dodac `truncateName()` helper | ExportToExcelFull.tsx, nowa funkcja |
+| Zastosowac truncateName na Stronie 2 | linie 483, 487 |
+| Zmienic numFmt na `#,##0.00 "zl"` | linie 455, 537 |
+| Zmniejszyc kolumne A z 32 do 28 | linia 417 |
+| Zmniejszyc marginesy Strony 1 | linie 420-421 |
+
