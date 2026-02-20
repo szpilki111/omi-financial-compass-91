@@ -110,12 +110,10 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       if (action === 'approved') {
         console.log('Blokowanie dokumentów dla okresu:', reportMonth, reportYear, locationId);
         
-        // Get start and end dates of the report month
-        const startDate = new Date(reportYear, reportMonth - 1, 1);
-        const endDate = new Date(reportYear, reportMonth, 0); // Last day of month
-        
-        const startDateStr = startDate.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
+        // Get start and end dates of the report month (timezone-safe)
+        const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(reportYear, reportMonth, 0).getDate();
+        const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
         // Mark documents as locked by adding validation info
         const { error: lockError } = await supabase
@@ -216,10 +214,10 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
       }
 
       // Unlock documents for this period
-      const startDate = new Date(reportYear, reportMonth - 1, 1);
-      const endDate = new Date(reportYear, reportMonth, 0);
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
+      // Timezone-safe date construction
+      const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+      const lastDay = new Date(reportYear, reportMonth, 0).getDate();
+      const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const { error: unlockError } = await supabase
         .from('documents')

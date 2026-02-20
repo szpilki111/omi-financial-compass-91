@@ -173,6 +173,9 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
                 provinceTurnovers.set(suffix, (provinceTurnovers.get(suffix) || 0) + amountCredit);
               }
             }
+            if (isDom && tx.credit_account.number.startsWith(`201-${locationData?.location_identifier}-`)) {
+              // 201 credit side also tracked for province
+            }
           }
           if (prefix === "210") intentions210CelebratedGiven += amountCredit;
         }
@@ -190,6 +193,15 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
             const ex = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
             ex.receivables += amountDebit;
             liabilitiesMap.set(prefix, ex);
+
+            // Track province turnovers on debit side (200-X-15-* accounts)
+            if (isDom && tx.debit_account.number.startsWith(`200-${locationData?.location_identifier}-`)) {
+              const parts = tx.debit_account.number.split("-");
+              if (parts.length >= 4) {
+                const suffix = parts[3];
+                provinceTurnovers.set(suffix, (provinceTurnovers.get(suffix) || 0) + amountDebit);
+              }
+            }
           }
           if (prefix === "210") intentions210Received += amountDebit;
         }
@@ -385,7 +397,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         sheet1Data.push([""]);
         sheet1Data.push([""]);
         sheet1Data.push([""]);
-        sheet1Data.push(["SUPERIOR", "EKONOM", "PROBOSZCZ", "Radni"]);
+        sheet1Data.push(["SUPERIOR", "", "EKONOM", "", "Radni"]);
       } else {
         sheet1Data.push([`Sporządzono dnia ................${year} r.`]);
         sheet1Data.push([""]);
@@ -402,7 +414,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
       // ─── USTAWIENIA ARKUSZA 1 ───
-      sheet1["!cols"] = [{ wch: 27 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+      sheet1["!cols"] = [{ wch: 32 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
 
       sheet1["!margins"] = {
         left: 0.3,
@@ -436,9 +448,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           const cellValue = String(sheet1[cell].v || "");
           const isBold = boldHeaders1.some((h) => cellValue.includes(h));
+          const isNumber = typeof sheet1[cell].v === 'number';
 
           sheet1[cell].s = {
             font: { sz: 11, bold: isBold },
+            ...(isNumber ? { numFmt: '#,##0.00' } : {}),
           };
         }
       }
@@ -461,21 +475,16 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
       const maxLen = Math.max(INCOME_PREFIXES.length, EXPENSE_PREFIXES.length);
 
-      const truncateName = (name: string, maxLen: number = 22): string => {
-        if (name.length <= maxLen) return name;
-        return name.substring(0, maxLen - 1) + '.';
-      };
-
       for (let i = 0; i < maxLen; i++) {
         const incPrefix = i < INCOME_PREFIXES.length ? INCOME_PREFIXES[i] : null;
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
         sheet2Data.push([
           incPrefix,
-          incPrefix ? truncateName(getIncomeAccountName(incPrefix)) : null,
+          incPrefix ? getIncomeAccountName(incPrefix) : null,
           incPrefix ? incomeMap.get(incPrefix) || 0 : null,
           null,
           expPrefix,
-          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 20) : null,
+          expPrefix ? getExpenseAccountName(expPrefix) : null,
           expPrefix ? expenseMap.get(expPrefix) || 0 : null,
         ]);
       }
@@ -488,12 +497,12 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       // ─── USTAWIENIA ARKUSZA 2 ───
       sheet2["!cols"] = [
         { wch: 7.0 }, // nr konta przychód
-        { wch: 19.0 }, // treść przychód
-        { wch: 11.5 }, // kwota przychód
+        { wch: 24.0 }, // treść przychód
+        { wch: 14.0 }, // kwota przychód
         { wch: 2.0 }, // odstęp
         { wch: 7.5 }, // nr konta rozchód
-        { wch: 18.0 }, // treść rozchód
-        { wch: 13.0 }, // kwota rozchód
+        { wch: 22.0 }, // treść rozchód
+        { wch: 14.0 }, // kwota rozchód
       ];
 
       sheet2["!margins"] = {
@@ -521,9 +530,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           const cellValue = String(sheet2[cell].v || "");
           const isBold = boldHeaders2.some((h) => cellValue.includes(h));
+          const isNumber = typeof sheet2[cell].v === 'number';
 
           sheet2[cell].s = {
             font: { sz: 9.5, bold: isBold },
+            ...(isNumber ? { numFmt: '#,##0.00' } : {}),
           };
         }
       }
