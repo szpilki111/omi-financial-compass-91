@@ -485,11 +485,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
         sheet2Data.push([
           incPrefix,
-          incPrefix ? truncateName(getIncomeAccountName(incPrefix), 22) : null,
+          incPrefix ? truncateName(getIncomeAccountName(incPrefix), 28) : null,
           incPrefix ? incomeMap.get(incPrefix) || 0 : null,
           null,
           expPrefix,
-          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 20) : null,
+          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 26) : null,
           expPrefix ? expenseMap.get(expPrefix) || 0 : null,
         ]);
       }
