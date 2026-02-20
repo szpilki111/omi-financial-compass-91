@@ -453,7 +453,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           const cellValue = String(sheet1[cell].v || "");
           const isBold = boldHeaders1.some((h) => cellValue.includes(h));
-          const isNumber = typeof sheet1[cell].v === 'number';
+          const isNumber = typeof sheet1[cell].v === "number";
 
           sheet1[cell].s = {
             font: { sz: 11, bold: isBold },
@@ -485,11 +485,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
         sheet2Data.push([
           incPrefix,
-          incPrefix ? truncateName(getIncomeAccountName(incPrefix), 28) : null,
+          incPrefix ? truncateName(getIncomeAccountName(incPrefix), 33) : null,
           incPrefix ? incomeMap.get(incPrefix) || 0 : null,
           null,
           expPrefix,
-          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 26) : null,
+          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 29) : null,
           expPrefix ? expenseMap.get(expPrefix) || 0 : null,
         ]);
       }
@@ -535,7 +535,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           const cellValue = String(sheet2[cell].v || "");
           const isBold = boldHeaders2.some((h) => cellValue.includes(h));
-          const isNumber = typeof sheet2[cell].v === 'number';
+          const isNumber = typeof sheet2[cell].v === "number";
 
           sheet2[cell].s = {
             font: { sz: 9.5, bold: isBold },
