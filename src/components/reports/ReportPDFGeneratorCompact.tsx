@@ -431,23 +431,31 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
           {/* PODPISY */}
           <div className="mt-8">
             <h2 className="text-sm font-bold mb-4">PODPISY:</h2>
-            <div className="grid grid-cols-5 gap-4">
-              <div className="border-b border-gray-400 pb-8 text-center">
-                <p className="text-[9px] text-gray-600 mt-2">Superior</p>
+            {report.location?.name && report.location.name.toLowerCase().includes('parafia') ? (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Superior</p>
+                </div>
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Ekonom</p>
+                </div>
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Proboszcz</p>
+                </div>
               </div>
-              <div className="border-b border-gray-400 pb-8 text-center">
-                <p className="text-[9px] text-gray-600 mt-2">Ekonom</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Superior</p>
+                </div>
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Ekonom</p>
+                </div>
+                <div className="border-b border-gray-400 pb-8 text-center">
+                  <p className="text-[9px] text-gray-600 mt-2">Radni</p>
+                </div>
               </div>
-              <div className="border-b border-gray-400 pb-8 text-center">
-                <p className="text-[9px] text-gray-600 mt-2">Proboszcz</p>
-              </div>
-              <div className="border-b border-gray-400 pb-8 text-center">
-                <p className="text-[9px] text-gray-600 mt-2">I Radny</p>
-              </div>
-              <div className="border-b border-gray-400 pb-8 text-center">
-                <p className="text-[9px] text-gray-600 mt-2">II Radny</p>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Data wydruku strony 1 */}
