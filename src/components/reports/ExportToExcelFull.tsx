@@ -39,6 +39,11 @@ const LIABILITY_CATEGORIES = [
   { name: "4. Rozliczenia z innymi", accounts: ["217"] },
 ];
 
+const truncateName = (name: string, maxLen: number): string => {
+  if (name.length <= maxLen) return name;
+  return name.substring(0, maxLen - 1) + ".";
+};
+
 export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, locationName }) => {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -414,11 +419,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const sheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
 
       // ─── USTAWIENIA ARKUSZA 1 ───
-      sheet1["!cols"] = [{ wch: 32 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+      sheet1["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
 
       sheet1["!margins"] = {
-        left: 0.3,
-        right: 0.3,
+        left: 0.2,
+        right: 0.2,
         top: 0.3,
         bottom: 0.3,
         header: 0.2,
@@ -452,7 +457,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           sheet1[cell].s = {
             font: { sz: 11, bold: isBold },
-            ...(isNumber ? { numFmt: '#,##0.00' } : {}),
+            ...(isNumber ? { numFmt: '#,##0.00 "zł"' } : {}),
           };
         }
       }
@@ -480,11 +485,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const expPrefix = i < EXPENSE_PREFIXES.length ? EXPENSE_PREFIXES[i] : null;
         sheet2Data.push([
           incPrefix,
-          incPrefix ? getIncomeAccountName(incPrefix) : null,
+          incPrefix ? truncateName(getIncomeAccountName(incPrefix), 22) : null,
           incPrefix ? incomeMap.get(incPrefix) || 0 : null,
           null,
           expPrefix,
-          expPrefix ? getExpenseAccountName(expPrefix) : null,
+          expPrefix ? truncateName(getExpenseAccountName(expPrefix), 20) : null,
           expPrefix ? expenseMap.get(expPrefix) || 0 : null,
         ]);
       }
@@ -534,7 +539,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
 
           sheet2[cell].s = {
             font: { sz: 9.5, bold: isBold },
-            ...(isNumber ? { numFmt: '#,##0.00' } : {}),
+            ...(isNumber ? { numFmt: '#,##0.00 "zł"' } : {}),
           };
         }
       }
