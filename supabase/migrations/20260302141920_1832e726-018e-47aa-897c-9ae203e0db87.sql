@@ -1,0 +1,1 @@
+UPDATE app_settings SET value = 'true'::jsonb, updated_at = now() WHERE key = 'two_factor_auth_enabled';
