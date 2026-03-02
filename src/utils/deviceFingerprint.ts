@@ -82,12 +82,9 @@ export const isDeviceTrusted = async (
   deviceFingerprint: string,
   supabase: any
 ): Promise<boolean> => {
-  const TRUST_DAYS = 30;
-  const TRUST_MS = TRUST_DAYS * 24 * 60 * 60 * 1000;
-
   const { data, error } = await supabase
     .from('trusted_devices')
-    .select('id, created_at')
+    .select('id')
     .eq('user_id', userId)
     .eq('device_fingerprint', deviceFingerprint)
     .maybeSingle();
@@ -97,17 +94,7 @@ export const isDeviceTrusted = async (
     return false;
   }
 
-  if (!data) return false;
-
-  // Ważność zaufania: 30 dni od dodania
-  if (data.created_at) {
-    const createdAt = new Date(data.created_at).getTime();
-    if (!Number.isNaN(createdAt) && Date.now() - createdAt > TRUST_MS) {
-      return false;
-    }
-  }
-
-  return true;
+  return !!data;
 };
 
 /**
@@ -148,7 +135,6 @@ export const addTrustedDevice = async (
   const deviceName = getDeviceName();
   const now = new Date().toISOString();
   
-  // Najpierw sprawdź czy urządzenie już istnieje
   const { data: existing } = await supabase
     .from('trusted_devices')
     .select('id')
@@ -157,13 +143,11 @@ export const addTrustedDevice = async (
     .maybeSingle();
 
   if (existing) {
-    // Urządzenie istnieje (może być wygasłe) - aktualizuj je (reset 30 dni)
     const { error } = await supabase
       .from('trusted_devices')
       .update({
         device_name: deviceName,
         user_agent: navigator.userAgent,
-        created_at: now,  // Reset daty utworzenia = reset 30-dniowego okresu
         last_used_at: now,
       })
       .eq('id', existing.id);
@@ -173,7 +157,6 @@ export const addTrustedDevice = async (
       throw error;
     }
   } else {
-    // Nowe urządzenie - utwórz wpis
     const { error } = await supabase
       .from('trusted_devices')
       .insert({
@@ -181,7 +164,6 @@ export const addTrustedDevice = async (
         device_fingerprint: deviceFingerprint,
         device_name: deviceName,
         user_agent: navigator.userAgent,
-        created_at: now,
         last_used_at: now,
       });
 
@@ -209,31 +191,6 @@ export const updateTrustedDeviceLastUsed = async (
   if (error) {
     console.error('Error updating trusted device:', error);
   }
-};
-
-/**
- * Usuwa wygasłe zaufane urządzenia (starsze niż 30 dni)
- */
-export const cleanupExpiredTrustedDevices = async (
-  userId: string,
-  supabase: any
-): Promise<number> => {
-  const TRUST_DAYS = 30;
-  const expiryDate = new Date(Date.now() - TRUST_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data, error } = await supabase
-    .from('trusted_devices')
-    .delete()
-    .eq('user_id', userId)
-    .lt('created_at', expiryDate)
-    .select('id');
-
-  if (error) {
-    console.error('Error cleaning up expired devices:', error);
-    return 0;
-  }
-
-  return data?.length || 0;
 };
 
 /**

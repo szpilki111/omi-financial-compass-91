@@ -100,7 +100,7 @@ const SecuritySettingsManagement = () => {
               </Label>
               <p className="text-sm text-muted-foreground">
                 {twoFactorEnabled 
-                  ? 'Włączona - użytkownicy muszą potwierdzić logowanie kodem z emaila'
+                  ? 'Włączona - użytkownicy muszą potwierdzić logowanie kodem z emaila przy pierwszym logowaniu z nowego urządzenia'
                   : 'Wyłączona - użytkownicy logują się tylko hasłem'}
               </p>
             </div>
@@ -117,8 +117,8 @@ const SecuritySettingsManagement = () => {
           <h4 className="font-medium mb-2">Jak działa weryfikacja dwuetapowa?</h4>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
             <li>Przy logowaniu z nowego urządzenia, użytkownik otrzyma kod na email</li>
-            <li>Po poprawnym wprowadzeniu kodu, urządzenie może być zapamiętane na 30 dni</li>
-            <li>Zapamiętane urządzenia nie wymagają ponownej weryfikacji</li>
+            <li>Po poprawnym wprowadzeniu kodu, urządzenie jest automatycznie dodawane do zaufanych na stałe</li>
+            <li>Zaufane urządzenia nie wymagają ponownej weryfikacji (chyba że zostaną usunięte)</li>
             <li>Wyłączenie 2FA zmniejsza bezpieczeństwo, ale upraszcza logowanie</li>
           </ul>
         </div>

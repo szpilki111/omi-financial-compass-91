@@ -16,7 +16,6 @@ import {
   isDeviceTrusted, 
   addTrustedDevice,
   updateTrustedDeviceLastUsed,
-  cleanupExpiredTrustedDevices
 } from '@/utils/deviceFingerprint';
 
 // Ograniczamy role do ekonoma
@@ -189,8 +188,6 @@ const Login = () => {
       
       if (trusted) {
         await updateTrustedDeviceLastUsed(userId, fingerprint, supabase);
-        // Automatyczne sprzątanie wygasłych urządzeń przy logowaniu
-        cleanupExpiredTrustedDevices(userId, supabase).catch(() => {});
 
         toast({
           title: "Logowanie pomyślne",
@@ -238,13 +235,12 @@ const Login = () => {
     }
   };
 
-  const handleTwoFactorVerified = async (trustDevice: boolean) => {
+  const handleTwoFactorVerified = async () => {
     setShowTwoFactorDialog(false);
     setIsLoading(true);
     setError(null);
 
     try {
-      // Najpierw zaloguj użytkownika (w momencie 2FA byliśmy wylogowani lokalnie)
       const success = await Promise.race([
         login(pendingEmail, password),
         timeout(10000),
@@ -256,23 +252,21 @@ const Login = () => {
         return;
       }
 
-      // Dopiero po zalogowaniu dodaj do zaufanych (wymaga sesji do RLS)
-      if (trustDevice) {
-        try {
-          await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
-          toast({
-            title: "Dodano do zaufanych",
-            description: "Urządzenie zapisano jako zaufane (30 dni).",
-          });
-        } catch (e: any) {
-          toast({
-            title: "Nie udało się dodać do zaufanych",
-            description: e?.message
-              ? `Zalogowano, ale nie zapisano urządzenia jako zaufanego. (${e.message})`
-              : "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
-            variant: "destructive",
-          });
-        }
+      // Zawsze dodaj urządzenie do zaufanych na stałe
+      try {
+        await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
+        toast({
+          title: "Dodano do zaufanych",
+          description: "Urządzenie zapisano jako zaufane na stałe.",
+        });
+      } catch (e: any) {
+        toast({
+          title: "Nie udało się dodać do zaufanych",
+          description: e?.message
+            ? `Zalogowano, ale nie zapisano urządzenia jako zaufanego. (${e.message})`
+            : "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
+          variant: "destructive",
+        });
       }
 
       setTwoFactorInProgress(false);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,10 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Trash2, Smartphone, Monitor, Info, Clock, AlertTriangle, ShieldOff } from 'lucide-react';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { Trash2, Smartphone, Monitor, Info, ShieldOff } from 'lucide-react';
+import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { cleanupExpiredTrustedDevices, removeAllTrustedDevices } from '@/utils/deviceFingerprint';
+import { removeAllTrustedDevices } from '@/utils/deviceFingerprint';
 
 interface TrustedDevice {
   id: string;
@@ -32,15 +31,12 @@ interface TrustedDevice {
   created_at: string | null;
 }
 
-const TRUST_PERIOD_DAYS = 30;
-
 const TrustedDevicesTab = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showRemoveAllDialog, setShowRemoveAllDialog] = useState(false);
   const [isRemovingAll, setIsRemovingAll] = useState(false);
-  const [isCleaningExpired, setIsCleaningExpired] = useState(false);
 
   const { data: trustedDevices, isLoading } = useQuery({
     queryKey: ['trustedDevices', user?.id],
@@ -56,19 +52,6 @@ const TrustedDevicesTab = () => {
     },
     enabled: !!user?.id,
   });
-
-  // Auto-cleanup wygasłych urządzeń przy montowaniu komponentu
-  useEffect(() => {
-    const autoCleanup = async () => {
-      if (user?.id) {
-        const removed = await cleanupExpiredTrustedDevices(user.id, supabase);
-        if (removed > 0) {
-          queryClient.invalidateQueries({ queryKey: ['trustedDevices'] });
-        }
-      }
-    };
-    autoCleanup();
-  }, [user?.id, queryClient]);
 
   const deleteMutation = useMutation({
     mutationFn: async (deviceId: string) => {
@@ -94,27 +77,6 @@ const TrustedDevicesTab = () => {
       });
     },
   });
-
-  const handleRemoveExpired = async () => {
-    if (!user?.id) return;
-    setIsCleaningExpired(true);
-    try {
-      const removed = await cleanupExpiredTrustedDevices(user.id, supabase);
-      queryClient.invalidateQueries({ queryKey: ['trustedDevices'] });
-      toast({
-        title: removed > 0 ? "Usunięto wygasłe urządzenia" : "Brak wygasłych urządzeń",
-        description: removed > 0 ? `Usunięto ${removed} wygasłych urządzeń.` : "Nie znaleziono wygasłych urządzeń do usunięcia.",
-      });
-    } catch {
-      toast({
-        title: "Błąd",
-        description: "Nie udało się usunąć wygasłych urządzeń.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCleaningExpired(false);
-    }
-  };
 
   const handleRemoveAll = async () => {
     if (!user?.id) return;
@@ -145,43 +107,6 @@ const TrustedDevicesTab = () => {
     }
     return <Monitor className="w-5 h-5 text-primary" />;
   };
-
-  const getDaysRemaining = (createdAt: string | null) => {
-    if (!createdAt) return 0;
-    const expiryDate = addDays(new Date(createdAt), TRUST_PERIOD_DAYS);
-    return Math.max(0, differenceInDays(expiryDate, new Date()));
-  };
-
-  const getExpiryBadge = (createdAt: string | null) => {
-    const daysRemaining = getDaysRemaining(createdAt);
-
-    if (daysRemaining <= 0) {
-      return (
-        <Badge variant="destructive" className="gap-1">
-          <AlertTriangle className="w-3 h-3" />
-          Wygasło
-        </Badge>
-      );
-    }
-
-    if (daysRemaining <= 7) {
-      return (
-        <Badge variant="secondary" className="gap-1 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
-          <Clock className="w-3 h-3" />
-          Zostało {daysRemaining} dni
-        </Badge>
-      );
-    }
-
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Clock className="w-3 h-3" />
-        Zostało {daysRemaining} dni
-      </Badge>
-    );
-  };
-
-  const expiredCount = trustedDevices?.filter(d => getDaysRemaining(d.created_at) <= 0).length || 0;
 
   if (isLoading) {
     return (
@@ -229,32 +154,13 @@ const TrustedDevicesTab = () => {
           <Alert>
             <Info className="w-4 h-4" />
             <AlertDescription>
-              Gdy usuniesz urządzenie z listy zaufanych, przy następnym logowaniu z tego urządzenia 
-              otrzymasz kod weryfikacyjny na email.
-            </AlertDescription>
-          </Alert>
-
-          <Alert>
-            <Clock className="w-4 h-4" />
-            <AlertDescription>
-              Zaufane urządzenia wygasają automatycznie po <strong>{TRUST_PERIOD_DAYS} dniach</strong>. 
-              Po wygaśnięciu usuń urządzenie z listy, aby przy następnym logowaniu zweryfikować je ponownie kodem.
+              Zaufane urządzenia są zapisane <strong>na stałe</strong>. Gdy usuniesz urządzenie z listy, 
+              przy następnym logowaniu z tego urządzenia otrzymasz kod weryfikacyjny na email.
             </AlertDescription>
           </Alert>
 
           {trustedDevices && trustedDevices.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {expiredCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRemoveExpired}
-                  disabled={isCleaningExpired}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {isCleaningExpired ? 'Usuwanie...' : `Usuń wygasłe (${expiredCount})`}
-                </Button>
-              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -272,7 +178,7 @@ const TrustedDevicesTab = () => {
               <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>Nie masz żadnych zaufanych urządzeń</p>
               <p className="text-sm mt-2">
-                Zaznacz "Dodaj do zaufanych" podczas logowania, aby nie otrzymywać kodów weryfikacyjnych
+                Urządzenie zostanie automatycznie dodane do zaufanych po weryfikacji kodem przy logowaniu
               </p>
             </div>
           ) : (
@@ -287,12 +193,9 @@ const TrustedDevicesTab = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium truncate">
-                        {device.device_name || 'Nieznane urządzenie'}
-                      </p>
-                      {getExpiryBadge(device.created_at)}
-                    </div>
+                    <p className="font-medium truncate">
+                      {device.device_name || 'Nieznane urządzenie'}
+                    </p>
                     
                     <div className="mt-1 space-y-1 text-sm text-muted-foreground">
                       {device.user_agent && (
