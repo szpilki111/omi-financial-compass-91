@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +11,7 @@ import { Shield, Clock, RefreshCw } from 'lucide-react';
 interface TwoFactorVerificationProps {
   isOpen: boolean;
   onClose: () => void;
-  onVerified: (trustDevice: boolean) => void;
+  onVerified: () => void;
   userId: string;
   email: string;
   deviceFingerprint: string;
@@ -27,8 +26,6 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
   deviceFingerprint,
 }) => {
   const [code, setCode] = useState('');
-  // Domyślnie ufamy urządzeniu po poprawnym wpisaniu kodu (user może odznaczyć)
-  const [trustDevice, setTrustDevice] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState('');
@@ -103,7 +100,7 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
         description: "Zalogowano do systemu",
       });
 
-      onVerified(trustDevice);
+      onVerified();
     } catch (error: any) {
       setError('Wystąpił błąd podczas weryfikacji');
     } finally {
@@ -203,19 +200,9 @@ const TwoFactorVerification: React.FC<TwoFactorVerificationProps> = ({
             </Button>
           </div>
 
-          <div className="flex items-center space-x-2 pt-2">
-            <Checkbox
-              id="trust-device"
-              checked={trustDevice}
-              onCheckedChange={(checked) => setTrustDevice(checked as boolean)}
-            />
-            <Label
-              htmlFor="trust-device"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Dodaj to urządzenie do zaufanych (nie pytaj ponownie)
-            </Label>
-          </div>
+          <p className="text-sm text-muted-foreground pt-2">
+            Po weryfikacji urządzenie zostanie automatycznie dodane do zaufanych na stałe.
+          </p>
 
           {error && (
             <Alert variant="destructive">
