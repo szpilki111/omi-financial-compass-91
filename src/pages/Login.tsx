@@ -64,8 +64,11 @@ const Login = () => {
         .eq('key', 'two_factor_auth_enabled')
         .maybeSingle();
 
-      if (error) return true; // Default to enabled on error
-      return data?.value === true || data?.value === 'true';
+      if (error) return true; // Fail closed: when setting cannot be read, require 2FA
+
+      // 2FA is disabled only when explicitly set to false
+      if (data?.value === false || data?.value === 'false') return false;
+      return true;
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
