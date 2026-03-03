@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from '@supabase/supabase-js';
+import { generateDeviceFingerprint, isDeviceTrusted } from '@/utils/deviceFingerprint';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin' | 'proboszcz' | 'asystent' | 'asystent_ekonoma_prowincjalnego' | 'ekonom_prowincjalny';
 
@@ -46,6 +47,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   useEffect(() => {
+    const checkDeviceTrust = async (userId: string): Promise<boolean> => {
+      try {
+        const { data: settings } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'two_factor_auth_enabled')
+          .maybeSingle();
+
+        const is2FAEnabled = settings?.value === true || settings?.value === 'true';
+        if (!is2FAEnabled) return true; // 2FA disabled, trust all
+
+        const fingerprint = await generateDeviceFingerprint();
+        const trusted = await isDeviceTrusted(userId, fingerprint, supabase);
+        return trusted;
+      } catch {
+        // On error, allow access (fail open) to avoid locking users out
+        return true;
+      }
+    };
+
     const fetchUserProfile = async (userId: string) => {
       try {
         const { data: profile, error } = await supabase
@@ -107,9 +128,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
-          setTimeout(() => {
-            fetchUserProfile(currentSession.user.id);
-          }, 0);
+          if (event === 'SIGNED_IN') {
+            // For SIGNED_IN, check device trust before loading profile
+            setTimeout(async () => {
+              const trusted = await checkDeviceTrust(currentSession.user.id);
+              if (!trusted) {
+                await supabase.auth.signOut();
+                setUser(null);
+                setIsLoading(false);
+                return;
+              }
+              fetchUserProfile(currentSession.user.id);
+            }, 0);
+          } else {
+            setTimeout(() => {
+              fetchUserProfile(currentSession.user.id);
+            }, 0);
+          }
         } else {
           setUser(null);
           setIsLoading(false);
@@ -123,6 +158,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
+          // Check device trust before allowing session
+          const trusted = await checkDeviceTrust(currentSession.user.id);
+          if (!trusted) {
+            await supabase.auth.signOut();
+            setSession(null);
+            setIsLoading(false);
+            return;
+          }
           fetchUserProfile(currentSession.user.id);
         } else {
           setIsLoading(false);
