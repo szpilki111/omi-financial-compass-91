@@ -128,23 +128,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
-          if (event === 'SIGNED_IN') {
-            // For SIGNED_IN, check device trust before loading profile
-            setTimeout(async () => {
-              const trusted = await checkDeviceTrust(currentSession.user.id);
-              if (!trusted) {
-                await supabase.auth.signOut();
-                setUser(null);
-                setIsLoading(false);
-                return;
-              }
-              fetchUserProfile(currentSession.user.id);
-            }, 0);
-          } else {
-            setTimeout(() => {
-              fetchUserProfile(currentSession.user.id);
-            }, 0);
-          }
+          // Don't check device trust on SIGNED_IN — the Login page handles
+          // the 2FA flow and must be allowed to complete addTrustedDevice
+          // before any trust check fires. Session-based trust is enforced
+          // only in initializeAuth (page load / refresh).
+          setTimeout(() => {
+            fetchUserProfile(currentSession.user.id);
+          }, 0);
         } else {
           setUser(null);
           setIsLoading(false);
