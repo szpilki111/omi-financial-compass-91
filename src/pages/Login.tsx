@@ -252,7 +252,8 @@ const Login = () => {
         return;
       }
 
-      // Zawsze dodaj urządzenie do zaufanych na stałe
+      // Atomowo dodaj urządzenie — bez tego użytkownik zostanie
+      // wylogowany przy następnym odświeżeniu (initializeAuth check).
       try {
         await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
         toast({
@@ -260,13 +261,14 @@ const Login = () => {
           description: "Urządzenie zapisano jako zaufane na stałe.",
         });
       } catch (e: any) {
-        toast({
-          title: "Nie udało się dodać do zaufanych",
-          description: e?.message
-            ? `Zalogowano, ale nie zapisano urządzenia jako zaufanego. (${e.message})`
-            : "Zalogowano, ale nie zapisano urządzenia jako zaufanego.",
-          variant: "destructive",
-        });
+        // KRYTYCZNE: bez zapisu urządzenia nie wpuszczamy użytkownika
+        await supabase.auth.signOut();
+        setError("Nie udało się zapisać urządzenia jako zaufanego. Spróbuj zalogować się ponownie.");
+        setTwoFactorInProgress(false);
+        setIsLoading(false);
+        setPendingUserId('');
+        setPendingEmail('');
+        return;
       }
 
       setTwoFactorInProgress(false);
