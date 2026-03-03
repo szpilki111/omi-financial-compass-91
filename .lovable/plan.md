@@ -1,36 +1,48 @@
 
+# Problem: 2FA bypass through existing sessions
 
-# Plan: Permanent trusted devices + force re-login
+## Root cause
 
-## Changes
+The 2FA check only runs inside `handleSubmit` on the Login page. But users with existing Supabase auth sessions never reach `handleSubmit`:
 
-### 1. Remove 30-day expiry from `isDeviceTrusted` (`src/utils/deviceFingerprint.ts`)
-- Remove the `TRUST_DAYS` / `TRUST_MS` expiry check — if device exists, it's trusted forever
-- Remove `cleanupExpiredTrustedDevices` function (no longer needed)
-- Keep `removeAllTrustedDevices` for manual management
+1. `AuthContext.initializeAuth()` loads the session → sets `user` + `isAuthenticated`
+2. `ProtectedRoute` sees `user` exists → grants access
+3. Login page `useEffect` sees `isAuthenticated` → auto-redirects to dashboard
 
-### 2. Update `addTrustedDevice` (`src/utils/deviceFingerprint.ts`)
-- Remove `created_at` reset on re-trust (no expiry cycle to reset)
-- Keep upsert logic but only update `last_used_at` and `device_name`/`user_agent`
+Clearing `trusted_devices` did nothing because auth sessions are independent.
 
-### 3. Update Login flow (`src/pages/Login.tsx`)
-- Remove call to `cleanupExpiredTrustedDevices` on login (line 193)
-- Change toast message from "30 dni" to "na stałe" (line 265)
-- Force trust: after 2FA verification, always add device as trusted (remove the `if (trustDevice)` condition — device is always saved)
+## Fix
 
-### 4. Update `TwoFactorVerification.tsx`
-- Remove the "trust this device" checkbox — trusting is mandatory, not optional
-- Always pass `trustDevice: true` to `onVerified`
+### 1. Add device trust check in `AuthContext.tsx` (`initializeAuth`)
 
-### 5. Update `TrustedDevicesTab.tsx`
-- Remove `TRUST_PERIOD_DAYS`, `getDaysRemaining`, `getExpiryBadge`, expired device cleanup button
-- Show simpler UI: device list with "Added on" date, no expiry badges
-- Keep "remove device" and "remove all" functionality
+After loading a session, check if 2FA is enabled and device is trusted. If not, sign out the user:
 
-### 6. Force logout all users (SQL migration)
-- Delete all records from `trusted_devices` table (forces everyone to re-verify)
-- Truncate active sessions: call `auth.sign_out_all()` or delete from `auth.sessions` — since we can't modify auth schema, we'll delete all `trusted_devices` entries so every user must re-verify on next login
+```text
+initializeAuth:
+  1. getSession()
+  2. if session exists:
+     a. fetch app_settings.two_factor_auth_enabled
+     b. if 2FA enabled:
+        - generate device fingerprint
+        - check trusted_devices for this user+fingerprint
+        - if NOT trusted → signOut() + setIsLoading(false) + return
+     c. proceed with fetchUserProfile as before
+```
 
-### 7. Update `SecuritySettingsManagement.tsx` description
-- Update the 2FA description text to reflect permanent device trust instead of 30-day
+This ensures that ANY existing session from an untrusted device gets terminated immediately on app load.
 
+### 2. Same check in `onAuthStateChange` handler
+
+For the `SIGNED_IN` event, do the same trust check before calling `fetchUserProfile`. This prevents the brief authenticated state after `signInWithPassword` in the login flow (which signs in, then signs out for untrusted devices).
+
+### 3. Login page `useEffect` (line 110-113) — no change needed
+
+Once AuthContext properly signs out untrusted sessions, `isAuthenticated` will be `false` and the redirect won't fire.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/context/AuthContext.tsx` | Add device trust verification in `initializeAuth` and `onAuthStateChange` before setting user state |
+
+No new migrations needed — the `trusted_devices` table is already empty, and `app_settings.two_factor_auth_enabled` is already `true`.
