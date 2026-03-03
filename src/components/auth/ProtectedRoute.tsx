@@ -22,8 +22,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     if (!isLoading && !user) {
       toast({
-        title: "Dostęp zabroniony",
-        description: "Musisz być zalogowany, aby zobaczyć tę stronę",
+        title: "Wymagane ponowne logowanie",
+        description: "Sesja wygasła lub to urządzenie nie jest zaufane. Zaloguj się ponownie.",
         variant: "destructive",
       });
     }
