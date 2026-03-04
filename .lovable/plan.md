@@ -1,65 +1,53 @@
 
-Cel: zatrzymać błąd logowania „Cannot read properties of undefined (reading 'digest')” oraz usunąć niespójność „czasem wpuszcza bez trusted device, czasem wylogowuje po odświeżeniu”.
+Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-Do I know what the issue is? Tak.
+1) Co dokładnie jest zepsute (potwierdzone)
+- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
+- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
+- Twarde dowody:
+  - `app_settings.two_factor_auth_enabled = true`
+  - `trusted_devices_count = 0`
+  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
 
-Co potwierdziłem (na podstawie kodu + logów + DB):
-1) `src/utils/deviceFingerprint.ts` używa `crypto.subtle.digest(...)` bez fallbacku.  
-   Na części środowisk (zwłaszcza HTTP/insecure context i część mobile) `crypto.subtle` jest `undefined`, co daje dokładnie zgłaszany błąd.
-2) `src/context/AuthContext.tsx` w `checkDeviceTrust` ma `catch { return true; }` (fail-open).  
-   To powoduje bypass trusted-device przy błędach fingerprintu i daje chaos: jedni wchodzą bez 2FA/trusted, inni są wylogowywani po refresh.
-3) RLS dla `app_settings` pozwala SELECT tylko `authenticated`, więc na `/login` (anon) zapytanie zwykle errorem i system wymusza 2FA (co jest OK przy fail-closed), ale to zwiększa częstotliwość wywołania fingerprintu.
-4) Widziałem już rekordy w `trusted_devices` (26), więc problem nie jest „brak tabeli”, tylko niestabilna ścieżka runtime.
+2) Plan poprawki w kodzie (bez zmian DB)
+- Plik: `src/context/AuthContext.tsx`
+  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
+  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
+  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
 
-Plan wdrożenia (bezpieczny dla produkcji):
-1) Uodpornić fingerprint na każde środowisko (`src/utils/deviceFingerprint.ts`)
-- Dodać bezpieczny hash:
-  - najpierw `globalThis.crypto?.subtle?.digest` (jeśli dostępne),
-  - fallback na lokalny deterministiczny hash JS (bez WebCrypto).
-- Funkcja fingerprint nie może rzucać wyjątku: zawsze zwraca string.
-- Dodać guardy na brak `window/navigator/screen` i try/catch na każdy komponent.
-- Zachować możliwie kompatybilny format, żeby nie wycinać istniejących trusted devices.
+- Plik: `src/pages/Login.tsx`
+  - Utrzymać obecny flow:
+    - login+hasło → niezaufane urządzenie → kod 2FA.
+  - Po poprawnej weryfikacji kodu:
+    - zalogować użytkownika,
+    - natychmiast wykonać `addTrustedDevice(...)`,
+    - dopiero potem nawigacja.
+  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
 
-2) Zamknąć bypass bezpieczeństwa (`src/context/AuthContext.tsx`)
-- Zmienić `checkDeviceTrust` na fail-closed:
-  - błąd odczytu `app_settings` => traktuj jak `2FA = ON`,
-  - błąd generacji fingerprintu / check trusted => zwróć `false` (nie wpuszczaj).
-- Utrzymać check trusted w `initializeAuth` (na start/refresh), ale już bez „przepuszczania” na wyjątku.
+3) Dlaczego to spełni wymaganie biznesowe
+- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
+- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
+- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
 
-3) Ustabilizować zapis trusted device po 2FA (`src/pages/Login.tsx`)
-- Po `handleTwoFactorVerified`:
-  - potwierdzić aktywną sesję (`getSession`) przed `addTrustedDevice`,
-  - jeśli brak sesji: krótki retry i dopiero insert,
-  - po insercie odczytać rekord kontrolnie (assert), dopiero wtedy nawigacja.
-- Jeśli zapis trusted nie przejdzie: kontrolowany signOut + czytelny komunikat (bez pół-zalogowanego stanu).
+4) Testy regresji (obowiązkowe przed domknięciem)
+- Scenariusz A: użytkownik bez trusted device:
+  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
+  - w DB pojawia się rekord w `trusted_devices`.
+- Scenariusz B: ponowne logowanie z tego samego urządzenia:
+  - brak 2FA (urządzenie już zaufane).
+- Scenariusz C: usunięcie urządzenia z listy:
+  - kolejne logowanie znowu wymaga 2FA.
+- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
+  - `initializeAuth` wylogowuje i kieruje na login.
 
-4) Diagnostyka operacyjna (krótkoterminowo, produkcja)
-- Dodać tymczasowe logi diagnostyczne (source + reason) dla:
-  - fingerprint fallback,
-  - decyzji trusted/untrusted,
-  - błędu inserta trusted.
-- Dzięki temu po następnym zgłoszeniu od razu zobaczymy, czy problem to insecure context, brak sesji, RLS, czy coś innego.
+5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
+- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
+- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
 
-5) Plan testów regresji przed zamknięciem incydentu
-- Scenariusz A: nowe urządzenie (desktop)  
-  login -> 2FA -> zapis trusted -> refresh -> pozostaje zalogowany.
-- Scenariusz B: kolejne logowanie z tej samej maszyny  
-  login bez 2FA (trusted hit), brak błędu digest.
-- Scenariusz C: mobile (zgłaszany przypadek)  
-  pierwsze i kolejne logowanie, plus refresh.
-- Scenariusz D: brak trusted (ręczne usunięcie rekordu)  
-  wymusza 2FA zawsze.
-- Scenariusz E: wejście przez HTTP oraz HTTPS (jeśli oba działają)  
-  brak błędu digest; przewidywalne zachowanie trusted.
-
-Sekcja techniczna:
-- Pliki do zmiany:
-  - `src/utils/deviceFingerprint.ts` (krytyczny runtime fix)
-  - `src/context/AuthContext.tsx` (fail-open -> fail-closed)
-  - `src/pages/Login.tsx` (atomowy zapis trusted po 2FA)
-- Brak migracji DB.
-- Ryzyko wdrożenia: niskie-średnie (dotyczy wyłącznie auth flow), zredukowane przez testy A–E i logi diagnostyczne.
-- Oczekiwany efekt:
-  - znika błąd `digest`,
-  - znika „pierwsze logowanie działa, kolejne nie”,
-  - znika możliwość wejścia bez trusted device przy błędach technicznych.
+Sekcja techniczna (dla zespołu)
+- Problem jest wyścigiem asynchronicznym między:
+  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
+  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
+- Naprawa polega na rozdzieleniu odpowiedzialności:
+  - `AuthContext` pilnuje tylko „sesji zastanych”,
+  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).

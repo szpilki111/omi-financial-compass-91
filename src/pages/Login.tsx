@@ -244,6 +244,7 @@ const Login = () => {
     setError(null);
 
     try {
+      // 1. Zaloguj użytkownika
       const success = await Promise.race([
         login(pendingEmail, password),
         timeout(10000),
@@ -255,16 +256,33 @@ const Login = () => {
         return;
       }
 
-      // Atomowo dodaj urządzenie — bez tego użytkownik zostanie
-      // wylogowany przy następnym odświeżeniu (initializeAuth check).
+      // 2. Potwierdź aktywną sesję przed zapisem urządzenia
+      const { data: { session: activeSession } } = await supabase.auth.getSession();
+      if (!activeSession) {
+        console.error('[Login] Brak aktywnej sesji po login() — retry');
+        // Krótki retry
+        await new Promise(r => setTimeout(r, 1000));
+        const { data: { session: retrySession } } = await supabase.auth.getSession();
+        if (!retrySession) {
+          setError("Sesja nie została utworzona poprawnie. Spróbuj ponownie.");
+          setTwoFactorInProgress(false);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 3. Atomowo dodaj urządzenie — bez tego użytkownik zostanie
+      //    wylogowany przy następnym odświeżeniu (initializeAuth check).
       try {
         await addTrustedDevice(pendingUserId, deviceFingerprint, supabase);
+        console.log('[Login] Urządzenie zaufane zapisane pomyślnie');
         toast({
           title: "Dodano do zaufanych",
           description: "Urządzenie zapisano jako zaufane na stałe.",
         });
       } catch (e: any) {
         // KRYTYCZNE: bez zapisu urządzenia nie wpuszczamy użytkownika
+        console.error('[Login] KRYTYCZNY BŁĄD zapisu trusted device:', e);
         await supabase.auth.signOut();
         setError("Nie udało się zapisać urządzenia jako zaufanego. Spróbuj zalogować się ponownie.");
         setTwoFactorInProgress(false);
@@ -276,7 +294,8 @@ const Login = () => {
 
       setTwoFactorInProgress(false);
       navigate(from, { replace: true });
-    } catch {
+    } catch (err) {
+      console.error('[Login] handleTwoFactorVerified error:', err);
       setError("Wystąpił błąd podczas logowania");
       setTwoFactorInProgress(false);
     } finally {
