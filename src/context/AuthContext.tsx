@@ -49,21 +49,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkDeviceTrust = async (userId: string): Promise<boolean> => {
       try {
-        const { data: settings } = await supabase
+        const { data: settings, error: settingsError } = await supabase
           .from('app_settings')
           .select('value')
           .eq('key', 'two_factor_auth_enabled')
           .maybeSingle();
 
-        const is2FAEnabled = settings?.value === true || settings?.value === 'true';
-        if (!is2FAEnabled) return true; // 2FA disabled, trust all
+        // Fail-closed: jeśli nie udało się odczytać ustawienia, traktuj jak 2FA=ON
+        if (settingsError) {
+          console.warn('[AuthContext] Nie udało się odczytać app_settings (2FA), fail-closed:', settingsError.message);
+        }
+
+        // 2FA wyłączone TYLKO gdy jawnie ustawione na false
+        const is2FAEnabled = settingsError 
+          ? true 
+          : !(settings?.value === false || settings?.value === 'false');
+        
+        if (!is2FAEnabled) {
+          console.log('[AuthContext] 2FA wyłączone w ustawieniach, pomijam trust check');
+          return true;
+        }
 
         const fingerprint = await generateDeviceFingerprint();
         const trusted = await isDeviceTrusted(userId, fingerprint, supabase);
+        console.log('[AuthContext] Trust check:', { trusted, fingerprintLen: fingerprint.length });
         return trusted;
-      } catch {
-        // On error, allow access (fail open) to avoid locking users out
-        return true;
+      } catch (err) {
+        // FAIL-CLOSED: błąd = nie wpuszczaj
+        console.error('[AuthContext] checkDeviceTrust error (fail-closed, denying access):', err);
+        return false;
       }
     };
 

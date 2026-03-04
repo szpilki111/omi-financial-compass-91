@@ -1,32 +1,74 @@
 /**
- * Generuje unikalny fingerprint urządzenia na podstawie dostępnych informacji
- * o przeglądarce i systemie. Nie jest to idealne rozwiązanie, ale wystarczające
- * do podstawowej identyfikacji urządzenia.
+ * Deterministyczny hash JS — fallback gdy crypto.subtle niedostępne
+ * (HTTP, starsze mobile, ograniczone konteksty).
+ * Implementacja FNV-1a 128-bit (daje hex string, stabilny cross-platform).
  */
-export const generateDeviceFingerprint = async (): Promise<string> => {
-  const components: string[] = [];
-
-  // User agent
-  components.push(navigator.userAgent);
-
-  // Język przeglądarki
-  components.push(navigator.language);
-
-  // Strefa czasowa
-  components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
-
-  // Rozdzielczość ekranu
-  components.push(`${screen.width}x${screen.height}x${screen.colorDepth}`);
-
-  // Platform
-  components.push(navigator.platform);
-
-  // Liczba rdzeni procesora (jeśli dostępne)
-  if ('hardwareConcurrency' in navigator) {
-    components.push(String(navigator.hardwareConcurrency));
+const fnv1aHash = (str: string): string => {
+  let h1 = 0x811c9dc5 >>> 0;
+  let h2 = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ (ch + i), 0x01000193) >>> 0;
   }
+  const hex1 = h1.toString(16).padStart(8, '0');
+  const hex2 = h2.toString(16).padStart(8, '0');
+  // Powtórz, żeby uzyskać dłuższy hash (lepsze rozróżnienie)
+  const h3 = Math.imul(h1 ^ h2, 0x01000193) >>> 0;
+  const h4 = Math.imul(h2 ^ h1, 0x16f11fe5) >>> 0;
+  return hex1 + hex2 + h3.toString(16).padStart(8, '0') + h4.toString(16).padStart(8, '0');
+};
 
-  // Canvas fingerprint (prosty wariant)
+/**
+ * Hash: najpierw WebCrypto (SHA-256), fallback na FNV-1a JS.
+ * NIGDY nie rzuca wyjątku.
+ */
+const safeHash = async (str: string): Promise<string> => {
+  try {
+    if (globalThis.crypto?.subtle?.digest) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // WebCrypto niedostępne — kontynuuj do fallbacku
+  }
+  console.warn('[deviceFingerprint] crypto.subtle niedostępne, używam fallback hash (FNV-1a)');
+  return fnv1aHash(str);
+};
+
+/**
+ * Zbiera komponent fingerprintu bezpiecznie (guard na brak window/navigator/screen).
+ */
+const collectComponents = (): string[] => {
+  const components: string[] = [];
+  
+  try {
+    if (typeof navigator !== 'undefined') {
+      components.push(navigator.userAgent || 'unknown-ua');
+      components.push(navigator.language || 'unknown-lang');
+      components.push(navigator.platform || 'unknown-platform');
+      if ('hardwareConcurrency' in navigator) {
+        components.push(String(navigator.hardwareConcurrency));
+      }
+    }
+  } catch { /* guard */ }
+
+  try {
+    if (typeof Intl !== 'undefined') {
+      components.push(Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown-tz');
+    }
+  } catch { /* guard */ }
+
+  try {
+    if (typeof screen !== 'undefined') {
+      components.push(`${screen.width}x${screen.height}x${screen.colorDepth}`);
+    }
+  } catch { /* guard */ }
+
+  // Canvas fingerprint
   try {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -36,11 +78,9 @@ export const generateDeviceFingerprint = async (): Promise<string> => {
       ctx.fillText('OMI System', 2, 2);
       components.push(canvas.toDataURL());
     }
-  } catch (e) {
-    // Canvas może być zablokowany przez niektóre przeglądarki
-  }
+  } catch { /* guard */ }
 
-  // WebGL fingerprint (jeśli dostępne)
+  // WebGL fingerprint
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -51,27 +91,29 @@ export const generateDeviceFingerprint = async (): Promise<string> => {
         components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
       }
     }
-  } catch (e) {
-    // WebGL może nie być dostępny
+  } catch { /* guard */ }
+
+  // Jeśli nie udało się zebrać nic — dodaj stały marker
+  if (components.length === 0) {
+    components.push('fallback-empty-fingerprint');
   }
 
-  // Połącz wszystkie komponenty i zahashuj
-  const fingerprint = components.join('|');
-  
-  // Prosty hash (dla production lepiej użyć crypto.subtle.digest)
-  return await simpleHash(fingerprint);
+  return components;
 };
 
 /**
- * Prosty hash funkcja używająca Web Crypto API
+ * Generuje fingerprint urządzenia. NIGDY nie rzuca wyjątku — zawsze zwraca string.
  */
-const simpleHash = async (str: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+export const generateDeviceFingerprint = async (): Promise<string> => {
+  try {
+    const components = collectComponents();
+    const raw = components.join('|');
+    return await safeHash(raw);
+  } catch (e) {
+    console.error('[deviceFingerprint] Nieoczekiwany błąd generowania fingerprint:', e);
+    // Ostateczny fallback — deterministyczny, ale ograniczony
+    return fnv1aHash('emergency-fallback-' + (typeof navigator !== 'undefined' ? navigator.userAgent : 'no-ua'));
+  }
 };
 
 /**
@@ -90,7 +132,7 @@ export const isDeviceTrusted = async (
     .maybeSingle();
 
   if (error) {
-    console.error('Error checking trusted device:', error);
+    console.error('[deviceFingerprint] Error checking trusted device:', error);
     return false;
   }
 
@@ -101,31 +143,32 @@ export const isDeviceTrusted = async (
  * Generuje czytelną nazwę urządzenia na podstawie user agent
  */
 const getDeviceName = (): string => {
-  const ua = navigator.userAgent;
-  let browser = 'Przeglądarka';
-  let os = 'System';
-  
-  // Wykryj przeglądarkę
-  if (ua.includes('Firefox')) browser = 'Firefox';
-  else if (ua.includes('Edg')) browser = 'Edge';
-  else if (ua.includes('Chrome')) browser = 'Chrome';
-  else if (ua.includes('Safari')) browser = 'Safari';
-  else if (ua.includes('Opera')) browser = 'Opera';
-  
-  // Wykryj system operacyjny
-  if (ua.includes('Windows NT 10')) os = 'Windows 10/11';
-  else if (ua.includes('Windows')) os = 'Windows';
-  else if (ua.includes('Mac OS X')) os = 'macOS';
-  else if (ua.includes('Linux')) os = 'Linux';
-  else if (ua.includes('Android')) os = 'Android';
-  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
-  
-  return `${browser} na ${os}`;
+  try {
+    const ua = navigator.userAgent;
+    let browser = 'Przeglądarka';
+    let os = 'System';
+    
+    if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Edg')) browser = 'Edge';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari')) browser = 'Safari';
+    else if (ua.includes('Opera')) browser = 'Opera';
+    
+    if (ua.includes('Windows NT 10')) os = 'Windows 10/11';
+    else if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac OS X')) os = 'macOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    
+    return `${browser} na ${os}`;
+  } catch {
+    return 'Nieznane urządzenie';
+  }
 };
 
 /**
- * Dodaje urządzenie do listy zaufanych (lub odświeża istniejące - UPSERT)
- * Jeśli urządzenie już istnieje (nawet wygasłe), aktualizuje je zamiast tworzyć duplikat
+ * Dodaje urządzenie do listy zaufanych (UPSERT)
  */
 export const addTrustedDevice = async (
   userId: string,
@@ -134,6 +177,7 @@ export const addTrustedDevice = async (
 ): Promise<void> => {
   const deviceName = getDeviceName();
   const now = new Date().toISOString();
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
   
   const { data: existing } = await supabase
     .from('trusted_devices')
@@ -147,13 +191,13 @@ export const addTrustedDevice = async (
       .from('trusted_devices')
       .update({
         device_name: deviceName,
-        user_agent: navigator.userAgent,
+        user_agent: userAgent,
         last_used_at: now,
       })
       .eq('id', existing.id);
 
     if (error) {
-      console.error('Error updating trusted device:', error);
+      console.error('[deviceFingerprint] Error updating trusted device:', error);
       throw error;
     }
   } else {
@@ -163,15 +207,29 @@ export const addTrustedDevice = async (
         user_id: userId,
         device_fingerprint: deviceFingerprint,
         device_name: deviceName,
-        user_agent: navigator.userAgent,
+        user_agent: userAgent,
         last_used_at: now,
       });
 
     if (error) {
-      console.error('Error adding trusted device:', error);
+      console.error('[deviceFingerprint] Error adding trusted device:', error);
       throw error;
     }
   }
+
+  // Weryfikacja zapisu (assert)
+  const { data: verification } = await supabase
+    .from('trusted_devices')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('device_fingerprint', deviceFingerprint)
+    .maybeSingle();
+
+  if (!verification) {
+    throw new Error('Zapis urządzenia nie powiódł się — brak rekordu po insercie');
+  }
+
+  console.log('[deviceFingerprint] Urządzenie zaufane zapisane pomyślnie:', verification.id);
 };
 
 /**
@@ -189,7 +247,7 @@ export const updateTrustedDeviceLastUsed = async (
     .eq('device_fingerprint', deviceFingerprint);
 
   if (error) {
-    console.error('Error updating trusted device:', error);
+    console.error('[deviceFingerprint] Error updating trusted device:', error);
   }
 };
 
@@ -207,7 +265,7 @@ export const removeAllTrustedDevices = async (
     .select('id');
 
   if (error) {
-    console.error('Error removing all trusted devices:', error);
+    console.error('[deviceFingerprint] Error removing all trusted devices:', error);
     throw error;
   }
 
