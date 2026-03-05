@@ -306,8 +306,8 @@ const Login = () => {
         return;
       }
 
+      // Don't navigate here — the isAuthenticated effect will handle it
       setTwoFactorInProgress(false);
-      navigate(from, { replace: true });
     } catch (err) {
       console.error('[Login] handleTwoFactorVerified error:', err);
       setError("Wystąpił błąd podczas logowania");
