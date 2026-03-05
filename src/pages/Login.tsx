@@ -244,7 +244,6 @@ const Login = () => {
       if (sendData?.error === 'Too many requests') {
         // Code already sent — just show the dialog
         console.log('[Login] Rate limited via response body — reusing existing code');
-        return;
       }
 
       setPendingUserId(userId);
