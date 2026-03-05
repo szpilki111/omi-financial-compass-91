@@ -71,9 +71,11 @@ const handler = async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     if (!recentError && recentCode) {
+      // Don't return HTTP 429 here because client SDK treats non-2xx as function error.
+      // We already have a valid recent code, so return success-like response and let UI continue.
       return new Response(
-        JSON.stringify({ error: 'Too many requests' }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ success: true, rate_limited: true, message: 'Kod został już wysłany. Użyj ostatniego kodu.' }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
