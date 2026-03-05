@@ -210,8 +210,9 @@ const Login = () => {
           description: "Zostałeś zalogowany do systemu.",
         });
 
+        // Don't navigate here — the isAuthenticated effect will handle it
+        // once AuthContext finishes fetching the profile.
         setTwoFactorInProgress(false);
-        navigate(from, { replace: true });
         return;
       }
 
