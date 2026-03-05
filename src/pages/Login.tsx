@@ -158,7 +158,7 @@ const Login = () => {
             title: "Logowanie pomyślne",
             description: "Zostałeś zalogowany do systemu."
           });
-          navigate(from, { replace: true });
+          // Navigation handled by isAuthenticated effect
         } else {
           setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
         }
