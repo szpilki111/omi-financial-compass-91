@@ -229,15 +229,21 @@ const Login = () => {
       });
 
       if (sendError) {
-        setError('Nie udało się wysłać kodu weryfikacyjnego');
-        setTwoFactorInProgress(false);
-        return;
+        // Check if it's a 429 rate limit — code was already sent, show dialog anyway
+        const is429 = sendError?.message?.includes('429') || sendError?.status === 429;
+        if (!is429) {
+          setError('Nie udało się wysłać kodu weryfikacyjnego');
+          setTwoFactorInProgress(false);
+          return;
+        }
+        // 429 = code already sent recently, proceed to dialog
+        console.log('[Login] 429 rate limit — reusing existing code, showing dialog');
       }
 
-      // Obsługa rate limiting (429)
+      // Obsługa rate limiting z body response (gdy status 200 ale error w danych)
       if (sendData?.error === 'Too many requests') {
-        setError('Zbyt wiele prób. Poczekaj chwilę i spróbuj ponownie.');
-        setTwoFactorInProgress(false);
+        // Code already sent — just show the dialog
+        console.log('[Login] Rate limited via response body — reusing existing code');
         return;
       }
 
