@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,8 +13,8 @@ interface UserData {
   email: string;
   role: Role;
   location: string;
-  locations: string[];           // wszystkie przypisane lokalizacje (ID)
-  locationIdentifiers: string[]; // identyfikatory lokalizacji (np. ["2-1", "2-3"])
+  locations: string[];
+  locationIdentifiers: string[];
 }
 
 interface AuthContextType {
@@ -45,6 +45,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  // Track whether initializeAuth has completed to avoid race with onAuthStateChange
+  const initDone = useRef(false);
 
   useEffect(() => {
     const checkDeviceTrust = async (userId: string): Promise<boolean> => {
@@ -55,12 +57,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('key', 'two_factor_auth_enabled')
           .maybeSingle();
 
-        // Fail-closed: jeśli nie udało się odczytać ustawienia, traktuj jak 2FA=ON
         if (settingsError) {
           console.warn('[AuthContext] Nie udało się odczytać app_settings (2FA), fail-closed:', settingsError.message);
         }
 
-        // 2FA wyłączone TYLKO gdy jawnie ustawione na false
         const is2FAEnabled = settingsError 
           ? true 
           : !(settings?.value === false || settings?.value === 'false');
@@ -75,7 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[AuthContext] Trust check:', { trusted, fingerprintLen: fingerprint.length });
         return trusted;
       } catch (err) {
-        // FAIL-CLOSED: błąd = nie wpuszczaj
         console.error('[AuthContext] checkDeviceTrust error (fail-closed, denying access):', err);
         return false;
       }
@@ -95,7 +94,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // Pobierz wszystkie lokalizacje użytkownika z user_locations
         const { data: userLocations } = await supabase
           .from('user_locations')
           .select('location_id')
@@ -103,12 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const locationIds = userLocations?.map(ul => ul.location_id) || [];
         
-        // Jeśli brak w user_locations, użyj location_id z profilu
         if (locationIds.length === 0 && profile.location_id) {
           locationIds.push(profile.location_id);
         }
 
-        // Pobierz identyfikatory lokalizacji
         let locationIdentifiers: string[] = [];
         if (locationIds.length > 0) {
           const { data: locationsData } = await supabase
@@ -139,13 +135,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        console.log('[AuthContext] onAuthStateChange:', event);
         setSession(currentSession);
         
+        if (event === 'SIGNED_OUT') {
+          // Clear immediately on explicit sign-out
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
         if (currentSession?.user) {
-          // Don't check device trust on SIGNED_IN — the Login page handles
-          // the 2FA flow and must be allowed to complete addTrustedDevice
-          // before any trust check fires. Session-based trust is enforced
-          // only in initializeAuth (page load / refresh).
+          // Only react to auth events AFTER init is done.
+          // Before that, initializeAuth handles everything (including trust check).
+          if (!initDone.current) {
+            console.log('[AuthContext] onAuthStateChange: skipping — init not done yet');
+            return;
+          }
+          // Set loading=true so ProtectedRoute shows spinner while we fetch profile
+          setIsLoading(true);
           setTimeout(() => {
             fetchUserProfile(currentSession.user.id);
           }, 0);
@@ -162,20 +170,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
-          // Check device trust before allowing session
           const trusted = await checkDeviceTrust(currentSession.user.id);
           if (!trusted) {
             await supabase.auth.signOut();
             setSession(null);
+            setUser(null);
             setIsLoading(false);
+            initDone.current = true;
             return;
           }
-          fetchUserProfile(currentSession.user.id);
+          await fetchUserProfile(currentSession.user.id);
         } else {
           setIsLoading(false);
         }
       } catch {
         setIsLoading(false);
+      } finally {
+        initDone.current = true;
       }
     };
 
@@ -215,7 +226,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        // Log failed login attempt
         try {
           await supabase.functions.invoke('log-login-event', {
             body: {
@@ -229,7 +239,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Ignore logging errors
         }
 
-        // Update failed_logins counter
         const { data: failedLogin } = await supabase
           .from('failed_logins')
           .select('*')
@@ -269,7 +278,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
         }
 
-        // Check recent failures
         const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
         const { data: recentFailures } = await supabase
           .from('failed_logins')
@@ -307,7 +315,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        // Log successful login
         try {
           await supabase.functions.invoke('log-login-event', {
             body: {
@@ -321,7 +328,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Ignore logging errors
         }
 
-        // Check if blocked
         const { data: finalCheck } = await supabase
           .from('profiles')
           .select('blocked')
@@ -339,7 +345,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return false;
         }
 
-        // Clear failed_logins on successful login
         const { data: failedLogin } = await supabase
           .from('failed_logins')
           .select('*')
@@ -370,7 +375,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        setIsLoading(false);
+        // Don't setIsLoading(false) here — onAuthStateChange will fetch profile
+        // and set isLoading=false when done. This prevents the race condition
+        // where ProtectedRoute sees !isLoading && !user momentarily.
         return true;
       }
 

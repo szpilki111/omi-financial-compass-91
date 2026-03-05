@@ -84,11 +84,24 @@ const Login = () => {
   } = useToast();
 
   // Get the redirect path or use home page as default
-  const from = (location_path.state as {
-    from?: {
-      pathname: string;
-    };
-  })?.from?.pathname || '/dashboard';
+  const locationState = location_path.state as {
+    from?: { pathname: string };
+    sessionExpired?: boolean;
+  } | null;
+  const from = locationState?.from?.pathname || '/dashboard';
+
+  // Show session-expired toast only when redirected from ProtectedRoute
+  useEffect(() => {
+    if (locationState?.sessionExpired) {
+      toast({
+        title: "Wymagane ponowne logowanie",
+        description: "Sesja wygasła lub to urządzenie nie jest zaufane. Zaloguj się ponownie.",
+        variant: "destructive",
+      });
+      // Clear the state so it doesn't re-trigger
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   // Pobieranie istniejących lokalizacji
   useEffect(() => {
@@ -145,7 +158,7 @@ const Login = () => {
             title: "Logowanie pomyślne",
             description: "Zostałeś zalogowany do systemu."
           });
-          navigate(from, { replace: true });
+          // Navigation handled by isAuthenticated effect
         } else {
           setError("Nieprawidłowy email lub hasło. Spróbuj ponownie.");
         }
@@ -197,8 +210,9 @@ const Login = () => {
           description: "Zostałeś zalogowany do systemu.",
         });
 
+        // Don't navigate here — the isAuthenticated effect will handle it
+        // once AuthContext finishes fetching the profile.
         setTwoFactorInProgress(false);
-        navigate(from, { replace: true });
         return;
       }
 
@@ -292,8 +306,8 @@ const Login = () => {
         return;
       }
 
+      // Don't navigate here — the isAuthenticated effect will handle it
       setTwoFactorInProgress(false);
-      navigate(from, { replace: true });
     } catch (err) {
       console.error('[Login] handleTwoFactorVerified error:', err);
       setError("Wystąpił błąd podczas logowania");
@@ -542,10 +556,19 @@ const Login = () => {
   return <>
     <TwoFactorVerification
       isOpen={showTwoFactorDialog}
-      onClose={() => {
+      onClose={async () => {
+        // CRITICAL: kill any partial session left by signInWithPassword
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+          console.log('[Login] 2FA cancelled — session killed');
+        } catch (e) {
+          console.warn('[Login] Error signing out on 2FA cancel:', e);
+        }
         setShowTwoFactorDialog(false);
         setPendingUserId('');
         setPendingEmail('');
+        setDeviceFingerprint('');
+        setPassword('');
         setTwoFactorInProgress(false);
       }}
       onVerified={handleTwoFactorVerified}

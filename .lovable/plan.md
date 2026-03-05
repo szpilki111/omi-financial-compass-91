@@ -1,61 +1,53 @@
 
-Do I know what the issue is? Tak.
+Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-Diagnoza (na podstawie kodu + logów + zachowania ze screenów):
-1) Fałszywy toast „Wymagane ponowne logowanie” po poprawnym logowaniu wynika z wyścigu stanu:
-- `Login.tsx` robi `navigate(...)` zanim `AuthContext` zdąży ustawić `user`.
-- `ProtectedRoute.tsx` widzi chwilowo `!isLoading && !user`, odpala toast i redirect na `/login`.
-- po chwili `user` się pojawia i aplikacja wraca na stronę docelową, ale toast już został pokazany.
+1) Co dokładnie jest zepsute (potwierdzone)
+- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
+- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
+- Twarde dowody:
+  - `app_settings.two_factor_auth_enabled = true`
+  - `trusted_devices_count = 0`
+  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
 
-2) Zamknięcie modala 2FA (X / Anuluj) może zostawić „pół-sesję” po wcześniejszym `signInWithPassword`:
-- w `Login.tsx` `onClose` tylko czyści stany lokalne, nie domyka twardo sesji i nie czeka na potwierdzenie `SIGNED_OUT`.
-- efekt: możliwe wejście bez dokończenia 2FA, szczególnie przy opóźnieniach eventów auth.
+2) Plan poprawki w kodzie (bez zmian DB)
+- Plik: `src/context/AuthContext.tsx`
+  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
+  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
+  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
 
-3) Dodatkowo UX jest mylący, bo toast o reautoryzacji jest emitowany globalnie z `ProtectedRoute.tsx`, zamiast tylko w faktycznym scenariuszu odrzucenia sesji.
+- Plik: `src/pages/Login.tsx`
+  - Utrzymać obecny flow:
+    - login+hasło → niezaufane urządzenie → kod 2FA.
+  - Po poprawnej weryfikacji kodu:
+    - zalogować użytkownika,
+    - natychmiast wykonać `addTrustedDevice(...)`,
+    - dopiero potem nawigacja.
+  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
 
-Plan naprawy (ultra-stabilny, minimalnie inwazyjny):
-A) Ustabilizować hydrację auth w `src/context/AuthContext.tsx`
-- przy `onAuthStateChange` dla `currentSession?.user` ustawiać `isLoading=true` przed `fetchUserProfile`.
-- nie dopuszczać do stanu „route chroniona + user=null + isLoading=false” w trakcie przejścia logowania.
-- czyścić `user` tylko na jednoznacznym `SIGNED_OUT`/braku sesji, nie w przejściowych momentach.
+3) Dlaczego to spełni wymaganie biznesowe
+- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
+- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
+- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
 
-B) Uszczelnić przepływ logowania w `src/pages/Login.tsx`
-- usunąć natychmiastowe `navigate(...)` z gałęzi „trusted=true” i z `handleTwoFactorVerified`; nawigować dopiero gdy `isAuthenticated=true` (kontrolowany efekt „readyToNavigate”).
-- dodać stan kroków auth (np. `idle | pending_2fa | finalizing`) żeby nie było niejawnych przejść.
-- przy anulowaniu 2FA (`onClose`) wykonać twarde `signOut({scope:'local'})`, sprawdzić `getSession()==null`, dopiero potem wyczyścić stany.
-- po anulowaniu wyzerować `pendingUserId`, `pendingEmail`, `deviceFingerprint`, `twoFactorInProgress`, hasło (żeby nie było auto-dokończenia starym stanem).
+4) Testy regresji (obowiązkowe przed domknięciem)
+- Scenariusz A: użytkownik bez trusted device:
+  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
+  - w DB pojawia się rekord w `trusted_devices`.
+- Scenariusz B: ponowne logowanie z tego samego urządzenia:
+  - brak 2FA (urządzenie już zaufane).
+- Scenariusz C: usunięcie urządzenia z listy:
+  - kolejne logowanie znowu wymaga 2FA.
+- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
+  - `initializeAuth` wylogowuje i kieruje na login.
 
-C) Ograniczyć fałszywe alarmy z guardów w `src/components/auth/ProtectedRoute.tsx`
-- usunąć bezwarunkowy toast w `useEffect`.
-- redirect do `/login` zostawić, ale reason przekazywać w `state`.
-- toast pokazywać tylko na stronie logowania, raz, gdy naprawdę przyszliśmy z redirectu wymuszonego przez brak sesji/niezaufane urządzenie.
+5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
+- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
+- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
 
-D) Dodatkowa walidacja operacyjna
-- sprawdzić, czy po anulowaniu 2FA nie ma żadnego aktywnego tokena (brak „cichego wejścia”).
-- potwierdzić, że `trusted_devices` nie dostaje duplikatów z jednego flow (poza realnie różnymi fingerprintami/środowiskami).
-
-Testy akceptacyjne (dokładnie pod zgłoszenie):
-1) Nowe urządzenie, poprawny kod 2FA:
-- logowanie -> modal 2FA -> wpisanie kodu -> wejście.
-- brak czerwonego toasta po wejściu.
-- rekord urządzenia widoczny w „Ustawienia > Bezpieczeństwo”.
-
-2) Drugie logowanie z tego samego urządzenia:
-- bez kodu 2FA (trusted hit).
-- brak „Wymagane ponowne logowanie”.
-
-3) Anulowanie 2FA (X lub Anuluj):
-- brak wejścia do aplikacji.
-- pozostaje ekran logowania.
-- `trusted_devices` bez nowego wpisu.
-
-4) Refresh po poprawnym logowaniu:
-- pozostaje zalogowany dla trusted.
-- brak redirect-loop i brak mylących toastów.
-
-Zakres zmian w kodzie:
-- `src/context/AuthContext.tsx`
-- `src/pages/Login.tsx`
-- `src/components/auth/ProtectedRoute.tsx`
-
-To jest plan, który eliminuje oba zgłoszone objawy jednocześnie: (a) „dziwny toast mimo poprawnego logowania”, (b) „wejście po zamknięciu 2FA bez kodu”.
+Sekcja techniczna (dla zespołu)
+- Problem jest wyścigiem asynchronicznym między:
+  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
+  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
+- Naprawa polega na rozdzieleniu odpowiedzialności:
+  - `AuthContext` pilnuje tylko „sesji zastanych”,
+  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).

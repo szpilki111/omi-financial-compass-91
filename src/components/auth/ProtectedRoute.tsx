@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '../ui/Spinner';
-import { useToast } from '@/hooks/use-toast';
 
 type Role = 'ekonom' | 'prowincjal' | 'admin' | 'proboszcz' | 'asystent' | 'asystent_ekonoma_prowincjalnego' | 'ekonom_prowincjalny';
 
@@ -17,17 +16,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, isLoading, checkPermission } = useAuth();
   const location = useLocation();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      toast({
-        title: "Wymagane ponowne logowanie",
-        description: "Sesja wygasła lub to urządzenie nie jest zaufane. Zaloguj się ponownie.",
-        variant: "destructive",
-      });
-    }
-  }, [isLoading, user, toast]);
 
   if (isLoading) {
     return (
@@ -38,7 +26,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Pass reason in state so Login page can show toast only when appropriate
+    return <Navigate to="/login" state={{ from: location, sessionExpired: true }} replace />;
   }
 
   if (requiredRole && !checkPermission(requiredRole)) {
