@@ -84,11 +84,24 @@ const Login = () => {
   } = useToast();
 
   // Get the redirect path or use home page as default
-  const from = (location_path.state as {
-    from?: {
-      pathname: string;
-    };
-  })?.from?.pathname || '/dashboard';
+  const locationState = location_path.state as {
+    from?: { pathname: string };
+    sessionExpired?: boolean;
+  } | null;
+  const from = locationState?.from?.pathname || '/dashboard';
+
+  // Show session-expired toast only when redirected from ProtectedRoute
+  useEffect(() => {
+    if (locationState?.sessionExpired) {
+      toast({
+        title: "Wymagane ponowne logowanie",
+        description: "Sesja wygasła lub to urządzenie nie jest zaufane. Zaloguj się ponownie.",
+        variant: "destructive",
+      });
+      // Clear the state so it doesn't re-trigger
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   // Pobieranie istniejących lokalizacji
   useEffect(() => {
