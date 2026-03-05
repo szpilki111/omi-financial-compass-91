@@ -555,10 +555,19 @@ const Login = () => {
   return <>
     <TwoFactorVerification
       isOpen={showTwoFactorDialog}
-      onClose={() => {
+      onClose={async () => {
+        // CRITICAL: kill any partial session left by signInWithPassword
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+          console.log('[Login] 2FA cancelled — session killed');
+        } catch (e) {
+          console.warn('[Login] Error signing out on 2FA cancel:', e);
+        }
         setShowTwoFactorDialog(false);
         setPendingUserId('');
         setPendingEmail('');
+        setDeviceFingerprint('');
+        setPassword('');
         setTwoFactorInProgress(false);
       }}
       onVerified={handleTwoFactorVerified}
