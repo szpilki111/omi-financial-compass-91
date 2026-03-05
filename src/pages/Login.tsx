@@ -230,7 +230,11 @@ const Login = () => {
 
       if (sendError) {
         // Check if it's a 429 rate limit — code was already sent, show dialog anyway
-        const is429 = sendError?.message?.includes('429') || sendError?.status === 429;
+        const errorMsg = sendError?.message || '';
+        const errorContext = (sendError as any)?.context;
+        const is429 = errorMsg.includes('429') 
+          || errorContext?.status === 429
+          || (typeof sendError === 'object' && JSON.stringify(sendError).includes('429'));
         if (!is429) {
           setError('Nie udało się wysłać kodu weryfikacyjnego');
           setTwoFactorInProgress(false);
