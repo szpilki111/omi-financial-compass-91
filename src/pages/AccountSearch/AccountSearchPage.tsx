@@ -201,13 +201,15 @@ const AccountSearchPage = () => {
     let creditTotal = 0;
     transactions.forEach(transaction => {
       // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
       if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
         const amount = transaction.debit_amount ?? transaction.amount ?? 0;
-        debitTotal += amount;
+        // Kwoty w debit_amount/credit_amount są w walucie oryginalnej - przelicz na PLN
+        debitTotal += amount * exchangeRate;
       }
       if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
         const amount = transaction.credit_amount ?? transaction.amount ?? 0;
-        creditTotal += amount;
+        creditTotal += amount * exchangeRate;
       }
     });
     
