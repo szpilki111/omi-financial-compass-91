@@ -201,13 +201,15 @@ const AccountSearchPage = () => {
     let creditTotal = 0;
     transactions.forEach(transaction => {
       // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
       if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
         const amount = transaction.debit_amount ?? transaction.amount ?? 0;
-        debitTotal += amount;
+        // Kwoty w debit_amount/credit_amount są w walucie oryginalnej - przelicz na PLN
+        debitTotal += amount * exchangeRate;
       }
       if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
         const amount = transaction.credit_amount ?? transaction.amount ?? 0;
-        creditTotal += amount;
+        creditTotal += amount * exchangeRate;
       }
     });
     
@@ -241,16 +243,12 @@ const AccountSearchPage = () => {
       if (!map.has(currency)) map.set(currency, { debit: 0, credit: 0 });
       const entry = map.get(currency)!;
       
-      // Kwoty w oryginalnej walucie = kwota PLN / kurs wymiany
-      const exchangeRate = tx.exchange_rate || tx.document?.exchange_rate || 1;
-      
+      // Kwoty w debit_amount/credit_amount są już w walucie oryginalnej - używamy bezpośrednio
       if (relatedAccountIdsSet.has(tx.debit_account_id)) {
-        const plnAmount = tx.debit_amount ?? tx.amount ?? 0;
-        entry.debit += exchangeRate !== 1 ? plnAmount / exchangeRate : plnAmount;
+        entry.debit += tx.debit_amount ?? tx.amount ?? 0;
       }
       if (relatedAccountIdsSet.has(tx.credit_account_id)) {
-        const plnAmount = tx.credit_amount ?? tx.amount ?? 0;
-        entry.credit += exchangeRate !== 1 ? plnAmount / exchangeRate : plnAmount;
+        entry.credit += tx.credit_amount ?? tx.amount ?? 0;
       }
     });
     
@@ -278,11 +276,12 @@ const AccountSearchPage = () => {
       acc[month].transactions.push(transaction);
 
       // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
       if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
-        acc[month].debit += transaction.debit_amount ?? transaction.amount ?? 0;
+        acc[month].debit += (transaction.debit_amount ?? transaction.amount ?? 0) * exchangeRate;
       }
       if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
-        acc[month].credit += transaction.credit_amount ?? transaction.amount ?? 0;
+        acc[month].credit += (transaction.credit_amount ?? transaction.amount ?? 0) * exchangeRate;
       }
       return acc;
     }, {} as Record<string, any>);
