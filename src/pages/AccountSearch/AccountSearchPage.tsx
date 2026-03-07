@@ -276,11 +276,12 @@ const AccountSearchPage = () => {
       acc[month].transactions.push(transaction);
 
       // Sprawdzamy czy konto jest w zbiorze powiązanych kont (główne + analityczne)
+      const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
       if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
-        acc[month].debit += transaction.debit_amount ?? transaction.amount ?? 0;
+        acc[month].debit += (transaction.debit_amount ?? transaction.amount ?? 0) * exchangeRate;
       }
       if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
-        acc[month].credit += transaction.credit_amount ?? transaction.amount ?? 0;
+        acc[month].credit += (transaction.credit_amount ?? transaction.amount ?? 0) * exchangeRate;
       }
       return acc;
     }, {} as Record<string, any>);
