@@ -1252,10 +1252,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const isDebitSideSmaller = totalDebit < totalCredit;
       const balanceAmount = Math.abs(totalDebit - totalCredit);
 
-      if (balanceAmount === 0) {
+    if (balanceAmount < 0.01) {
         toast({
           title: "Błąd",
-          description: "Sumy Wn i Ma są już wyrównane",
+          description: "Sumy Wn i Ma są już wyrównane — nie ma czego rozbijać",
           variant: "destructive",
         });
         return;
