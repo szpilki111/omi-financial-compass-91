@@ -152,6 +152,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('[AuthContext] onAuthStateChange: skipping — init not done yet');
             return;
           }
+          // For TOKEN_REFRESHED, silently update profile without setting loading=true
+          // This prevents dialog closing when user switches browser tabs
+          if (event === 'TOKEN_REFRESHED') {
+            console.log('[AuthContext] TOKEN_REFRESHED — silent profile refresh');
+            setTimeout(() => {
+              fetchUserProfile(currentSession.user.id);
+            }, 0);
+            return;
+          }
           // Set loading=true so ProtectedRoute shows spinner while we fetch profile
           setIsLoading(true);
           setTimeout(() => {

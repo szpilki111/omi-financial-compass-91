@@ -1252,10 +1252,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
       const isDebitSideSmaller = totalDebit < totalCredit;
       const balanceAmount = Math.abs(totalDebit - totalCredit);
 
-      if (balanceAmount === 0) {
+    if (balanceAmount < 0.01) {
         toast({
           title: "Błąd",
-          description: "Sumy Wn i Ma są już wyrównane",
+          description: "Sumy Wn i Ma są już wyrównane — nie ma czego rozbijać",
           variant: "destructive",
         });
         return;
@@ -1976,7 +1976,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   </div>
                 </div>
               </div>
-              {isForeignCurrency && (
+              {isForeignCurrency && !showInPLN && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <div className="text-sm text-muted-foreground mb-2">
                     Równowartość w PLN (kurs: {exchangeRate.toFixed(4)})
