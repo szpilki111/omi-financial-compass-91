@@ -522,7 +522,7 @@ interface Mt940Data {
       const transactionsToInsert = previewData.transactions.map((transaction, index) => ({
         document_id: document.id,
         document_number: documentNumber,
-        date: transaction.date,
+        date: format(documentDate, 'yyyy-MM-dd'),
         description: transaction.description,
         amount: transaction.amount,
         debit_amount: transaction.amount,

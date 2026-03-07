@@ -1976,7 +1976,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
                   </div>
                 </div>
               </div>
-              {isForeignCurrency && (
+              {isForeignCurrency && !showInPLN && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <div className="text-sm text-muted-foreground mb-2">
                     Równowartość w PLN (kurs: {exchangeRate.toFixed(4)})
