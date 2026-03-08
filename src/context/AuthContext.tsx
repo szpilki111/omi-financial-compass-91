@@ -47,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
   // Track whether initializeAuth has completed to avoid race with onAuthStateChange
   const initDone = useRef(false);
+  const userRef = useRef<UserData | null>(null);
 
   useEffect(() => {
     const checkDeviceTrust = async (userId: string): Promise<boolean> => {
