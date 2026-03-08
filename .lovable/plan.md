@@ -1,53 +1,57 @@
 
-Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-1) Co dokładnie jest zepsute (potwierdzone)
-- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
-- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
-- Twarde dowody:
-  - `app_settings.two_factor_auth_enabled = true`
-  - `trusted_devices_count = 0`
-  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
+## Plan naprawy: Budżet (2 paski + roczny) + Dialog zamykający się przy zmianie karty
 
-2) Plan poprawki w kodzie (bez zmian DB)
-- Plik: `src/context/AuthContext.tsx`
-  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
-  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
-  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
+### Problem 1: Budżet — nieprawidłowe paski realizacji
 
-- Plik: `src/pages/Login.tsx`
-  - Utrzymać obecny flow:
-    - login+hasło → niezaufane urządzenie → kod 2FA.
-  - Po poprawnej weryfikacji kodu:
-    - zalogować użytkownika,
-    - natychmiast wykonać `addTrustedDevice(...)`,
-    - dopiero potem nawigacja.
-  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
+**Obecny stan**: `BudgetRealizationBar` ma jeden pasek per miesiąc, który liczy tylko rozchody (debit_amount) bez filtrowania po kontach 4xx. Brak paska przychodów (7xx). Brak paska rocznego.
 
-3) Dlaczego to spełni wymaganie biznesowe
-- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
-- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
-- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
+**Plan zmian**:
 
-4) Testy regresji (obowiązkowe przed domknięciem)
-- Scenariusz A: użytkownik bez trusted device:
-  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
-  - w DB pojawia się rekord w `trusted_devices`.
-- Scenariusz B: ponowne logowanie z tego samego urządzenia:
-  - brak 2FA (urządzenie już zaufane).
-- Scenariusz C: usunięcie urządzenia z listy:
-  - kolejne logowanie znowu wymaga 2FA.
-- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
-  - `initializeAuth` wylogowuje i kieruje na login.
+**`src/utils/budgetUtils.ts`** — nowa funkcja `getBudgetRealizationForMonthDetailed`:
+- Pobiera transakcje za dany miesiąc z filtrami: konta 4xx (rozchody, debit_amount) i konta 7xx (przychody, credit_amount)
+- Dołącza do transakcji relację `accounts` lub filtruje po `debit_account_id LIKE '4%'` i `credit_account_id LIKE '7%'`
+- Zwraca: `{ expenseActual, incomeActual, expensePercentage, incomePercentage, expenseStatus, incomeStatus }`
 
-5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
-- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
-- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
+**`src/pages/Budget/BudgetRealizationBar.tsx`** — przebudowa komponentu:
+1. **Pasek roczny na górze**: Suma wszystkich wydatków 4xx z roku vs. suma zaplanowana (totalExpenseBudget). Jeden duży progress bar z procentem i statusem.
+2. **Per miesiąc — 2 paski**:
+   - Pasek rozchodów (4xx): `monthlyExpenseBudget = totalExpenseBudget / 12` vs. faktyczne wydatki na kontach 4xx
+   - Pasek przychodów (7xx): `monthlyIncomeBudget = totalIncomeBudget / 12` vs. faktyczne przychody na kontach 7xx
+   - Kolorystyka: rozchody (czerwona gamma), przychody (zielona/niebieska gamma)
+3. Budżety miesięczne liczone oddzielnie: `totalIncomeBudget` z `budgetItems.filter(account_type === 'income')`, `totalExpenseBudget` z `budgetItems.filter(account_type === 'expense')`
 
-Sekcja techniczna (dla zespołu)
-- Problem jest wyścigiem asynchronicznym między:
-  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
-  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
-- Naprawa polega na rozdzieleniu odpowiedzialności:
-  - `AuthContext` pilnuje tylko „sesji zastanych”,
-  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).
+**Logika filtrowania transakcji** (w nowej funkcji):
+- Rozchody: `debit_account_id LIKE '4%'` → suma `debit_amount`
+- Przychody: `credit_account_id LIKE '7%'` → suma `credit_amount`
+- Zapewnia to precyzyjne liczenie tylko właściwych kont, zamiast sumowania wszystkich debit_amount
+
+---
+
+### Problem 2: Dialog dokumentu zamyka się przy zmianie karty
+
+**Przyczyna**: Gdy użytkownik wraca na kartę, Supabase może wyemitować event `SIGNED_IN` (nie tylko `TOKEN_REFRESHED`). W `AuthContext` event `SIGNED_IN` ustawia `setIsLoading(true)` (linia 165). `ProtectedRoute` widzi `isLoading=true` → renderuje spinner → `DocumentsPage` jest odmontowana → stan `isDialogOpen` jest tracony → dialog znika.
+
+**Fix w `src/context/AuthContext.tsx`**:
+- W handlerze `onAuthStateChange`, dla eventów `SIGNED_IN` i `TOKEN_REFRESHED`: jeśli `user` już istnieje (użytkownik jest zalogowany), wykonaj cichy refresh profilu **bez** `setIsLoading(true)`. Ustawienie loading na true jest potrzebne tylko przy pierwszym logowaniu.
+
+```
+if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && user)) {
+  // Silent refresh — don't unmount the page
+  setTimeout(() => fetchUserProfile(currentSession.user.id), 0);
+  return;
+}
+```
+
+Dodatkowo w `fetchUserProfile`: nie wywoływać `setIsLoading(false)` gdy loading jest już false (guard).
+
+---
+
+### Pliki do zmiany
+
+| Plik | Zmiana |
+|------|--------|
+| `src/utils/budgetUtils.ts` | Nowa funkcja pobierająca realizację z podziałem na konta 4xx/7xx |
+| `src/pages/Budget/BudgetRealizationBar.tsx` | Przebudowa: pasek roczny + 2 paski/miesiąc (koszty + przychody) |
+| `src/context/AuthContext.tsx` | Cichy refresh dla `SIGNED_IN` gdy user już zalogowany |
+
