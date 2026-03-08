@@ -50,6 +50,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userRef = useRef<UserData | null>(null);
 
   useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
     const checkDeviceTrust = async (userId: string): Promise<boolean> => {
       try {
         const { data: settings, error: settingsError } = await supabase
