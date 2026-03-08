@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, RefreshCw, History } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -27,12 +26,6 @@ interface ExchangeRateManagerProps {
   className?: string;
 }
 
-interface NBPRate {
-  currency: string;
-  code: string;
-  mid: number;
-}
-
 interface ExchangeRateHistory {
   id: string;
   currency_code: string;
@@ -49,9 +42,6 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
   disabled = false,
   className = ""
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [rateHistory, setRateHistory] = useState<ExchangeRateHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -61,80 +51,6 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
   if (currency === baseCurrency) {
     return null;
   }
-
-  const saveRateToHistory = async (currencyCode: string, rate: number, effectiveDate: Date) => {
-    try {
-      const dateStr = effectiveDate.toISOString().split('T')[0];
-      
-      // Use upsert to avoid duplicates
-      const { error } = await supabase
-        .from('exchange_rate_history')
-        .upsert(
-          {
-            currency_code: currencyCode,
-            rate: rate,
-            effective_date: dateStr,
-            source: 'NBP',
-            fetched_at: new Date().toISOString()
-          },
-          { onConflict: 'currency_code,effective_date' }
-        );
-
-      if (error) {
-        console.error('Error saving rate to history:', error);
-      } else {
-        console.log(`Rate saved to history: ${currencyCode} = ${rate} PLN on ${dateStr}`);
-      }
-    } catch (err) {
-      console.error('Error in saveRateToHistory:', err);
-    }
-  };
-
-  const fetchExchangeRate = async () => {
-    if (currency === baseCurrency || !currency) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Fetch from NBP API
-      const response = await fetch(`https://api.nbp.pl/api/exchangerates/rates/A/${currency}/last/?format=json`);
-      
-      if (!response.ok) {
-        throw new Error(`Nie udało się pobrać kursu dla waluty ${currency}`);
-      }
-
-      const data = await response.json();
-      const rate = data.rates[0]?.mid;
-      const effectiveDate = data.rates[0]?.effectiveDate ? new Date(data.rates[0].effectiveDate) : new Date();
-
-      if (!rate) {
-        throw new Error(`Brak dostępnego kursu dla waluty ${currency}`);
-      }
-
-      onChange(rate);
-      setLastFetched(new Date());
-      
-      // Save to history
-      await saveRateToHistory(currency, rate, effectiveDate);
-      
-      toast({
-        title: "Sukces",
-        description: `Pobrano aktualny kurs ${currency}: ${rate.toFixed(4)} PLN`,
-      });
-
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Nieznany błąd';
-      setError(errorMessage);
-      toast({
-        title: "Błąd",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchRateHistory = async () => {
     if (!currency) return;
@@ -162,17 +78,9 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
     }
   };
 
-  // Auto-fetch rate when currency changes
-  useEffect(() => {
-    if (currency && currency !== baseCurrency && value === 1) {
-      fetchExchangeRate();
-    }
-  }, [currency]);
-
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRate = parseFloat(e.target.value) || 0;
     onChange(newRate);
-    setError(null);
   };
 
   const handleOpenHistory = () => {
@@ -197,22 +105,10 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
             value={value}
             onChange={handleRateChange}
             placeholder="0.0000"
-            disabled={disabled || loading}
-            className={!isValidRate ? 'border-red-500' : ''}
+            disabled={disabled}
+            className={!isValidRate ? 'border-destructive' : ''}
           />
         </div>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={fetchExchangeRate}
-          disabled={loading || disabled || !currency || currency === baseCurrency}
-          className="px-3"
-          title="Pobierz aktualny kurs z NBP"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
 
         <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
           <DialogTrigger asChild>
@@ -280,28 +176,13 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
         </Dialog>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="py-2">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-xs">
-            {error}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {lastFetched && !error && (
-        <p className="text-xs text-gray-500">
-          Ostatnia aktualizacja: {lastFetched.toLocaleString('pl-PL')}
-        </p>
-      )}
-
       {!isValidRate && (
-        <p className="text-xs text-red-500">
+        <p className="text-xs text-destructive">
           Kurs wymiany musi być większy od zera
         </p>
       )}
 
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-muted-foreground">
         1 {currency} = {value.toFixed(4)} {baseCurrency}
       </p>
     </div>
