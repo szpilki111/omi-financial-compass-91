@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, RefreshCw, History } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -27,12 +26,6 @@ interface ExchangeRateManagerProps {
   className?: string;
 }
 
-interface NBPRate {
-  currency: string;
-  code: string;
-  mid: number;
-}
-
 interface ExchangeRateHistory {
   id: string;
   currency_code: string;
@@ -49,9 +42,6 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
   disabled = false,
   className = ""
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [rateHistory, setRateHistory] = useState<ExchangeRateHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -63,10 +53,34 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
   }
 
   const fetchRateHistory = async () => {
+    if (!currency) return;
+    
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('exchange_rate_history')
+        .select('*')
+        .eq('currency_code', currency)
+        .order('effective_date', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+      setRateHistory(data || []);
+    } catch (err) {
+      console.error('Error fetching rate history:', err);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się pobrać historii kursów",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRate = parseFloat(e.target.value) || 0;
     onChange(newRate);
-    setError(null);
   };
 
   const handleOpenHistory = () => {
@@ -91,22 +105,10 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
             value={value}
             onChange={handleRateChange}
             placeholder="0.0000"
-            disabled={disabled || loading}
-            className={!isValidRate ? 'border-red-500' : ''}
+            disabled={disabled}
+            className={!isValidRate ? 'border-destructive' : ''}
           />
         </div>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={fetchExchangeRate}
-          disabled={loading || disabled || !currency || currency === baseCurrency}
-          className="px-3"
-          title="Pobierz aktualny kurs z NBP"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
 
         <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
           <DialogTrigger asChild>
@@ -174,28 +176,13 @@ const ExchangeRateManager: React.FC<ExchangeRateManagerProps> = ({
         </Dialog>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="py-2">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-xs">
-            {error}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {lastFetched && !error && (
-        <p className="text-xs text-gray-500">
-          Ostatnia aktualizacja: {lastFetched.toLocaleString('pl-PL')}
-        </p>
-      )}
-
       {!isValidRate && (
-        <p className="text-xs text-red-500">
+        <p className="text-xs text-destructive">
           Kurs wymiany musi być większy od zera
         </p>
       )}
 
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-muted-foreground">
         1 {currency} = {value.toFixed(4)} {baseCurrency}
       </p>
     </div>
