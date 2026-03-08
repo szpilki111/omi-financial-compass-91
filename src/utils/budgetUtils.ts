@@ -292,3 +292,70 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 2,
   }).format(amount);
 }
+
+/**
+ * Pobiera realizację budżetu z podziałem na koszty (4xx) i przychody (7xx)
+ */
+export async function getBudgetRealizationForMonthDetailed(
+  locationId: string,
+  year: number,
+  month: number,
+  monthlyExpenseBudget: number,
+  monthlyIncomeBudget: number
+): Promise<{
+  expenseActual: number;
+  incomeActual: number;
+  expensePercentage: number;
+  incomePercentage: number;
+  expenseStatus: 'green' | 'orange' | 'red' | 'gray';
+  incomeStatus: 'green' | 'orange' | 'red' | 'gray';
+}> {
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+  // Fetch all transactions for this month and location
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('debit_amount, credit_amount, debit_account_id, credit_account_id, accounts!transactions_debit_account_id_fkey(number), credit_account:accounts!transactions_credit_account_id_fkey(number)')
+    .eq('location_id', locationId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+
+  if (error) {
+    console.error('Error fetching transactions for budget realization:', error);
+    return {
+      expenseActual: 0, incomeActual: 0,
+      expensePercentage: 0, incomePercentage: 0,
+      expenseStatus: 'gray', incomeStatus: 'gray',
+    };
+  }
+
+  let expenseActual = 0;
+  let incomeActual = 0;
+
+  data?.forEach((t: any) => {
+    // Koszty: konta 4xx po stronie Wn (debit)
+    const debitNumber = t.accounts?.number || '';
+    if (debitNumber.startsWith('4') && t.debit_amount) {
+      expenseActual += t.debit_amount;
+    }
+    // Przychody: konta 7xx po stronie Ma (credit)
+    const creditNumber = t.credit_account?.number || '';
+    if (creditNumber.startsWith('7') && t.credit_amount) {
+      incomeActual += t.credit_amount;
+    }
+  });
+
+  const expensePercentage = monthlyExpenseBudget > 0 ? (expenseActual / monthlyExpenseBudget) * 100 : 0;
+  const incomePercentage = monthlyIncomeBudget > 0 ? (incomeActual / monthlyIncomeBudget) * 100 : 0;
+
+  return {
+    expenseActual,
+    incomeActual,
+    expensePercentage,
+    incomePercentage,
+    expenseStatus: getBudgetStatus(expensePercentage),
+    incomeStatus: getBudgetStatus(incomePercentage),
+  };
+}

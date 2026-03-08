@@ -152,10 +152,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('[AuthContext] onAuthStateChange: skipping — init not done yet');
             return;
           }
-          // For TOKEN_REFRESHED, silently update profile without setting loading=true
-          // This prevents dialog closing when user switches browser tabs
-          if (event === 'TOKEN_REFRESHED') {
-            console.log('[AuthContext] TOKEN_REFRESHED — silent profile refresh');
+          // For TOKEN_REFRESHED or re-emitted SIGNED_IN when user is already logged in,
+          // silently update profile without setting loading=true.
+          // This prevents dialog closing when user switches browser tabs.
+          if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && user)) {
+            console.log(`[AuthContext] ${event} — silent profile refresh (user already logged in)`);
             setTimeout(() => {
               fetchUserProfile(currentSession.user.id);
             }, 0);
