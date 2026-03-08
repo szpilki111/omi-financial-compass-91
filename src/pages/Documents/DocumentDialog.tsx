@@ -524,8 +524,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   };
 
-  const generateDocumentNumber = async (date: Date, locationIdOverride?: string) => {
-    const locationId = locationIdOverride || document?.location_id || user?.location;
+  const generateDocumentNumber = async (date: Date, locationIdParam?: string) => {
+    const locationId = locationIdParam || locationIdOverride || document?.location_id || user?.location;
     if (!locationId) {
       toast({
         title: "Błąd",
