@@ -567,7 +567,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
       <DocumentDialog isOpen={isDialogOpen} onClose={() => {
       setIsDialogOpen(false);
       setSelectedDocument(null);
-    }} onDocumentCreated={handleDocumentCreated} document={selectedDocument} />
+    }} onDocumentCreated={handleDocumentCreated} document={selectedDocument} locationIdOverride={selectedLocationId !== 'all' ? selectedLocationId : undefined} />
 
       <Mt940ImportDialog open={mt940Dialog.open} variant={mt940Dialog.variant} onClose={() => setMt940Dialog({
       open: false,

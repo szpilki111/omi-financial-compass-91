@@ -948,7 +948,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
             document_number: data.document_number,
             document_name: data.document_name,
             document_date: format(data.document_date, "yyyy-MM-dd"),
-            location_id: user.location,
+            location_id: locationIdOverride || user.location,
             user_id: user.id,
             currency: data.currency,
             exchange_rate: data.currency !== "PLN" ? exchangeRate : 1,
