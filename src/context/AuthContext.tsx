@@ -47,6 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
   // Track whether initializeAuth has completed to avoid race with onAuthStateChange
   const initDone = useRef(false);
+  const userRef = useRef<UserData | null>(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     const checkDeviceTrust = async (userId: string): Promise<boolean> => {
@@ -155,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // For TOKEN_REFRESHED or re-emitted SIGNED_IN when user is already logged in,
           // silently update profile without setting loading=true.
           // This prevents dialog closing when user switches browser tabs.
-          if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && user)) {
+          if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && userRef.current)) {
             console.log(`[AuthContext] ${event} — silent profile refresh (user already logged in)`);
             setTimeout(() => {
               fetchUserProfile(currentSession.user.id);
