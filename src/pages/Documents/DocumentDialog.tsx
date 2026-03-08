@@ -50,6 +50,7 @@ interface DocumentDialogProps {
   onClose: () => void;
   onDocumentCreated: () => void;
   document?: any;
+  locationIdOverride?: string;
 }
 
 interface ValidationError {
