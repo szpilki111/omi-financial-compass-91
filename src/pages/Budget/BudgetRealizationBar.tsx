@@ -90,7 +90,7 @@ const BudgetRealizationBar = ({ locationId, year, budgetItems }: BudgetRealizati
   const getStatusText = (status: string) => {
     switch (status) {
       case 'green': return 'W normie';
-      case 'orange': return 'Powyżej';
+      case 'orange': return 'Powyżej normy';
       case 'red': return 'Przekroczony';
       case 'gray': return 'Niezrealizowany';
       default: return '';
