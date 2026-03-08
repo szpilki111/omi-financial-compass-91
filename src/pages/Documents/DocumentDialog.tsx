@@ -650,7 +650,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   }, [document, isOpen, form, user?.location]);
 
   useEffect(() => {
-    if (!document && isOpen && user?.location) {
+    if (!document && isOpen && (locationIdOverride || user?.location)) {
       const currentDate = form.getValues("document_date");
       generateDocumentNumber(currentDate).then((generatedNumber) => {
         if (generatedNumber) {
@@ -658,7 +658,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
         }
       });
     }
-  }, [document, isOpen, user?.location]);
+  }, [document, isOpen, user?.location, locationIdOverride]);
 
   const loadTransactions = async (documentId: string) => {
     try {
