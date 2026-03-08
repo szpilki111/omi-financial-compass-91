@@ -73,7 +73,7 @@ interface DocumentFormData {
   currency: string;
 }
 
-const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
+const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, locationIdOverride }: DocumentDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
