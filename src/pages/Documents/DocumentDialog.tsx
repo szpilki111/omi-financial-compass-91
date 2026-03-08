@@ -50,6 +50,7 @@ interface DocumentDialogProps {
   onClose: () => void;
   onDocumentCreated: () => void;
   document?: any;
+  locationIdOverride?: string;
 }
 
 interface ValidationError {
@@ -72,7 +73,7 @@ interface DocumentFormData {
   currency: string;
 }
 
-const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: DocumentDialogProps) => {
+const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, locationIdOverride }: DocumentDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -523,8 +524,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
     }
   };
 
-  const generateDocumentNumber = async (date: Date, locationIdOverride?: string) => {
-    const locationId = locationIdOverride || document?.location_id || user?.location;
+  const generateDocumentNumber = async (date: Date, locationIdParam?: string) => {
+    const locationId = locationIdParam || locationIdOverride || document?.location_id || user?.location;
     if (!locationId) {
       toast({
         title: "Błąd",
@@ -649,7 +650,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
   }, [document, isOpen, form, user?.location]);
 
   useEffect(() => {
-    if (!document && isOpen && user?.location) {
+    if (!document && isOpen && (locationIdOverride || user?.location)) {
       const currentDate = form.getValues("document_date");
       generateDocumentNumber(currentDate).then((generatedNumber) => {
         if (generatedNumber) {
@@ -657,7 +658,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
         }
       });
     }
-  }, [document, isOpen, user?.location]);
+  }, [document, isOpen, user?.location, locationIdOverride]);
 
   const loadTransactions = async (documentId: string) => {
     try {
@@ -947,7 +948,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document }: Docume
             document_number: data.document_number,
             document_name: data.document_name,
             document_date: format(data.document_date, "yyyy-MM-dd"),
-            location_id: user.location,
+            location_id: locationIdOverride || user.location,
             user_id: user.id,
             currency: data.currency,
             exchange_rate: data.currency !== "PLN" ? exchangeRate : 1,
