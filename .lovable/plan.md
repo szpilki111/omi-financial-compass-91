@@ -1,70 +1,53 @@
 
+Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-## Plan: Ograniczenie konta 463 + Przebudowa widoku budżetu
+1) Co dokładnie jest zepsute (potwierdzone)
+- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
+- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
+- Twarde dowody:
+  - `app_settings.two_factor_auth_enabled = true`
+  - `trusted_devices_count = 0`
+  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
 
-### 1. Konto 463 — ograniczenie do administracji prowincjalnej
+2) Plan poprawki w kodzie (bez zmian DB)
+- Plik: `src/context/AuthContext.tsx`
+  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
+  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
+  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
 
-**Diagnoza**: Konto 463 jest już oznaczone jako `is_restricted: true` dla kategorii 2, 3, 4, 5 w tabeli `account_category_restrictions`. Funkcja RPC `get_user_filtered_accounts_with_analytics` filtruje te konta w selektorze UI. Jednak konto `463-2-20` fizycznie istnieje w tabeli `accounts` — prawdopodobnie transakcje zostały dodane przez administratora (admin omija ograniczenia) lub przed wdrożeniem ograniczeń.
+- Plik: `src/pages/Login.tsx`
+  - Utrzymać obecny flow:
+    - login+hasło → niezaufane urządzenie → kod 2FA.
+  - Po poprawnej weryfikacji kodu:
+    - zalogować użytkownika,
+    - natychmiast wykonać `addTrustedDevice(...)`,
+    - dopiero potem nawigacja.
+  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
 
-**Rozwiązanie**: Dodać walidację server-side w `AccountCombobox.tsx` i/lub `TransactionForm.tsx` — ostrzeżenie/blokada przy próbie użycia konta 463 przez użytkownika spoza kategorii 1 (Prowincja). Dodatkowo, jeśli admin księguje na placówkę inną niż prowincjalna, wyświetlić ostrzeżenie.
+3) Dlaczego to spełni wymaganie biznesowe
+- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
+- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
+- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
 
-**Pliki do zmiany**:
-- `src/pages/Documents/TransactionForm.tsx` — dodać walidację przy wyborze konta 463 dla lokalizacji spoza kategorii 1
+4) Testy regresji (obowiązkowe przed domknięciem)
+- Scenariusz A: użytkownik bez trusted device:
+  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
+  - w DB pojawia się rekord w `trusted_devices`.
+- Scenariusz B: ponowne logowanie z tego samego urządzenia:
+  - brak 2FA (urządzenie już zaufane).
+- Scenariusz C: usunięcie urządzenia z listy:
+  - kolejne logowanie znowu wymaga 2FA.
+- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
+  - `initializeAuth` wylogowuje i kieruje na login.
 
----
+5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
+- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
+- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
 
-### 2a. Realizacja budżetu rocznego — dwa paski (przychody + koszty)
-
-**Obecny stan**: Jeden pasek roczny (tylko koszty 4xx).
-
-**Zmiana**: Dodać drugi pasek roczny dla przychodów (7xx). W `BudgetRealizationBar.tsx`:
-- Dodać obliczanie `yearlyIncomeActual` (analogicznie do `yearlyExpenseActual`)
-- Renderować dwa paski: "Koszty (4xx)" i "Przychody (7xx)"
-
-**Plik**: `src/pages/Budget/BudgetRealizationBar.tsx`
-
----
-
-### 2b. Usunięcie sekcji "Realizacja miesięczna"
-
-**Zmiana**: Usunąć cały blok `Card` z "Realizacja miesięczna {year}" (linie 148-214 w `BudgetRealizationBar.tsx`). Usunąć zbędne obliczenia miesięczne z `queryFn`.
-
-**Plik**: `src/pages/Budget/BudgetRealizationBar.tsx`
-
----
-
-### 2c. Tabele Przychody/Rozchody — zamiana "Prognoza" i "Poprz. rok" na "Zrealizowano"
-
-**Obecny stan**: Każda pozycja pokazuje: Prognoza, Budżet, Poprz. rok.
-
-**Zmiana**: Usunąć "Prognoza" i "Poprz. rok". Dodać wiersz "Zrealizowano" pokazujący roczną realizację (sumę transakcji) per konto. Wymaga:
-- Rozszerzenia interfejsu `BudgetItem` o pole `realized: number`
-- W `BudgetView.tsx`: pobrania danych realizacji (sum transakcji per konto za bieżący rok) i przekazania do `BudgetItemsTable`
-- W `BudgetItemsTable.tsx`: usunięcia wierszy "Prognoza" i "Poprz. rok", dodania wiersza "Zrealizowano" z kwotą
-- W `BudgetForm.tsx`: usunięcia wyświetlania "Prognoza" i "Poprz. rok" (zostawiając je w danych, ale nie wyświetlając)
-
-**Pliki**: `src/pages/Budget/BudgetItemsTable.tsx`, `src/pages/Budget/BudgetView.tsx`, `src/pages/Budget/BudgetForm.tsx`
-
----
-
-### 2d. Zmiana konta "201-460-x-x" na "201-x-x-1" w Rozchodach
-
-**Obecny stan**: W `budgetUtils.ts` EXPENSE_ACCOUNTS zawiera `{ prefix: '201-460', name: 'Świadczenia na prowincję' }`.
-
-**Zmiana**: Zamienić prefix na `'201'` z sufiksem `-1` (konto `201-x-x-1`). Dostosować logikę `buildAccountPrefix` i `getAccountBalanceForYear` dla tego specjalnego konta, aby szukać transakcji na koncie `201-{locationIdentifier}-1`.
-
-**Pliki**: `src/utils/budgetUtils.ts`, `src/constants/accountNames.ts` (jeśli 201-460 tam też występuje — nie występuje, tylko w budgetUtils)
-
----
-
-### Podsumowanie zmian
-
-| Plik | Zmiana |
-|------|--------|
-| `src/pages/Documents/TransactionForm.tsx` | Walidacja konta 463 |
-| `src/pages/Budget/BudgetRealizationBar.tsx` | 2 paski roczne + usunięcie sekcji miesięcznej |
-| `src/pages/Budget/BudgetItemsTable.tsx` | Zamiana Prognoza/Poprz.rok na Zrealizowano |
-| `src/pages/Budget/BudgetView.tsx` | Pobranie danych realizacji per konto |
-| `src/pages/Budget/BudgetForm.tsx` | Usunięcie wyświetlania Prognoza/Poprz.rok |
-| `src/utils/budgetUtils.ts` | Zmiana prefixu 201-460 na 201 z sufiksem -1 |
-
+Sekcja techniczna (dla zespołu)
+- Problem jest wyścigiem asynchronicznym między:
+  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
+  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
+- Naprawa polega na rozdzieleniu odpowiedzialności:
+  - `AuthContext` pilnuje tylko „sesji zastanych”,
+  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).

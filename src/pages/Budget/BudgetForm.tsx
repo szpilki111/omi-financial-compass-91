@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { BudgetFormData, BudgetPlan } from '@/types/budget';
-import { generateForecast, INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, formatCurrency } from '@/utils/budgetUtils';
+import { generateForecast, INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, formatCurrency, buildAccountPrefix } from '@/utils/budgetUtils';
 import { sendBudgetNotification } from '@/utils/budgetNotifications';
 import BudgetItemsTable from './BudgetItemsTable';
 import { Spinner } from '@/components/ui/Spinner';
@@ -177,7 +177,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
     if (formData.forecast_method === 'manual') {
       // For manual mode, create empty budget items with full prefixes
       const incomeItems = INCOME_ACCOUNTS.map(account => ({
-        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
+        account_prefix: buildAccountPrefix(account.prefix, selectedLocation.location_identifier!, (account as any).suffix),
         account_name: account.name,
         forecasted: 0,
         planned: 0,
@@ -185,7 +185,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       }));
 
       const expenseItems = EXPENSE_ACCOUNTS.map(account => ({
-        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
+        account_prefix: buildAccountPrefix(account.prefix, selectedLocation.location_identifier!, (account as any).suffix),
         account_name: account.name,
         forecasted: 0,
         planned: 0,

@@ -74,6 +74,21 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     enabled: !!user?.id,
   });
 
+  // Fetch location identifier to check if provincial (category 1)
+  const { data: userLocation } = useQuery({
+    queryKey: ['userLocationIdentifier', userProfile?.location_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', userProfile!.location_id!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id,
+  });
+
   // Calculate totals
   const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
   const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
@@ -235,7 +250,30 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     }
   };
 
-  const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+  const handleAccountChange = async (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+    // Check if account 463 is being used by non-provincial location
+    if (accountId) {
+      const { data: accountData } = await supabase
+        .from('accounts')
+        .select('number')
+        .eq('id', accountId)
+        .single();
+      
+      if (accountData?.number?.startsWith('463')) {
+        const locationIdentifier = userLocation?.location_identifier || '';
+        const category = locationIdentifier.split('-')[0];
+        
+        if (category !== '1') {
+          toast({
+            title: "Konto zastrzeżone",
+            description: "Konto 463 jest zarezerwowane wyłącznie dla administracji prowincjalnej. Wybierz inne konto.",
+            variant: "destructive",
+          });
+          return; // Block the selection
+        }
+      }
+    }
+
     if (type === 'debit') {
       setDebitFields(prev => prev.map(field => 
         field.id === fieldId ? { ...field, accountId } : field

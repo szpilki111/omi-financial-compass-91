@@ -69,13 +69,17 @@ export const EXPENSE_ACCOUNTS = [
   { prefix: '459', name: 'Misje, pomoc misjonarzom' },
   { prefix: '461', name: 'Kuria diecezjalna' },
   { prefix: '462', name: 'Świadczenia na dom' },
-  { prefix: '201-460', name: 'Świadczenia na prowincję' },
+  { prefix: '201', name: 'Świadczenia na prowincję', suffix: '1' },
 ];
 
 /**
  * Buduje pełny prefiks konta dla danej lokalizacji
+ * Dla kont ze specjalnym sufiksem (np. 201 z suffix '1') buduje: 201-{locationIdentifier}-1
  */
-export function buildAccountPrefix(basePrefix: string, locationIdentifier: string): string {
+export function buildAccountPrefix(basePrefix: string, locationIdentifier: string, suffix?: string): string {
+  if (suffix) {
+    return `${basePrefix}-${locationIdentifier}-${suffix}`;
+  }
   return `${basePrefix}-${locationIdentifier}`;
 }
 
@@ -152,7 +156,8 @@ export async function generateForecast(
 
     // Prognoza dla przychodów
     for (const account of INCOME_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balance = await getAccountBalanceForYear(
         locationId,
         previousYear,
@@ -168,7 +173,8 @@ export async function generateForecast(
 
     // Prognoza dla rozchodów
     for (const account of EXPENSE_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balance = await getAccountBalanceForYear(
         locationId,
         previousYear,
@@ -186,7 +192,8 @@ export async function generateForecast(
 
     // Prognoza dla przychodów (średnia z 3 lat)
     for (const account of INCOME_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balances = await Promise.all(
         years.map(y => getAccountBalanceForYear(locationId, y, account.prefix, 'income', locationIdentifier))
       );
@@ -199,7 +206,8 @@ export async function generateForecast(
 
     // Prognoza dla rozchodów (średnia z 3 lat)
     for (const account of EXPENSE_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balances = await Promise.all(
         years.map(y => getAccountBalanceForYear(locationId, y, account.prefix, 'expense', locationIdentifier))
       );

@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { getBudgetRealizationForMonthDetailed } from '@/utils/budgetUtils';
 
 interface BudgetViewProps {
   budgetId: string;
@@ -151,6 +152,50 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     }
   };
 
+  // Fetch realization data per account
+  const { data: realizationByAccount } = useQuery({
+    queryKey: ['budget-realization-by-account', budget?.location_id, budget?.year],
+    queryFn: async () => {
+      if (!budget) return {};
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const maxMonth = currentYear === budget.year ? currentMonth : 12;
+      
+      const startDate = `${budget.year}-01-01`;
+      const endDate = `${budget.year}-${String(maxMonth).padStart(2, '0')}-${new Date(budget.year, maxMonth, 0).getDate()}`;
+      
+      const { data: transactions, error } = await supabase
+        .from('transactions')
+        .select('debit_amount, credit_amount, accounts!transactions_debit_account_id_fkey(number), credit_account:accounts!transactions_credit_account_id_fkey(number)')
+        .eq('location_id', budget.location_id)
+        .gte('date', startDate)
+        .lte('date', endDate);
+      
+      if (error || !transactions) return {};
+      
+      const result: Record<string, number> = {};
+      
+      transactions.forEach((t: any) => {
+        const debitNumber = t.accounts?.number || '';
+        if (debitNumber.startsWith('4') && t.debit_amount) {
+          const prefix = debitNumber.split('-')[0];
+          result[prefix] = (result[prefix] || 0) + t.debit_amount;
+        }
+        if (debitNumber.startsWith('201') && t.debit_amount) {
+          result['201'] = (result['201'] || 0) + t.debit_amount;
+        }
+        const creditNumber = t.credit_account?.number || '';
+        if (creditNumber.startsWith('7') && t.credit_amount) {
+          const prefix = creditNumber.split('-')[0];
+          result[prefix] = (result[prefix] || 0) + t.credit_amount;
+        }
+      });
+      
+      return result;
+    },
+    enabled: !!budget,
+  });
+
   if (isLoading || !budget) {
     return (
       <Card>
@@ -163,23 +208,31 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
 
   const incomeItems = budget.budget_items
     .filter((item: any) => item.account_type === 'income')
-    .map((item: any) => ({
-      account_prefix: item.account_prefix,
-      account_name: item.account_name,
-      forecasted: item.forecasted_amount || 0,
-      planned: item.planned_amount,
-      previous: item.previous_year_amount || 0,
-    }));
+    .map((item: any) => {
+      const basePrefix = item.account_prefix.split('-')[0];
+      return {
+        account_prefix: item.account_prefix,
+        account_name: item.account_name,
+        forecasted: item.forecasted_amount || 0,
+        planned: item.planned_amount,
+        previous: item.previous_year_amount || 0,
+        realized: realizationByAccount?.[basePrefix] || 0,
+      };
+    });
 
   const expenseItems = budget.budget_items
     .filter((item: any) => item.account_type === 'expense')
-    .map((item: any) => ({
-      account_prefix: item.account_prefix,
-      account_name: item.account_name,
-      forecasted: item.forecasted_amount || 0,
-      planned: item.planned_amount,
-      previous: item.previous_year_amount || 0,
-    }));
+    .map((item: any) => {
+      const basePrefix = item.account_prefix.split('-')[0];
+      return {
+        account_prefix: item.account_prefix,
+        account_name: item.account_name,
+        forecasted: item.forecasted_amount || 0,
+        planned: item.planned_amount,
+        previous: item.previous_year_amount || 0,
+        realized: realizationByAccount?.[basePrefix] || 0,
+      };
+    });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
