@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { BudgetFormData, BudgetPlan } from '@/types/budget';
-import { generateForecast, INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, formatCurrency } from '@/utils/budgetUtils';
+import { generateForecast, INCOME_ACCOUNTS, EXPENSE_ACCOUNTS, formatCurrency, buildAccountPrefix } from '@/utils/budgetUtils';
 import { sendBudgetNotification } from '@/utils/budgetNotifications';
 import BudgetItemsTable from './BudgetItemsTable';
 import { Spinner } from '@/components/ui/Spinner';
