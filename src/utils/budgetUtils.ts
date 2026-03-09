@@ -74,8 +74,12 @@ export const EXPENSE_ACCOUNTS = [
 
 /**
  * Buduje pełny prefiks konta dla danej lokalizacji
+ * Dla kont ze specjalnym sufiksem (np. 201 z suffix '1') buduje: 201-{locationIdentifier}-1
  */
-export function buildAccountPrefix(basePrefix: string, locationIdentifier: string): string {
+export function buildAccountPrefix(basePrefix: string, locationIdentifier: string, suffix?: string): string {
+  if (suffix) {
+    return `${basePrefix}-${locationIdentifier}-${suffix}`;
+  }
   return `${basePrefix}-${locationIdentifier}`;
 }
 
