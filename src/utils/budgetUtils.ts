@@ -173,7 +173,8 @@ export async function generateForecast(
 
     // Prognoza dla rozchodów
     for (const account of EXPENSE_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balance = await getAccountBalanceForYear(
         locationId,
         previousYear,
