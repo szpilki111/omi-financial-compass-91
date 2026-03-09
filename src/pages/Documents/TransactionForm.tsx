@@ -74,6 +74,21 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     enabled: !!user?.id,
   });
 
+  // Fetch location identifier to check if provincial (category 1)
+  const { data: userLocation } = useQuery({
+    queryKey: ['userLocationIdentifier', userProfile?.location_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', userProfile!.location_id!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id,
+  });
+
   // Calculate totals
   const debitTotal = debitFields.reduce((sum, field) => sum + field.amount, 0);
   const creditTotal = creditFields.reduce((sum, field) => sum + field.amount, 0);
