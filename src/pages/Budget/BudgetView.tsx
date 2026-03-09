@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { getBudgetRealizationForMonthDetailed } from '@/utils/budgetUtils';
 
 interface BudgetViewProps {
   budgetId: string;
