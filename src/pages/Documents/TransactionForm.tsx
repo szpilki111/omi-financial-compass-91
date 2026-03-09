@@ -250,7 +250,30 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onCancel, onAu
     }
   };
 
-  const handleAccountChange = (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+  const handleAccountChange = async (fieldId: string, type: 'debit' | 'credit', accountId: string) => {
+    // Check if account 463 is being used by non-provincial location
+    if (accountId) {
+      const { data: accountData } = await supabase
+        .from('accounts')
+        .select('number')
+        .eq('id', accountId)
+        .single();
+      
+      if (accountData?.number?.startsWith('463')) {
+        const locationIdentifier = userLocation?.location_identifier || '';
+        const category = locationIdentifier.split('-')[0];
+        
+        if (category !== '1') {
+          toast({
+            title: "Konto zastrzeżone",
+            description: "Konto 463 jest zarezerwowane wyłącznie dla administracji prowincjalnej. Wybierz inne konto.",
+            variant: "destructive",
+          });
+          return; // Block the selection
+        }
+      }
+    }
+
     if (type === 'debit') {
       setDebitFields(prev => prev.map(field => 
         field.id === fieldId ? { ...field, accountId } : field
