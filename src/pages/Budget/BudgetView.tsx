@@ -152,16 +152,6 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     }
   };
 
-  if (isLoading || !budget) {
-    return (
-      <Card>
-        <CardContent className="flex justify-center py-8">
-          <Spinner />
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Fetch realization data per account
   const { data: realizationByAccount } = useQuery({
     queryKey: ['budget-realization-by-account', budget?.location_id, budget?.year],
@@ -171,7 +161,6 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       const currentYear = new Date().getFullYear();
       const maxMonth = currentYear === budget.year ? currentMonth : 12;
       
-      // Fetch all transactions for the year
       const startDate = `${budget.year}-01-01`;
       const endDate = `${budget.year}-${String(maxMonth).padStart(2, '0')}-${new Date(budget.year, maxMonth, 0).getDate()}`;
       
@@ -187,17 +176,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       const result: Record<string, number> = {};
       
       transactions.forEach((t: any) => {
-        // Expenses: 4xx accounts on debit side
         const debitNumber = t.accounts?.number || '';
         if (debitNumber.startsWith('4') && t.debit_amount) {
           const prefix = debitNumber.split('-')[0];
           result[prefix] = (result[prefix] || 0) + t.debit_amount;
         }
-        // Also 201 accounts on debit side (Świadczenia na prowincję)
         if (debitNumber.startsWith('201') && t.debit_amount) {
           result['201'] = (result['201'] || 0) + t.debit_amount;
         }
-        // Income: 7xx accounts on credit side
         const creditNumber = t.credit_account?.number || '';
         if (creditNumber.startsWith('7') && t.credit_amount) {
           const prefix = creditNumber.split('-')[0];
@@ -210,22 +196,18 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     enabled: !!budget,
   });
 
-  const incomeItems = budget?.budget_items
-    ?.filter((item: any) => item.account_type === 'income')
-    .map((item: any) => {
-      const basePrefix = item.account_prefix.split('-')[0];
-      return {
-        account_prefix: item.account_prefix,
-        account_name: item.account_name,
-        forecasted: item.forecasted_amount || 0,
-        planned: item.planned_amount,
-        previous: item.previous_year_amount || 0,
-        realized: realizationByAccount?.[basePrefix] || 0,
-      };
-    }) || [];
+  if (isLoading || !budget) {
+    return (
+      <Card>
+        <CardContent className="flex justify-center py-8">
+          <Spinner />
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const expenseItems = budget?.budget_items
-    ?.filter((item: any) => item.account_type === 'expense')
+  const incomeItems = budget.budget_items
+    .filter((item: any) => item.account_type === 'income')
     .map((item: any) => {
       const basePrefix = item.account_prefix.split('-')[0];
       return {
@@ -236,7 +218,21 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
         previous: item.previous_year_amount || 0,
         realized: realizationByAccount?.[basePrefix] || 0,
       };
-    }) || [];
+    });
+
+  const expenseItems = budget.budget_items
+    .filter((item: any) => item.account_type === 'expense')
+    .map((item: any) => {
+      const basePrefix = item.account_prefix.split('-')[0];
+      return {
+        account_prefix: item.account_prefix,
+        account_name: item.account_name,
+        forecasted: item.forecasted_amount || 0,
+        planned: item.planned_amount,
+        previous: item.previous_year_amount || 0,
+        realized: realizationByAccount?.[basePrefix] || 0,
+      };
+    });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
