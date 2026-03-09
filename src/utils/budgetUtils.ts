@@ -69,7 +69,7 @@ export const EXPENSE_ACCOUNTS = [
   { prefix: '459', name: 'Misje, pomoc misjonarzom' },
   { prefix: '461', name: 'Kuria diecezjalna' },
   { prefix: '462', name: 'Świadczenia na dom' },
-  { prefix: '201-460', name: 'Świadczenia na prowincję' },
+  { prefix: '201', name: 'Świadczenia na prowincję', suffix: '1' },
 ];
 
 /**

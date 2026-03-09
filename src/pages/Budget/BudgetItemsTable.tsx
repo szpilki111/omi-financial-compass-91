@@ -9,6 +9,7 @@ interface BudgetItem {
   forecasted: number;
   planned: number;
   previous: number;
+  realized?: number;
 }
 
 interface BudgetItemsTableProps {
@@ -40,6 +41,8 @@ const BudgetItemsTable = ({
 
   const totalIncome = incomeItems.reduce((sum, item) => sum + item.planned, 0);
   const totalExpenses = expenseItems.reduce((sum, item) => sum + item.planned, 0);
+  const totalIncomeRealized = incomeItems.reduce((sum, item) => sum + (item.realized || 0), 0);
+  const totalExpensesRealized = expenseItems.reduce((sum, item) => sum + (item.realized || 0), 0);
   const balance = totalIncome - totalExpenses;
 
   return (
@@ -58,10 +61,6 @@ const BudgetItemsTable = ({
                     {item.account_prefix} - {item.account_name}
                   </Label>
                   <div className="grid gap-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Prognoza:</span>
-                      <span>{formatCurrency(item.forecasted)}</span>
-                    </div>
                     {!readonly && (
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">Budżet:</span>
@@ -80,19 +79,29 @@ const BudgetItemsTable = ({
                         <span>{formatCurrency(item.planned)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Poprz. rok:</span>
-                      <span>{formatCurrency(item.previous)}</span>
-                    </div>
+                    {item.realized !== undefined && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Zrealizowano:</span>
+                        <span className={item.realized > item.planned ? 'text-green-600 font-medium' : ''}>
+                          {formatCurrency(item.realized)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {index < incomeItems.length - 1 && <div className="border-t my-2" />}
                 </div>
               ))}
-              <div className="border-t pt-4">
+              <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between font-bold text-lg">
                   <span>SUMA PRZYCHODÓW:</span>
                   <span className="text-green-600">{formatCurrency(totalIncome)}</span>
                 </div>
+                {totalIncomeRealized > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Zrealizowano łącznie:</span>
+                    <span className="font-medium">{formatCurrency(totalIncomeRealized)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -111,10 +120,6 @@ const BudgetItemsTable = ({
                     {item.account_prefix} - {item.account_name}
                   </Label>
                   <div className="grid gap-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Prognoza:</span>
-                      <span>{formatCurrency(item.forecasted)}</span>
-                    </div>
                     {!readonly && (
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">Budżet:</span>
@@ -133,19 +138,29 @@ const BudgetItemsTable = ({
                         <span>{formatCurrency(item.planned)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Poprz. rok:</span>
-                      <span>{formatCurrency(item.previous)}</span>
-                    </div>
+                    {item.realized !== undefined && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Zrealizowano:</span>
+                        <span className={item.realized > item.planned ? 'text-red-600 font-medium' : ''}>
+                          {formatCurrency(item.realized)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {index < expenseItems.length - 1 && <div className="border-t my-2" />}
                 </div>
               ))}
-              <div className="border-t pt-4">
+              <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between font-bold text-lg">
                   <span>SUMA ROZCHODÓW:</span>
                   <span className="text-red-600">{formatCurrency(totalExpenses)}</span>
                 </div>
+                {totalExpensesRealized > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Zrealizowano łącznie:</span>
+                    <span className="font-medium">{formatCurrency(totalExpensesRealized)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
