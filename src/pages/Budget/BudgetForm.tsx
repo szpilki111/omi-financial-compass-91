@@ -185,7 +185,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
       }));
 
       const expenseItems = EXPENSE_ACCOUNTS.map(account => ({
-        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
+        account_prefix: buildAccountPrefix(account.prefix, selectedLocation.location_identifier!, (account as any).suffix),
         account_name: account.name,
         forecasted: 0,
         planned: 0,
