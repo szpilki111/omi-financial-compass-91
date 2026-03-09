@@ -177,7 +177,7 @@ const BudgetForm = ({ budgetId, onSaved, onCancel }: BudgetFormProps) => {
     if (formData.forecast_method === 'manual') {
       // For manual mode, create empty budget items with full prefixes
       const incomeItems = INCOME_ACCOUNTS.map(account => ({
-        account_prefix: `${account.prefix}-${selectedLocation.location_identifier}`,
+        account_prefix: buildAccountPrefix(account.prefix, selectedLocation.location_identifier!, (account as any).suffix),
         account_name: account.name,
         forecasted: 0,
         planned: 0,
