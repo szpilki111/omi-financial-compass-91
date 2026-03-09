@@ -206,7 +206,8 @@ export async function generateForecast(
 
     // Prognoza dla rozchodów (średnia z 3 lat)
     for (const account of EXPENSE_ACCOUNTS) {
-      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier);
+      const accountDef = account as any;
+      const fullPrefix = buildAccountPrefix(account.prefix, locationIdentifier, accountDef.suffix);
       const balances = await Promise.all(
         years.map(y => getAccountBalanceForYear(locationId, y, account.prefix, 'expense', locationIdentifier))
       );
