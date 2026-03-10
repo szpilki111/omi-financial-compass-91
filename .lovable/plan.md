@@ -1,53 +1,57 @@
 
-Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-1) Co dokładnie jest zepsute (potwierdzone)
-- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
-- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
-- Twarde dowody:
-  - `app_settings.two_factor_auth_enabled = true`
-  - `trusted_devices_count = 0`
-  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
+## Plan: Konto 201/215, sticky header, przeniesienie "Zgłoś błąd"
 
-2) Plan poprawki w kodzie (bez zmian DB)
-- Plik: `src/context/AuthContext.tsx`
-  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
-  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
-  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
+### 1. Konto 201 — zmiana wyświetlanego prefiksu na `201-x-x-1`
 
-- Plik: `src/pages/Login.tsx`
-  - Utrzymać obecny flow:
-    - login+hasło → niezaufane urządzenie → kod 2FA.
-  - Po poprawnej weryfikacji kodu:
-    - zalogować użytkownika,
-    - natychmiast wykonać `addTrustedDevice(...)`,
-    - dopiero potem nawigacja.
-  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
+**Problem**: W widoku budżetu (BudgetView) konto świadczeń pokazuje się jako `201-460-2-20` zamiast `201-x-x-1` (z identyfikatorem lokalizacji).
 
-3) Dlaczego to spełni wymaganie biznesowe
-- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
-- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
-- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
+**Analiza**: W `budgetUtils.ts` linia 72 już jest `{ prefix: '201', name: 'Świadczenia na prowincję', suffix: '1' }` i `buildAccountPrefix` buduje `201-{locationIdentifier}-1`. Problem polega na tym, że istniejące rekordy w bazie (`budget_items`) wciąż mają stary `account_prefix: '201-460-2-20'`. Trzeba naprawić:
 
-4) Testy regresji (obowiązkowe przed domknięciem)
-- Scenariusz A: użytkownik bez trusted device:
-  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
-  - w DB pojawia się rekord w `trusted_devices`.
-- Scenariusz B: ponowne logowanie z tego samego urządzenia:
-  - brak 2FA (urządzenie już zaufane).
-- Scenariusz C: usunięcie urządzenia z listy:
-  - kolejne logowanie znowu wymaga 2FA.
-- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
-  - `initializeAuth` wylogowuje i kieruje na login.
+a) **`BudgetView.tsx` (linia 184)**: Realizacja dla konta 201 — aktualnie zbiera WSZYSTKIE transakcje `201-*` do klucza `'201'`. Trzeba doprecyzować, by zbierał tylko te z sufiksem `-1` (świadczenia na prowincję): `debitNumber.match(/^201-\d+-\d+-1$/)`.
 
-5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
-- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
-- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
+b) **Wyświetlanie prefiksu**: Jeśli dane w bazie mają stary prefix `201-460-2-20`, trzeba albo zrobić migrację SQL, albo w UI mapować stary prefix na nowy. Lepiej poprawić w kodzie wyświetlania — w `BudgetView.tsx` przy mapowaniu `expenseItems` sprawdzać prefix `201` i wyświetlać poprawny.
 
-Sekcja techniczna (dla zespołu)
-- Problem jest wyścigiem asynchronicznym między:
-  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
-  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
-- Naprawa polega na rozdzieleniu odpowiedzialności:
-  - `AuthContext` pilnuje tylko „sesji zastanych”,
-  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).
+### 2. Konto 215 — pożyczki (po stronie Ma = przychód, Wn = koszt)
+
+**Zmiany**:
+
+a) **`budgetUtils.ts`**: Dodać konto `215` zarówno do `INCOME_ACCOUNTS` (np. `{ prefix: '215', name: 'Pożyczki (Ma)' }`) jak i do `EXPENSE_ACCOUNTS` (`{ prefix: '215', name: 'Pożyczki (Wn)' }`).
+
+b) **`BudgetView.tsx` realizacja (linie 176-192)**: Dodać logikę dla konta 215:
+- Transakcje z kontem `215-*` po stronie **credit** (Ma) → dodaj do realizacji przychodów (`result['215-income']`)
+- Transakcje z kontem `215-*` po stronie **debit** (Wn) → dodaj do realizacji kosztów (`result['215-expense']`)
+
+c) **Mapowanie realizacji do pozycji**: W sekcji `incomeItems` i `expenseItems` (linie 209-235) — dla konta 215 po stronie przychodów brać `realizationByAccount['215-income']`, po stronie kosztów `realizationByAccount['215-expense']`.
+
+d) **`BudgetRealizationBar.tsx` (linia 345-356)**: W `getBudgetRealizationForMonthDetailed` dodać zliczanie konta 215:
+- `creditNumber.startsWith('215')` → `incomeActual += credit_amount`
+- `debitNumber.startsWith('215')` → `expenseActual += debit_amount`
+
+e) **`BudgetForm.tsx`**: Konto 215 pojawi się automatycznie z tablic INCOME/EXPENSE_ACCOUNTS.
+
+### 3. Przeniesienie "Zgłoś błąd" do Headera + sticky header
+
+**Zmiany**:
+
+a) **`src/components/layout/Header.tsx`**: 
+- Dodać sticky: zmienić `<header className="bg-white border-b ...">` na `<header className="bg-white border-b ... sticky top-0 z-50">`
+- Dodać przycisk "Zgłoś błąd" obok avatara (przed dropdownem)
+
+b) **`src/components/ErrorReportButton.tsx`**: Zmienić z renderowania `fixed bottom-6 right-6` buttona na eksportowanie logiki (captureScreenshot, dialog) w formacie użytecznym z Headera. Można wyeksportować hook lub po prostu przenieść przycisk do Headera.
+
+c) **`src/components/layout/MainLayout.tsx`**: Usunąć `<ErrorReportButton />` z MainLayout (linia 25).
+
+d) **Header**: Dodać `ErrorReportButton` jako mały przycisk (ikona Bug) w pasku nawigacji zamiast floating buttona.
+
+### Pliki do zmiany
+
+| Plik | Zmiana |
+|------|--------|
+| `src/utils/budgetUtils.ts` | Dodać konto 215 do INCOME i EXPENSE, poprawić 201 realizację |
+| `src/pages/Budget/BudgetView.tsx` | Realizacja: obsługa 201 z sufiksem -1, konto 215 dwustronnie |
+| `src/pages/Budget/BudgetRealizationBar.tsx` | Paski: uwzględnić 201 i 215 w obliczeniach |
+| `src/components/layout/Header.tsx` | Sticky top + przycisk "Zgłoś błąd" |
+| `src/components/ErrorReportButton.tsx` | Zmienić na komponent inline (bez fixed positioning) |
+| `src/components/layout/MainLayout.tsx` | Usunąć ErrorReportButton |
+
