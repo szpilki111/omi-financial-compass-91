@@ -177,17 +177,29 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       
       transactions.forEach((t: any) => {
         const debitNumber = t.accounts?.number || '';
+        // Koszty 4xx po stronie Wn
         if (debitNumber.startsWith('4') && t.debit_amount) {
           const prefix = debitNumber.split('-')[0];
           result[prefix] = (result[prefix] || 0) + t.debit_amount;
         }
-        if (debitNumber.startsWith('201') && t.debit_amount) {
+        // Konto 201-x-x-1 (świadczenia na prowincję) po stronie Wn
+        if (/^201-\d+-\d+-1$/.test(debitNumber) && t.debit_amount) {
           result['201'] = (result['201'] || 0) + t.debit_amount;
         }
+        // Konto 215 po stronie Wn → koszt
+        if (debitNumber.startsWith('215') && t.debit_amount) {
+          result['215-expense'] = (result['215-expense'] || 0) + t.debit_amount;
+        }
+        
         const creditNumber = t.credit_account?.number || '';
+        // Przychody 7xx po stronie Ma
         if (creditNumber.startsWith('7') && t.credit_amount) {
           const prefix = creditNumber.split('-')[0];
           result[prefix] = (result[prefix] || 0) + t.credit_amount;
+        }
+        // Konto 215 po stronie Ma → przychód
+        if (creditNumber.startsWith('215') && t.credit_amount) {
+          result['215-income'] = (result['215-income'] || 0) + t.credit_amount;
         }
       });
       
@@ -210,13 +222,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     .filter((item: any) => item.account_type === 'income')
     .map((item: any) => {
       const basePrefix = item.account_prefix.split('-')[0];
+      const realizationKey = basePrefix === '215' ? '215-income' : basePrefix;
       return {
         account_prefix: item.account_prefix,
         account_name: item.account_name,
         forecasted: item.forecasted_amount || 0,
         planned: item.planned_amount,
         previous: item.previous_year_amount || 0,
-        realized: realizationByAccount?.[basePrefix] || 0,
+        realized: realizationByAccount?.[realizationKey] || 0,
       };
     });
 
@@ -224,13 +237,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     .filter((item: any) => item.account_type === 'expense')
     .map((item: any) => {
       const basePrefix = item.account_prefix.split('-')[0];
+      const realizationKey = basePrefix === '215' ? '215-expense' : basePrefix;
       return {
         account_prefix: item.account_prefix,
         account_name: item.account_name,
         forecasted: item.forecasted_amount || 0,
         planned: item.planned_amount,
         previous: item.previous_year_amount || 0,
-        realized: realizationByAccount?.[basePrefix] || 0,
+        realized: realizationByAccount?.[realizationKey] || 0,
       };
     });
 

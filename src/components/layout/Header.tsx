@@ -8,28 +8,24 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ErrorReportButton } from "@/components/ErrorReportButton";
 
 const Header = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { isWindows98Style } = useStyleSettings();
 
-  // Updated navigation items - removed KPiR from menu
   const getNavItems = () => {
     const baseItems = [];
 
-    // Dokumenty - dla wszystkich zalogowanych użytkowników
     baseItems.push({
       name: "Dokumenty",
       path: "/dokumenty",
       icon: "/88a736db-1198-4c92-b31a-d8b7c4c8adb7.png",
     });
 
-    // Pozostałe pozycje dla wszystkich zalogowanych użytkowników
     baseItems.push(
       {
         name: "Raporty",
@@ -53,12 +49,11 @@ const Header = () => {
       },
     );
 
-    // Administracja dla prowincjała i admina
     if (user?.role === "prowincjal" || user?.role === "admin") {
       baseItems.push({
         name: "Administracja",
         path: "/administracja",
-        icon: "/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png", // używam tej samej ikony co dla ustawień
+        icon: "/ef42a7e5-53d2-4c0a-8208-6e4863ef2f82.png",
       });
     }
 
@@ -67,7 +62,6 @@ const Header = () => {
 
   const navItems = getNavItems();
 
-  // Zwracanie inicjału imienia użytkownika
   const getInitial = () => {
     if (user?.name) {
       return user.name.charAt(0).toUpperCase();
@@ -79,7 +73,7 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 justify-between">
           <div className="flex items-center">
@@ -88,7 +82,6 @@ const Header = () => {
               <span className="ml-2 text-lg font-semibold text-omi-500">Finanse OMI</span>
             </Link>
 
-            {/* Menu nawigacyjne */}
             {user && (
               <nav className="hidden md:ml-6 md:flex md:space-x-4">
                 {navItems.map((item) => (
@@ -110,23 +103,25 @@ const Header = () => {
             )}
           </div>
 
-          {/* Przyciski z prawej */}
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             {user ? (
-              <div className="flex items-center ml-4 md:ml-6">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-omi-300 text-white">{getInitial()}</AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => logout()}>Wyloguj</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <>
+                <ErrorReportButton />
+                <div className="flex items-center">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-omi-300 text-white">{getInitial()}</AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => logout()}>Wyloguj</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
             ) : (
               <Link to="/login">
                 <Button variant="default" size="sm">
