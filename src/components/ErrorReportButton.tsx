@@ -82,12 +82,12 @@ export const ErrorReportButton = () => {
       <Button
         onClick={captureScreenshot}
         disabled={isCapturing}
-        className="fixed bottom-6 right-6 z-50 shadow-lg mb-20"
-        size="lg"
+        variant="outline"
+        size="sm"
         title="Zgłoś błąd"
       >
-        <Bug className="h-5 w-5 mr-2" />
-        {isCapturing ? "Robię screenshot..." : "Zgłoś błąd"}
+        <Bug className="h-4 w-4 mr-1" />
+        {isCapturing ? "..." : "Zgłoś błąd"}
       </Button>
 
       <ErrorReportDialog

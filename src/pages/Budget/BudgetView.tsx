@@ -222,13 +222,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     .filter((item: any) => item.account_type === 'income')
     .map((item: any) => {
       const basePrefix = item.account_prefix.split('-')[0];
+      const realizationKey = basePrefix === '215' ? '215-income' : basePrefix;
       return {
         account_prefix: item.account_prefix,
         account_name: item.account_name,
         forecasted: item.forecasted_amount || 0,
         planned: item.planned_amount,
         previous: item.previous_year_amount || 0,
-        realized: realizationByAccount?.[basePrefix] || 0,
+        realized: realizationByAccount?.[realizationKey] || 0,
       };
     });
 
@@ -236,13 +237,14 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
     .filter((item: any) => item.account_type === 'expense')
     .map((item: any) => {
       const basePrefix = item.account_prefix.split('-')[0];
+      const realizationKey = basePrefix === '215' ? '215-expense' : basePrefix;
       return {
         account_prefix: item.account_prefix,
         account_name: item.account_name,
         forecasted: item.forecasted_amount || 0,
         planned: item.planned_amount,
         previous: item.previous_year_amount || 0,
-        realized: realizationByAccount?.[basePrefix] || 0,
+        realized: realizationByAccount?.[realizationKey] || 0,
       };
     });
 
