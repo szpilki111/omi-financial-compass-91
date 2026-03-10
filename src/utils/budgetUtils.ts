@@ -71,6 +71,7 @@ export const EXPENSE_ACCOUNTS = [
   { prefix: '461', name: 'Kuria diecezjalna' },
   { prefix: '462', name: 'Świadczenia na dom' },
   { prefix: '201', name: 'Świadczenia na prowincję', suffix: '1' },
+  { prefix: '215', name: 'Pożyczki (Wn)' },
 ];
 
 /**
