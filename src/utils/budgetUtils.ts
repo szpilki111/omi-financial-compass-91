@@ -345,14 +345,23 @@ export async function getBudgetRealizationForMonthDetailed(
   let incomeActual = 0;
 
   data?.forEach((t: any) => {
-    // Koszty: konta 4xx po stronie Wn (debit)
+    // Koszty: konta 4xx po stronie Wn (debit) + 201-x-x-1 + 215 Wn
     const debitNumber = t.accounts?.number || '';
     if (debitNumber.startsWith('4') && t.debit_amount) {
       expenseActual += t.debit_amount;
     }
-    // Przychody: konta 7xx po stronie Ma (credit)
+    if (/^201-\d+-\d+-1$/.test(debitNumber) && t.debit_amount) {
+      expenseActual += t.debit_amount;
+    }
+    if (debitNumber.startsWith('215') && t.debit_amount) {
+      expenseActual += t.debit_amount;
+    }
+    // Przychody: konta 7xx po stronie Ma (credit) + 215 Ma
     const creditNumber = t.credit_account?.number || '';
     if (creditNumber.startsWith('7') && t.credit_amount) {
+      incomeActual += t.credit_amount;
+    }
+    if (creditNumber.startsWith('215') && t.credit_amount) {
       incomeActual += t.credit_amount;
     }
   });
