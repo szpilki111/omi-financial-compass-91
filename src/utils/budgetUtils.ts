@@ -23,6 +23,7 @@ export const INCOME_ACCOUNTS = [
   { prefix: '727', name: 'Cmentarz' },
   { prefix: '728', name: 'Różnice kursowe' },
   { prefix: '730', name: 'Sprzedaż majątku trwałego' },
+  { prefix: '215', name: 'Pożyczki (Ma)' },
 ];
 
 export const EXPENSE_ACCOUNTS = [
