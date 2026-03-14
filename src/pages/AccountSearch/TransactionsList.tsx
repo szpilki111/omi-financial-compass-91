@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Edit, X, FileText, Calculator } from 'lucide-react';
+import { Edit, X, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -57,6 +57,7 @@ interface TransactionsListProps {
   onClearMonthFilter: () => void;
   selectedTransactionIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
+  relatedAccountIds?: string[];
 }
 
 const TransactionsList: React.FC<TransactionsListProps> = ({
@@ -68,7 +69,14 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
   onClearMonthFilter,
   selectedTransactionIds = [],
   onSelectionChange,
+  relatedAccountIds = [],
 }) => {
+  const relatedSet = useMemo(() => {
+    const s = new Set(relatedAccountIds);
+    if (s.size === 0) s.add(selectedAccount.id);
+    return s;
+  }, [relatedAccountIds, selectedAccount.id]);
+
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
@@ -77,31 +85,20 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
     }).format(amount);
   };
 
-  // Funkcja do przeliczania kwot walutowych na PLN
-  const getAmountInPLN = (transaction: Transaction): number => {
-    const rawAmount = transaction.debit_account_id === selectedAccount.id
-      ? transaction.debit_amount || transaction.amount
-      : transaction.credit_amount || transaction.amount;
-    
-    // Pobierz kurs - najpierw z transakcji, potem z dokumentu
-    const currency = transaction.currency || transaction.document?.currency || 'PLN';
+  const getDebitCredit = (transaction: Transaction) => {
+    const isDebit = relatedSet.has(transaction.debit_account_id);
+    const isCredit = relatedSet.has(transaction.credit_account_id);
     const exchangeRate = transaction.exchange_rate || transaction.document?.exchange_rate || 1;
-    
-    // Przelicz na PLN jeśli waluta obca
-    if (currency !== 'PLN' && exchangeRate > 0) {
-      return rawAmount * exchangeRate;
-    }
-    
-    return rawAmount;
+
+    const debitAmount = isDebit ? (transaction.debit_amount ?? transaction.amount ?? 0) * exchangeRate : 0;
+    const creditAmount = isCredit ? (transaction.credit_amount ?? transaction.amount ?? 0) * exchangeRate : 0;
+
+    return { debitAmount, creditAmount, isDebit, isCredit };
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (!onSelectionChange) return;
-    if (checked) {
-      onSelectionChange(transactions.map(t => t.id));
-    } else {
-      onSelectionChange([]);
-    }
+    onSelectionChange(checked ? transactions.map(t => t.id) : []);
   };
 
   const handleSelectOne = (transactionId: string, checked: boolean) => {
@@ -161,7 +158,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
       </CardHeader>
       <CardContent>
         {transactions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             Brak operacji do wyświetlenia
           </div>
         ) : (
@@ -187,13 +184,18 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                   <TableHead>Dokument</TableHead>
                   <TableHead>Opis</TableHead>
                   <TableHead>Konta</TableHead>
-                  <TableHead className="text-right">Kwota</TableHead>
+                  <TableHead className="text-right">Wn (PLN)</TableHead>
+                  <TableHead className="text-right">Ma (PLN)</TableHead>
                   <TableHead className="text-right">Akcje</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {transactions.map((transaction) => {
                   const isSelected = selectedTransactionIds.includes(transaction.id);
+                  const { debitAmount, creditAmount } = getDebitCredit(transaction);
+                  const currency = transaction.currency || transaction.document?.currency;
+                  const hasForeignCurrency = currency && currency !== 'PLN';
+
                   return (
                     <TableRow 
                       key={transaction.id}
@@ -217,7 +219,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                             {transaction.document?.document_number || transaction.document_number || 'Brak numeru'}
                           </div>
                           {transaction.document && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-muted-foreground">
                               {transaction.document.document_name}
                             </div>
                           )}
@@ -239,20 +241,28 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <div className="flex items-center justify-end gap-1">
-                            <Calculator className="h-4 w-4 text-muted-foreground" />
-                            {formatAmount(getAmountInPLN(transaction))}
+                        {debitAmount > 0 && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-destructive">{formatAmount(debitAmount)}</span>
+                            {hasForeignCurrency && (
+                              <span className="text-xs text-muted-foreground">
+                                ({(transaction.debit_amount ?? transaction.amount ?? 0).toFixed(2)} {currency})
+                              </span>
+                            )}
                           </div>
-                          {transaction.currency && transaction.currency !== 'PLN' && (
-                            <span className="text-xs text-muted-foreground">
-                              ({(transaction.debit_account_id === selectedAccount.id
-                                ? transaction.debit_amount || transaction.amount
-                                : transaction.credit_amount || transaction.amount
-                              ).toFixed(2)} {transaction.currency})
-                            </span>
-                          )}
-                        </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {creditAmount > 0 && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-green-600">{formatAmount(creditAmount)}</span>
+                            {hasForeignCurrency && (
+                              <span className="text-xs text-muted-foreground">
+                                ({(transaction.credit_amount ?? transaction.amount ?? 0).toFixed(2)} {currency})
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {transaction.document_id && (

@@ -711,6 +711,7 @@ const AccountSearchPage = () => {
                 onClearMonthFilter={() => setSelectedMonth(null)}
                 selectedTransactionIds={selectedTransactionIds}
                 onSelectionChange={setSelectedTransactionIds}
+                relatedAccountIds={relatedAccountIds}
               />
             )}
 
@@ -757,7 +758,8 @@ const AccountSearchPage = () => {
           transactions={transactions} 
           year={selectedYear} 
           totals={totals} 
-          locationName={locationName} 
+          locationName={locationName}
+          relatedAccountIds={relatedAccountIds}
         />
       )}
 
