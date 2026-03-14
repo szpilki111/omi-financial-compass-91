@@ -36,7 +36,7 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
         .from('budget_plans')
         .select(`
           *,
-          locations(name),
+          locations(name, location_identifier),
           budget_items(*),
           created_by_profile:profiles!budget_plans_created_by_fkey(name),
           submitted_by_profile:profiles!budget_plans_submitted_by_fkey(name),
