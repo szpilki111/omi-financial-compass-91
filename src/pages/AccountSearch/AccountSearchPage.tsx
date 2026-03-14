@@ -758,7 +758,8 @@ const AccountSearchPage = () => {
           transactions={transactions} 
           year={selectedYear} 
           totals={totals} 
-          locationName={locationName} 
+          locationName={locationName}
+          relatedAccountIds={relatedAccountIds}
         />
       )}
 

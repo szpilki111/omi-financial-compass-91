@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -35,11 +35,18 @@ interface PrintableAccountTurnoverProps {
     balance: number;
   };
   locationName?: string;
+  relatedAccountIds?: string[];
 }
 
 const PrintableAccountTurnover = React.forwardRef<HTMLDivElement, PrintableAccountTurnoverProps>(
-  ({ account, transactions, year, totals, locationName }, ref) => {
+  ({ account, transactions, year, totals, locationName, relatedAccountIds = [] }, ref) => {
     
+    const relatedSet = useMemo(() => {
+      const s = new Set(relatedAccountIds);
+      if (s.size === 0) s.add(account.id);
+      return s;
+    }, [relatedAccountIds, account.id]);
+
     const formatAmount = (amount?: number) => {
       if (amount === undefined || amount === 0) return '';
       return amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -96,9 +103,9 @@ const PrintableAccountTurnover = React.forwardRef<HTMLDivElement, PrintableAccou
               const monthName = format(firstDate, 'LLL', { locale: pl });
               
               const monthDebit = monthTransactions.reduce((sum, t) => 
-                sum + (t.debit_account_id === account.id ? (t.debit_amount || t.amount || 0) : 0), 0);
+                sum + (relatedSet.has(t.debit_account_id) ? (t.debit_amount || t.amount || 0) : 0), 0);
               const monthCredit = monthTransactions.reduce((sum, t) => 
-                sum + (t.credit_account_id === account.id ? (t.credit_amount || t.amount || 0) : 0), 0);
+                sum + (relatedSet.has(t.credit_account_id) ? (t.credit_amount || t.amount || 0) : 0), 0);
 
               return (
                 <React.Fragment key={month}>
@@ -110,8 +117,8 @@ const PrintableAccountTurnover = React.forwardRef<HTMLDivElement, PrintableAccou
                   </tr>
                   {/* Transakcje */}
                   {monthTransactions.map((t) => {
-                    const isDebit = t.debit_account_id === account.id;
-                    const isCredit = t.credit_account_id === account.id;
+                    const isDebit = relatedSet.has(t.debit_account_id);
+                    const isCredit = relatedSet.has(t.credit_account_id);
                     
                     return (
                       <tr key={t.id} style={{ borderBottom: '1px solid #eee' }}>
