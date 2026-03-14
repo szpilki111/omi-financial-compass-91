@@ -1,53 +1,71 @@
 
-Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-1) Co dokładnie jest zepsute (potwierdzone)
-- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
-- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
-- Twarde dowody:
-  - `app_settings.two_factor_auth_enabled = true`
-  - `trusted_devices_count = 0`
-  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
+## Plan: Dodanie konta 215 do widoku budżetu
 
-2) Plan poprawki w kodzie (bez zmian DB)
-- Plik: `src/context/AuthContext.tsx`
-  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
-  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
-  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
+### Problem
+Konto 215 (Pożyczki) zostało dodane do definicji kont w `budgetUtils.ts`, ale istniejące budżety w bazie nie mają wierszy `budget_items` dla konta 215. Dlatego 215 nie pojawia się w tabelce — bo BudgetView renderuje tylko to, co jest w `budget_items`.
 
-- Plik: `src/pages/Login.tsx`
-  - Utrzymać obecny flow:
-    - login+hasło → niezaufane urządzenie → kod 2FA.
-  - Po poprawnej weryfikacji kodu:
-    - zalogować użytkownika,
-    - natychmiast wykonać `addTrustedDevice(...)`,
-    - dopiero potem nawigacja.
-  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
+### Rozwiązanie
 
-3) Dlaczego to spełni wymaganie biznesowe
-- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
-- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
-- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
+Dwutorowe podejście: migracja SQL + zabezpieczenie w kodzie.
 
-4) Testy regresji (obowiązkowe przed domknięciem)
-- Scenariusz A: użytkownik bez trusted device:
-  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
-  - w DB pojawia się rekord w `trusted_devices`.
-- Scenariusz B: ponowne logowanie z tego samego urządzenia:
-  - brak 2FA (urządzenie już zaufane).
-- Scenariusz C: usunięcie urządzenia z listy:
-  - kolejne logowanie znowu wymaga 2FA.
-- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
-  - `initializeAuth` wylogowuje i kieruje na login.
+#### 1. Migracja SQL — nowy plik
 
-5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
-- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
-- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
+Nowy plik `supabase/migrations/20260314100100_*.sql`:
+```sql
+INSERT INTO budget_items (budget_plan_id, account_type, account_prefix, account_name, planned_amount, forecasted_amount, previous_year_amount)
+SELECT bp.id, 'income', '215-' || l.location_identifier, 'Pożyczki (Ma)', 0, 0, 0
+FROM budget_plans bp JOIN locations l ON l.id = bp.location_id
+WHERE NOT EXISTS (SELECT 1 FROM budget_items bi WHERE bi.budget_plan_id = bp.id AND bi.account_type = 'income' AND bi.account_prefix LIKE '215%');
 
-Sekcja techniczna (dla zespołu)
-- Problem jest wyścigiem asynchronicznym między:
-  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
-  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
-- Naprawa polega na rozdzieleniu odpowiedzialności:
-  - `AuthContext` pilnuje tylko „sesji zastanych”,
-  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).
+INSERT INTO budget_items (budget_plan_id, account_type, account_prefix, account_name, planned_amount, forecasted_amount, previous_year_amount)
+SELECT bp.id, 'expense', '215-' || l.location_identifier, 'Pożyczki (Wn)', 0, 0, 0
+FROM budget_plans bp JOIN locations l ON l.id = bp.location_id
+WHERE NOT EXISTS (SELECT 1 FROM budget_items bi WHERE bi.budget_plan_id = bp.id AND bi.account_type = 'expense' AND bi.account_prefix LIKE '215%');
+```
+
+#### 2. BudgetView.tsx — zabezpieczenie w kodzie
+
+Zmiana w query (linia 39): dodać `location_identifier` do `locations`:
+```
+locations(name, location_identifier)
+```
+
+Po zbudowaniu `incomeItems` i `expenseItems` (linie 221-249), dodać logikę wstrzykiwania brakujących pozycji 215:
+
+```typescript
+// Po linii 249, przed getStatusBadge:
+const locationIdentifier = (budget.locations as any)?.location_identifier || '';
+
+// Jeśli brak 215 w przychodach — dodaj
+const has215Income = incomeItems.some(i => i.account_prefix.startsWith('215'));
+if (!has215Income && locationIdentifier) {
+  incomeItems.push({
+    account_prefix: `215-${locationIdentifier}`,
+    account_name: 'Pożyczki (Ma)',
+    forecasted: 0, planned: 0, previous: 0,
+    realized: realizationByAccount?.['215-income'] || 0,
+  });
+}
+
+// Jeśli brak 215 w kosztach — dodaj
+const has215Expense = expenseItems.some(i => i.account_prefix.startsWith('215'));
+if (!has215Expense && locationIdentifier) {
+  expenseItems.push({
+    account_prefix: `215-${locationIdentifier}`,
+    account_name: 'Pożyczki (Wn)',
+    forecasted: 0, planned: 0, previous: 0,
+    realized: realizationByAccount?.['215-expense'] || 0,
+  });
+}
+```
+
+To zabezpiecza wyświetlanie 215 nawet gdy migracja jeszcze nie przeszła lub budżet został utworzony przed dodaniem konta 215.
+
+### Pliki do zmiany
+
+| Plik | Zmiana |
+|------|--------|
+| `supabase/migrations/20260314100100_*.sql` | INSERT brakujących 215 do budget_items |
+| `src/pages/Budget/BudgetView.tsx` | Dodać location_identifier do query + wstrzykiwanie 215 gdy brak |
+
