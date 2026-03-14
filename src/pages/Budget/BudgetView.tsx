@@ -248,6 +248,27 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
       };
     });
 
+  // Zabezpieczenie: wstrzyknij konto 215 jeśli brak w budget_items
+  const locationIdentifier = (budget.locations as any)?.location_identifier || '';
+  
+  if (!incomeItems.some((i: any) => i.account_prefix.startsWith('215')) && locationIdentifier) {
+    incomeItems.push({
+      account_prefix: `215-${locationIdentifier}`,
+      account_name: 'Pożyczki (Ma)',
+      forecasted: 0, planned: 0, previous: 0,
+      realized: realizationByAccount?.['215-income'] || 0,
+    });
+  }
+
+  if (!expenseItems.some((i: any) => i.account_prefix.startsWith('215')) && locationIdentifier) {
+    expenseItems.push({
+      account_prefix: `215-${locationIdentifier}`,
+      account_name: 'Pożyczki (Wn)',
+      forecasted: 0, planned: 0, previous: 0,
+      realized: realizationByAccount?.['215-expense'] || 0,
+    });
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
