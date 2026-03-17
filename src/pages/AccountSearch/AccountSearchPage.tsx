@@ -681,14 +681,17 @@ const AccountSearchPage = () => {
             </Card>
 
             {/* Currency-specific summaries - same 4-column layout as PLN */}
-            {currencyTotals.size > 0 && Array.from(currencyTotals.entries()).map(([currency, data]) => (
+            {currencyTotals.size > 0 && Array.from(currencyTotals.entries()).map(([currency, data]) => {
+              const currencyOpeningBalance = openingBalanceData.currencyBalances.get(currency) || 0;
+              const currencyClosingBalance = currencyOpeningBalance + data.debit - data.credit;
+              return (
               <Card key={currency}>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="text-center">
                       <p className="text-sm text-muted-foreground">Saldo początkowe ({currency})</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        — {currency}
+                      <p className={`text-2xl font-bold ${currencyOpeningBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        {currencyOpeningBalance.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
                       </p>
                     </div>
                     <div className="text-center">
@@ -705,14 +708,15 @@ const AccountSearchPage = () => {
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-muted-foreground">Saldo końcowe ({currency})</p>
-                      <p className={`text-2xl font-bold ${(data.debit - data.credit) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(data.debit - data.credit).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+                      <p className={`text-2xl font-bold ${currencyClosingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {currencyClosingBalance.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
                       </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
 
             {/* Content based on view mode */}
             {showTurnover ? (
