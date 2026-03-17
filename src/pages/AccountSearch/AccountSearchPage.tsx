@@ -247,7 +247,7 @@ const AccountSearchPage = () => {
       openingBalance,
       closingBalance
     };
-  }, [transactions, selectedAccount, openingBalanceForYear, relatedAccountIds]);
+  }, [transactions, selectedAccount, openingBalanceData, relatedAccountIds]);
 
   // Calculate currency-specific totals for non-PLN transactions
   const currencyTotals = useMemo(() => {
