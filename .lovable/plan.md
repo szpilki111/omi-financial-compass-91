@@ -1,53 +1,48 @@
 
-Plan naprawy (ultra-dokładny, minimalne ryzyko dla produkcji)
 
-1) Co dokładnie jest zepsute (potwierdzone)
-- Główna przyczyna: w `AuthContext.tsx` dodany check w `onAuthStateChange` dla eventu `SIGNED_IN` wylogowuje użytkownika zanim flow 2FA zdąży dodać urządzenie do `trusted_devices`.
-- Efekt uboczny: `addTrustedDevice(...)` po weryfikacji kodu działa już na sesji, która została chwilę wcześniej wycięta, więc insert wpada w RLS (`auth.uid() = user_id`) i urządzenie nie zapisuje się.
-- Twarde dowody:
-  - `app_settings.two_factor_auth_enabled = true`
-  - `trusted_devices_count = 0`
-  - auth logi: sekwencja `POST /token (200)` → natychmiast `POST /logout (204)`
+## Plan: Saldo początkowe w pasku walutowym
 
-2) Plan poprawki w kodzie (bez zmian DB)
-- Plik: `src/context/AuthContext.tsx`
-  - Usunąć wymuszanie trust-check w ścieżce `SIGNED_IN` (to jest punkt kolizji z 2FA).
-  - Zostawić trust-check w `initializeAuth()` (przy starcie aplikacji) — to nadal blokuje bypass przez „stare sesje” po odświeżeniu/aplikacji.
-  - Dodać kontrolę tylko dla sesji już istniejących (nie dla świeżego, etapowego logowania 2FA).
+### Problem
+Karta walutowa (np. EUR) w wyszukiwarce kont pokazuje "— EUR" jako saldo początkowe, bo:
+1. **Brak kalkulacji walutowego salda otwarcia** — query `openingBalanceForYear` nie pobiera informacji o walucie/kursie, więc nie da się wyliczyć salda w walucie obcej.
+2. **Saldo PLN też potencjalnie niedokładne** — opening balance nie mnoży przez `exchange_rate`, podczas gdy obroty bieżącego roku to robią (linia 208: `amount * exchangeRate`).
 
-- Plik: `src/pages/Login.tsx`
-  - Utrzymać obecny flow:
-    - login+hasło → niezaufane urządzenie → kod 2FA.
-  - Po poprawnej weryfikacji kodu:
-    - zalogować użytkownika,
-    - natychmiast wykonać `addTrustedDevice(...)`,
-    - dopiero potem nawigacja.
-  - Krytyczne uszczelnienie: jeśli `addTrustedDevice(...)` się nie powiedzie, wymusić `signOut()` i pokazać komunikat, że logowanie z nowego urządzenia wymaga poprawnego zapisu zaufanego urządzenia (żeby nie było „wejścia bez dodania urządzenia”).
+### Rozwiązanie
 
-3) Dlaczego to spełni wymaganie biznesowe
-- Każde nowe urządzenie przechodzi 2FA i jest dodawane „na stałe”.
-- Bez zapisu urządzenia do trusted user nie zostanie wpuszczony.
-- Role/przywileje nie mają znaczenia — warunek działa identycznie dla admin i non-admin.
+**Plik: `src/pages/AccountSearch/AccountSearchPage.tsx`**
 
-4) Testy regresji (obowiązkowe przed domknięciem)
-- Scenariusz A: użytkownik bez trusted device:
-  - login hasło → modal 2FA → poprawny kod → wejście do systemu.
-  - w DB pojawia się rekord w `trusted_devices`.
-- Scenariusz B: ponowne logowanie z tego samego urządzenia:
-  - brak 2FA (urządzenie już zaufane).
-- Scenariusz C: usunięcie urządzenia z listy:
-  - kolejne logowanie znowu wymaga 2FA.
-- Scenariusz D: restart/odświeżenie app z sesją, ale bez wpisu trusted:
-  - `initializeAuth` wylogowuje i kieruje na login.
+#### 1. Rozszerzyć query salda otwarcia (linie 145-149)
+Dodać do `.select()` pola `currency, exchange_rate` oraz join na dokument:
+```
+.select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount, currency, exchange_rate, document:documents(currency, exchange_rate)')
+```
 
-5) Dodatkowa kontrola bezpieczeństwa po wdrożeniu
-- Szybki audyt kont z `profiles.blocked = true` (bo część osób mogła zostać zablokowana przez poprzednie nieudane próby).
-- W razie potrzeby przygotować oddzielny, kontrolowany plan odblokowania wyłącznie wskazanych kont produkcyjnych (bez masowego „odblokuj wszystko”).
+#### 2. Zmienić typ zwracany z `number` na obiekt
+Zamiast zwracać sam `number`, zwrócić:
+```typescript
+{ plnBalance: number, currencyBalances: Map<string, number> }
+```
 
-Sekcja techniczna (dla zespołu)
-- Problem jest wyścigiem asynchronicznym między:
-  - `AuthContext.onAuthStateChange(SIGNED_IN)` + `checkDeviceTrust -> signOut`
-  - oraz `Login.handleTwoFactorVerified -> login() -> addTrustedDevice`.
-- Naprawa polega na rozdzieleniu odpowiedzialności:
-  - `AuthContext` pilnuje tylko „sesji zastanych”,
-  - `Login` kończy transakcję 2FA + trust enrollment atomowo z punktu widzenia UX (bez przedwczesnego wylogowania w tle).
+Logika w `queryFn`:
+- Dla każdej transakcji historycznej określić walutę (dokument > transakcja > PLN)
+- **PLN opening balance**: `amount * exchangeRate` (tak samo jak obroty bieżące)
+- **Currency opening balances**: `debit_amount / credit_amount` bez przeliczania (tak samo jak `currencyTotals`)
+
+#### 3. Zaktualizować `totals` useMemo (linia 216)
+```typescript
+const openingBalance = openingBalanceData.plnBalance; // zamiast openingBalanceForYear
+```
+
+#### 4. Zaktualizować rendering kart walutowych (linie 660-691)
+Zamiast `— {currency}`, wyświetlić:
+```typescript
+const currencyOpeningBalance = openingBalanceData.currencyBalances.get(currency) || 0;
+// Saldo początkowe: currencyOpeningBalance
+// Saldo końcowe: currencyOpeningBalance + data.debit - data.credit
+```
+
+### Pliki do zmiany
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/AccountSearch/AccountSearchPage.tsx` | Rozszerzyć query opening balance o walutę/kurs, wyliczyć saldo per waluta, wyświetlić w kartach walutowych |
+
