@@ -237,7 +237,7 @@ const AccountSearchPage = () => {
       }
     });
     
-    const openingBalance = openingBalanceForYear;
+    const openingBalance = openingBalanceData.plnBalance;
     const closingBalance = openingBalance + debitTotal - creditTotal;
     
     return {
