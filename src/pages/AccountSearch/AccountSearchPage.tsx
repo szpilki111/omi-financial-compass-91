@@ -131,39 +131,63 @@ const AccountSearchPage = () => {
   });
 
   // Fetch opening balance for the year (all transactions BEFORE the selected year) - including analytical sub-accounts
-  const { data: openingBalanceForYear = 0 } = useQuery({
+  const { data: openingBalanceData = { plnBalance: 0, currencyBalances: new Map<string, number>() } } = useQuery({
     queryKey: ['account-opening-balance', selectedAccount?.id, selectedYear, relatedAccountIds],
     queryFn: async () => {
-      if (!selectedAccount || relatedAccountIds.length === 0) return 0;
+      if (!selectedAccount || relatedAccountIds.length === 0) return { plnBalance: 0, currencyBalances: new Map<string, number>() };
       const endOfPrevYear = `${selectedYear - 1}-12-31`;
       
-      // Buduj warunek OR dla wszystkich powiązanych kont
       const orConditions = relatedAccountIds
         .flatMap(id => [`debit_account_id.eq.${id}`, `credit_account_id.eq.${id}`])
         .join(',');
       
       const { data, error } = await supabase
         .from('transactions')
-        .select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount')
+        .select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount, currency, exchange_rate, document:documents(currency, exchange_rate)')
         .or(orConditions)
         .lte('date', endOfPrevYear);
       
       if (error) throw error;
       
-      // Tworzymy Set dla szybkiego sprawdzania
       const relatedAccountIdsSet = new Set(relatedAccountIds);
       
-      let balance = 0;
+      let plnBalance = 0;
+      const currencyBalances = new Map<string, number>();
+      
       data?.forEach(tx => {
+        const doc = Array.isArray(tx.document) ? tx.document[0] : tx.document;
+        const exchangeRate = tx.exchange_rate || doc?.exchange_rate || 1;
+        
+        // Determine currency
+        const docCurrency = doc?.currency;
+        const txCurrency = tx.currency;
+        const currency = (docCurrency && docCurrency !== 'PLN') ? docCurrency 
+                        : (txCurrency && txCurrency !== 'PLN') ? txCurrency 
+                        : 'PLN';
+        
+        // PLN balance (always converted)
         if (relatedAccountIdsSet.has(tx.debit_account_id)) {
-          balance += tx.debit_amount ?? tx.amount ?? 0;
+          const amount = tx.debit_amount ?? tx.amount ?? 0;
+          plnBalance += amount * exchangeRate;
         }
         if (relatedAccountIdsSet.has(tx.credit_account_id)) {
-          balance -= tx.credit_amount ?? tx.amount ?? 0;
+          const amount = tx.credit_amount ?? tx.amount ?? 0;
+          plnBalance -= amount * exchangeRate;
+        }
+        
+        // Currency-specific balance (raw amounts, no conversion)
+        if (currency !== 'PLN') {
+          if (!currencyBalances.has(currency)) currencyBalances.set(currency, 0);
+          if (relatedAccountIdsSet.has(tx.debit_account_id)) {
+            currencyBalances.set(currency, currencyBalances.get(currency)! + (tx.debit_amount ?? tx.amount ?? 0));
+          }
+          if (relatedAccountIdsSet.has(tx.credit_account_id)) {
+            currencyBalances.set(currency, currencyBalances.get(currency)! - (tx.credit_amount ?? tx.amount ?? 0));
+          }
         }
       });
       
-      return balance;
+      return { plnBalance, currencyBalances };
     },
     enabled: !!selectedAccount && relatedAccountIds.length > 0
   });
