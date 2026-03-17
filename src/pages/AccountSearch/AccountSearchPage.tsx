@@ -723,7 +723,7 @@ const AccountSearchPage = () => {
                   setSelectedMonth(month);
                   setShowTurnover(false);
                 }}
-                openingBalanceForYear={openingBalanceForYear}
+                openingBalanceForYear={openingBalanceData.plnBalance}
               />
             ) : (
               <TransactionsList 
