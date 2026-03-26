@@ -85,7 +85,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId],
+    queryKey: ['documents', currentPage, selectedLocationId, searchTerm],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -102,6 +102,12 @@ const DocumentsPage = () => {
       // Filter by location if selected
       if (isAdminOrProvincial && selectedLocationId !== 'all') {
         query = query.eq('location_id', selectedLocationId);
+      }
+
+      // Server-side search filter
+      if (searchTerm.trim()) {
+        const s = `%${searchTerm.trim()}%`;
+        query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
       }
 
       const { data, error, count } = await query.range(from, to);
@@ -161,14 +167,7 @@ const DocumentsPage = () => {
   const totalCount = documentsResult?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Filter documents based on search term only (location filter is now server-side)
-  const filteredDocuments = useMemo(() => {
-    if (!documents) return [];
-    if (!searchTerm.trim()) return documents;
-
-    const search = searchTerm.toLowerCase();
-    return documents.filter(doc => doc.document_number.toLowerCase().includes(search) || doc.document_name.toLowerCase().includes(search) || doc.locations?.name?.toLowerCase().includes(search) || format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search));
-  }, [documents, searchTerm]);
+  const filteredDocuments = documents;
   const handleDocumentCreated = () => {
     refetch();
     setIsDialogOpen(false);
