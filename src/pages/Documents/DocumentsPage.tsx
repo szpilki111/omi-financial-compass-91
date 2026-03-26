@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -85,7 +85,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId],
+    queryKey: ['documents', currentPage, selectedLocationId, searchTerm],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -102,6 +102,12 @@ const DocumentsPage = () => {
       // Filter by location if selected
       if (isAdminOrProvincial && selectedLocationId !== 'all') {
         query = query.eq('location_id', selectedLocationId);
+      }
+
+      // Server-side search filter
+      if (searchTerm.trim()) {
+        const s = `%${searchTerm.trim()}%`;
+        query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
       }
 
       const { data, error, count } = await query.range(from, to);
@@ -161,14 +167,7 @@ const DocumentsPage = () => {
   const totalCount = documentsResult?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Filter documents based on search term only (location filter is now server-side)
-  const filteredDocuments = useMemo(() => {
-    if (!documents) return [];
-    if (!searchTerm.trim()) return documents;
-
-    const search = searchTerm.toLowerCase();
-    return documents.filter(doc => doc.document_number.toLowerCase().includes(search) || doc.document_name.toLowerCase().includes(search) || doc.locations?.name?.toLowerCase().includes(search) || format(new Date(doc.document_date), 'dd.MM.yyyy').includes(search));
-  }, [documents, searchTerm]);
+  const filteredDocuments = documents;
   const handleDocumentCreated = () => {
     refetch();
     setIsDialogOpen(false);
@@ -518,7 +517,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
             </div>}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input placeholder="Szukaj po numerze, nazwie, placówce lub dacie..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
+            <Input placeholder="Szukaj po numerze lub nazwie..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-11" />
           </div>
         </div>
 
