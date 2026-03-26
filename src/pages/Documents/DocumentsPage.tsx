@@ -517,7 +517,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
             </div>}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input placeholder="Szukaj po numerze, nazwie, placówce lub dacie..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
+            <Input placeholder="Szukaj po numerze lub nazwie..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-11" />
           </div>
         </div>
 
