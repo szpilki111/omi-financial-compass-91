@@ -1,25 +1,37 @@
 
 
-## Plan: Wygenerowanie dokumentu Markdown z pełnym opisem aplikacji dla portfolio
+## Problem: Wyszukiwanie dokumentów działa tylko na bieżącej stronie
 
-### Co zrobię
-Stworzę plik Markdown w `/mnt/documents/` zawierający:
-- Pełny opis aplikacji (cel, klient, problem)
-- Wszystkie moduły i funkcjonalności (12+ modułów)
-- Stos technologiczny
-- Kolorystykę i design system (kolory HSL, gradienty, paleta OMI)
-- Role użytkowników i system uprawnień
-- Korzyści biznesowe dla klienta
-- Wskazówki wizualne dla AI budującego portfolio
+Wyszukiwarka (`searchTerm`) filtruje dokumenty **po stronie klienta** (linia 165-171), czyli przeszukuje tylko 50 dokumentów załadowanych na aktualnej stronie paginacji. Dokumenty z kolejnych stron nigdy nie są sprawdzane.
 
-### Plik wyjściowy
-`/mnt/documents/portfolio-omi-opis.md`
+## Rozwiązanie
 
-### Źródła danych
-- `INSTRUKTAZ_SYSTEMU.md` (834 linie dokumentacji)
-- `tailwind.config.ts` + `src/index.css` (kolory, design tokens)
-- `src/App.tsx` (routing, moduły)
-- `src/pages/Index.tsx` (landing page, gradienty)
-- `src/context/AuthContext.tsx` (role)
-- Kontekst z memory (budżet, raporty, waluty, baza wiedzy)
+Przenieść filtrowanie po `searchTerm` na stronę serwera (Supabase query), tak aby paginacja dotyczyła już przefiltrowanych wyników.
+
+### Plik: `src/pages/Documents/DocumentsPage.tsx`
+
+**1. Dodać `searchTerm` do `queryKey` (linia 88)**
+```typescript
+queryKey: ['documents', currentPage, selectedLocationId, searchTerm],
+```
+
+**2. Dodać filtry do Supabase query (po linii 105)**
+Jeśli `searchTerm` jest niepusty, dodać `.or()` z filtrami `ilike` na kolumnach `document_number`, `document_name`:
+```typescript
+if (searchTerm.trim()) {
+  const s = `%${searchTerm.trim()}%`;
+  query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
+}
+```
+
+**3. Resetować stronę przy zmianie wyszukiwania**
+Dodać `useEffect` lub zmienić handler `setSearchTerm`, aby przy każdej zmianie frazy ustawiać `setCurrentPage(1)`.
+
+**4. Usunąć filtrowanie client-side**
+Zastąpić `filteredDocuments` bezpośrednim użyciem `documents` (usunąć `useMemo` z liniami 165-171), ponieważ filtrowanie odbywa się już na serwerze.
+
+### Efekt
+- Wyszukiwanie przeszuka **wszystkie** dokumenty, nie tylko bieżącą stronę
+- Paginacja będzie działać poprawnie z wynikami wyszukiwania
+- Wydajność: mniej danych pobieranych z serwera przy aktywnym wyszukiwaniu
 
