@@ -17,7 +17,7 @@ import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 
 interface Account {
@@ -529,7 +529,7 @@ const AccountSearchPage = () => {
     ];
     // Ustawienia drukowania: landscape, dopasowanie do 1 strony, małe marginesy
     ws['!margins'] = { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
-    ws['!print'] = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    ws['!pageSetup'] = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
     
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Obroty');
