@@ -479,43 +479,62 @@ const AccountSearchPage = () => {
     if (!selectedAccount || !transactions) return;
     const wsData: (string | number | undefined)[][] = [];
 
+    const periodLabel = selectedMonth 
+      ? `Miesiąc: ${String(selectedMonth).padStart(2, '0')}/${selectedYear}` 
+      : `Rok: ${selectedYear}`;
+
     wsData.push([`Obroty konta: ${selectedAccount.number} - ${selectedAccount.name}`]);
-    wsData.push([`Rok: ${selectedYear}`]);
+    wsData.push([periodLabel]);
     wsData.push([]);
 
-    wsData.push(['Data', 'Nr dokumentu', 'Opis', 'Strona Wn', 'Strona Ma', 'Saldo bieżące']);
+    wsData.push(['Data', 'Nr dokumentu', 'Opis', 'Wn (PLN)', 'Ma (PLN)', 'Saldo bieżące']);
 
+    // Użyj filteredTransactions (uwzględnia wybrany miesiąc)
+    const dataToExport = selectedMonth !== null ? filteredTransactions : transactions;
     let runningBalance = 0;
-    const sortedTransactions = [...transactions].sort((a, b) => 
+    const sortedTransactions = [...dataToExport].sort((a, b) => 
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     const relatedSet = new Set(relatedAccountIds);
+    
+    let totalDebit = 0;
+    let totalCredit = 0;
+    
     sortedTransactions.forEach(t => {
       const isDebit = relatedSet.has(t.debit_account_id);
       const isCredit = relatedSet.has(t.credit_account_id);
-      const debitAmount = isDebit ? t.debit_amount ?? t.amount ?? 0 : 0;
-      const creditAmount = isCredit ? t.credit_amount ?? t.amount ?? 0 : 0;
+      // Przelicz na PLN przez kurs wymiany
+      const exchangeRate = t.exchange_rate || t.document?.exchange_rate || 1;
+      const debitAmount = isDebit ? (t.debit_amount ?? t.amount ?? 0) * exchangeRate : 0;
+      const creditAmount = isCredit ? (t.credit_amount ?? t.amount ?? 0) * exchangeRate : 0;
       runningBalance += debitAmount - creditAmount;
+      totalDebit += debitAmount;
+      totalCredit += creditAmount;
       wsData.push([
         format(parseISO(t.date), 'dd.MM.yyyy'),
         t.document_number || '-',
         t.description || '-',
-        debitAmount || '',
-        creditAmount || '',
-        runningBalance
+        debitAmount ? Math.round(debitAmount * 100) / 100 : '',
+        creditAmount ? Math.round(creditAmount * 100) / 100 : '',
+        Math.round(runningBalance * 100) / 100
       ]);
     });
 
     wsData.push([]);
-    wsData.push(['', '', 'RAZEM:', totals.debit, totals.credit, totals.balance]);
+    wsData.push(['', '', 'RAZEM:', Math.round(totalDebit * 100) / 100, Math.round(totalCredit * 100) / 100, Math.round(runningBalance * 100) / 100]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     ws['!cols'] = [
-      { wch: 12 }, { wch: 20 }, { wch: 50 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+      { wch: 12 }, { wch: 18 }, { wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
     ];
+    // Ustawienia drukowania: landscape, dopasowanie do 1 strony, małe marginesy
+    ws['!margins'] = { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
+    ws['!print'] = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Obroty');
-    const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}_${selectedYear}.xlsx`;
+    const monthSuffix = selectedMonth ? `_${String(selectedMonth).padStart(2, '0')}` : '';
+    const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}${monthSuffix}_${selectedYear}.xlsx`;
     XLSX.writeFile(wb, fileName);
     toast({
       title: 'Eksport zakończony',
