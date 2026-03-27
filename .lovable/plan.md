@@ -1,44 +1,48 @@
 
 
-## Plan: Eksport Excel z wyszukiwarki kont — filtrowanie po miesiącu, kwoty w PLN, mieści się na 1 stronie
+## Problem: Orientacja pozioma nie działa w eksporcie Excel
 
-### Problem
-1. Excel eksportuje **wszystkie miesiące** zamiast tylko wybranego miesiąca
-2. Kwoty w Excelu są w **walucie obcej** zamiast w PLN
-3. Wydruk nie mieści się na jednej stronie A4
+### Przyczyna
+Biblioteka `xlsx-js-style` (i bazowy SheetJS) **nie zapisuje** właściwości `!pageSetup` do pliku XLSX — jest to funkcja dostępna wyłącznie w wersji komercyjnej (Pro). Ustawienie `ws['!pageSetup'] = { orientation: 'landscape' }` jest po prostu ignorowane podczas zapisu.
 
 ### Rozwiązanie
+Użyć **JSZip** (już dostępny jako zależność SheetJS) do ręcznej modyfikacji XML wewnątrz pliku XLSX po jego wygenerowaniu. Plik XLSX to archiwum ZIP — wystarczy:
 
-**Plik: `src/pages/AccountSearch/AccountSearchPage.tsx`** — modyfikacja funkcji `handleExportToExcel` (linie 478-524)
+1. Wygenerować plik jako `ArrayBuffer` zamiast zapisywać go od razu (`XLSX.write(wb, { type: 'array' })`)
+2. Otworzyć go przez JSZip
+3. W pliku `xl/worksheets/sheet1.xml` wstrzyknąć tag `<pageSetup>` z `orientation="landscape"`, `fitToWidth="1"`, `fitToHeight="0"`
+4. Dodać `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` na początku XML
+5. Zapisać zmodyfikowany ZIP i pobrać jako plik
 
-#### 1. Filtrowanie po wybranym miesiącu
-Zamiast `[...transactions]` użyć `filteredTransactions` (który już uwzględnia `selectedMonth`). Jeśli miesiąc jest wybrany — eksportujemy tylko ten miesiąc. Jeśli nie — wszystkie (obecne zachowanie).
+### Plik do zmiany
+`src/pages/AccountSearch/AccountSearchPage.tsx` — fragment `handleExportToExcel` (linie 530-538)
 
-Nagłówek zmieniony na:
-```
-selectedMonth ? `Miesiąc: ${selectedMonth}/${selectedYear}` : `Rok: ${selectedYear}`
-```
-
-Nazwa pliku uwzględni miesiąc: `obroty_101-1_03-2026.xlsx` zamiast `obroty_101-1_2026.xlsx`.
-
-#### 2. Kwoty w PLN zamiast w walucie obcej
-Obecny kod używa `debit_amount` / `credit_amount` (waluta oryginalna). Zmienię na przeliczanie przez `exchangeRate`:
+### Szczegóły techniczne
+Zamiast:
 ```typescript
-const exchangeRate = t.exchange_rate || t.document?.exchange_rate || 1;
-const debitAmount = isDebit ? (t.debit_amount ?? t.amount ?? 0) * exchangeRate : 0;
-const creditAmount = isCredit ? (t.credit_amount ?? t.amount ?? 0) * exchangeRate : 0;
+ws['!pageSetup'] = { orientation: 'landscape', ... };
+XLSX.writeFile(wb, fileName);
 ```
-To jest ta sama logika co w `totals` useMemo (linia 228-237).
 
-#### 3. Dopasowanie do jednej strony A4
-Użyję `!print` property w XLSX:
-- Orientacja: pozioma (landscape)
-- Dopasowanie do 1 strony (`fitToPage`, `fitToWidth: 1, fitToHeight: 0`)
-- Mniejsze marginesy (0.3 cala)
-- Zamrożenie wiersza nagłówkowego
+Będzie:
+```typescript
+import JSZip from 'jszip';
 
-### Efekt
-- Użytkownik widzi luty → eksportuje tylko luty
-- Kwoty zawsze w PLN (spójne z widokiem na ekranie)
-- Excel drukuje się na jednej stronie A4
+const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+const zip = await JSZip.loadAsync(wbOut);
+const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+
+// Wstrzyknięcie pageSetup i fitToPage
+const modifiedXml = sheetXml
+  .replace('</worksheet>', '<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0" paperSize="9"/></worksheet>')
+  .replace('<worksheet', '<worksheet')
+  .replace(/<sheetPr[^/]*\/>|<sheetPr>.*?<\/sheetPr>/s, '')
+  .replace('<sheetData', '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetData');
+
+zip.file('xl/worksheets/sheet1.xml', modifiedXml);
+const blob = await zip.generateAsync({ type: 'blob' });
+saveAs(blob, fileName); // z file-saver lub URL.createObjectURL
+```
+
+Funkcja `handleExportToExcel` stanie się `async`. Trzeba dodać `jszip` do dependencies (sprawdzę czy już jest jako transitive dep od xlsx).
 
