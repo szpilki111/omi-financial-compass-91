@@ -18,6 +18,8 @@ import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
 import XLSX from 'xlsx-js-style';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { useToast } from '@/hooks/use-toast';
 
 interface Account {
@@ -475,7 +477,7 @@ const AccountSearchPage = () => {
   };
 
   // Eksport do Excela
-  const handleExportToExcel = () => {
+  const handleExportToExcel = async () => {
     if (!selectedAccount || !transactions) return;
     const wsData: (string | number | undefined)[][] = [];
 
@@ -489,7 +491,6 @@ const AccountSearchPage = () => {
 
     wsData.push(['Data', 'Nr dokumentu', 'Opis', 'Wn (PLN)', 'Ma (PLN)', 'Saldo bieżące']);
 
-    // Użyj filteredTransactions (uwzględnia wybrany miesiąc)
     const dataToExport = selectedMonth !== null ? filteredTransactions : transactions;
     let runningBalance = 0;
     const sortedTransactions = [...dataToExport].sort((a, b) => 
@@ -503,7 +504,6 @@ const AccountSearchPage = () => {
     sortedTransactions.forEach(t => {
       const isDebit = relatedSet.has(t.debit_account_id);
       const isCredit = relatedSet.has(t.credit_account_id);
-      // Przelicz na PLN przez kurs wymiany
       const exchangeRate = t.exchange_rate || t.document?.exchange_rate || 1;
       const debitAmount = isDebit ? (t.debit_amount ?? t.amount ?? 0) * exchangeRate : 0;
       const creditAmount = isCredit ? (t.credit_amount ?? t.amount ?? 0) * exchangeRate : 0;
@@ -527,19 +527,59 @@ const AccountSearchPage = () => {
     ws['!cols'] = [
       { wch: 12 }, { wch: 18 }, { wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
     ];
-    // Ustawienia drukowania: landscape, dopasowanie do 1 strony, małe marginesy
     ws['!margins'] = { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
-    ws['!pageSetup'] = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
     
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Obroty');
     const monthSuffix = selectedMonth ? `_${String(selectedMonth).padStart(2, '0')}` : '';
     const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}${monthSuffix}_${selectedYear}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    toast({
-      title: 'Eksport zakończony',
-      description: `Plik ${fileName} został pobrany`
-    });
+
+    try {
+      // Generuj plik jako ArrayBuffer
+      const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      
+      // Otwórz ZIP i zmodyfikuj XML aby dodać orientację landscape
+      const zip = await JSZip.loadAsync(wbOut);
+      const sheetFile = zip.file('xl/worksheets/sheet1.xml');
+      if (sheetFile) {
+        let sheetXml = await sheetFile.async('string');
+        
+        // Usuń istniejące sheetPr jeśli jest
+        sheetXml = sheetXml.replace(/<sheetPr[^/]*\/>|<sheetPr>[\s\S]*?<\/sheetPr>/g, '');
+        
+        // Dodaj sheetPr z fitToPage przed sheetData (lub sheetViews)
+        sheetXml = sheetXml.replace(
+          /(<sheetViews|<sheetData)/,
+          '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>$1'
+        );
+        
+        // Usuń istniejący pageSetup jeśli jest
+        sheetXml = sheetXml.replace(/<pageSetup[^/]*\/>/g, '');
+        
+        // Dodaj pageSetup przed zamknięciem worksheet
+        sheetXml = sheetXml.replace(
+          '</worksheet>',
+          '<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0" paperSize="9"/></worksheet>'
+        );
+        
+        zip.file('xl/worksheets/sheet1.xml', sheetXml);
+      }
+      
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, fileName);
+      
+      toast({
+        title: 'Eksport zakończony',
+        description: `Plik ${fileName} został pobrany`
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: 'Błąd eksportu',
+        description: 'Nie udało się wygenerować pliku Excel',
+        variant: 'destructive'
+      });
+    }
   };
 
   const locationName = user?.locations?.[0] ? 'Lokalizacja użytkownika' : undefined;
