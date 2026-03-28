@@ -475,7 +475,7 @@ const AccountSearchPage = () => {
   };
 
   // Eksport do Excela
-  const handleExportToExcel = async () => {
+  const handleExportToExcel = () => {
     if (!selectedAccount || !transactions) return;
     const wsData: (string | number | undefined)[][] = [];
 
