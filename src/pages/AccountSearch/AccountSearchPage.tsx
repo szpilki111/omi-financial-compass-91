@@ -18,8 +18,6 @@ import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
 import XLSX from 'xlsx-js-style';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
 import { useToast } from '@/hooks/use-toast';
 
 interface Account {
@@ -477,7 +475,7 @@ const AccountSearchPage = () => {
   };
 
   // Eksport do Excela
-  const handleExportToExcel = async () => {
+  const handleExportToExcel = () => {
     if (!selectedAccount || !transactions) return;
     const wsData: (string | number | undefined)[][] = [];
 
@@ -534,52 +532,12 @@ const AccountSearchPage = () => {
     const monthSuffix = selectedMonth ? `_${String(selectedMonth).padStart(2, '0')}` : '';
     const fileName = `obroty_${selectedAccount.number.replace(/\//g, '-')}${monthSuffix}_${selectedYear}.xlsx`;
 
-    try {
-      // Generuj plik jako ArrayBuffer
-      const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      
-      // Otwórz ZIP i zmodyfikuj XML aby dodać orientację landscape
-      const zip = await JSZip.loadAsync(wbOut);
-      const sheetFile = zip.file('xl/worksheets/sheet1.xml');
-      if (sheetFile) {
-        let sheetXml = await sheetFile.async('string');
-        
-        // Usuń istniejące sheetPr jeśli jest
-        sheetXml = sheetXml.replace(/<sheetPr[^/]*\/>|<sheetPr>[\s\S]*?<\/sheetPr>/g, '');
-        
-        // Dodaj sheetPr z fitToPage przed sheetData (lub sheetViews)
-        sheetXml = sheetXml.replace(
-          /(<sheetViews|<sheetData)/,
-          '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>$1'
-        );
-        
-        // Usuń istniejący pageSetup jeśli jest
-        sheetXml = sheetXml.replace(/<pageSetup[^/]*\/>/g, '');
-        
-        // Dodaj pageSetup przed zamknięciem worksheet
-        sheetXml = sheetXml.replace(
-          '</worksheet>',
-          '<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0" paperSize="9"/></worksheet>'
-        );
-        
-        zip.file('xl/worksheets/sheet1.xml', sheetXml);
-      }
-      
-      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      saveAs(blob, fileName);
-      
-      toast({
-        title: 'Eksport zakończony',
-        description: `Plik ${fileName} został pobrany`
-      });
-    } catch (error) {
-      console.error('Export error:', error);
-      toast({
-        title: 'Błąd eksportu',
-        description: 'Nie udało się wygenerować pliku Excel',
-        variant: 'destructive'
-      });
-    }
+    XLSX.writeFile(wb, fileName);
+    
+    toast({
+      title: 'Eksport zakończony',
+      description: `Plik ${fileName} został pobrany`
+    });
   };
 
   const locationName = user?.locations?.[0] ? 'Lokalizacja użytkownika' : undefined;
