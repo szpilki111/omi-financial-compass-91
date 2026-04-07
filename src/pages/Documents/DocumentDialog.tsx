@@ -1141,24 +1141,47 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   };
 
+  // Helper: get account number prefix (first segment before dash)
+  const getAccountPrefix = (accountId: string): string => {
+    const account = accounts?.find((a) => a.id === accountId);
+    if (!account) return '';
+    return account.number.split('-')[0];
+  };
+
+  // Helper: resolve prefix to account ID for current user's accounts
+  const resolveAccountByPrefix = (prefix: string): string | null => {
+    if (!accounts || !prefix) return null;
+    // Find account matching this prefix among user's available accounts
+    const match = accounts.find((a) => a.number.split('-')[0] === prefix);
+    return match?.id || null;
+  };
+
   // Helper: check if a transaction triggers provincial fee
   const shouldCreateProvincialFee = (transaction: Transaction): boolean => {
-    if (!provincialFeeSettings || !provincialFeeAccounts || provincialFeeAccounts.length === 0) return false;
+    if (!provincialFeeSettings || !provincialFeePrefixes || provincialFeePrefixes.length === 0) return false;
     if (provincialFeeSettings.fee_percentage <= 0) return false;
-    if (!provincialFeeSettings.target_debit_account_id || !provincialFeeSettings.target_credit_account_id) return false;
+    if (!provincialFeeSettings.target_debit_account_prefix || !provincialFeeSettings.target_credit_account_prefix) return false;
+    
+    const debitPrefix = getAccountPrefix(transaction.debit_account_id);
+    const creditPrefix = getAccountPrefix(transaction.credit_account_id);
+    
     return (
-      provincialFeeAccounts.includes(transaction.debit_account_id) ||
-      provincialFeeAccounts.includes(transaction.credit_account_id)
+      provincialFeePrefixes.includes(debitPrefix) ||
+      provincialFeePrefixes.includes(creditPrefix)
     );
   };
 
   const createProvincialFeeTransaction = (baseTransaction: Transaction, baseIndex: number): Transaction => {
     const amount = Math.max(baseTransaction.debit_amount || 0, baseTransaction.credit_amount || 0);
     const feeAmount = Math.round(amount * (provincialFeeSettings!.fee_percentage / 100) * 100) / 100;
+    
+    const debitAccountId = resolveAccountByPrefix(provincialFeeSettings!.target_debit_account_prefix!) || '';
+    const creditAccountId = resolveAccountByPrefix(provincialFeeSettings!.target_credit_account_prefix!) || '';
+    
     return {
       description: "procent na prowincję",
-      debit_account_id: provincialFeeSettings!.target_debit_account_id!,
-      credit_account_id: provincialFeeSettings!.target_credit_account_id!,
+      debit_account_id: debitAccountId,
+      credit_account_id: creditAccountId,
       debit_amount: feeAmount,
       credit_amount: feeAmount,
       amount: feeAmount,
