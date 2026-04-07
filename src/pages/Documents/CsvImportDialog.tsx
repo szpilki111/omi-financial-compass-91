@@ -177,6 +177,15 @@ const parseAmount = (amountStr: string): number => {
 };
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file || !user?.location || !documentDate) {
       toast({
         title: "Błąd",
