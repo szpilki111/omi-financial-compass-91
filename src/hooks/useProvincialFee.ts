@@ -207,6 +207,7 @@ export const useProvincialFee = () => {
     settings,
     triggerPrefixes,
     isConfigured,
+    isReady,
     getAccountPrefix,
     getAccountPrefixFromNumber,
     resolveAccountByPrefix,
@@ -214,5 +215,7 @@ export const useProvincialFee = () => {
     shouldCreateProvincialFeeByIds,
     createProvincialFeeTransaction,
     generateProvincialFeesForImport,
+  };
+};
   };
 };
