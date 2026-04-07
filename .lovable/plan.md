@@ -2,42 +2,39 @@
 
 ## Problem
 
-Logika automatycznego generowania operacji "procent na prowincję" istnieje tylko w `DocumentDialog.tsx`. Importy (CSV, MT940, Excel, KPIR) omijają tę logikę — transakcje trafiają bezpośrednio do bazy bez sprawdzania kont prowincjalnych.
+Funkcja wykrywania kont prowincjalnych (`shouldCreateProvincialFee`) ma poprawny warunek logiczny (sprawdza Wn OR Ma), ale zawodzi przez **race condition** — dane (`accounts`, `triggerPrefixes`, `settings`) mogą nie być załadowane w momencie wywołania, co powoduje ciche `return false`.
 
 ## Rozwiązanie
 
-Wydzielić logikę provincial fee do wspólnego hooka/utilsa i zastosować go we wszystkich importerach.
+### 1. Hook `useProvincialFee.ts` — dodanie `isReady`
 
-### 1. Nowy hook: `src/hooks/useProvincialFee.ts`
+- Nowa flaga: `isReady = Boolean(accounts?.length > 0 && settings && triggerPrefixes)`
+- Eksportować `isReady` z hooka
+- `console.warn` gdy `getAccountPrefix` nie znajduje konta (diagnostyka)
 
-Wydzielenie z `DocumentDialog.tsx` logiki:
-- Pobieranie `provincial_fee_settings` i `provincial_fee_accounts`
-- Funkcja `generateProvincialFeeTransaction(baseTransaction)` — sprawdza czy konto Wn/Ma pasuje do prefiksu wyzwalającego, jeśli tak — zwraca dodatkową transakcję z wyliczoną kwotą
-- Funkcja `resolveAccountByPrefix(prefix, accounts)` — rozwiązywanie prefiksu na UUID konta
+### 2. `DocumentDialog.tsx` — guard na `isReady`
 
-### 2. Modyfikacja importerów
+- Przed wywołaniem `shouldCreateProvincialFee` sprawdzać `isReady`
+- Jeśli `!isReady` i konfiguracja istnieje — nie blokować UI, ale odłożyć sprawdzenie do momentu gdy dane będą gotowe (useEffect)
 
-W każdym importerze, po przygotowaniu listy transakcji do importu, przed `supabase.insert()`:
-- Iteracja po transakcjach
-- Dla każdej: sprawdzenie czy konto Wn lub Ma pasuje do prefiksu prowincjalnego
-- Jeśli tak: wygenerowanie dodatkowej transakcji i dodanie jej do listy
-- Import obu transakcji razem (bazowa + prowincjalna)
+### 3. Importery — blokada gdy dane nie gotowe
 
-Pliki do modyfikacji:
-- `src/pages/Documents/CsvImportDialog.tsx`
-- `src/pages/Documents/Mt940ImportDialog.tsx`
-- `src/pages/Documents/ExcelFormImportDialog.tsx`
-- `src/pages/KPIR/KpirImportDialog.tsx`
+W każdym importerze (`CsvImportDialog`, `Mt940ImportDialog`, `ExcelFormImportDialog`, `KpirImportDialog`):
+- Użyć `isReady` z hooka
+- Jeśli `isConfigured && !isReady` — wyświetlić ostrzeżenie i zablokować przycisk importu
+- Jeśli `!isConfigured` — import bez zmian (brak konfiguracji = brak opłat)
 
-### 3. Refaktor DocumentDialog.tsx
+### Efekt końcowy
 
-Zamiana inline logiki na użycie nowego hooka `useProvincialFee`, aby uniknąć duplikacji kodu.
-
-### Pliki do utworzenia
-- `src/hooks/useProvincialFee.ts`
+Po wdrożeniu, auto-operacja "procent na prowincję" będzie tworzona gdy konto wyzwalające jest:
+- Po stronie **Wn** (debit) — tak
+- Po stronie **Ma** (credit) — tak
+- Po **obu stronach** — tak
+- Przy **imporcie plików** (CSV, MT940, Excel, KPIR) — tak
 
 ### Pliki do modyfikacji
-- `src/pages/Documents/DocumentDialog.tsx` (refaktor na hook)
+- `src/hooks/useProvincialFee.ts`
+- `src/pages/Documents/DocumentDialog.tsx`
 - `src/pages/Documents/CsvImportDialog.tsx`
 - `src/pages/Documents/Mt940ImportDialog.tsx`
 - `src/pages/Documents/ExcelFormImportDialog.tsx`
