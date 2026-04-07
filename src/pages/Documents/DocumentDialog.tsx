@@ -1197,9 +1197,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       );
 
       // If updating a base transaction that has a linked provincial fee, recalculate fee
-      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && settings) {
         const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
-        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        const feeAmount = Math.round(amount * (settings.fee_percentage / 100) * 100) / 100;
         newList[index + 1] = {
           ...newList[index + 1],
           debit_amount: feeAmount,
@@ -1222,9 +1222,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       const newList = prev.map((t, i) => (i === index ? updatedTransaction : t));
 
       // Recalculate linked provincial fee
-      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && settings) {
         const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
-        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        const feeAmount = Math.round(amount * (settings.fee_percentage / 100) * 100) / 100;
         newList[index + 1] = {
           ...newList[index + 1],
           debit_amount: feeAmount,
