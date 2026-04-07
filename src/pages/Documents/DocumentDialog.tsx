@@ -1141,6 +1141,34 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   };
 
+  // Helper: check if a transaction triggers provincial fee
+  const shouldCreateProvincialFee = (transaction: Transaction): boolean => {
+    if (!provincialFeeSettings || !provincialFeeAccounts || provincialFeeAccounts.length === 0) return false;
+    if (provincialFeeSettings.fee_percentage <= 0) return false;
+    if (!provincialFeeSettings.target_debit_account_id || !provincialFeeSettings.target_credit_account_id) return false;
+    return (
+      provincialFeeAccounts.includes(transaction.debit_account_id) ||
+      provincialFeeAccounts.includes(transaction.credit_account_id)
+    );
+  };
+
+  const createProvincialFeeTransaction = (baseTransaction: Transaction, baseIndex: number): Transaction => {
+    const amount = Math.max(baseTransaction.debit_amount || 0, baseTransaction.credit_amount || 0);
+    const feeAmount = Math.round(amount * (provincialFeeSettings!.fee_percentage / 100) * 100) / 100;
+    return {
+      description: "procent na prowincję",
+      debit_account_id: provincialFeeSettings!.target_debit_account_id!,
+      credit_account_id: provincialFeeSettings!.target_credit_account_id!,
+      debit_amount: feeAmount,
+      credit_amount: feeAmount,
+      amount: feeAmount,
+      currency: baseTransaction.currency,
+      is_provincial_fee: true,
+      linked_provincial_fee_index: baseIndex,
+      display_order: baseIndex + 2,
+    };
+  };
+
   const addTransaction = async (transaction: Transaction) => {
     const currency = form.getValues("currency");
     const transactionWithCurrency = {
@@ -1148,8 +1176,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       currency,
       display_order: transactions.length + 1,
     };
-    setTransactions((prev) => [...prev, transactionWithCurrency]);
-    // Clear validation errors when a new transaction is added
+
+    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+      const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, transactions.length);
+      setTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
+    } else {
+      setTransactions((prev) => [...prev, transactionWithCurrency]);
+    }
     setValidationErrors([]);
   };
 
@@ -1160,35 +1193,67 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       currency,
       display_order: parallelTransactions.length + 1,
     };
-    setParallelTransactions((prev) => [...prev, transactionWithCurrency]);
-    // Clear validation errors when a new transaction is added
+
+    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+      const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, parallelTransactions.length);
+      setParallelTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
+    } else {
+      setParallelTransactions((prev) => [...prev, transactionWithCurrency]);
+    }
     setValidationErrors([]);
   };
 
   const removeTransaction = (index: number) => {
-    setTransactions((prev) => prev.filter((_, i) => i !== index));
-    // Clear validation errors when a transaction is removed
+    setTransactions((prev) => {
+      const tx = prev[index];
+      // If removing a base transaction, also remove its linked provincial fee (next item)
+      if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
+        return prev.filter((_, i) => i !== index && i !== index + 1);
+      }
+      // Don't allow removing provincial fee transactions directly
+      if (tx.is_provincial_fee) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
     setValidationErrors([]);
   };
 
   const removeParallelTransaction = (index: number) => {
-    setParallelTransactions((prev) => prev.filter((_, i) => i !== index));
-    // Clear validation errors when a transaction is removed
+    setParallelTransactions((prev) => {
+      const tx = prev[index];
+      if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
+        return prev.filter((_, i) => i !== index && i !== index + 1);
+      }
+      if (tx.is_provincial_fee) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
     setValidationErrors([]);
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
-    setTransactions((prev) =>
-      prev.map((t, i) =>
+    setTransactions((prev) => {
+      const newList = prev.map((t, i) =>
         i === index
           ? {
               ...updatedTransaction,
-              display_order: t.display_order, // ← ZACHOWAJ STARY display_order
+              display_order: t.display_order,
             }
           : t,
-      ),
-    );
-    // Clear validation errors when a transaction is updated
+      );
+
+      // If updating a base transaction that has a linked provincial fee, recalculate fee
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+        const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
+        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        newList[index + 1] = {
+          ...newList[index + 1],
+          debit_amount: feeAmount,
+          credit_amount: feeAmount,
+          amount: feeAmount,
+        };
+      }
+
+      return newList;
+    });
     setValidationErrors((prev) =>
       prev.filter(
         (e) => !(e.type === "incomplete_transaction" && e.transactionIndex === index && e.isParallel === false),
