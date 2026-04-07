@@ -1262,8 +1262,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   };
 
   const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
-    setParallelTransactions((prev) => prev.map((t, i) => (i === index ? updatedTransaction : t)));
-    // Clear validation errors when a transaction is updated
+    setParallelTransactions((prev) => {
+      const newList = prev.map((t, i) => (i === index ? updatedTransaction : t));
+
+      // Recalculate linked provincial fee
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+        const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
+        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        newList[index + 1] = {
+          ...newList[index + 1],
+          debit_amount: feeAmount,
+          credit_amount: feeAmount,
+          amount: feeAmount,
+        };
+      }
+
+      return newList;
+    });
     setValidationErrors((prev) =>
       prev.filter(
         (e) => !(e.type === "incomplete_transaction" && e.transactionIndex === index && e.isParallel === true),
