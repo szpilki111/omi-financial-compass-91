@@ -73,13 +73,18 @@ const SortableRow: React.FC<SortableRowProps> = ({
 
   return (
     <React.Fragment>
-      <TableRow ref={setNodeRef} style={style} className="hover:bg-omi-100">
+      <TableRow ref={setNodeRef} style={style} className={`hover:bg-omi-100 ${isProvincialFee ? 'bg-amber-50/50' : ''}`}>
         <TableCell className="w-10">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
-            <GripVertical className="h-4 w-4 text-gray-400" />
-          </div>
+          {!isProvincialFee && (
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+              <GripVertical className="h-4 w-4 text-gray-400" />
+            </div>
+          )}
         </TableCell>
-        <TableCell>{transaction.description}</TableCell>
+        <TableCell>
+          {isProvincialFee && <span className="text-xs text-amber-600 font-medium mr-1">🔒</span>}
+          {transaction.description}
+        </TableCell>
         <TableCell>
           <div className="space-y-1">
             <div className="text-sm font-medium">
@@ -109,28 +114,30 @@ const SortableRow: React.FC<SortableRowProps> = ({
         <TableCell>{getCurrencySymbol(documentCurrency)}</TableCell>
         <TableCell>{transaction.settlement_type}</TableCell>
         <TableCell>
-          <div className="flex space-x-1">
-            {onEdit && (
-              <Button variant="ghost" size="icon" onClick={() => onEdit(transaction)} title="Edytuj">
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
-            {onCopy && (
-              <Button variant="ghost" size="icon" onClick={() => onCopy(transaction)} title="Kopiuj">
-                <Copy className="h-4 w-4" />
-              </Button>
-            )}
-            {onSplit && (
-              <Button variant="ghost" size="icon" onClick={() => onSplit(transaction)} title="Podziel">
-                <Split className="h-4 w-4" />
-              </Button>
-            )}
-            {onDelete && isAdmin && (
-              <Button variant="ghost" size="icon" onClick={() => onDelete(transaction.id!)} title="Usuń">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          {!isProvincialFee && (
+            <div className="flex space-x-1">
+              {onEdit && (
+                <Button variant="ghost" size="icon" onClick={() => onEdit(transaction)} title="Edytuj">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onCopy && (
+                <Button variant="ghost" size="icon" onClick={() => onCopy(transaction)} title="Kopiuj">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+              {onSplit && (
+                <Button variant="ghost" size="icon" onClick={() => onSplit(transaction)} title="Podziel">
+                  <Split className="h-4 w-4" />
+                </Button>
+              )}
+              {onDelete && isAdmin && (
+                <Button variant="ghost" size="icon" onClick={() => onDelete(transaction.id!)} title="Usuń">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </TableCell>
       </TableRow>
       {subs.map((sub) => (
