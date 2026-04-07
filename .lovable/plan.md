@@ -1,86 +1,45 @@
 
 
-## Funkcjonalność: Automatyczne tworzenie operacji "procent na prowincję"
+## Problem
 
-### Opis
+Logika automatycznego generowania operacji "procent na prowincję" istnieje tylko w `DocumentDialog.tsx`. Importy (CSV, MT940, Excel, KPIR) omijają tę logikę — transakcje trafiają bezpośrednio do bazy bez sprawdzania kont prowincjalnych.
 
-Gdy użytkownik tworzy operację zawierającą konto z "listy kont prowincjalnych" (zdefiniowanej w administracji), system automatycznie tworzy dodatkową operację read-only z tytułem "procent na prowincję", z kwotą wyliczoną jako % od kwoty bazowej.
+## Rozwiązanie
 
-### Zakres zmian
+Wydzielić logikę provincial fee do wspólnego hooka/utilsa i zastosować go we wszystkich importerach.
 
-#### 1. Baza danych — nowa tabela `provincial_fee_settings`
+### 1. Nowy hook: `src/hooks/useProvincialFee.ts`
 
-Tabela przechowująca konfigurację: procent i listę kont wyzwalających.
+Wydzielenie z `DocumentDialog.tsx` logiki:
+- Pobieranie `provincial_fee_settings` i `provincial_fee_accounts`
+- Funkcja `generateProvincialFeeTransaction(baseTransaction)` — sprawdza czy konto Wn/Ma pasuje do prefiksu wyzwalającego, jeśli tak — zwraca dodatkową transakcję z wyliczoną kwotą
+- Funkcja `resolveAccountByPrefix(prefix, accounts)` — rozwiązywanie prefiksu na UUID konta
 
-```sql
-CREATE TABLE provincial_fee_settings (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fee_percentage numeric NOT NULL DEFAULT 0,
-  target_debit_account_id uuid REFERENCES accounts(id),
-  target_credit_account_id uuid REFERENCES accounts(id),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
+### 2. Modyfikacja importerów
 
-CREATE TABLE provincial_fee_accounts (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(account_id)
-);
-```
+W każdym importerze, po przygotowaniu listy transakcji do importu, przed `supabase.insert()`:
+- Iteracja po transakcjach
+- Dla każdej: sprawdzenie czy konto Wn lub Ma pasuje do prefiksu prowincjalnego
+- Jeśli tak: wygenerowanie dodatkowej transakcji i dodanie jej do listy
+- Import obu transakcji razem (bazowa + prowincjalna)
 
-RLS: admin/prowincjal — pełny dostęp; reszta — SELECT.
+Pliki do modyfikacji:
+- `src/pages/Documents/CsvImportDialog.tsx`
+- `src/pages/Documents/Mt940ImportDialog.tsx`
+- `src/pages/Documents/ExcelFormImportDialog.tsx`
+- `src/pages/KPIR/KpirImportDialog.tsx`
 
-#### 2. Administracja — nowa zakładka "Procent prowincjalny"
+### 3. Refaktor DocumentDialog.tsx
 
-Nowy komponent `ProvincialFeeManagement.tsx` w `src/pages/Administration/`:
-- Pole do ustawienia % (np. 10%)
-- Selektor konta docelowego Wn i Ma dla automatycznej operacji
-- Lista kont wyzwalających (dodawanie/usuwanie kont z listy za pomocą AccountCombobox)
-
-Dodanie zakładki w `AdministrationPage.tsx`.
-
-#### 3. Typ Transaction — nowe pole `is_provincial_fee`
-
-W `src/pages/Documents/types.ts` dodać:
-```typescript
-is_provincial_fee?: boolean;
-```
-
-To pole oznacza operację jako automatycznie wygenerowaną i read-only.
-
-#### 4. Logika auto-generowania w DocumentDialog.tsx
-
-W funkcjach `addTransaction` i `addParallelTransaction`:
-1. Po dodaniu operacji sprawdzić, czy `debit_account_id` lub `credit_account_id` jest na liście kont prowincjalnych (pobieranej z `provincial_fee_accounts`)
-2. Jeśli tak — automatycznie dodać drugą operację:
-   - `description`: "procent na prowincję"
-   - `debit_account_id` / `credit_account_id`: z `provincial_fee_settings`
-   - kwota: `bazowa_kwota * (fee_percentage / 100)`
-   - `is_provincial_fee: true`
-
-Analogicznie: przy usuwaniu operacji bazowej — usunąć powiązaną operację prowincjalną.
-
-#### 5. UI — read-only dla operacji prowincjalnych
-
-W komponentach renderujących wiersze transakcji (`EditableTransactionRow`, `SortableTransactionRow`):
-- Jeśli `transaction.is_provincial_fee === true` — wszystkie pola disabled/readOnly
-- Specjalne oznaczenie wizualne (np. tło fioletowe/szare, badge "Auto")
-- Brak przycisku usuwania (usuwana razem z operacją bazową)
-
-#### 6. Zapis do bazy
-
-W `onSubmit` — operacje z `is_provincial_fee` zapisywane normalnie jako transakcje (pole nie jest w schemacie DB, więc nie jest wysyłane do Supabase — służy tylko do UI).
+Zamiana inline logiki na użycie nowego hooka `useProvincialFee`, aby uniknąć duplikacji kodu.
 
 ### Pliki do utworzenia
-- `src/pages/Administration/ProvincialFeeManagement.tsx`
+- `src/hooks/useProvincialFee.ts`
 
 ### Pliki do modyfikacji
-- `src/pages/Documents/types.ts` — dodanie `is_provincial_fee`
-- `src/pages/Documents/DocumentDialog.tsx` — logika auto-generowania w `addTransaction`/`addParallelTransaction`, query na konfigurację, read-only rendering
-- `src/pages/Administration/AdministrationPage.tsx` — nowa zakładka
-
-### Migracja SQL
-- Tabele `provincial_fee_settings` i `provincial_fee_accounts` z politykami RLS
+- `src/pages/Documents/DocumentDialog.tsx` (refaktor na hook)
+- `src/pages/Documents/CsvImportDialog.tsx`
+- `src/pages/Documents/Mt940ImportDialog.tsx`
+- `src/pages/Documents/ExcelFormImportDialog.tsx`
+- `src/pages/KPIR/KpirImportDialog.tsx`
 
