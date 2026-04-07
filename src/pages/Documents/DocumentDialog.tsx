@@ -147,6 +147,34 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     enabled: isOpen,
   });
 
+  // Provincial fee settings
+  const { data: provincialFeeSettings } = useQuery({
+    queryKey: ["provincialFeeSettings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("provincial_fee_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen,
+  });
+
+  // Provincial fee trigger accounts
+  const { data: provincialFeeAccounts } = useQuery({
+    queryKey: ["provincialFeeAccounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("provincial_fee_accounts")
+        .select("account_id");
+      if (error) throw error;
+      return data?.map((a: any) => a.account_id) || [];
+    },
+    enabled: isOpen,
+  });
+
   const { data: locations } = useQuery({
     queryKey: ["locations"],
     queryFn: async () => {
@@ -1113,6 +1141,34 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   };
 
+  // Helper: check if a transaction triggers provincial fee
+  const shouldCreateProvincialFee = (transaction: Transaction): boolean => {
+    if (!provincialFeeSettings || !provincialFeeAccounts || provincialFeeAccounts.length === 0) return false;
+    if (provincialFeeSettings.fee_percentage <= 0) return false;
+    if (!provincialFeeSettings.target_debit_account_id || !provincialFeeSettings.target_credit_account_id) return false;
+    return (
+      provincialFeeAccounts.includes(transaction.debit_account_id) ||
+      provincialFeeAccounts.includes(transaction.credit_account_id)
+    );
+  };
+
+  const createProvincialFeeTransaction = (baseTransaction: Transaction, baseIndex: number): Transaction => {
+    const amount = Math.max(baseTransaction.debit_amount || 0, baseTransaction.credit_amount || 0);
+    const feeAmount = Math.round(amount * (provincialFeeSettings!.fee_percentage / 100) * 100) / 100;
+    return {
+      description: "procent na prowincję",
+      debit_account_id: provincialFeeSettings!.target_debit_account_id!,
+      credit_account_id: provincialFeeSettings!.target_credit_account_id!,
+      debit_amount: feeAmount,
+      credit_amount: feeAmount,
+      amount: feeAmount,
+      currency: baseTransaction.currency,
+      is_provincial_fee: true,
+      linked_provincial_fee_index: baseIndex,
+      display_order: baseIndex + 2,
+    };
+  };
+
   const addTransaction = async (transaction: Transaction) => {
     const currency = form.getValues("currency");
     const transactionWithCurrency = {
@@ -1120,8 +1176,13 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       currency,
       display_order: transactions.length + 1,
     };
-    setTransactions((prev) => [...prev, transactionWithCurrency]);
-    // Clear validation errors when a new transaction is added
+
+    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+      const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, transactions.length);
+      setTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
+    } else {
+      setTransactions((prev) => [...prev, transactionWithCurrency]);
+    }
     setValidationErrors([]);
   };
 
@@ -1132,35 +1193,67 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       currency,
       display_order: parallelTransactions.length + 1,
     };
-    setParallelTransactions((prev) => [...prev, transactionWithCurrency]);
-    // Clear validation errors when a new transaction is added
+
+    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+      const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, parallelTransactions.length);
+      setParallelTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
+    } else {
+      setParallelTransactions((prev) => [...prev, transactionWithCurrency]);
+    }
     setValidationErrors([]);
   };
 
   const removeTransaction = (index: number) => {
-    setTransactions((prev) => prev.filter((_, i) => i !== index));
-    // Clear validation errors when a transaction is removed
+    setTransactions((prev) => {
+      const tx = prev[index];
+      // If removing a base transaction, also remove its linked provincial fee (next item)
+      if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
+        return prev.filter((_, i) => i !== index && i !== index + 1);
+      }
+      // Don't allow removing provincial fee transactions directly
+      if (tx.is_provincial_fee) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
     setValidationErrors([]);
   };
 
   const removeParallelTransaction = (index: number) => {
-    setParallelTransactions((prev) => prev.filter((_, i) => i !== index));
-    // Clear validation errors when a transaction is removed
+    setParallelTransactions((prev) => {
+      const tx = prev[index];
+      if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
+        return prev.filter((_, i) => i !== index && i !== index + 1);
+      }
+      if (tx.is_provincial_fee) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
     setValidationErrors([]);
   };
 
   const handleUpdateTransaction = (index: number, updatedTransaction: Transaction) => {
-    setTransactions((prev) =>
-      prev.map((t, i) =>
+    setTransactions((prev) => {
+      const newList = prev.map((t, i) =>
         i === index
           ? {
               ...updatedTransaction,
-              display_order: t.display_order, // ← ZACHOWAJ STARY display_order
+              display_order: t.display_order,
             }
           : t,
-      ),
-    );
-    // Clear validation errors when a transaction is updated
+      );
+
+      // If updating a base transaction that has a linked provincial fee, recalculate fee
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+        const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
+        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        newList[index + 1] = {
+          ...newList[index + 1],
+          debit_amount: feeAmount,
+          credit_amount: feeAmount,
+          amount: feeAmount,
+        };
+      }
+
+      return newList;
+    });
     setValidationErrors((prev) =>
       prev.filter(
         (e) => !(e.type === "incomplete_transaction" && e.transactionIndex === index && e.isParallel === false),
@@ -1169,8 +1262,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   };
 
   const handleUpdateParallelTransaction = (index: number, updatedTransaction: Transaction) => {
-    setParallelTransactions((prev) => prev.map((t, i) => (i === index ? updatedTransaction : t)));
-    // Clear validation errors when a transaction is updated
+    setParallelTransactions((prev) => {
+      const newList = prev.map((t, i) => (i === index ? updatedTransaction : t));
+
+      // Recalculate linked provincial fee
+      if (!updatedTransaction.is_provincial_fee && newList[index + 1]?.is_provincial_fee && provincialFeeSettings) {
+        const amount = Math.max(updatedTransaction.debit_amount || 0, updatedTransaction.credit_amount || 0);
+        const feeAmount = Math.round(amount * (provincialFeeSettings.fee_percentage / 100) * 100) / 100;
+        newList[index + 1] = {
+          ...newList[index + 1],
+          debit_amount: feeAmount,
+          credit_amount: feeAmount,
+          amount: feeAmount,
+        };
+      }
+
+      return newList;
+    });
     setValidationErrors((prev) =>
       prev.filter(
         (e) => !(e.type === "incomplete_transaction" && e.transactionIndex === index && e.isParallel === true),
@@ -2328,26 +2436,36 @@ const EditableTransactionRow = React.forwardRef<
       return displayValue ? displayValue.toFixed(2) : "";
     };
 
+    const isProvincialFee = transaction.is_provincial_fee === true;
+    const isRowLocked = isEditingBlocked || isProvincialFee;
+
     return (
       <TableRow
         ref={ref}
         style={style}
         className={cn(
-          hasValidationError
-            ? "bg-destructive/10 border-2 border-destructive"
-            : isSelected
-              ? "bg-blue-100 border-l-4 border-l-blue-500"
-              : "hover:bg-gray-50",
+          isProvincialFee
+            ? "bg-accent/40 border-l-4 border-l-primary/50"
+            : hasValidationError
+              ? "bg-destructive/10 border-2 border-destructive"
+              : isSelected
+                ? "bg-accent border-l-4 border-l-primary"
+                : "hover:bg-muted/50",
         )}
       >
         <TableCell>
           <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing">
-            <GripVertical className="h-4 w-4 text-gray-400" />
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
         </TableCell>
-        <TableCell className="text-center font-mono text-sm text-muted-foreground">{orderNumber}</TableCell>
+        <TableCell className="text-center font-mono text-sm text-muted-foreground">
+          {orderNumber}
+          {isProvincialFee && (
+            <span className="block text-[10px] font-semibold text-primary">Auto</span>
+          )}
+        </TableCell>
         <TableCell>
-          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
+          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isRowLocked} />
         </TableCell>
         <TableCell>
           <Textarea
@@ -2356,9 +2474,10 @@ const EditableTransactionRow = React.forwardRef<
             placeholder="Opis operacji..."
             className={cn(
               "min-h-[60px] resize-none",
+              isProvincialFee && "bg-muted cursor-not-allowed",
               missingFields?.description && "border-destructive focus-visible:ring-destructive bg-destructive/5",
             )}
-            disabled={isEditingBlocked}
+            disabled={isRowLocked}
           />
         </TableCell>
         <TableCell className="w-auto">
@@ -2402,7 +2521,7 @@ const EditableTransactionRow = React.forwardRef<
                   missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
                   showInPLN && currency !== "PLN" && "bg-muted",
                 )}
-                disabled={isEditingBlocked || isDebitReadOnly || (showInPLN && currency !== "PLN")}
+                disabled={isRowLocked || isDebitReadOnly || (showInPLN && currency !== "PLN")}
                 readOnly={isDebitReadOnly || (showInPLN && currency !== "PLN")}
               />
               {showInPLN && currency !== "PLN" && formData.debit_amount > 0 && (
@@ -2422,7 +2541,7 @@ const EditableTransactionRow = React.forwardRef<
             onChange={(accountId) => setFormData((prev) => ({ ...prev, debit_account_id: accountId }))}
             locationId={userProfile?.location_id}
             side="debit"
-            disabled={isEditingBlocked || isDebitReadOnly}
+            disabled={isRowLocked || isDebitReadOnly}
             autoOpenOnFocus={true}
             className={cn(
               isDebitReadOnly && "opacity-50",
@@ -2471,7 +2590,7 @@ const EditableTransactionRow = React.forwardRef<
                   missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
                   showInPLN && currency !== "PLN" && "bg-muted",
                 )}
-                disabled={isEditingBlocked || isCreditReadOnly || (showInPLN && currency !== "PLN")}
+                disabled={isRowLocked || isCreditReadOnly || (showInPLN && currency !== "PLN")}
                 readOnly={isCreditReadOnly || (showInPLN && currency !== "PLN")}
               />
               {showInPLN && currency !== "PLN" && formData.credit_amount > 0 && (
@@ -2491,7 +2610,7 @@ const EditableTransactionRow = React.forwardRef<
             onChange={(accountId) => setFormData((prev) => ({ ...prev, credit_account_id: accountId }))}
             locationId={userProfile?.location_id}
             side="credit"
-            disabled={isEditingBlocked || isCreditReadOnly}
+            disabled={isRowLocked || isCreditReadOnly}
             autoOpenOnFocus={true}
             className={cn(
               isCreditReadOnly && "opacity-50",
@@ -2500,43 +2619,47 @@ const EditableTransactionRow = React.forwardRef<
           />
         </TableCell>
         <TableCell>
-          <div className="flex gap-1">
-            {onCopy && (
+          {!isProvincialFee ? (
+            <div className="flex gap-1">
+              {onCopy && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onCopy}
+                  title="Kopiuj"
+                  disabled={isEditingBlocked}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+              {onSplit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onSplit}
+                  title="Rozdziel kwotę"
+                  disabled={isEditingBlocked}
+                >
+                  <Split className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={onCopy}
-                title="Kopiuj"
+                onClick={onDelete}
+                className="text-destructive hover:text-destructive/80"
+                title="Usuń"
                 disabled={isEditingBlocked}
               >
-                <Copy className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               </Button>
-            )}
-            {onSplit && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onSplit}
-                title="Rozdziel kwotę"
-                disabled={isEditingBlocked}
-              >
-                <Split className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onDelete}
-              className="text-red-600 hover:text-red-700"
-              title="Usuń"
-              disabled={isEditingBlocked}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">Auto</span>
+          )}
         </TableCell>
       </TableRow>
     );

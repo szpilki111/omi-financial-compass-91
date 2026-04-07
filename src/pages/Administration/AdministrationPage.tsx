@@ -15,6 +15,7 @@ import LoginEventsManagement from './LoginEventsManagement';
 import ProjectFeaturesManagement from './ProjectFeaturesManagement';
 import RemindersManagement from './RemindersManagement';
 import SecuritySettingsManagement from './SecuritySettingsManagement';
+import ProvincialFeeManagement from './ProvincialFeeManagement';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -86,6 +87,9 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="project-features" className="flex-shrink-0">Postęp projektu</TabsTrigger>
           )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="provincial-fee" className="flex-shrink-0">Procent prowincjalny</TabsTrigger>
+          )}
         </TabsList>
 
           {/* Lazy loading - render only active tab */}
@@ -152,6 +156,12 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'project-features' && (
             <TabsContent value="project-features" className="space-y-4">
               <ProjectFeaturesManagement />
+            </TabsContent>
+          )}
+
+          {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'provincial-fee' && (
+            <TabsContent value="provincial-fee" className="space-y-4">
+              <ProvincialFeeManagement />
             </TabsContent>
           )}
       </Tabs>

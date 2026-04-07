@@ -1078,6 +1078,74 @@ export type Database = {
           },
         ]
       }
+      provincial_fee_accounts: {
+        Row: {
+          account_id: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provincial_fee_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provincial_fee_settings: {
+        Row: {
+          created_at: string | null
+          fee_percentage: number
+          id: string
+          target_credit_account_id: string | null
+          target_debit_account_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fee_percentage?: number
+          id?: string
+          target_credit_account_id?: string | null
+          target_debit_account_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fee_percentage?: number
+          id?: string
+          target_credit_account_id?: string | null
+          target_debit_account_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provincial_fee_settings_target_credit_account_id_fkey"
+            columns: ["target_credit_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provincial_fee_settings_target_debit_account_id_fkey"
+            columns: ["target_debit_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reminder_logs: {
         Row: {
           created_at: string | null

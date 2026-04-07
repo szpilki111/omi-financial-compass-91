@@ -17,6 +17,8 @@ export interface Transaction {
   debitAccountNumber?: string;
   creditAccountNumber?: string;
   display_order?: number;
+  is_provincial_fee?: boolean;
+  linked_provincial_fee_index?: number;
   // Add the missing properties that DocumentTable expects
   debitAccount?: {
     number: string;
