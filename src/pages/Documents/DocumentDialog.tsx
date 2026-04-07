@@ -82,6 +82,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   // Full list of user's accounts (with pagination, no 1000-row limit)
   const { data: filteredAccountsFull } = useFilteredAccounts();
   const {
+    settings: provincialFeeSettings,
     shouldCreateProvincialFee,
     createProvincialFeeTransaction,
   } = useProvincialFee();
