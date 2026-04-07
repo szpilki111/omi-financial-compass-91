@@ -96,7 +96,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId, searchTerm],
+    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
