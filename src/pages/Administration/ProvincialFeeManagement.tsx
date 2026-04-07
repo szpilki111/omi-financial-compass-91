@@ -29,13 +29,28 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
   const { data: accounts } = useQuery({
     queryKey: ['allAccountsForPrefixes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('number, name')
-        .eq('is_active', true)
-        .order('number');
-      if (error) throw error;
-      return data;
+      // Fetch ALL accounts using pagination to bypass 1000-row limit
+      const allAccounts: { number: string; name: string }[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('number, name')
+          .eq('is_active', true)
+          .order('number')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allAccounts.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return allAccounts;
     },
   });
 
@@ -54,12 +69,25 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
       .sort((a, b) => a.prefix.localeCompare(b.prefix));
   }, [accounts]);
 
+  const DISPLAY_LIMIT = 20;
+
   const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return uniquePrefixes;
+    let result = uniquePrefixes;
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = uniquePrefixes.filter(
+        (p) => p.prefix.includes(term) || p.name.toLowerCase().includes(term)
+      );
+    }
+    return result.slice(0, DISPLAY_LIMIT);
+  }, [uniquePrefixes, searchTerm]);
+
+  const totalMatching = useMemo(() => {
+    if (!searchTerm.trim()) return uniquePrefixes.length;
     const term = searchTerm.toLowerCase();
     return uniquePrefixes.filter(
       (p) => p.prefix.includes(term) || p.name.toLowerCase().includes(term)
-    );
+    ).length;
   }, [uniquePrefixes, searchTerm]);
 
   const selectedLabel = uniquePrefixes.find((p) => p.prefix === value);
@@ -109,6 +137,11 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
                   <span className="truncate">{item.name}</span>
                 </CommandItem>
               ))}
+              {totalMatching > DISPLAY_LIMIT && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground text-center border-t">
+                  Wyświetlono {DISPLAY_LIMIT} z {totalMatching} prefiksów. Wpisz więcej znaków aby zawęzić wyniki.
+                </div>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
