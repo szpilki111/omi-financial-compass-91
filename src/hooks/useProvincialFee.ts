@@ -67,7 +67,12 @@ export const useProvincialFee = () => {
   const getAccountPrefix = (accountId: string): string => {
     if (!accountId) return '';
     const account = accounts?.find((a) => a.id === accountId);
-    if (!account) return '';
+    if (!account) {
+      if (accounts && accounts.length > 0) {
+        console.warn(`[ProvincialFee] Account not found for ID: ${accountId}. Accounts loaded: ${accounts.length}`);
+      }
+      return '';
+    }
     return account.number.split('-')[0];
   };
 
