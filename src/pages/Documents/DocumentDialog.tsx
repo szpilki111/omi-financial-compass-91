@@ -147,6 +147,34 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     enabled: isOpen,
   });
 
+  // Provincial fee settings
+  const { data: provincialFeeSettings } = useQuery({
+    queryKey: ["provincialFeeSettings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("provincial_fee_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen,
+  });
+
+  // Provincial fee trigger accounts
+  const { data: provincialFeeAccounts } = useQuery({
+    queryKey: ["provincialFeeAccounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("provincial_fee_accounts")
+        .select("account_id");
+      if (error) throw error;
+      return data?.map((a: any) => a.account_id) || [];
+    },
+    enabled: isOpen,
+  });
+
   const { data: locations } = useQuery({
     queryKey: ["locations"],
     queryFn: async () => {
