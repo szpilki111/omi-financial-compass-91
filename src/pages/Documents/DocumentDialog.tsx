@@ -172,6 +172,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     enabled: !!userProfile?.location_id && !!documentDate && isOpen,
   });
 
+  // Sprawdź czy oryginalny okres dokumentu jest zablokowany raportem
+  const { data: isOriginalPeriodBlocked } = useQuery({
+    queryKey: ["originalPeriodBlocked", document?.id, document?.document_date, userProfile?.location_id],
+    queryFn: async () => {
+      if (!userProfile?.location_id || !document?.document_date) return false;
+      const { data, error } = await supabase.rpc("check_report_editing_blocked", {
+        p_location_id: userProfile.location_id,
+        p_document_date: document.document_date,
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id && !!document?.document_date && isOpen,
+  });
+
+  // Dokument jest w pełni zablokowany gdy jego oryginalny okres ma raport
+  const isFullyLocked = Boolean(document && isOriginalPeriodBlocked);
+
   const handleExportToExcel = () => {
     const formData = form.getValues();
 
@@ -1525,7 +1543,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
             </div>
           </DialogHeader>
 
-          {isEditingBlocked && documentDate && (
+          {isFullyLocked && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Dokument jest zablokowany — raport za okres {document?.document_date ? format(new Date(document.document_date), "MM/yyyy") : ""} został złożony. Edycja nie jest możliwa.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isFullyLocked && isEditingBlocked && documentDate && (
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -1590,7 +1617,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           value={field.value}
                           onChange={field.onChange}
                           placeholder="Wybierz datę"
-                          disabled={(date) => date < new Date("1900-01-01")}
+                          disabled={isFullyLocked ? () => true : (date) => date < new Date("1900-01-01")}
                         />
                       </FormControl>
                       <FormMessage />
@@ -1609,7 +1636,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                             <CurrencySelector
                               value={field.value}
                               onChange={field.onChange}
-                              disabled={isEditingBlocked}
+                              disabled={isFullyLocked || isEditingBlocked}
                             />
                           </FormControl>
                           <FormMessage />
@@ -1622,7 +1649,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           currency={form.watch("currency")}
                           value={exchangeRate}
                           onChange={setExchangeRate}
-                          disabled={isEditingBlocked}
+                          disabled={isFullyLocked || isEditingBlocked}
                         />
                       </div>
                     )}
@@ -1637,7 +1664,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                   <FormItem>
                     <FormLabel>Nazwa dokumentu</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Opisowa nazwa dokumentu" />
+                      <Input {...field} placeholder="Opisowa nazwa dokumentu" readOnly={isFullyLocked} className={isFullyLocked ? "bg-muted cursor-not-allowed" : ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1655,8 +1682,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 >
                   Anuluj
                 </Button>
-                <Button type="submit" disabled={isLoading || (isEditingBlocked && Boolean(documentDate))}>
-                  {isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
+                <Button type="submit" disabled={isLoading || isFullyLocked || (isEditingBlocked && Boolean(documentDate))}>
+                  {isFullyLocked ? "Dokument zablokowany" : isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
                 </Button>
               </div>
             </form>
@@ -1692,7 +1719,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                       variant="outline"
                       onClick={handleCopySelected}
                       className="flex items-center gap-2"
-                      disabled={isEditingBlocked}
+                      disabled={isFullyLocked || isEditingBlocked}
                     >
                       <Copy className="h-4 w-4" />
                       Kopiuj ({selectedTransactions.length})
@@ -1702,7 +1729,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                       variant="outline"
                       onClick={handleParallelPosting}
                       className="flex items-center gap-2"
-                      disabled={isEditingBlocked}
+                      disabled={isFullyLocked || isEditingBlocked}
                     >
                       <BookOpen className="h-4 w-4" />
                       Księgowanie równoległe ({selectedTransactions.length})
@@ -1714,7 +1741,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                   variant="outline"
                   onClick={() => setShowInlineForm(true)}
                   className="flex items-center gap-2"
-                  disabled={isEditingBlocked}
+                  disabled={isFullyLocked || isEditingBlocked}
                 >
                   <Plus className="h-4 w-4" />
                   Dodaj operację
@@ -1738,7 +1765,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           <Checkbox
                             checked={selectedTransactions.length === transactions.length && transactions.length > 0}
                             onCheckedChange={handleSelectAll}
-                            disabled={isEditingBlocked || transactions.length === 0}
+                            disabled={isFullyLocked || isEditingBlocked || transactions.length === 0}
                           />
                         </TableHead>
                         <TableHead className="w-[50%] min-w-[300px]">Opis</TableHead>
@@ -1773,7 +1800,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                               onCopy={() => handleCopyTransaction(transaction, false)}
                               onSplit={() => handleSplitTransaction(index, false)}
                               currency={selectedCurrency}
-                              isEditingBlocked={isEditingBlocked}
+                              isEditingBlocked={isFullyLocked || isEditingBlocked}
                               isSelected={selectedTransactions.includes(index)}
                               onSelect={(checked) => handleSelectTransaction(index, checked)}
                               hasValidationError={!!errorInfo}
@@ -1788,7 +1815,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                         <InlineTransactionRow
                           ref={inlineFormRef}
                           onSave={addTransaction}
-                          isEditingBlocked={isEditingBlocked}
+                          isEditingBlocked={isFullyLocked || isEditingBlocked}
                           currency={selectedCurrency}
                           onHasDataChange={setHasInlineFormData}
                           hasValidationError={validationErrors.some((e) => e.type === "inline_form")}
@@ -1825,7 +1852,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
               variant="outline"
               onClick={() => setShowParallelAccounting(!showParallelAccounting)}
               className="flex items-center gap-2"
-              disabled={isEditingBlocked}
+              disabled={isFullyLocked || isEditingBlocked}
             >
               <BookOpen className="h-4 w-4" />
               {showParallelAccounting ? "Ukryj księgowanie równoległe" : "Pokaż księgowanie równoległe"}
@@ -1858,7 +1885,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                         });
                       }}
                       className="flex items-center gap-2"
-                      disabled={isEditingBlocked}
+                      disabled={isFullyLocked || isEditingBlocked}
                     >
                       <Copy className="h-4 w-4" />
                       Kopiuj ({selectedParallelTransactions.length})
@@ -1869,7 +1896,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                     variant="outline"
                     onClick={() => setShowParallelInlineForm(true)}
                     className="flex items-center gap-2"
-                    disabled={isEditingBlocked}
+                    disabled={isFullyLocked || isEditingBlocked}
                   >
                     <Plus className="h-4 w-4" />
                     Dodaj operację równoległą
@@ -1896,7 +1923,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                                 parallelTransactions.length > 0
                               }
                               onCheckedChange={handleSelectAllParallel}
-                              disabled={isEditingBlocked || parallelTransactions.length === 0}
+                              disabled={isFullyLocked || isEditingBlocked || parallelTransactions.length === 0}
                             />
                           </TableHead>
                           <TableHead className="w-[50%] min-w-[300px]">Opis</TableHead>
@@ -1933,7 +1960,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                                 onCopy={() => handleCopyTransaction(transaction, true)}
                                 onSplit={() => handleSplitTransaction(index, true)}
                                 currency={selectedCurrency}
-                                isEditingBlocked={isEditingBlocked}
+                                isEditingBlocked={isFullyLocked || isEditingBlocked}
                                 isSelected={selectedParallelTransactions.includes(index)}
                                 onSelect={(checked) => handleSelectParallelTransaction(index, checked)}
                                 hasValidationError={!!errorInfo}
@@ -1948,7 +1975,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           <InlineTransactionRow
                             ref={parallelInlineFormRef}
                             onSave={addParallelTransaction}
-                            isEditingBlocked={isEditingBlocked}
+                            isEditingBlocked={isFullyLocked || isEditingBlocked}
                             currency={selectedCurrency}
                             onHasDataChange={setHasParallelInlineFormData}
                             hasValidationError={validationErrors.some((e) => e.type === "parallel_inline_form")}
@@ -2139,7 +2166,7 @@ const SortableTransactionRow: React.FC<{
       onCopy={onCopy}
       onSplit={onSplit}
       currency={currency}
-      isEditingBlocked={isEditingBlocked}
+      isEditingBlocked={isFullyLocked || isEditingBlocked}
       showInPLN={showInPLN}
       exchangeRate={exchangeRate}
       isSelected={isSelected}
@@ -2320,7 +2347,7 @@ const EditableTransactionRow = React.forwardRef<
         </TableCell>
         <TableCell className="text-center font-mono text-sm text-muted-foreground">{orderNumber}</TableCell>
         <TableCell>
-          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
+          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isFullyLocked || isEditingBlocked} />
         </TableCell>
         <TableCell>
           <Textarea
@@ -2331,7 +2358,7 @@ const EditableTransactionRow = React.forwardRef<
               "min-h-[60px] resize-none",
               missingFields?.description && "border-destructive focus-visible:ring-destructive bg-destructive/5",
             )}
-            disabled={isEditingBlocked}
+            disabled={isFullyLocked || isEditingBlocked}
           />
         </TableCell>
         <TableCell className="w-auto">
@@ -2481,7 +2508,7 @@ const EditableTransactionRow = React.forwardRef<
                 size="icon"
                 onClick={onCopy}
                 title="Kopiuj"
-                disabled={isEditingBlocked}
+                disabled={isFullyLocked || isEditingBlocked}
               >
                 <Copy className="h-4 w-4" />
               </Button>
@@ -2493,7 +2520,7 @@ const EditableTransactionRow = React.forwardRef<
                 size="icon"
                 onClick={onSplit}
                 title="Rozdziel kwotę"
-                disabled={isEditingBlocked}
+                disabled={isFullyLocked || isEditingBlocked}
               >
                 <Split className="h-4 w-4" />
               </Button>
@@ -2505,7 +2532,7 @@ const EditableTransactionRow = React.forwardRef<
               onClick={onDelete}
               className="text-red-600 hover:text-red-700"
               title="Usuń"
-              disabled={isEditingBlocked}
+              disabled={isFullyLocked || isEditingBlocked}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
