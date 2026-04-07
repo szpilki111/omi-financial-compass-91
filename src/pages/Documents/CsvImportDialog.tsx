@@ -40,7 +40,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
   const [previewData, setPreviewData] = useState<CsvTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const { data: accounts = [] } = useFilteredAccounts();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
   const [mappings, setMappings] = useState({
     descriptionColumn: '',
     amountColumn: '',

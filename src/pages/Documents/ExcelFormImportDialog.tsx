@@ -63,7 +63,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   const [parseError, setParseError] = useState<string | null>(null);
 
   const { data: accounts = [] } = useFilteredAccounts();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
   const { user } = useAuth();
   const { toast } = useToast();
 
