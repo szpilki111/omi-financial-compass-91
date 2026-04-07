@@ -1,38 +1,42 @@
 
 
-## Problem: Kwoty ujemne nie wyświetlają się w widoku transakcji i eksporcie Excel
+## Analiza zgłoszenia: "Niemożliwość zapisu dokumentu" — dokument z lutego zniknął po zmianie daty na marzec
 
-### Przyczyna
+### Co się stało
 
-W **trzech miejscach** kwoty ujemne są odfiltrowane przez warunki `> 0` lub truthy check:
+Użytkownik **edytował** istniejący dokument "BANK 2026.02" (luty) i zmienił mu datę na 31 marca. System:
+1. Sprawdził `isEditingBlocked` dla **nowej daty** (marzec) — brak raportu → pozwolił zapisać
+2. Zaktualizował dokument **in-place** (UPDATE, nie INSERT) — zmienił datę, numer dokumentu i daty transakcji na marzec
+3. Dokument lutowy **zniknął** — nie został skopiowany, tylko przeniesiony
+4. Teraz użytkownik nie może zmienić daty z powrotem na luty, bo raport za luty istnieje i blokuje edycję
 
-1. **`TransactionsList.tsx`** (linie 244, 256):
-   - `{debitAmount > 0 && ...}` — kwota -900 nie spełnia warunku `> 0`, więc nic się nie wyświetla
-   - `{creditAmount > 0 && ...}` — analogicznie dla strony Ma
+### Przyczyna w kodzie
 
-2. **`AccountSearchPage.tsx` — eksport Excel** (linie 515-516):
-   - `debitAmount ? ... : ''` — wartość `0` jest falsy, ale ujemna kwota (-900) jest truthy, więc tu **akurat działa** dla ujemnych. Ale `0` nie pojawi się nigdy.
-   - Jednak po głębszej analizie: `debitAmount` wynosi 0 gdy `isDebit` jest false, a ujemna kwota jest poprawnie przekazywana. Ten fragment jest OK.
+**`DocumentDialog.tsx`, linia 161-173**: sprawdzenie `isEditingBlocked` używa `documentDate` (aktualnej daty z formularza), a nie oryginalnej daty dokumentu. Gdy użytkownik zmienia datę z lutego na marzec, walidacja sprawdza marzec (wolny) zamiast lutego (zablokowany raportem).
 
-3. **Obliczanie sum w `totals` i `monthlyData`** — te dodają wartości bezwarunkowo (linie 229-237, 304-309), więc sumy są poprawne nawet dla kwot ujemnych.
+**Brakuje dwóch zabezpieczeń:**
+1. Przy edycji istniejącego dokumentu nie sprawdza się, czy **oryginalna data** (luty) jest zablokowana raportem — zmiana daty powinna być zablokowana, jeśli oryginalny okres jest zamknięty raportem
+2. Nie ma sprawdzenia, czy zmiana daty przenosi dokument **z** zablokowanego okresu
 
-### Rozwiązanie
+### Proponowane rozwiązanie
 
-**Plik: `src/pages/AccountSearch/TransactionsList.tsx`**
+**Plik: `src/pages/Documents/DocumentDialog.tsx`**
 
-Zmienić warunki wyświetlania kwot z `> 0` na `!== 0`:
+1. Dodać **drugie sprawdzenie** — czy oryginalna data dokumentu jest zablokowana raportem. Jeśli tak, zablokować zmianę daty na inny miesiąc.
 
-- Linia 244: `{debitAmount > 0 && (` → `{debitAmount !== 0 && (`
-- Linia 256: `{creditAmount > 0 && (` → `{creditAmount !== 0 && (`
+2. W `onSubmit` dodać walidację: jeśli edytujemy dokument i zmieniliśmy miesiąc/rok, sprawdzić czy stary okres jest zablokowany raportem. Jeśli tak — zablokować zapis z komunikatem.
 
-Dodatkowo, dla kwot ujemnych styl powinien się zachować — kwoty ujemne po stronie Wn nadal wyświetlą się na czerwono (`text-destructive`), a po stronie Ma na zielono (`text-green-600`), co jest spójne z obecną konwencją kolorystyczną.
+Konkretnie:
+- Zapamiętać oryginalną datę dokumentu (`document.document_date`) przy otwarciu
+- W `onSubmit` porównać miesiąc/rok nowej daty z oryginalną
+- Jeśli się różnią i oryginalny okres ma raport → zablokować z komunikatem: "Nie można przenieść dokumentu z okresu, za który istnieje raport"
 
-### Weryfikacja pozostałych miejsc
+### Natychmiastowa pomoc dla użytkownika
 
-- **MonthlyTurnoverView.tsx** — wyświetla `formatCurrency(monthData.debit)` bezwarunkowo → OK
-- **financeUtils.ts** — ma warunek `if (rawAmount > 0)` (linie 96, 104) do zliczania przychodów/kosztów. To jest **poprawne** w kontekście raportów finansowych — korekty ujemne powinny zmniejszać sumę przychodu/kosztu, ale ten warunek je pomija. Jednak to osobny temat (korekty w raportach), nie zgłoszony przez użytkownika.
-- **KpirTable.tsx** — wyświetla kwoty bezwarunkowo przez `formatAmount()` → OK
+Administrator musi ręcznie w Supabase zmienić datę dokumentu z powrotem na luty (UPDATE na tabeli `documents` i `transactions`), lub odblokować raport za luty, poprawić datę, i ponownie złożyć raport. Mogę pomóc przygotować zapytanie SQL jeśli potrzebne.
 
 ### Zakres zmian
-Jeden plik, dwie linie — zmiana warunku z `> 0` na `!== 0`.
+- Jeden plik: `src/pages/Documents/DocumentDialog.tsx`
+- Dodanie walidacji w `onSubmit` (~15 linii)
+- Opcjonalnie: komunikat informujący dlaczego zmiana daty jest zablokowana
 
