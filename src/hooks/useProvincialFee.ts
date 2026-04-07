@@ -217,5 +217,3 @@ export const useProvincialFee = () => {
     generateProvincialFeesForImport,
   };
 };
-  };
-};
