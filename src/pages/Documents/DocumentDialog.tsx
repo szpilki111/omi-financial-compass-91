@@ -2436,26 +2436,36 @@ const EditableTransactionRow = React.forwardRef<
       return displayValue ? displayValue.toFixed(2) : "";
     };
 
+    const isProvincialFee = transaction.is_provincial_fee === true;
+    const isRowLocked = isEditingBlocked || isProvincialFee;
+
     return (
       <TableRow
         ref={ref}
         style={style}
         className={cn(
-          hasValidationError
-            ? "bg-destructive/10 border-2 border-destructive"
-            : isSelected
-              ? "bg-blue-100 border-l-4 border-l-blue-500"
-              : "hover:bg-gray-50",
+          isProvincialFee
+            ? "bg-accent/40 border-l-4 border-l-primary/50"
+            : hasValidationError
+              ? "bg-destructive/10 border-2 border-destructive"
+              : isSelected
+                ? "bg-accent border-l-4 border-l-primary"
+                : "hover:bg-muted/50",
         )}
       >
         <TableCell>
           <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing">
-            <GripVertical className="h-4 w-4 text-gray-400" />
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
         </TableCell>
-        <TableCell className="text-center font-mono text-sm text-muted-foreground">{orderNumber}</TableCell>
+        <TableCell className="text-center font-mono text-sm text-muted-foreground">
+          {orderNumber}
+          {isProvincialFee && (
+            <span className="block text-[10px] font-semibold text-primary">Auto</span>
+          )}
+        </TableCell>
         <TableCell>
-          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
+          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isRowLocked} />
         </TableCell>
         <TableCell>
           <Textarea
@@ -2464,9 +2474,10 @@ const EditableTransactionRow = React.forwardRef<
             placeholder="Opis operacji..."
             className={cn(
               "min-h-[60px] resize-none",
+              isProvincialFee && "bg-muted cursor-not-allowed",
               missingFields?.description && "border-destructive focus-visible:ring-destructive bg-destructive/5",
             )}
-            disabled={isEditingBlocked}
+            disabled={isRowLocked}
           />
         </TableCell>
         <TableCell className="w-auto">
