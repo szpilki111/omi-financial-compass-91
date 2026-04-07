@@ -63,6 +63,15 @@ const DocumentsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Fetch locations for filter (only for admin/prowincjal)
   const {
     data: locations
