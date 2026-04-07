@@ -106,16 +106,15 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
       console.log('Raport zaktualizowany pomyślnie');
 
-      // If report is approved, lock all documents for this period
-      if (action === 'approved') {
-        console.log('Blokowanie dokumentów dla okresu:', reportMonth, reportYear, locationId);
-        
-        // Get start and end dates of the report month (timezone-safe)
-        const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
-        const lastDay = new Date(reportYear, reportMonth, 0).getDate();
-        const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      // Get start and end dates of the report month (timezone-safe)
+      const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+      const lastDay = new Date(reportYear, reportMonth, 0).getDate();
+      const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-        // Mark documents as locked by adding validation info
+      if (action === 'approved') {
+        // Lock documents when report is approved
+        console.log('Blokowanie dokumentów dla okresu:', reportMonth, reportYear, locationId);
+
         const { error: lockError } = await supabase
           .from('documents')
           .update({ 
@@ -127,7 +126,6 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
 
         if (lockError) {
           console.error('Błąd blokowania dokumentów:', lockError);
-          // Don't throw - report is already approved, just log the error
           toast({
             title: "Uwaga",
             description: "Raport zatwierdzony, ale nie udało się zablokować dokumentów automatycznie.",
@@ -135,6 +133,24 @@ const ReportApprovalActions: React.FC<ReportApprovalActionsProps> = ({
           });
         } else {
           console.log('Dokumenty zablokowane pomyślnie');
+        }
+      } else if (action === 'to_be_corrected') {
+        // Unlock documents when report is sent back for corrections
+        console.log('Odblokowywanie dokumentów dla okresu:', reportMonth, reportYear, locationId);
+
+        const { error: unlockError } = await supabase
+          .from('documents')
+          .update({ 
+            validation_errors: null
+          })
+          .eq('location_id', locationId)
+          .gte('document_date', startDateStr)
+          .lte('document_date', endDateStr);
+
+        if (unlockError) {
+          console.error('Błąd odblokowywania dokumentów:', unlockError);
+        } else {
+          console.log('Dokumenty odblokowane pomyślnie');
         }
       }
 
