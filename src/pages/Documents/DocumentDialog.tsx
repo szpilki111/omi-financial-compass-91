@@ -44,6 +44,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useFilteredAccounts } from "@/hooks/useFilteredAccounts";
 
 interface DocumentDialogProps {
   isOpen: boolean;
