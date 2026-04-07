@@ -2521,7 +2521,7 @@ const EditableTransactionRow = React.forwardRef<
                   missingFields?.debit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
                   showInPLN && currency !== "PLN" && "bg-muted",
                 )}
-                disabled={isEditingBlocked || isDebitReadOnly || (showInPLN && currency !== "PLN")}
+                disabled={isRowLocked || isDebitReadOnly || (showInPLN && currency !== "PLN")}
                 readOnly={isDebitReadOnly || (showInPLN && currency !== "PLN")}
               />
               {showInPLN && currency !== "PLN" && formData.debit_amount > 0 && (
@@ -2541,7 +2541,7 @@ const EditableTransactionRow = React.forwardRef<
             onChange={(accountId) => setFormData((prev) => ({ ...prev, debit_account_id: accountId }))}
             locationId={userProfile?.location_id}
             side="debit"
-            disabled={isEditingBlocked || isDebitReadOnly}
+            disabled={isRowLocked || isDebitReadOnly}
             autoOpenOnFocus={true}
             className={cn(
               isDebitReadOnly && "opacity-50",
@@ -2590,7 +2590,7 @@ const EditableTransactionRow = React.forwardRef<
                   missingFields?.credit_amount && "border-destructive focus-visible:ring-destructive bg-destructive/5",
                   showInPLN && currency !== "PLN" && "bg-muted",
                 )}
-                disabled={isEditingBlocked || isCreditReadOnly || (showInPLN && currency !== "PLN")}
+                disabled={isRowLocked || isCreditReadOnly || (showInPLN && currency !== "PLN")}
                 readOnly={isCreditReadOnly || (showInPLN && currency !== "PLN")}
               />
               {showInPLN && currency !== "PLN" && formData.credit_amount > 0 && (
@@ -2610,7 +2610,7 @@ const EditableTransactionRow = React.forwardRef<
             onChange={(accountId) => setFormData((prev) => ({ ...prev, credit_account_id: accountId }))}
             locationId={userProfile?.location_id}
             side="credit"
-            disabled={isEditingBlocked || isCreditReadOnly}
+            disabled={isRowLocked || isCreditReadOnly}
             autoOpenOnFocus={true}
             className={cn(
               isCreditReadOnly && "opacity-50",
@@ -2619,43 +2619,47 @@ const EditableTransactionRow = React.forwardRef<
           />
         </TableCell>
         <TableCell>
-          <div className="flex gap-1">
-            {onCopy && (
+          {!isProvincialFee ? (
+            <div className="flex gap-1">
+              {onCopy && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onCopy}
+                  title="Kopiuj"
+                  disabled={isEditingBlocked}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+              {onSplit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onSplit}
+                  title="Rozdziel kwotę"
+                  disabled={isEditingBlocked}
+                >
+                  <Split className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={onCopy}
-                title="Kopiuj"
+                onClick={onDelete}
+                className="text-destructive hover:text-destructive/80"
+                title="Usuń"
                 disabled={isEditingBlocked}
               >
-                <Copy className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               </Button>
-            )}
-            {onSplit && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onSplit}
-                title="Rozdziel kwotę"
-                disabled={isEditingBlocked}
-              >
-                <Split className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onDelete}
-              className="text-red-600 hover:text-red-700"
-              title="Usuń"
-              disabled={isEditingBlocked}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">Auto</span>
+          )}
         </TableCell>
       </TableRow>
     );
