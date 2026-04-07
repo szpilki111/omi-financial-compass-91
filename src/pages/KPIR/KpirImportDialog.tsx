@@ -101,6 +101,15 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
   };
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file || !user?.location) {
       toast({
         title: "Błąd",
