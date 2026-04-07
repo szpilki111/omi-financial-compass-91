@@ -85,6 +85,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     settings: provincialFeeSettings,
     shouldCreateProvincialFee,
     createProvincialFeeTransaction,
+    isReady: provincialFeeReady,
+    isConfigured: provincialFeeConfigured,
   } = useProvincialFee();
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
