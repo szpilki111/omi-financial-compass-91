@@ -32,7 +32,7 @@ export const useProvincialFee = () => {
     },
   });
 
-  const { data: triggerPrefixes } = useQuery({
+  const { data: triggerPrefixes, isLoading: prefixesLoading } = useQuery({
     queryKey: ['provincialFeeAccounts'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -50,6 +50,17 @@ export const useProvincialFee = () => {
     settings.fee_percentage > 0 &&
     settings.target_debit_account_prefix &&
     settings.target_credit_account_prefix
+  );
+
+  // isReady = all data loaded (accounts, settings, triggerPrefixes)
+  const isReady = Boolean(
+    !accountsLoading &&
+    !settingsLoading &&
+    !prefixesLoading &&
+    accounts &&
+    accounts.length > 0 &&
+    settings !== undefined &&
+    triggerPrefixes !== undefined
   );
 
   /** Get the base prefix (first segment before dash) from an account ID */
