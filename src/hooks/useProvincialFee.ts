@@ -81,8 +81,8 @@ export const useProvincialFee = () => {
     const creditPrefix = getAccountPrefix(transaction.credit_account_id);
 
     return (
-      triggerPrefixes!.includes(debitPrefix) ||
-      triggerPrefixes!.includes(creditPrefix)
+      (debitPrefix !== '' && triggerPrefixes!.includes(debitPrefix)) ||
+      (creditPrefix !== '' && triggerPrefixes!.includes(creditPrefix))
     );
   };
 
