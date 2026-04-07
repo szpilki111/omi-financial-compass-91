@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Upload, FileText } from 'lucide-react';
+import { useProvincialFee } from '@/hooks/useProvincialFee';
 
 interface Mt940Transaction {
   date: string;
@@ -47,6 +48,7 @@ interface Mt940Data {
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const { user } = useAuth();
   const { toast } = useToast();
+  const { generateProvincialFeesForImport } = useProvincialFee();
 
   const extractDescription = (detailsLine: string): string => {
     let description = 'Operacja bankowa';
@@ -539,9 +541,25 @@ interface Mt940Data {
         created_at: new Date(Date.now() + index * 1000).toISOString()
       }));
 
+      // Generuj opłaty prowincjalne
+      const withProvincialFees = generateProvincialFeesForImport(
+        transactionsToInsert,
+        {
+          document_id: document.id,
+          document_number: documentNumber,
+          date: format(documentDate, 'yyyy-MM-dd'),
+          currency: 'PLN',
+          exchange_rate: 1,
+          settlement_type: 'Bank',
+          location_id: user.location,
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+        }
+      );
+
       const { error: transError } = await supabase
         .from('transactions')
-        .insert(transactionsToInsert);
+        .insert(withProvincialFees);
       
       if (transError) {
         console.error('Error creating transactions:', transError);

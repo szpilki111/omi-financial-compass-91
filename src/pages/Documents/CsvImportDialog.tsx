@@ -15,6 +15,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Upload, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
+import { useProvincialFee } from '@/hooks/useProvincialFee';
 import Papa from 'papaparse';
 
 // Account type is now imported from useFilteredAccounts as FilteredAccount
@@ -39,6 +40,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
   const [previewData, setPreviewData] = useState<CsvTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const { data: accounts = [] } = useFilteredAccounts();
+  const { generateProvincialFeesForImport } = useProvincialFee();
   const [mappings, setMappings] = useState({
     descriptionColumn: '',
     amountColumn: '',
@@ -372,10 +374,25 @@ const parseAmount = (amountStr: string): number => {
             }
             
             // Importuj transakcje do bazy danych
-            if (transactionsToImport.length > 0) {
+            // Generuj opłaty prowincjalne dla importowanych transakcji
+            const withProvincialFees = generateProvincialFeesForImport(
+              transactionsToImport,
+              {
+                document_id: document.id,
+                document_number: documentNumber,
+                date: documentDate.toISOString().split('T')[0],
+                currency: 'PLN',
+                exchange_rate: 1,
+                settlement_type: 'Bank',
+                location_id: user.location,
+                user_id: user.id,
+              }
+            );
+
+            if (withProvincialFees.length > 0) {
               const { error } = await supabase
                 .from('transactions')
-                .insert(transactionsToImport);
+                .insert(withProvincialFees);
                 
               if (error) throw error;
               
