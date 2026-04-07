@@ -162,15 +162,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     enabled: isOpen,
   });
 
-  // Provincial fee trigger accounts
-  const { data: provincialFeeAccounts } = useQuery({
+  // Provincial fee trigger account prefixes
+  const { data: provincialFeePrefixes } = useQuery({
     queryKey: ["provincialFeeAccounts"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("provincial_fee_accounts")
-        .select("account_id");
+        .select("account_number_prefix");
       if (error) throw error;
-      return data?.map((a: any) => a.account_id) || [];
+      return data?.map((a: any) => a.account_number_prefix as string) || [];
     },
     enabled: isOpen,
   });
