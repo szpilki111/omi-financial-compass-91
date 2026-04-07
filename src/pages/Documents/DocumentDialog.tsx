@@ -1543,7 +1543,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
             </div>
           </DialogHeader>
 
-          {isEditingBlocked && documentDate && (
+          {isFullyLocked && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Dokument jest zablokowany — raport za okres {document?.document_date ? format(new Date(document.document_date), "MM/yyyy") : ""} został złożony. Edycja nie jest możliwa.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isFullyLocked && isEditingBlocked && documentDate && (
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -1608,7 +1617,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           value={field.value}
                           onChange={field.onChange}
                           placeholder="Wybierz datę"
-                          disabled={(date) => date < new Date("1900-01-01")}
+                          disabled={isFullyLocked ? () => true : (date) => date < new Date("1900-01-01")}
                         />
                       </FormControl>
                       <FormMessage />
@@ -1627,7 +1636,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                             <CurrencySelector
                               value={field.value}
                               onChange={field.onChange}
-                              disabled={isEditingBlocked}
+                              disabled={isFullyLocked || isEditingBlocked}
                             />
                           </FormControl>
                           <FormMessage />
@@ -1640,7 +1649,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                           currency={form.watch("currency")}
                           value={exchangeRate}
                           onChange={setExchangeRate}
-                          disabled={isEditingBlocked}
+                          disabled={isFullyLocked || isEditingBlocked}
                         />
                       </div>
                     )}
@@ -1655,7 +1664,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                   <FormItem>
                     <FormLabel>Nazwa dokumentu</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Opisowa nazwa dokumentu" />
+                      <Input {...field} placeholder="Opisowa nazwa dokumentu" readOnly={isFullyLocked} className={isFullyLocked ? "bg-muted cursor-not-allowed" : ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1673,8 +1682,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 >
                   Anuluj
                 </Button>
-                <Button type="submit" disabled={isLoading || (isEditingBlocked && Boolean(documentDate))}>
-                  {isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
+                <Button type="submit" disabled={isLoading || isFullyLocked || (isEditingBlocked && Boolean(documentDate))}>
+                  {isFullyLocked ? "Dokument zablokowany" : isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
                 </Button>
               </div>
             </form>
