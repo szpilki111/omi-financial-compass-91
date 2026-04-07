@@ -78,6 +78,8 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  // Full list of user's accounts (with pagination, no 1000-row limit)
+  const { data: filteredAccountsFull } = useFilteredAccounts();
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [parallelTransactions, setParallelTransactions] = useState<Transaction[]>([]);
