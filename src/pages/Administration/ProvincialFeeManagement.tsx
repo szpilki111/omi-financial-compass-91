@@ -69,12 +69,25 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
       .sort((a, b) => a.prefix.localeCompare(b.prefix));
   }, [accounts]);
 
+  const DISPLAY_LIMIT = 20;
+
   const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return uniquePrefixes;
+    let result = uniquePrefixes;
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = uniquePrefixes.filter(
+        (p) => p.prefix.includes(term) || p.name.toLowerCase().includes(term)
+      );
+    }
+    return result.slice(0, DISPLAY_LIMIT);
+  }, [uniquePrefixes, searchTerm]);
+
+  const totalMatching = useMemo(() => {
+    if (!searchTerm.trim()) return uniquePrefixes.length;
     const term = searchTerm.toLowerCase();
     return uniquePrefixes.filter(
       (p) => p.prefix.includes(term) || p.name.toLowerCase().includes(term)
-    );
+    ).length;
   }, [uniquePrefixes, searchTerm]);
 
   const selectedLabel = uniquePrefixes.find((p) => p.prefix === value);
