@@ -241,7 +241,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {debitAmount > 0 && (
+                        {debitAmount !== 0 && (
                           <div className="flex flex-col items-end">
                             <span className="text-destructive">{formatAmount(debitAmount)}</span>
                             {hasForeignCurrency && (
@@ -253,7 +253,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {creditAmount > 0 && (
+                        {creditAmount !== 0 && (
                           <div className="flex flex-col items-end">
                             <span className="text-green-600">{formatAmount(creditAmount)}</span>
                             {hasForeignCurrency && (
