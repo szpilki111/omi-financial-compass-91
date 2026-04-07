@@ -232,6 +232,31 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
         
       if (error) throw error;
 
+      // Zablokuj dokumenty z tego okresu
+      if (report) {
+        const reportMonth = report.month;
+        const reportYear = report.year;
+        const locationId = report.location_id;
+        const startDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(reportYear, reportMonth, 0).getDate();
+        const endDateStr = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+        const { error: lockError } = await supabase
+          .from('documents')
+          .update({ 
+            validation_errors: [{ type: 'locked_by_report', reportId, message: 'Dokument zablokowany - raport złożony' }]
+          })
+          .eq('location_id', locationId)
+          .gte('document_date', startDateStr)
+          .lte('document_date', endDateStr);
+
+        if (lockError) {
+          console.error('Błąd blokowania dokumentów:', lockError);
+        } else {
+          console.log('Dokumenty zablokowane po złożeniu raportu');
+        }
+      }
+
       // Wyślij powiadomienie email do prowincjała
       try {
         console.log('Wysyłanie powiadomienia email...');
