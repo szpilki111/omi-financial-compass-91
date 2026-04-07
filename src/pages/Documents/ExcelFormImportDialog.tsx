@@ -63,7 +63,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   const [parseError, setParseError] = useState<string | null>(null);
 
   const { data: accounts = [] } = useFilteredAccounts();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -340,6 +340,15 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   }, [generatedTransactions]);
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!parsedData || generatedTransactions.length === 0) {
       toast({
         title: "Błąd",

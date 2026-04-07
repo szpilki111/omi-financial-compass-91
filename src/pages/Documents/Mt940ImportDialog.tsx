@@ -48,7 +48,7 @@ interface Mt940Data {
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const { user } = useAuth();
   const { toast } = useToast();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
 
   const extractDescription = (detailsLine: string): string => {
     let description = 'Operacja bankowa';
@@ -460,6 +460,15 @@ interface Mt940Data {
   };
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!previewData || previewData.transactions.length === 0) {
       toast({
         title: "Błąd",

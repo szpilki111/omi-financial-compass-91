@@ -30,7 +30,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<ImportRow[]>([]);
   const { data: accounts = [] } = useFilteredAccounts();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
   const [mappings, setMappings] = useState({
     dateColumn: '',
     descriptionColumn: '',
@@ -101,6 +101,15 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
   };
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file || !user?.location) {
       toast({
         title: "Błąd",

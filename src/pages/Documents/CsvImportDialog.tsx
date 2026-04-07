@@ -40,7 +40,7 @@ const CsvImportDialog: React.FC<CsvImportDialogProps> = ({ open, onClose, onImpo
   const [previewData, setPreviewData] = useState<CsvTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const { data: accounts = [] } = useFilteredAccounts();
-  const { generateProvincialFeesForImport } = useProvincialFee();
+  const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
   const [mappings, setMappings] = useState({
     descriptionColumn: '',
     amountColumn: '',
@@ -177,6 +177,15 @@ const parseAmount = (amountStr: string): number => {
 };
 
   const handleImport = async () => {
+    if (provincialFeeConfigured && !provincialFeeReady) {
+      toast({
+        title: "Ładowanie danych",
+        description: "Trwa ładowanie konfiguracji opłaty prowincjalnej. Spróbuj ponownie za chwilę.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file || !user?.location || !documentDate) {
       toast({
         title: "Błąd",

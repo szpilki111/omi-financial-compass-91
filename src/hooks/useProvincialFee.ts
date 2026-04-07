@@ -17,9 +17,9 @@ export interface ProvincialFeeConfig {
  * - generateProvincialFees(transactionsList) — dla importerów (dodaje opłaty inline)
  */
 export const useProvincialFee = () => {
-  const { data: accounts } = useFilteredAccounts();
+  const { data: accounts, isLoading: accountsLoading } = useFilteredAccounts();
 
-  const { data: settings } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ['provincialFeeSettings'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -32,7 +32,7 @@ export const useProvincialFee = () => {
     },
   });
 
-  const { data: triggerPrefixes } = useQuery({
+  const { data: triggerPrefixes, isLoading: prefixesLoading } = useQuery({
     queryKey: ['provincialFeeAccounts'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -52,11 +52,27 @@ export const useProvincialFee = () => {
     settings.target_credit_account_prefix
   );
 
+  // isReady = all data loaded (accounts, settings, triggerPrefixes)
+  const isReady = Boolean(
+    !accountsLoading &&
+    !settingsLoading &&
+    !prefixesLoading &&
+    accounts &&
+    accounts.length > 0 &&
+    settings !== undefined &&
+    triggerPrefixes !== undefined
+  );
+
   /** Get the base prefix (first segment before dash) from an account ID */
   const getAccountPrefix = (accountId: string): string => {
     if (!accountId) return '';
     const account = accounts?.find((a) => a.id === accountId);
-    if (!account) return '';
+    if (!account) {
+      if (accounts && accounts.length > 0) {
+        console.warn(`[ProvincialFee] Account not found for ID: ${accountId}. Accounts loaded: ${accounts.length}`);
+      }
+      return '';
+    }
     return account.number.split('-')[0];
   };
 
@@ -191,6 +207,7 @@ export const useProvincialFee = () => {
     settings,
     triggerPrefixes,
     isConfigured,
+    isReady,
     getAccountPrefix,
     getAccountPrefixFromNumber,
     resolveAccountByPrefix,
