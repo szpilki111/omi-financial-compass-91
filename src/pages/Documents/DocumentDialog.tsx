@@ -1146,16 +1146,19 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   // Helper: get account number prefix (first segment before dash)
   const getAccountPrefix = (accountId: string): string => {
-    const account = accounts?.find((a) => a.id === accountId);
+    // Try filteredAccountsFull first (complete list), then fallback to accounts
+    const account = filteredAccountsFull?.find((a) => a.id === accountId) 
+      || accounts?.find((a) => a.id === accountId);
     if (!account) return '';
     return account.number.split('-')[0];
   };
 
   // Helper: resolve prefix to account ID for current user's accounts
   const resolveAccountByPrefix = (prefix: string): string | null => {
-    if (!accounts || !prefix) return null;
-    // Find account matching this prefix among user's available accounts
-    const match = accounts.find((a) => a.number.split('-')[0] === prefix);
+    if (!prefix) return null;
+    // Use filteredAccountsFull which has ALL user's accounts (paginated, no 1000-row limit)
+    const source = filteredAccountsFull || accounts || [];
+    const match = source.find((a) => a.number.split('-')[0] === prefix);
     return match?.id || null;
   };
 
