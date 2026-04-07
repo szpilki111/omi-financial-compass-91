@@ -1,42 +1,86 @@
 
 
-## Analiza zgłoszenia: "Niemożliwość zapisu dokumentu" — dokument z lutego zniknął po zmianie daty na marzec
+## Funkcjonalność: Automatyczne tworzenie operacji "procent na prowincję"
 
-### Co się stało
+### Opis
 
-Użytkownik **edytował** istniejący dokument "BANK 2026.02" (luty) i zmienił mu datę na 31 marca. System:
-1. Sprawdził `isEditingBlocked` dla **nowej daty** (marzec) — brak raportu → pozwolił zapisać
-2. Zaktualizował dokument **in-place** (UPDATE, nie INSERT) — zmienił datę, numer dokumentu i daty transakcji na marzec
-3. Dokument lutowy **zniknął** — nie został skopiowany, tylko przeniesiony
-4. Teraz użytkownik nie może zmienić daty z powrotem na luty, bo raport za luty istnieje i blokuje edycję
-
-### Przyczyna w kodzie
-
-**`DocumentDialog.tsx`, linia 161-173**: sprawdzenie `isEditingBlocked` używa `documentDate` (aktualnej daty z formularza), a nie oryginalnej daty dokumentu. Gdy użytkownik zmienia datę z lutego na marzec, walidacja sprawdza marzec (wolny) zamiast lutego (zablokowany raportem).
-
-**Brakuje dwóch zabezpieczeń:**
-1. Przy edycji istniejącego dokumentu nie sprawdza się, czy **oryginalna data** (luty) jest zablokowana raportem — zmiana daty powinna być zablokowana, jeśli oryginalny okres jest zamknięty raportem
-2. Nie ma sprawdzenia, czy zmiana daty przenosi dokument **z** zablokowanego okresu
-
-### Proponowane rozwiązanie
-
-**Plik: `src/pages/Documents/DocumentDialog.tsx`**
-
-1. Dodać **drugie sprawdzenie** — czy oryginalna data dokumentu jest zablokowana raportem. Jeśli tak, zablokować zmianę daty na inny miesiąc.
-
-2. W `onSubmit` dodać walidację: jeśli edytujemy dokument i zmieniliśmy miesiąc/rok, sprawdzić czy stary okres jest zablokowany raportem. Jeśli tak — zablokować zapis z komunikatem.
-
-Konkretnie:
-- Zapamiętać oryginalną datę dokumentu (`document.document_date`) przy otwarciu
-- W `onSubmit` porównać miesiąc/rok nowej daty z oryginalną
-- Jeśli się różnią i oryginalny okres ma raport → zablokować z komunikatem: "Nie można przenieść dokumentu z okresu, za który istnieje raport"
-
-### Natychmiastowa pomoc dla użytkownika
-
-Administrator musi ręcznie w Supabase zmienić datę dokumentu z powrotem na luty (UPDATE na tabeli `documents` i `transactions`), lub odblokować raport za luty, poprawić datę, i ponownie złożyć raport. Mogę pomóc przygotować zapytanie SQL jeśli potrzebne.
+Gdy użytkownik tworzy operację zawierającą konto z "listy kont prowincjalnych" (zdefiniowanej w administracji), system automatycznie tworzy dodatkową operację read-only z tytułem "procent na prowincję", z kwotą wyliczoną jako % od kwoty bazowej.
 
 ### Zakres zmian
-- Jeden plik: `src/pages/Documents/DocumentDialog.tsx`
-- Dodanie walidacji w `onSubmit` (~15 linii)
-- Opcjonalnie: komunikat informujący dlaczego zmiana daty jest zablokowana
+
+#### 1. Baza danych — nowa tabela `provincial_fee_settings`
+
+Tabela przechowująca konfigurację: procent i listę kont wyzwalających.
+
+```sql
+CREATE TABLE provincial_fee_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  fee_percentage numeric NOT NULL DEFAULT 0,
+  target_debit_account_id uuid REFERENCES accounts(id),
+  target_credit_account_id uuid REFERENCES accounts(id),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE provincial_fee_accounts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(account_id)
+);
+```
+
+RLS: admin/prowincjal — pełny dostęp; reszta — SELECT.
+
+#### 2. Administracja — nowa zakładka "Procent prowincjalny"
+
+Nowy komponent `ProvincialFeeManagement.tsx` w `src/pages/Administration/`:
+- Pole do ustawienia % (np. 10%)
+- Selektor konta docelowego Wn i Ma dla automatycznej operacji
+- Lista kont wyzwalających (dodawanie/usuwanie kont z listy za pomocą AccountCombobox)
+
+Dodanie zakładki w `AdministrationPage.tsx`.
+
+#### 3. Typ Transaction — nowe pole `is_provincial_fee`
+
+W `src/pages/Documents/types.ts` dodać:
+```typescript
+is_provincial_fee?: boolean;
+```
+
+To pole oznacza operację jako automatycznie wygenerowaną i read-only.
+
+#### 4. Logika auto-generowania w DocumentDialog.tsx
+
+W funkcjach `addTransaction` i `addParallelTransaction`:
+1. Po dodaniu operacji sprawdzić, czy `debit_account_id` lub `credit_account_id` jest na liście kont prowincjalnych (pobieranej z `provincial_fee_accounts`)
+2. Jeśli tak — automatycznie dodać drugą operację:
+   - `description`: "procent na prowincję"
+   - `debit_account_id` / `credit_account_id`: z `provincial_fee_settings`
+   - kwota: `bazowa_kwota * (fee_percentage / 100)`
+   - `is_provincial_fee: true`
+
+Analogicznie: przy usuwaniu operacji bazowej — usunąć powiązaną operację prowincjalną.
+
+#### 5. UI — read-only dla operacji prowincjalnych
+
+W komponentach renderujących wiersze transakcji (`EditableTransactionRow`, `SortableTransactionRow`):
+- Jeśli `transaction.is_provincial_fee === true` — wszystkie pola disabled/readOnly
+- Specjalne oznaczenie wizualne (np. tło fioletowe/szare, badge "Auto")
+- Brak przycisku usuwania (usuwana razem z operacją bazową)
+
+#### 6. Zapis do bazy
+
+W `onSubmit` — operacje z `is_provincial_fee` zapisywane normalnie jako transakcje (pole nie jest w schemacie DB, więc nie jest wysyłane do Supabase — służy tylko do UI).
+
+### Pliki do utworzenia
+- `src/pages/Administration/ProvincialFeeManagement.tsx`
+
+### Pliki do modyfikacji
+- `src/pages/Documents/types.ts` — dodanie `is_provincial_fee`
+- `src/pages/Documents/DocumentDialog.tsx` — logika auto-generowania w `addTransaction`/`addParallelTransaction`, query na konfigurację, read-only rendering
+- `src/pages/Administration/AdministrationPage.tsx` — nowa zakładka
+
+### Migracja SQL
+- Tabele `provincial_fee_settings` i `provincial_fee_accounts` z politykami RLS
 
