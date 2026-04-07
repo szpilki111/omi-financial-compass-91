@@ -137,6 +137,11 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
                   <span className="truncate">{item.name}</span>
                 </CommandItem>
               ))}
+              {totalMatching > DISPLAY_LIMIT && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground text-center border-t">
+                  Wyświetlono {DISPLAY_LIMIT} z {totalMatching} prefiksów. Wpisz więcej znaków aby zawęzić wyniki.
+                </div>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
