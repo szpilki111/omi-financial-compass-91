@@ -116,8 +116,8 @@ const DocumentsPage = () => {
       }
 
       // Server-side search filter
-      if (searchTerm.trim()) {
-        const s = `%${searchTerm.trim()}%`;
+      if (debouncedSearch.trim()) {
+        const s = `%${debouncedSearch.trim()}%`;
         query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
       }
 
