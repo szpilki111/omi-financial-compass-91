@@ -29,13 +29,28 @@ const AccountPrefixSelector: React.FC<AccountPrefixSelectorProps> = ({ value, on
   const { data: accounts } = useQuery({
     queryKey: ['allAccountsForPrefixes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('number, name')
-        .eq('is_active', true)
-        .order('number');
-      if (error) throw error;
-      return data;
+      // Fetch ALL accounts using pagination to bypass 1000-row limit
+      const allAccounts: { number: string; name: string }[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('number, name')
+          .eq('is_active', true)
+          .order('number')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allAccounts.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return allAccounts;
     },
   });
 
