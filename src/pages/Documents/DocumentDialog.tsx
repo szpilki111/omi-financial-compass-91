@@ -747,6 +747,32 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       return;
     }
 
+    // Zabezpieczenie: nie pozwól przenieść dokumentu z okresu zamkniętego raportem
+    if (document?.document_date && userProfile?.location_id) {
+      const originalDate = new Date(document.document_date);
+      const newDate = data.document_date;
+      const originalMonth = originalDate.getMonth();
+      const originalYear = originalDate.getFullYear();
+      const newMonth = newDate.getMonth();
+      const newYear = newDate.getFullYear();
+
+      if (originalMonth !== newMonth || originalYear !== newYear) {
+        const { data: originalPeriodBlocked } = await supabase.rpc("check_report_editing_blocked", {
+          p_location_id: userProfile.location_id,
+          p_document_date: format(originalDate, "yyyy-MM-dd"),
+        });
+
+        if (originalPeriodBlocked) {
+          toast({
+            title: "Błąd",
+            description: "Nie można przenieść dokumentu z okresu, za który istnieje raport. Skontaktuj się z administratorem.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
+
     const allTransactions = [...transactions, ...parallelTransactions];
     const errors: ValidationError[] = [];
 
