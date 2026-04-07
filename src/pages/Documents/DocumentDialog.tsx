@@ -172,6 +172,24 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     enabled: !!userProfile?.location_id && !!documentDate && isOpen,
   });
 
+  // Sprawdź czy oryginalny okres dokumentu jest zablokowany raportem
+  const { data: isOriginalPeriodBlocked } = useQuery({
+    queryKey: ["originalPeriodBlocked", document?.id, document?.document_date, userProfile?.location_id],
+    queryFn: async () => {
+      if (!userProfile?.location_id || !document?.document_date) return false;
+      const { data, error } = await supabase.rpc("check_report_editing_blocked", {
+        p_location_id: userProfile.location_id,
+        p_document_date: document.document_date,
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userProfile?.location_id && !!document?.document_date && isOpen,
+  });
+
+  // Dokument jest w pełni zablokowany gdy jego oryginalny okres ma raport
+  const isFullyLocked = Boolean(document && isOriginalPeriodBlocked);
+
   const handleExportToExcel = () => {
     const formData = form.getValues();
 
