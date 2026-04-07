@@ -17,7 +17,7 @@ export interface ProvincialFeeConfig {
  * - generateProvincialFees(transactionsList) — dla importerów (dodaje opłaty inline)
  */
 export const useProvincialFee = () => {
-  const { data: accounts } = useFilteredAccounts();
+  const { data: accounts, isLoading: accountsLoading } = useFilteredAccounts();
 
   const { data: settings } = useQuery({
     queryKey: ['provincialFeeSettings'],
