@@ -75,31 +75,15 @@ export const useProvincialFee = () => {
 
   /** Check if a transaction should trigger a provincial fee (by account IDs) */
   const shouldCreateProvincialFee = (transaction: Transaction): boolean => {
-    if (!isConfigured) {
-      console.log('[ProvincialFee] Not configured, skipping check');
-      return false;
-    }
+    if (!isConfigured) return false;
 
     const debitPrefix = getAccountPrefix(transaction.debit_account_id);
     const creditPrefix = getAccountPrefix(transaction.credit_account_id);
 
-    console.log('[ProvincialFee] Check:', {
-      debitAccountId: transaction.debit_account_id,
-      creditAccountId: transaction.credit_account_id,
-      debitPrefix,
-      creditPrefix,
-      triggerPrefixes,
-      accountsCount: accounts?.length,
-      debitFound: accounts?.find(a => a.id === transaction.debit_account_id)?.number,
-      creditFound: accounts?.find(a => a.id === transaction.credit_account_id)?.number,
-    });
-
-    const result = (
+    return (
       (debitPrefix !== '' && triggerPrefixes!.includes(debitPrefix)) ||
       (creditPrefix !== '' && triggerPrefixes!.includes(creditPrefix))
     );
-    console.log('[ProvincialFee] Result:', result);
-    return result;
   };
 
   /** Check if account IDs (UUIDs) trigger provincial fee — for importers that already resolved accounts */
