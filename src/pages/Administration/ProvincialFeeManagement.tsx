@@ -199,7 +199,6 @@ const ProvincialFeeManagement = () => {
                 value={targetDebitAccountId}
                 onChange={setTargetDebitAccountId}
                 side="debit"
-                skipRestrictions={true}
               />
               <p className="text-xs text-muted-foreground">
                 Konto Wn w automatycznie tworzonej operacji
@@ -212,7 +211,6 @@ const ProvincialFeeManagement = () => {
                 value={targetCreditAccountId}
                 onChange={setTargetCreditAccountId}
                 side="credit"
-                skipRestrictions={true}
               />
               <p className="text-xs text-muted-foreground">
                 Konto Ma w automatycznie tworzonej operacji
@@ -249,7 +247,6 @@ const ProvincialFeeManagement = () => {
                 value={newAccountId}
                 onChange={setNewAccountId}
                 side="debit"
-                skipRestrictions={true}
               />
             </div>
             <Button
