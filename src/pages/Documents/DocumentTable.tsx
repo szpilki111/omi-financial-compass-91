@@ -64,6 +64,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
   getAccountDisplay,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: transaction.id! });
+  const isProvincialFee = transaction.is_provincial_fee === true || transaction.description === 'procent na prowincję';
 
   const style = {
     transform: CSS.Transform.toString(transform),
