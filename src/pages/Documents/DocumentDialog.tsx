@@ -1129,6 +1129,55 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   // Provincial fee helpers are now provided by useProvincialFee hook
 
+  // Store pending transactions that were added before provincial fee data was ready
+  const [pendingFeeCheck, setPendingFeeCheck] = useState<{ type: 'main' | 'parallel'; index: number }[]>([]);
+
+  // When provincial fee data becomes ready, re-check pending transactions
+  useEffect(() => {
+    if (!provincialFeeReady || !provincialFeeConfigured || pendingFeeCheck.length === 0) return;
+
+    // Check main transactions
+    const mainPending = pendingFeeCheck.filter(p => p.type === 'main');
+    if (mainPending.length > 0) {
+      setTransactions((prev) => {
+        const result: Transaction[] = [];
+        for (let i = 0; i < prev.length; i++) {
+          const tx = prev[i];
+          result.push(tx);
+          // Only add fee if this was a pending transaction and doesn't already have a fee after it
+          const isPending = mainPending.some(p => p.index === i);
+          const nextIsFee = prev[i + 1]?.is_provincial_fee;
+          if (isPending && !nextIsFee && !tx.is_provincial_fee && shouldCreateProvincialFee(tx)) {
+            const feeTransaction = createProvincialFeeTransaction(tx, i);
+            result.push(feeTransaction);
+          }
+        }
+        return result;
+      });
+    }
+
+    // Check parallel transactions
+    const parallelPending = pendingFeeCheck.filter(p => p.type === 'parallel');
+    if (parallelPending.length > 0) {
+      setParallelTransactions((prev) => {
+        const result: Transaction[] = [];
+        for (let i = 0; i < prev.length; i++) {
+          const tx = prev[i];
+          result.push(tx);
+          const isPending = parallelPending.some(p => p.index === i);
+          const nextIsFee = prev[i + 1]?.is_provincial_fee;
+          if (isPending && !nextIsFee && !tx.is_provincial_fee && shouldCreateProvincialFee(tx)) {
+            const feeTransaction = createProvincialFeeTransaction(tx, i);
+            result.push(feeTransaction);
+          }
+        }
+        return result;
+      });
+    }
+
+    setPendingFeeCheck([]);
+  }, [provincialFeeReady, provincialFeeConfigured, pendingFeeCheck, shouldCreateProvincialFee, createProvincialFeeTransaction]);
+
   const addTransaction = async (transaction: Transaction) => {
     const currency = form.getValues("currency");
     const transactionWithCurrency = {
@@ -1137,11 +1186,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       display_order: transactions.length + 1,
     };
 
-    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+    if (provincialFeeReady && shouldCreateProvincialFee(transactionWithCurrency)) {
       const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, transactions.length);
       setTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
     } else {
       setTransactions((prev) => [...prev, transactionWithCurrency]);
+      // If data not ready yet, mark for re-check
+      if (!provincialFeeReady && provincialFeeConfigured) {
+        setPendingFeeCheck(prev => [...prev, { type: 'main', index: transactions.length }]);
+      }
     }
     setValidationErrors([]);
   };
@@ -1154,11 +1207,14 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       display_order: parallelTransactions.length + 1,
     };
 
-    if (shouldCreateProvincialFee(transactionWithCurrency)) {
+    if (provincialFeeReady && shouldCreateProvincialFee(transactionWithCurrency)) {
       const feeTransaction = createProvincialFeeTransaction(transactionWithCurrency, parallelTransactions.length);
       setParallelTransactions((prev) => [...prev, transactionWithCurrency, feeTransaction]);
     } else {
       setParallelTransactions((prev) => [...prev, transactionWithCurrency]);
+      if (!provincialFeeReady && provincialFeeConfigured) {
+        setPendingFeeCheck(prev => [...prev, { type: 'parallel', index: parallelTransactions.length }]);
+      }
     }
     setValidationErrors([]);
   };
