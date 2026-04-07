@@ -45,6 +45,8 @@ const DocumentsPage = () => {
   } = useToast();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [mt940Dialog, setMt940Dialog] = useState<{
