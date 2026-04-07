@@ -19,7 +19,7 @@ export interface ProvincialFeeConfig {
 export const useProvincialFee = () => {
   const { data: accounts, isLoading: accountsLoading } = useFilteredAccounts();
 
-  const { data: settings } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ['provincialFeeSettings'],
     queryFn: async () => {
       const { data, error } = await supabase
