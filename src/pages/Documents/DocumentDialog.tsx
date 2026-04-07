@@ -723,6 +723,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
         creditAccountNumber: t.credit_account?.number || "",
         debitAccount: t.debit_account,
         creditAccount: t.credit_account,
+        is_provincial_fee: t.description === 'procent na prowincję',
       }));
 
       // Podziel na główne i równoległe
