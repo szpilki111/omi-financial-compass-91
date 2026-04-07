@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ImportRow } from '@/types/kpir';
 import { useFilteredAccounts, FilteredAccount } from '@/hooks/useFilteredAccounts';
+import { useProvincialFee } from '@/hooks/useProvincialFee';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Papa from 'papaparse';
@@ -29,6 +30,7 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<ImportRow[]>([]);
   const { data: accounts = [] } = useFilteredAccounts();
+  const { generateProvincialFeesForImport } = useProvincialFee();
   const [mappings, setMappings] = useState({
     dateColumn: '',
     descriptionColumn: '',
@@ -224,10 +226,21 @@ const KpirImportDialog: React.FC<KpirImportDialogProps> = ({ open, onClose, onIm
             }
             
             // Importuj transakcje do bazy danych - they will be inserted in file order
-            if (transactionsToImport.length > 0) {
+            // Generuj opłaty prowincjalne
+            const withProvincialFees = generateProvincialFeesForImport(
+              transactionsToImport,
+              {
+                currency: 'PLN',
+                exchange_rate: 1,
+                location_id: user.location,
+                user_id: user.id,
+              }
+            );
+
+            if (withProvincialFees.length > 0) {
               const { error } = await supabase
                 .from('transactions')
-                .insert(transactionsToImport);
+                .insert(withProvincialFees);
                 
               if (error) throw error;
               

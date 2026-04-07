@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { useFilteredAccounts, FilteredAccount } from "@/hooks/useFilteredAccounts";
+import { useProvincialFee } from "@/hooks/useProvincialFee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -62,6 +63,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   const [parseError, setParseError] = useState<string | null>(null);
 
   const { data: accounts = [] } = useFilteredAccounts();
+  const { generateProvincialFeesForImport } = useProvincialFee();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -422,8 +424,23 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         display_order: index,
       }));
 
+      // Generuj opłaty prowincjalne
+      const withProvincialFees = generateProvincialFeesForImport(
+        transactionsToInsert,
+        {
+          document_id: document.id,
+          document_number: documentNumber,
+          date: documentDate.toISOString().split("T")[0],
+          currency: "PLN",
+          exchange_rate: 1,
+          settlement_type: parsedData.paymentType === "gotowka" ? "Gotówka" : "Bank",
+          location_id: user.location,
+          user_id: user.id,
+        }
+      );
+
       // Wstaw transakcje
-      const { error: transError } = await supabase.from("transactions").insert(transactionsToInsert);
+      const { error: transError } = await supabase.from("transactions").insert(withProvincialFees);
 
       if (transError) {
         console.error("Error inserting transactions:", transError);
