@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -45,6 +45,8 @@ const DocumentsPage = () => {
   } = useToast();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [mt940Dialog, setMt940Dialog] = useState<{
@@ -60,6 +62,15 @@ const DocumentsPage = () => {
   const [isImportSectionOpen, setIsImportSectionOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Fetch locations for filter (only for admin/prowincjal)
   const {
@@ -85,7 +96,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId, searchTerm],
+    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -105,8 +116,8 @@ const DocumentsPage = () => {
       }
 
       // Server-side search filter
-      if (searchTerm.trim()) {
-        const s = `%${searchTerm.trim()}%`;
+      if (debouncedSearch.trim()) {
+        const s = `%${debouncedSearch.trim()}%`;
         query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
       }
 
@@ -517,7 +528,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
             </div>}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input placeholder="Szukaj po numerze lub nazwie..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-11" />
+            <Input ref={searchInputRef} placeholder="Szukaj po numerze lub nazwie..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
           </div>
         </div>
 

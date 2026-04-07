@@ -2166,7 +2166,7 @@ const SortableTransactionRow: React.FC<{
       onCopy={onCopy}
       onSplit={onSplit}
       currency={currency}
-      isEditingBlocked={isFullyLocked || isEditingBlocked}
+      isEditingBlocked={isEditingBlocked}
       showInPLN={showInPLN}
       exchangeRate={exchangeRate}
       isSelected={isSelected}
@@ -2347,7 +2347,7 @@ const EditableTransactionRow = React.forwardRef<
         </TableCell>
         <TableCell className="text-center font-mono text-sm text-muted-foreground">{orderNumber}</TableCell>
         <TableCell>
-          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isFullyLocked || isEditingBlocked} />
+          <Checkbox checked={isSelected} onCheckedChange={onSelect} disabled={isEditingBlocked} />
         </TableCell>
         <TableCell>
           <Textarea
@@ -2358,7 +2358,7 @@ const EditableTransactionRow = React.forwardRef<
               "min-h-[60px] resize-none",
               missingFields?.description && "border-destructive focus-visible:ring-destructive bg-destructive/5",
             )}
-            disabled={isFullyLocked || isEditingBlocked}
+            disabled={isEditingBlocked}
           />
         </TableCell>
         <TableCell className="w-auto">
@@ -2508,7 +2508,7 @@ const EditableTransactionRow = React.forwardRef<
                 size="icon"
                 onClick={onCopy}
                 title="Kopiuj"
-                disabled={isFullyLocked || isEditingBlocked}
+                disabled={isEditingBlocked}
               >
                 <Copy className="h-4 w-4" />
               </Button>
@@ -2520,7 +2520,7 @@ const EditableTransactionRow = React.forwardRef<
                 size="icon"
                 onClick={onSplit}
                 title="Rozdziel kwotę"
-                disabled={isFullyLocked || isEditingBlocked}
+                disabled={isEditingBlocked}
               >
                 <Split className="h-4 w-4" />
               </Button>
@@ -2532,7 +2532,7 @@ const EditableTransactionRow = React.forwardRef<
               onClick={onDelete}
               className="text-red-600 hover:text-red-700"
               title="Usuń"
-              disabled={isFullyLocked || isEditingBlocked}
+              disabled={isEditingBlocked}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
