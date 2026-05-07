@@ -15,6 +15,7 @@ import LoginEventsManagement from './LoginEventsManagement';
 import RemindersManagement from './RemindersManagement';
 import SecuritySettingsManagement from './SecuritySettingsManagement';
 import ProvincialFeeManagement from './ProvincialFeeManagement';
+import LiabilityCategoryMappings from './LiabilityCategoryMappings';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -86,6 +87,9 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="provincial-fee" className="flex-shrink-0">Procent prowincjalny</TabsTrigger>
           )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="liability-mappings" className="flex-shrink-0">Mapowanie raportu (C)</TabsTrigger>
+          )}
         </TabsList>
 
           {/* Lazy loading - render only active tab */}
@@ -152,6 +156,12 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'provincial-fee' && (
             <TabsContent value="provincial-fee" className="space-y-4">
               <ProvincialFeeManagement />
+            </TabsContent>
+          )}
+
+          {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'liability-mappings' && (
+            <TabsContent value="liability-mappings" className="space-y-4">
+              <LiabilityCategoryMappings />
             </TabsContent>
           )}
       </Tabs>
