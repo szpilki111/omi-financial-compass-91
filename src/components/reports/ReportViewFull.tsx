@@ -35,7 +35,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     queryKey: ['report-liability-mappings', locationId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('report_liability_category_mappings' as any)
+        .from('report_liability_category_mappings')
         .select('category_key, account_prefixes, location_id, display_order')
         .or(`location_id.eq.${locationId},location_id.is.null`);
       if (error) throw error;
