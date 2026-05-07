@@ -37,13 +37,30 @@ export const useProvincialFee = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('provincial_fee_accounts')
-        .select('id, account_number_prefix, fee_percentage');
+        .select('id, account_number_prefix, fee_percentage, target_debit_subaccount, target_credit_subaccount');
       if (error) throw error;
-      return (data || []) as Array<{ id: string; account_number_prefix: string; fee_percentage: number | null }>;
+      return (data || []) as Array<{
+        id: string;
+        account_number_prefix: string;
+        fee_percentage: number | null;
+        target_debit_subaccount: string | null;
+        target_credit_subaccount: string | null;
+      }>;
     },
   });
 
   const triggerPrefixes = triggerAccounts?.map((a) => a.account_number_prefix) || [];
+
+  const { data: locationsList, isLoading: locationsLoading } = useQuery({
+    queryKey: ['locations-for-provincial-fee'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, location_identifier');
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; location_identifier: string | null }>;
+    },
+  });
 
   const { data: exclusions, isLoading: exclusionsLoading } = useQuery({
     queryKey: ['provincialFeeAccountExclusions'],
@@ -70,6 +87,7 @@ export const useProvincialFee = () => {
     !settingsLoading &&
     !prefixesLoading &&
     !exclusionsLoading &&
+    !locationsLoading &&
     accounts &&
     accounts.length > 0 &&
     settings !== undefined &&
@@ -100,6 +118,34 @@ export const useProvincialFee = () => {
     if (!prefix || !accounts) return null;
     const match = accounts.find((a) => a.number.split('-')[0] === prefix);
     return match?.id || null;
+  };
+
+  /**
+   * Resolve target account for a specific location and analytical sub-segment.
+   * Tries: `${prefix}-${locationIdentifier}-${sub}`, then `${prefix}-${locationIdentifier}`,
+   * and finally falls back to `resolveAccountByPrefix(prefix)`.
+   */
+  const resolveTargetAccountForLocation = (
+    prefix: string,
+    locationId: string | null | undefined,
+    sub: string | null | undefined
+  ): string | null => {
+    if (!prefix || !accounts) return null;
+    const loc = locationId ? locationsList?.find((l) => l.id === locationId) : null;
+    const ident = loc?.location_identifier || null;
+    if (ident) {
+      if (sub) {
+        const fullNumber = `${prefix}-${ident}-${sub}`;
+        const exact = accounts.find((a) => a.number === fullNumber);
+        if (exact) return exact.id;
+        console.warn(`[ProvincialFee] Brak konta analitycznego ${fullNumber}; próbuję ${prefix}-${ident}`);
+      }
+      const parentNumber = `${prefix}-${ident}`;
+      const parent = accounts.find((a) => a.number === parentNumber);
+      if (parent) return parent.id;
+      console.warn(`[ProvincialFee] Brak konta ${parentNumber}; fallback do ${prefix}`);
+    }
+    return resolveAccountByPrefix(prefix);
   };
 
   /** Find a trigger account row matching given prefix */
@@ -177,8 +223,19 @@ export const useProvincialFee = () => {
     const pct = triggerPrefix ? getEffectivePercentage(triggerPrefix) : Number(settings?.fee_percentage || 0);
     const feeAmount = Math.round(amount * (pct / 100) * 100) / 100;
 
-    const debitAccountId = resolveAccountByPrefix(settings!.target_debit_account_prefix!) || '';
-    const creditAccountId = resolveAccountByPrefix(settings!.target_credit_account_prefix!) || '';
+    const trigger = triggerPrefix ? findTriggerAccount(triggerPrefix) : undefined;
+    const debitAccountId =
+      resolveTargetAccountForLocation(
+        settings!.target_debit_account_prefix!,
+        locationId,
+        trigger?.target_debit_subaccount || null
+      ) || '';
+    const creditAccountId =
+      resolveTargetAccountForLocation(
+        settings!.target_credit_account_prefix!,
+        locationId,
+        trigger?.target_credit_subaccount || null
+      ) || '';
 
     return {
       description: 'procent na prowincję',
@@ -234,8 +291,17 @@ export const useProvincialFee = () => {
         const feeAmount = Math.round(baseAmount * (pct / 100) * 100) / 100;
 
         if (feeAmount > 0) {
-          const debitAccountId = resolveAccountByPrefix(settings!.target_debit_account_prefix!);
-          const creditAccountId = resolveAccountByPrefix(settings!.target_credit_account_prefix!);
+          const trigger = findTriggerAccount(triggerPrefix);
+          const debitAccountId = resolveTargetAccountForLocation(
+            settings!.target_debit_account_prefix!,
+            locationId,
+            trigger?.target_debit_subaccount || null
+          );
+          const creditAccountId = resolveTargetAccountForLocation(
+            settings!.target_credit_account_prefix!,
+            locationId,
+            trigger?.target_credit_subaccount || null
+          );
 
           const feeTx = {
             ...baseFields,
@@ -266,6 +332,7 @@ export const useProvincialFee = () => {
     getAccountPrefix,
     getAccountPrefixFromNumber,
     resolveAccountByPrefix,
+    resolveTargetAccountForLocation,
     getEffectivePercentage,
     isLocationExcluded,
     matchTriggerPrefix,
