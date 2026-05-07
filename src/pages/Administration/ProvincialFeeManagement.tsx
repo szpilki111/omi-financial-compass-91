@@ -207,6 +207,8 @@ const ProvincialFeeManagement = () => {
 
   // Local state for inline % editing per row
   const [percentEdits, setPercentEdits] = React.useState<Record<string, string>>({});
+  // Local state for inline subaccount editing (Wn / Ma) per row
+  const [subEdits, setSubEdits] = React.useState<Record<string, { debit: string; credit: string }>>({});
 
   // Exclusions dialog state
   const [exclusionsForId, setExclusionsForId] = React.useState<string | null>(null);
@@ -314,6 +316,24 @@ const ProvincialFeeManagement = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provincialFeeAccounts'] });
       toast({ title: 'Zapisano', description: 'Procent dla konta został zaktualizowany' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Błąd', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Update per-account target sub-segments (analytical part appended to debit/credit prefix)
+  const updateSubaccountsMutation = useMutation({
+    mutationFn: async ({ id, target_debit_subaccount, target_credit_subaccount }: { id: string; target_debit_subaccount: string | null; target_credit_subaccount: string | null }) => {
+      const { error } = await supabase
+        .from('provincial_fee_accounts')
+        .update({ target_debit_subaccount, target_credit_subaccount })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['provincialFeeAccounts'] });
+      toast({ title: 'Zapisano', description: 'Analityka kont docelowych została zaktualizowana' });
     },
     onError: (error: any) => {
       toast({ title: 'Błąd', description: error.message, variant: 'destructive' });
@@ -458,6 +478,7 @@ const ProvincialFeeManagement = () => {
                 <TableRow>
                   <TableHead>Prefix konta</TableHead>
                   <TableHead className="w-40">Indywidualny % opłaty</TableHead>
+                  <TableHead className="w-56">Analityka konta docelowego (Wn / Ma)</TableHead>
                   <TableHead className="w-48">Wykluczone lokalizacje</TableHead>
                   <TableHead className="w-20">Akcje</TableHead>
                 </TableRow>
@@ -469,6 +490,9 @@ const ProvincialFeeManagement = () => {
                   const currentValue = editValue !== undefined
                     ? editValue
                     : (tp.fee_percentage != null ? String(tp.fee_percentage) : '');
+                  const subEdit = subEdits[tp.id];
+                  const debitSub = subEdit?.debit ?? (tp.target_debit_subaccount ?? '');
+                  const creditSub = subEdit?.credit ?? (tp.target_credit_subaccount ?? '');
                   return (
                     <TableRow key={tp.id}>
                       <TableCell>
@@ -499,6 +523,44 @@ const ProvincialFeeManagement = () => {
                               }
                               updatePercentMutation.mutate({ id: tp.id, fee_percentage: val });
                               setPercentEdits((prev) => { const c = { ...prev }; delete c[tp.id]; return c; });
+                            }}
+                          >
+                            Zapisz
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            placeholder="Wn np. 3"
+                            value={debitSub}
+                            onChange={(e) => setSubEdits((prev) => ({
+                              ...prev,
+                              [tp.id]: { debit: e.target.value, credit: prev[tp.id]?.credit ?? (tp.target_credit_subaccount ?? '') },
+                            }))}
+                            className="w-20 h-8 font-mono"
+                          />
+                          <span className="text-muted-foreground">/</span>
+                          <Input
+                            placeholder="Ma np. 1"
+                            value={creditSub}
+                            onChange={(e) => setSubEdits((prev) => ({
+                              ...prev,
+                              [tp.id]: { debit: prev[tp.id]?.debit ?? (tp.target_debit_subaccount ?? ''), credit: e.target.value },
+                            }))}
+                            className="w-20 h-8 font-mono"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={updateSubaccountsMutation.isPending}
+                            onClick={() => {
+                              updateSubaccountsMutation.mutate({
+                                id: tp.id,
+                                target_debit_subaccount: debitSub.trim() || null,
+                                target_credit_subaccount: creditSub.trim() || null,
+                              });
+                              setSubEdits((prev) => { const c = { ...prev }; delete c[tp.id]; return c; });
                             }}
                           >
                             Zapisz

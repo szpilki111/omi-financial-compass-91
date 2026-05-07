@@ -1192,18 +1192,24 @@ export type Database = {
           created_at: string | null
           fee_percentage: number | null
           id: string
+          target_credit_subaccount: string | null
+          target_debit_subaccount: string | null
         }
         Insert: {
           account_number_prefix: string
           created_at?: string | null
           fee_percentage?: number | null
           id?: string
+          target_credit_subaccount?: string | null
+          target_debit_subaccount?: string | null
         }
         Update: {
           account_number_prefix?: string
           created_at?: string | null
           fee_percentage?: number | null
           id?: string
+          target_credit_subaccount?: string | null
+          target_debit_subaccount?: string | null
         }
         Relationships: []
       }
@@ -1432,6 +1438,44 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "report_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_liability_category_mappings: {
+        Row: {
+          account_prefixes: string[]
+          category_key: string
+          created_at: string
+          display_order: number
+          id: string
+          location_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_prefixes?: string[]
+          category_key: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          location_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_prefixes?: string[]
+          category_key?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          location_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_liability_category_mappings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]
