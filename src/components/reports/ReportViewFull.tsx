@@ -30,12 +30,39 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
+  // Fetch liability category mappings (prefer per-location, fallback to global NULL)
+  const { data: liabilityMappings } = useQuery({
+    queryKey: ['report-liability-mappings', locationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('report_liability_category_mappings' as any)
+        .select('category_key, account_prefixes, location_id, display_order')
+        .or(`location_id.eq.${locationId},location_id.is.null`);
+      if (error) throw error;
+      // Per-location overrides global; key by category_key
+      const byKey = new Map<string, string[]>();
+      const order: Record<string, number> = {};
+      // First pass: globals
+      (data || []).filter((r: any) => !r.location_id).forEach((r: any) => {
+        byKey.set(r.category_key, r.account_prefixes || []);
+        order[r.category_key] = r.display_order || 0;
+      });
+      // Second pass: per-location overrides
+      (data || []).filter((r: any) => r.location_id === locationId).forEach((r: any) => {
+        byKey.set(r.category_key, r.account_prefixes || []);
+        order[r.category_key] = r.display_order || 0;
+      });
+      return { byKey, order };
+    },
+    enabled: !!locationId,
+  });
+
   // Nazwy kont są teraz zahardcodowane w komponentach ReportIncomeSection i ReportExpenseSection
   // Nie ma potrzeby pobierania ich z bazy danych
 
   // Fetch opening balances from ALL transactions BEFORE this month
   const { data: openingBalances } = useQuery({
-    queryKey: ['report-opening-balances-calculated', locationId, month, year],
+    queryKey: ['report-opening-balances-calculated-v2', locationId, month, year],
     queryFn: async () => {
       // Calculate end of previous month
       const prevMonthEnd = month === 1 
@@ -64,10 +91,11 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       if (error) throw error;
 
-      // Calculate cumulative balances for each account prefix
-      // For 1xx accounts: balance = sum(Wn) - sum(Ma)
-      // For 2xx accounts: balance = sum(Wn) - sum(Ma)
+      // Calculate cumulative balances per FULL account number AND per first-segment prefix.
+      // - balances (Map<prefix,number>) keeps backward-compat for 1xx grouping.
+      // - balancesByAccount (Map<fullNumber,number>) lets liability mappings sum specific analytics.
       const balances = new Map<string, number>();
+      const balancesByAccount = new Map<string, number>();
       
       allTransactions?.forEach(tx => {
         const rate = tx.exchange_rate || 1;
@@ -75,24 +103,28 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         
         // Debit side (Wn) - increases balance
         if (tx.debit_account?.number) {
-          const prefix = tx.debit_account.number.split('-')[0];
+          const fullNum = tx.debit_account.number;
+          const prefix = fullNum.split('-')[0];
           const rawAmount = tx.debit_amount || 0;
           const amount = getAmountInPLN(rawAmount, curr, rate);
           balances.set(prefix, (balances.get(prefix) || 0) + amount);
+          balancesByAccount.set(fullNum, (balancesByAccount.get(fullNum) || 0) + amount);
         }
         
         // Credit side (Ma) - decreases balance
         if (tx.credit_account?.number) {
-          const prefix = tx.credit_account.number.split('-')[0];
+          const fullNum = tx.credit_account.number;
+          const prefix = fullNum.split('-')[0];
           const rawAmount = tx.credit_amount || 0;
           const amount = getAmountInPLN(rawAmount, curr, rate);
           balances.set(prefix, (balances.get(prefix) || 0) - amount);
+          balancesByAccount.set(fullNum, (balancesByAccount.get(fullNum) || 0) - amount);
         }
       });
 
       console.log('💰 Obliczone salda otwarcia:', Object.fromEntries(balances));
 
-      return balances;
+      return { balances, balancesByAccount };
     },
     enabled: !!locationId && !!month && !!year
   });
@@ -139,6 +171,11 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
       const liabilitiesData = new Map<string, {
         receivables: number;  // Należności (Wn)
         liabilities: number;  // Zobowiązania (Ma)
+      }>();
+      // Per FULL account number aggregation for liabilities (used by category mappings)
+      const liabilitiesByAccount = new Map<string, {
+        receivables: number;
+        liabilities: number;
       }>();
 
       // Intentions data (account 210) – konto pasywne
@@ -191,6 +228,10 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
             const existing = liabilitiesData.get(prefix) || { receivables: 0, liabilities: 0 };
             existing.liabilities += amount;
             liabilitiesData.set(prefix, existing);
+            const fullNum = accNum;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.liabilities += amount;
+            liabilitiesByAccount.set(fullNum, ex2);
           }
 
           // Intentions 210 (Ma = przyjęte – konto pasywne)
@@ -233,6 +274,10 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
             const existing = liabilitiesData.get(prefix) || { receivables: 0, liabilities: 0 };
             existing.receivables += amount;
             liabilitiesData.set(prefix, existing);
+            const fullNum = accNum;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.receivables += amount;
+            liabilitiesByAccount.set(fullNum, ex2);
           }
 
           // Intentions 210 (Wn = odprawione i oddane – konto pasywne)
@@ -253,6 +298,10 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         })),
         liabilitiesData: Array.from(liabilitiesData.entries()).map(([prefix, data]) => ({
           prefix,
+          ...data
+        })),
+        liabilitiesByAccount: Array.from(liabilitiesByAccount.entries()).map(([accountNumber, data]) => ({
+          accountNumber,
           ...data
         })),
         intentionsReceived: intentions210Received,
@@ -281,14 +330,20 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   // Helper function to get opening balance for a category
   const getCategoryOpeningBalance = (accounts: string[]): number => {
     if (!openingBalances) return 0;
+    const { balances, balancesByAccount } = openingBalances;
     let total = 0;
     accounts.forEach(acc => {
-      // Check all prefixes that start with this account number
-      openingBalances.forEach((balance, prefix) => {
-        if (prefix.startsWith(acc)) {
-          total += balance;
-        }
-      });
+      if (acc.includes('-')) {
+        // Specific multi-segment prefix → match per FULL account number
+        balancesByAccount.forEach((balance, accNum) => {
+          if (accNum === acc || accNum.startsWith(acc + '-')) total += balance;
+        });
+      } else {
+        // Single-segment prefix → use first-segment aggregation
+        balances.forEach((balance, prefix) => {
+          if (prefix === acc) total += balance;
+        });
+      }
     });
     return total;
   };
@@ -316,8 +371,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
   // Calculate intentions opening balance from previous transactions
   // Konto 210 jest kontem pasywnym – saldo otwarcia liczone jako (Ma − Wn).
-  // openingBalances przechowuje (Wn − Ma), więc dla 210 odwracamy znak.
-  const intentionsOpeningBalance = -(openingBalances?.get('210') || 0);
+  const intentionsOpeningBalance = -(openingBalances?.balances.get('210') || 0);
 
   // Build intentions table data
   const intentionsData = {
@@ -327,16 +381,34 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     closingBalance: intentionsOpeningBalance + (transactionData?.intentionsReceived || 0) - (transactionData?.intentionsCelebrated || 0)
   };
 
-  // Build liabilities table data with new structure
+  // Build liabilities table data — uses configurable mappings per location (with global fallback)
   const liabilitiesTableData = DEFAULT_LIABILITY_CATEGORIES.map(category => {
-    const matchingData = transactionData?.liabilitiesData?.filter(ld => 
-      category.accounts.some(acc => ld.prefix.startsWith(acc))
-    ) || [];
-    
-    const receivables = matchingData.reduce((sum, d) => sum + d.receivables, 0);
-    const liabilities = matchingData.reduce((sum, d) => sum + d.liabilities, 0);
-    const openingBalance = getCategoryOpeningBalance(category.accounts);
-    // Wzór: początek + należności - zobowiązania
+    const mapped = liabilityMappings?.byKey.get(category.key);
+    const accountsForCategory = mapped && mapped.length > 0 ? mapped : category.accounts;
+
+    const isSpecific = accountsForCategory.some(a => a.includes('-'));
+
+    let receivables = 0;
+    let liabilities = 0;
+    if (isSpecific) {
+      // Aggregate by FULL account number against mapped prefixes
+      (transactionData?.liabilitiesByAccount || []).forEach(ld => {
+        if (accountsForCategory.some(acc => ld.accountNumber === acc || ld.accountNumber.startsWith(acc + '-'))) {
+          receivables += ld.receivables;
+          liabilities += ld.liabilities;
+        }
+      });
+    } else {
+      // Single-segment prefixes → aggregate by first-segment prefix
+      (transactionData?.liabilitiesData || []).forEach(ld => {
+        if (accountsForCategory.some(acc => ld.prefix === acc || ld.prefix.startsWith(acc))) {
+          receivables += ld.receivables;
+          liabilities += ld.liabilities;
+        }
+      });
+    }
+
+    const openingBalance = getCategoryOpeningBalance(accountsForCategory);
     const closingBalance = openingBalance + receivables - liabilities;
 
     return {
