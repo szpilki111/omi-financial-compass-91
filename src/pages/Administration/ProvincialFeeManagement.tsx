@@ -327,7 +327,7 @@ const ProvincialFeeManagement = () => {
     mutationFn: async ({ id, target_debit_subaccount, target_credit_subaccount }: { id: string; target_debit_subaccount: string | null; target_credit_subaccount: string | null }) => {
       const { error } = await supabase
         .from('provincial_fee_accounts')
-        .update({ target_debit_subaccount, target_credit_subaccount } as any)
+        .update({ target_debit_subaccount, target_credit_subaccount })
         .eq('id', id);
       if (error) throw error;
     },
