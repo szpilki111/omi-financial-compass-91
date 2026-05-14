@@ -1729,6 +1729,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
             </Alert>
           )}
 
+          {documentHasMissingAccounts && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Ten dokument zawiera operacje bez przypisanych kont (Wn / Ma). Uzupełnij konta dla wszystkich operacji
+                i zapisz dokument, w przeciwnym razie zostanie on usunięty po zamknięciu okna.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div
