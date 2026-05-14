@@ -503,6 +503,7 @@ const AccountSearchPage = () => {
       // Otwórz dokument do edycji
       setEditingDocument(newDocument);
       setIsDocumentDialogOpen(true);
+      setPendingDraftDocId(newDocument.id);
       setSelectedTransactionIds([]);
 
     } catch (error: any) {
