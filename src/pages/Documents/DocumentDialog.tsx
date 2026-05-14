@@ -369,14 +369,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   useEffect(() => {
     const subscription = form.watch(() => {
-      setHasUnsavedChanges(true);
+      if (initialLoadDoneRef.current) {
+        setHasUnsavedChanges(true);
+      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // NOTE: Removed useEffect that set hasUnsavedChanges on transactions change,
-  // as it caused false "unsaved changes" alerts when loading existing documents.
-  // hasUnsavedChanges is now tracked only by form.watch() and explicit user edits.
+  // Po pierwszym załadowaniu transakcji każda zmiana listy operacji
+  // (dodanie / edycja / usunięcie / przesunięcie) oznacza dokument jako brudny.
+  useEffect(() => {
+    if (initialLoadDoneRef.current) {
+      setHasUnsavedChanges(true);
+    }
+  }, [transactions, parallelTransactions]);
 
   useEffect(() => {
     if (isOpen && !document) {
@@ -392,13 +398,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   }, [isOpen, showInlineForm, isFullyLocked, isEditingBlocked]);
 
-  // Add warning before closing browser/tab when dialog is open
+  // Ostrzeżenie przed zamknięciem/odświeżeniem karty TYLKO gdy są niezapisane zmiany.
   useEffect(() => {
     if (!isOpen) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges) return;
       e.preventDefault();
-      e.returnValue = "";
+      e.returnValue = "Masz niezapisane zmiany w dokumencie. Czy na pewno chcesz opuścić stronę?";
+      return e.returnValue;
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -406,7 +414,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isOpen]);
+  }, [isOpen, hasUnsavedChanges]);
 
   const checkLastTransactionComplete = () => {
     const errors: ValidationError[] = [];
