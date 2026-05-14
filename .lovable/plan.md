@@ -1,102 +1,73 @@
-## Cel
+## Plan naprawy 3 błędów krytycznych
 
-Naprawić 4 zgłoszone problemy: (1) brak analityki na kontach 200/201 przy automatycznym naliczaniu opłaty prowincjalnej, (2/3) błędne salda w sekcji „C. Należności i zobowiązania" raportu (Laskowice, Poznań, Obra), (4) potrzeba pełnej analityki dla każdego domu na 200 i 201.
+### Błąd 1 — „Utwórz dokument z zaznaczonych operacji" zostawia śmieci w bazie
 
----
+**Przyczyna (potwierdzona w kodzie)**
+W `src/pages/AccountSearch/AccountSearchPage.tsx` (`handleCreateDocumentFromSelected`, linie ~373–474) sekwencja jest:
+1. RPC `generate_document_number` — rezerwuje numer (np. `DOMSWK/2026/05/01`).
+2. `INSERT INTO documents` — dokument trafia do bazy z `validation_errors`, ale bez kont.
+3. `INSERT INTO transactions` — transakcje bez kont (`debit_account_id: null`, `credit_account_id: null`).
+4. Dopiero potem otwiera `DocumentDialog` do uzupełnienia.
 
-## Problem 1 + 4 — Brak analityki dla naliczanego procentu (200/201)
+Jeśli użytkownik anuluje (X / klik poza / Esc) — dokument i puste transakcje zostają w bazie. Do tego `DocumentDialog` po otwarciu już istniejącego rekordu nie pokazuje czerwonego alertu walidacyjnego (nie wczytuje `validation_errors` z DB do stanu `validationErrors`), a `hasUnsavedChanges` jest `false` (formularz nieedytowany), więc dialog zamyka się bez ostrzeżenia.
 
-### Diagnoza
-W `useProvincialFee.createProvincialFeeTransaction` i `generateProvincialFeesForImport` używamy `resolveAccountByPrefix(prefix)`, który dopasowuje tylko pierwszy segment numeru konta (np. „201"). W efekcie wybiera konto syntetyczne lub przypadkowe konto bez analityki — nie konto domu (np. `201-2-10-1`).
+**Naprawa**
+- Przejść na model „draft w pamięci": NIE tworzyć dokumentu w bazie do czasu zapisu. Przekazywać do `DocumentDialog` propsy `initialDocumentDraft` + `initialTransactions` (już istnieje wzorzec dla nowego dokumentu — wykorzystać go).
+  - Numer dokumentu generować dopiero w `onSubmit` (tak jak przy zwykłym „Nowy dokument"), żeby nie zużywać numerów na anulowane wpisy.
+  - Po pomyślnym zapisie wyczyścić zaznaczenie (`setSelectedTransactionIds([])`) oraz odświeżyć listę.
+- Dodać „pas bezpieczeństwa" gdyby ktoś jednak utworzył pusty dokument w przyszłości:
+  - W `DocumentDialog` po wczytaniu istniejącego dokumentu, jeśli `validation_errors` zawiera `missing_accounts` (lub jakakolwiek transakcja ma puste konto) — pokazywać czerwony alert na górze dialogu i blokować zamknięcie tak samo jak `checkLastTransactionComplete`.
+  - Dodać RPC/edge function albo trigger SQL `prevent_save_without_accounts`: dokument nie może być zapisany bez przynajmniej jednej kompletnej transakcji (Wn + Ma + kwota). Już istnieje walidacja po stronie UI — trzeba ją wzmocnić serwerowo.
 
-Wymaganie użytkownika (Speaker 1):
-- Dla konta wyzwalającego np. `702-3-1` w domu Zachutyń: opłata ma trafić na `200-2-20-3 / 201-2-20-1` (pełna analityka domu).
-- Dla `719-...-6-1`: analogicznie pełna analityka domu.
-- Czyli docelowe konto = `<prefix>-<identyfikator domu>-<analityka>`.
+### Błąd 2 — saldo otwarcia kwietnia ≠ saldo zamknięcia marca (np. „Gotówka")
 
-### Plan naprawczy
+**Przyczyna (potwierdzona w kodzie)**
+W `src/components/reports/ReportViewFull.tsx`, query `report-opening-balances-calculated-v2` (linie 64–130) pobiera transakcje:
 
-1. **Rozszerzenie `provincial_fee_accounts` o mapowanie docelowej analityki per prefix wyzwalający** (migracja):
-   - Dodać kolumny:
-     - `target_debit_subaccount` (text, nullable) – ostatni segment analityki dla strony Wn (np. `3`)
-     - `target_credit_subaccount` (text, nullable) – analogicznie dla Ma (np. `1`)
-   - Te wartości nadpisują globalne ustawienia `provincial_fee_settings.target_*_account_prefix` tylko w obrębie analityki.
-
-2. **`useProvincialFee` – nowy resolver `resolveTargetAccountForLocation`**:
-   - Wejście: `prefixGłówny` (np. `200`/`201`), `locationIdentifier` (np. `2-15`), `subAnaliza` (np. `1` lub `3`).
-   - Buduje wzorzec: `${prefix}-${locationIdentifier}-${sub}` i znajduje konto o dokładnie takim numerze.
-   - Fallback: jeśli nie istnieje, próbuje `${prefix}-${locationIdentifier}` (rodzic) i loguje ostrzeżenie.
-   - Pobiera `location_identifier` z tabeli `locations` na podstawie `effectiveLocationId` (nowa zależność/hook lub przekazane z DocumentDialog).
-
-3. **`createProvincialFeeTransaction` / `generateProvincialFeesForImport`**:
-   - Zamiast `resolveAccountByPrefix(target_debit_account_prefix)` używać `resolveTargetAccountForLocation(prefix, locationIdentifier, subDebit)` i analogicznie dla credit.
-   - Domyślne `subDebit`/`subCredit` można pobrać:
-     - z nowych pól w `provincial_fee_accounts` (per prefix wyzwalający), lub
-     - z analityki konta wyzwalającego (np. konto wyzwalające `200-2-15-6` ma sub=6, a opłata idzie na `200-2-15-{target_debit_subaccount}` – domyślnie `3` jeśli nie skonfigurowane).
-
-4. **UI: `ProvincialFeeManagement.tsx`** – w wierszu każdego prefixu wyzwalającego dodać dwa małe pola input („Docelowa analityka Wn", „Docelowa analityka Ma") obok „% opłaty" i „Wykluczenia". Zapisywane do nowych kolumn.
-
-5. **Walidacja**: jeżeli system nie znajdzie pełnego konta analitycznego, pokazać wyraźny `toast` z komunikatem zamiast cicho używać konta-rodzica. Zaproponować admina dodanie konta.
-
----
-
-## Problem 2 + 3 — Błędne salda w „C. Należności i zobowiązania"
-
-### Diagnoza
-Plik `ReportLiabilitiesTable.tsx` (i analogicznie `ReportViewFull.tsx`, `ExportToExcelFull.tsx`, `ReportPDFGeneratorCompact.tsx`) ma sztywne mapowanie kategorii:
-
-```
-'3. Rozliczenia z prowincją' → ['201']
-'4. Rozliczenia z innymi'    → ['217']
+```ts
+.from('transactions')
+.select(...)
+.eq('location_id', locationId)
+.lte('date', prevMonthEndStr);
 ```
 
-Tymczasem w bazie:
-- Laskowice: `200-2-10` = „Rozliczenie z prowincją Laskowice", `201-2-10` = „Rozliczenie z domami". Czyli rozliczenie z prowincją siedzi pod prefiksem **200**.
-- Poznań: `200-2-15` = „Rozliczenie z prowincją Poznań", `201-2-15` = „Rozliczenie z domami".
+Brak paginacji + domyślny limit Supabase **1000 wierszy**. Dla domów takich jak Święty Krzyż, gdzie do końca marca jest >1000 transakcji, część operacji nie wchodzi do salda otwarcia, więc kwiecień startuje z innej kwoty niż zamknięcie marca (a saldo zamknięcia liczone jest z `openingBalance + bieżący miesiąc` w tym samym komponencie, więc tam też propaguje się błąd; ale „Koniec marca" w raporcie marca liczy się z mniejszego okresu i często mieści się w 1000).
 
-Aktualnie raport bierze wszystkie konta `201-*` z lokalizacji – w tym `201-2-15-3 (Inne rozliczenia z prowincją)` o dużych obrotach (np. wpis 41 400,08 z 2026-01-01). Stąd:
-- Laskowice styczeń: pokazuje 19 419,37 zamiast 17 629,37 (różnica 1 790 ≈ obroty na 201-2-10-1/3 wmieszane w `Rozliczenia z prowincją`).
-- Poznań styczeń: 38 681,80 zamiast 35 031,78 (różnica 3 649,02 — wpisy na 201-2-15-3).
+To samo ryzyko mają zapytania o saldo otwarcia w innych miejscach (`ReportLiabilitiesTable`, `ExportToExcelFull`, generatory PDF) — sprawdzić i naprawić wszędzie.
 
-### Plan naprawczy
+**Naprawa**
+- Wprowadzić paginację po stronie klienta (pętla `range(from, from+999)` aż do końca) we wszystkich miejscach pobierających historię transakcji do salda otwarcia. Wzorzec już używany w innych modułach (np. eksport kont).
+- Lepiej: stworzyć RPC `get_opening_balances(location_id, before_date)` zwracający zagregowane salda po `account_number` po stronie SQL (jeden query, brak limitu wierszy w odpowiedzi, dużo szybsze). Wywoływać z `ReportViewFull`, `ReportLiabilitiesTable`, eksportów Excel/PDF.
+- Po naprawie zweryfikować: marzec→kwiecień dla Świętego Krzyża, Laskowic, Poznania, Obry — saldo zamknięcia poprzedniego miesiąca = saldo otwarcia następnego dla każdej kategorii (Kasa, Bank, Lokaty, kategorie pasywne).
 
-1. **Konfigurowalne mapowanie kategorii bilansu per lokalizacja** – nowa tabela `report_liability_category_mappings`:
-   - `id`, `location_id` (nullable = domyślne dla wszystkich), `category_key` ('loans_given'|'loans_taken'|'province'|'others'), `account_prefixes` (text[]), `display_order`.
-   - Domyślne wpisy (gdy `location_id = NULL`): zachowują obecne mapowanie jako fallback.
-   - Per lokalizacja administrator może np. ustawić: Laskowice → `province = ['200-2-10']`, Poznań → `province = ['201-2-15']`, itd. Mapowanie przyjmuje konkretne prefiksy z analityką (nie tylko pierwszy segment).
+### Błąd 3 — brak ostrzeżenia o niezapisanych zmianach przy zamknięciu / odświeżeniu
 
-2. **Aktualizacja `ReportViewFull.tsx`** (i `ExportToExcelFull.tsx`, `ReportPDFGeneratorCompact.tsx`, `ReportPDFGenerator.tsx`):
-   - Pobrać mapowanie z bazy (najpierw per `locationId`, fallback na domyślne).
-   - Funkcję dopasowania zmienić z `prefix.startsWith('201')` na `prefix.startsWith(mappedPrefix)` lub `accountNumber.startsWith(mappedPrefix)` — dopasowanie do całego ciągu numeru konta, np. `201-2-15` (a nie tylko `201`).
-   - **WAŻNE**: dotyczy zarówno sumy obrotów miesiąca (`receivables`/`liabilities`), jak i `getCategoryOpeningBalance` (saldo otwarcia) — obecnie tam też jest `prefix.startsWith(acc)`, co dla `acc='201-2-15'` zadziała poprawnie po zmianie struktury danych.
-   - W `ReportViewFull.tsx` kalkulacja salda otwarcia – przechowuje balance per `prefix = number.split('-')[0]` (linia 78/86). Trzeba **przebudować** klucz na pełny numer konta lub wprowadzić wyszukiwanie sumujące po kontach pasujących do `mappedPrefix`. Najczystsze: zachować transakcje per `accountNumber` (cały numer), a w `getCategoryOpeningBalance` sumować wszystkie konta zaczynające się od dowolnego z mapowanych prefiksów.
+**Przyczyna (potwierdzona w kodzie)**
+W `src/pages/Documents/DocumentDialog.tsx`:
+- Linia 360–362: świadomie usunięto `useEffect` który ustawiał `hasUnsavedChanges` na zmianach `transactions` („powodował fałszywe alerty przy wczytywaniu istniejących dokumentów"). Skutek: edycja/dodanie/usunięcie operacji NIE oznacza dokumentu jako brudnego, więc `handleDialogOpenChange` (linia 501) i `handleCloseDialog` (514) zamykają dialog bez pytania.
+- `beforeunload` (382–392): `e.preventDefault()` + `e.returnValue = ""` jest aktywne zawsze gdy `isOpen`, ale niektóre przeglądarki wymagają też niepustego stringa (`e.returnValue = "..."`) i de facto nie pyta gdy nie ma realnych zmian — tu chcemy pytać tylko gdy są brudne dane, żeby nie irytować przy podglądzie.
 
-3. **UI administratora**: Nowa zakładka w `Administracji` lub rozszerzenie istniejącej („Mapowanie kategorii raportu") — tabela z czterema kategoriami i polem multi-prefix per lokalizacja. Domyślnie pusta (= dziedziczy globalne).
+**Naprawa**
+- Wprowadzić poprawne tracking „dirty":
+  - Po wczytaniu dokumentu (lub otwarciu pustego nowego) zapisać snapshot: `initialFormSnapshot`, `initialTransactionsSnapshot`, `initialParallelSnapshot` (deep clone, tylko istotne pola).
+  - Zrobić `useMemo`/`useEffect` `isDirty = !deepEqual(current, initial)` — zarówno dla `form.getValues()`, jak i dla obu list transakcji.
+  - Zastąpić `hasUnsavedChanges` tym wyliczanym `isDirty`. Dzięki temu samo otwarcie dokumentu NIE zaznacza go jako brudnego, ale dodanie/edycja/usunięcie operacji TAK.
+- Pytać o potwierdzenie zawsze gdy `isDirty` przy:
+  - kliknięciu X / kliknięciu poza dialog / Esc — już jest `handleDialogOpenChange`, naprawi się automatycznie po naprawie `isDirty`.
+  - próbie zamknięcia/odświeżenia karty — `beforeunload` ma być warunkowy (`if (!isDirty) return;`), ustawiać `e.preventDefault()` + `e.returnValue = "Masz niezapisane zmiany w dokumencie..."`.
+  - próbie nawigacji w SPA (np. klik w menu boczne) — dodać blokadę `useBlocker` z React Router (jeśli `react-router-dom` v6.4+ jest dostępne) lub guard w `MainLayout`. Jeśli nie ma blokera, przynajmniej `beforeunload` zabezpieczy odświeżenie.
+- `ConfirmCloseDialog` już istnieje i ma 3 opcje (Anuluj / Zamknij bez zapisu / Zapisz) — wystarczy ponownie podpiąć logikę.
 
-4. **Migracja danych** – seed domyślnych mapowań:
-   - `loans_given` → `['212','213']`
-   - `loans_taken` → `['215']`
-   - `province` → `['200','201']` (zsumować oba prefiksy w fallback, by uniknąć utraty danych w nieskonfigurowanych domach)
-   - `others` → `['217']`
+### Sekcja techniczna (do wykonania w trybie build)
 
-5. **QA**: po wdrożeniu uruchomić raport dla Laskowic i Poznania za styczeń 2026, porównać z wartościami oczekiwanymi (17 629,37 / 35 031,78). Sprawdzić też Obrę.
+Pliki do edycji:
+- `src/pages/AccountSearch/AccountSearchPage.tsx` — przebudować `handleCreateDocumentFromSelected` na model draftu w pamięci, przekazać dane do `DocumentDialog`.
+- `src/pages/Documents/DocumentDialog.tsx` — przyjmować `initialDocumentDraft` + `initialTransactions`, dodać snapshot/`isDirty`, wczytywać `validation_errors` z istniejącego dokumentu, blokować zamknięcie dopóki konta nie uzupełnione, naprawić `beforeunload`.
+- `src/components/reports/ReportViewFull.tsx` — paginacja lub RPC dla `report-opening-balances-calculated-v2`.
+- `src/components/reports/ReportLiabilitiesTable.tsx`, `src/components/reports/ExportToExcelFull.tsx`, `ReportPDFGenerator(Compact).tsx` — to samo dla każdego miejsca liczącego salda otwarcia.
+- (opcjonalnie, zalecane) Migracja: nowa funkcja SQL `public.get_opening_balances(p_location uuid, p_before date)` zwracająca zagregowane salda po `account_number`, używana przez wszystkie raporty.
 
----
-
-## Pliki do zmiany
-
-- `src/hooks/useProvincialFee.ts` – nowy resolver, parametr `locationIdentifier`.
-- `src/pages/Administration/ProvincialFeeManagement.tsx` – pola docelowej analityki w wierszach.
-- `src/components/reports/ReportLiabilitiesTable.tsx` – usunąć sztywne `DEFAULT_LIABILITY_CATEGORIES` (lub trzymać jako fallback).
-- `src/components/reports/ReportViewFull.tsx` – ładowanie mapowań, refaktor `getCategoryOpeningBalance` i agregacji per pełny numer konta.
-- `src/components/reports/ExportToExcelFull.tsx`, `ReportPDFGeneratorCompact.tsx`, `ReportPDFGenerator.tsx` – ta sama zmiana logiki.
-- Migracja SQL: nowe kolumny w `provincial_fee_accounts`, nowa tabela `report_liability_category_mappings` + seed.
-- Aktualizacja `mem://features/administration/provincial-fee-auto-generation` i nowa notatka `mem://features/reports/liability-category-mappings`.
-
----
-
-## Podsumowanie zmian dla użytkownika
-
-1. Naliczanie 30% (i innych) trafi na **pełne konto z analityką domu** (np. `200-2-15-1` zamiast `200`). Konfigurowalne per prefix wyzwalający w Administracji.
-2. Sekcja „C. Należności i zobowiązania" w raporcie będzie używać **konkretnych kont** (z analityką) zdefiniowanych dla każdej lokalizacji. Domyślnie sumuje 200 i 201, ale admin może doprecyzować np. Laskowice = 200-2-10, Poznań = 201-2-15.
-3. Po zmianie raporty Laskowic, Poznania i Obry będą zgadzać się z saldami w wyszukiwarce kont.
+Weryfikacja po wdrożeniu:
+1. Wejść w „Wyszukaj konto" → zaznaczyć kilka operacji → „Utwórz dokument" → zamknąć X bez zapisu → potwierdzić, że żaden nowy dokument NIE pojawił się na liście.
+2. Wygenerować raport kwietniowy dla Świętego Krzyża, Laskowic, Poznania, Obry — saldo otwarcia każdej pozycji = saldo zamknięcia z marca.
+3. Otworzyć istniejący dokument → dodać operację → kliknąć poza dialog → ma się pojawić `ConfirmCloseDialog`. Otworzyć i tylko podejrzeć (bez zmian) → ma zamknąć bez pytania. Spróbować F5 z brudnym dokumentem → `beforeunload` pyta.
