@@ -9,6 +9,7 @@ import { Report } from '@/types/reports';
 import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/utils/supabasePagination';
 
 interface SyntheticAccount {
   prefix: string;
@@ -62,22 +63,24 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
       const dateFrom = getFirstDayOfMonth(report.year, report.month);
       const dateTo = getLastDayOfMonth(report.year, report.month);
 
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          amount,
-          debit_account_id,
-          credit_account_id,
-          debit_amount,
-          credit_amount,
-          debit_account:accounts!debit_account_id(number, name, type),
-          credit_account:accounts!credit_account_id(number, name, type)
-        `)
-        .eq('location_id', report.location_id)
-        .gte('date', dateFrom)
-        .lte('date', dateTo);
-
-      if (error) throw error;
+      const transactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('transactions')
+          .select(`
+            amount,
+            debit_account_id,
+            credit_account_id,
+            debit_amount,
+            credit_amount,
+            debit_account:accounts!debit_account_id(number, name, type),
+            credit_account:accounts!credit_account_id(number, name, type)
+          `)
+          .eq('location_id', report.location_id)
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .range(from, to)
+      );
 
       // Process transactions
       const financialStatusMap = new Map<string, { debits: number; credits: number }>();
