@@ -8,6 +8,7 @@ import { Report } from '@/types/reports';
 import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/utils/supabasePagination';
 
 interface AccountBreakdown {
   account_number: string;
