@@ -624,6 +624,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   useEffect(() => {
     if (document) {
+      // Wczytanie istniejącego dokumentu – traktujemy stan początkowy jako "czysty"
+      // dopóki użytkownik nic nie zmieni.
+      initialLoadDoneRef.current = false;
       const docDate = new Date(document.document_date);
       originalDocumentDate.current = {
         month: docDate.getMonth(),
@@ -640,10 +643,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       // Ustaw kurs wymiany z dokumentu
       setExchangeRate(document.exchange_rate || 1);
 
-      loadTransactions(document.id);
+      loadTransactions(document.id).finally(() => {
+        // Po załadowaniu transakcji uznajemy stan otwarcia za "czysty".
+        // Każda kolejna zmiana ustawi hasUnsavedChanges = true.
+        setTimeout(() => {
+          initialLoadDoneRef.current = true;
+        }, 0);
+      });
       setHasUnsavedChanges(false);
     } else {
       originalDocumentDate.current = null;
+      initialLoadDoneRef.current = false;
       form.reset({
         document_number: "",
         document_name: "",
@@ -654,6 +664,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       setParallelTransactions([]);
       setExchangeRate(1);
       setHasUnsavedChanges(false);
+      // Dla nowego dokumentu: po krótkim opóźnieniu uznajemy formularz za "gotowy",
+      // żeby śledzić zmiany użytkownika (a nie samo wyresetowanie pól).
+      setTimeout(() => {
+        initialLoadDoneRef.current = true;
+      }, 0);
     }
   }, [document, form, isOpen]);
 
