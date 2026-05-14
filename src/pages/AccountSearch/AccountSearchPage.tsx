@@ -64,6 +64,9 @@ const AccountSearchPage = () => {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<any>(null);
+  // Id dokumentu utworzonego przez "Utwórz dokument z zaznaczonych" – jeśli użytkownik
+  // anuluje bez zapisu z uzupełnionymi kontami, ten dokument jest usuwany przy zamknięciu.
+  const [pendingDraftDocId, setPendingDraftDocId] = useState<string | null>(null);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -362,9 +365,49 @@ const AccountSearchPage = () => {
     setIsDocumentDialogOpen(false);
     setEditingDocument(null);
     setSelectedTransactionIds([]);
+    // Dokument został zapisany przez użytkownika – nie traktujemy go już jako draft do usunięcia.
+    setPendingDraftDocId(null);
   };
 
-  const handleCloseDocumentDialog = () => {
+  const handleCloseDocumentDialog = async () => {
+    // Jeśli dokument został utworzony przez "Utwórz dokument z zaznaczonych" i użytkownik
+    // zamknął okno bez uzupełnienia kont – wycofujemy wpis z bazy, żeby nie zostawiać śmieci.
+    if (pendingDraftDocId) {
+      try {
+        const { data: docCheck } = await supabase
+          .from('documents')
+          .select('id, validation_errors')
+          .eq('id', pendingDraftDocId)
+          .maybeSingle();
+
+        const stillMissingAccounts = (() => {
+          if (!docCheck) return false;
+          const ve = docCheck.validation_errors as any;
+          if (!ve) return false;
+          try {
+            const arr = typeof ve === 'string' ? JSON.parse(ve) : ve;
+            return Array.isArray(arr) && arr.some((e: any) => e?.type === 'missing_accounts');
+          } catch {
+            return false;
+          }
+        })();
+
+        if (stillMissingAccounts) {
+          // Usuń transakcje, potem dokument
+          await supabase.from('transactions').delete().eq('document_id', pendingDraftDocId);
+          await supabase.from('documents').delete().eq('id', pendingDraftDocId);
+          toast({
+            title: 'Anulowano tworzenie dokumentu',
+            description: 'Pusty dokument został usunięty (brak uzupełnionych kont).',
+          });
+          queryClient.invalidateQueries({ queryKey: ['account-transactions'] });
+        }
+      } catch (err) {
+        console.error('Rollback draft document failed:', err);
+      } finally {
+        setPendingDraftDocId(null);
+      }
+    }
     setIsDocumentDialogOpen(false);
     setEditingDocument(null);
   };
@@ -460,6 +503,7 @@ const AccountSearchPage = () => {
       // Otwórz dokument do edycji
       setEditingDocument(newDocument);
       setIsDocumentDialogOpen(true);
+      setPendingDraftDocId(newDocument.id);
       setSelectedTransactionIds([]);
 
     } catch (error: any) {

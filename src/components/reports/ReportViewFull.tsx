@@ -10,6 +10,7 @@ import { ReportExpenseSection } from './ReportExpenseSection';
 import { ReportFinancialStatusTable, DEFAULT_CATEGORIES } from './ReportFinancialStatusTable';
 import { ReportIntentionsTable } from './ReportIntentionsTable';
 import { ReportLiabilitiesTable, DEFAULT_LIABILITY_CATEGORIES } from './ReportLiabilitiesTable';
+import { fetchAllRows } from '@/utils/supabasePagination';
 
 interface ReportViewFullProps {
   report: Report;
@@ -78,18 +79,21 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         return amount * exchangeRate;
       };
 
-      // Fetch ALL transactions up to end of previous month
-      const { data: allTransactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          debit_amount, credit_amount, currency, exchange_rate,
-          debit_account:accounts!transactions_debit_account_id_fkey(number),
-          credit_account:accounts!transactions_credit_account_id_fkey(number)
-        `)
-        .eq('location_id', locationId)
-        .lte('date', prevMonthEndStr);
-
-      if (error) throw error;
+      // Fetch ALL transactions up to end of previous month (z paginacją – limit 1000/req)
+      const allTransactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('transactions')
+          .select(`
+            debit_amount, credit_amount, currency, exchange_rate,
+            debit_account:accounts!transactions_debit_account_id_fkey(number),
+            credit_account:accounts!transactions_credit_account_id_fkey(number)
+          `)
+          .eq('location_id', locationId)
+          .lte('date', prevMonthEndStr)
+          .order('date', { ascending: true })
+          .range(from, to)
+      );
+      console.log('📊 Pobrano transakcji do salda otwarcia:', allTransactions.length);
 
       // Calculate cumulative balances per FULL account number AND per first-segment prefix.
       // - balances (Map<prefix,number>) keeps backward-compat for 1xx grouping.
@@ -140,19 +144,21 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       console.log('📅 Pobieram transakcje TYLKO za okres:', dateFrom, '-', dateTo);
 
-      // Fetch all transactions for the month ONLY
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-          credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-        `)
-        .eq('location_id', locationId)
-        .gte('date', dateFrom)
-        .lte('date', dateTo);
-
-      if (error) throw error;
+      // Fetch all transactions for the month ONLY (z paginacją – limit 1000/req)
+      const transactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('transactions')
+          .select(`
+            *,
+            debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+            credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
+          `)
+          .eq('location_id', locationId)
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .range(from, to)
+      );
 
       console.log('📊 Pobrano transakcji za bieżący miesiąc:', transactions?.length);
 

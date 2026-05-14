@@ -108,6 +108,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   const [isCapturingError, setIsCapturingError] = useState(false);
   const inlineFormRef = useRef<InlineTransactionRowRef>(null);
   const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
+  // Flaga: pierwsze załadowanie transakcji zakończone? Dopiero po niej zmiany w
+  // tablicy transactions/parallelTransactions oznaczają dokument jako "brudny".
+  // Dzięki temu samo otwarcie istniejącego dokumentu nie wywołuje fałszywego
+  // ostrzeżenia o niezapisanych zmianach.
+  const initialLoadDoneRef = useRef<boolean>(false);
+  // Czy wczytany dokument ma zapisaną walidację "missing_accounts" (powstał np.
+  // przez „Utwórz dokument z zaznaczonych operacji" – wymaga uzupełnienia kont).
+  const documentHasMissingAccounts = React.useMemo(() => {
+    const ve = (document as any)?.validation_errors;
+    if (!ve) return false;
+    try {
+      const arr = typeof ve === 'string' ? JSON.parse(ve) : ve;
+      return Array.isArray(arr) && arr.some((e: any) => e?.type === 'missing_accounts');
+    } catch {
+      return false;
+    }
+  }, [document]);
   const printRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<DocumentFormData>({
@@ -352,14 +369,20 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   useEffect(() => {
     const subscription = form.watch(() => {
-      setHasUnsavedChanges(true);
+      if (initialLoadDoneRef.current) {
+        setHasUnsavedChanges(true);
+      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // NOTE: Removed useEffect that set hasUnsavedChanges on transactions change,
-  // as it caused false "unsaved changes" alerts when loading existing documents.
-  // hasUnsavedChanges is now tracked only by form.watch() and explicit user edits.
+  // Po pierwszym załadowaniu transakcji każda zmiana listy operacji
+  // (dodanie / edycja / usunięcie / przesunięcie) oznacza dokument jako brudny.
+  useEffect(() => {
+    if (initialLoadDoneRef.current) {
+      setHasUnsavedChanges(true);
+    }
+  }, [transactions, parallelTransactions]);
 
   useEffect(() => {
     if (isOpen && !document) {
@@ -375,13 +398,15 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     }
   }, [isOpen, showInlineForm, isFullyLocked, isEditingBlocked]);
 
-  // Add warning before closing browser/tab when dialog is open
+  // Ostrzeżenie przed zamknięciem/odświeżeniem karty TYLKO gdy są niezapisane zmiany.
   useEffect(() => {
     if (!isOpen) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges) return;
       e.preventDefault();
-      e.returnValue = "";
+      e.returnValue = "Masz niezapisane zmiany w dokumencie. Czy na pewno chcesz opuścić stronę?";
+      return e.returnValue;
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -389,7 +414,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isOpen]);
+  }, [isOpen, hasUnsavedChanges]);
 
   const checkLastTransactionComplete = () => {
     const errors: ValidationError[] = [];
@@ -599,6 +624,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
   useEffect(() => {
     if (document) {
+      // Wczytanie istniejącego dokumentu – traktujemy stan początkowy jako "czysty"
+      // dopóki użytkownik nic nie zmieni.
+      initialLoadDoneRef.current = false;
       const docDate = new Date(document.document_date);
       originalDocumentDate.current = {
         month: docDate.getMonth(),
@@ -615,10 +643,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       // Ustaw kurs wymiany z dokumentu
       setExchangeRate(document.exchange_rate || 1);
 
-      loadTransactions(document.id);
+      loadTransactions(document.id).finally(() => {
+        // Po załadowaniu transakcji uznajemy stan otwarcia za "czysty".
+        // Każda kolejna zmiana ustawi hasUnsavedChanges = true.
+        setTimeout(() => {
+          initialLoadDoneRef.current = true;
+        }, 0);
+      });
       setHasUnsavedChanges(false);
     } else {
       originalDocumentDate.current = null;
+      initialLoadDoneRef.current = false;
       form.reset({
         document_number: "",
         document_name: "",
@@ -629,6 +664,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       setParallelTransactions([]);
       setExchangeRate(1);
       setHasUnsavedChanges(false);
+      // Dla nowego dokumentu: po krótkim opóźnieniu uznajemy formularz za "gotowy",
+      // żeby śledzić zmiany użytkownika (a nie samo wyresetowanie pól).
+      setTimeout(() => {
+        initialLoadDoneRef.current = true;
+      }, 0);
     }
   }, [document, form, isOpen]);
 
@@ -1685,6 +1725,16 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 Nie można zapisać dokumentu na datę {format(documentDate, "dd.MM.yyyy")}, ponieważ istnieje raport za
                 ten okres.
                 {!document && " Możesz wybrać inną datę."}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {documentHasMissingAccounts && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Ten dokument zawiera operacje bez przypisanych kont (Wn / Ma). Uzupełnij konta dla wszystkich operacji
+                i zapisz dokument, w przeciwnym razie zostanie on usunięty po zamknięciu okna.
               </AlertDescription>
             </Alert>
           )}
