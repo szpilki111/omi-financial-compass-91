@@ -66,24 +66,26 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
       // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          amount,
-          debit_account_id,
-          credit_account_id,
-          debit_amount,
-          credit_amount,
-          description,
-          document_number,
-          debit_account:accounts!debit_account_id(number, name, type),
-          credit_account:accounts!credit_account_id(number, name, type)
-        `)
-        .eq('location_id', report.location_id)
-        .gte('date', dateFrom)
-        .lte('date', dateTo);
-
-      if (error) throw error;
+      const transactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('transactions')
+          .select(`
+            amount,
+            debit_account_id,
+            credit_account_id,
+            debit_amount,
+            credit_amount,
+            description,
+            document_number,
+            debit_account:accounts!debit_account_id(number, name, type),
+            credit_account:accounts!credit_account_id(number, name, type)
+          `)
+          .eq('location_id', report.location_id)
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .range(from, to)
+      );
 
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
       const isRelevantAccount = (accountNumber: string) => {
@@ -175,22 +177,24 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          amount,
-          debit_account_id,
-          credit_account_id,
-          debit_amount,
-          credit_amount,
-          debit_account:accounts!debit_account_id(number, name, type),
-          credit_account:accounts!credit_account_id(number, name, type)
-        `)
-        .eq('location_id', report.location_id)
-        .gte('date', dateFrom)
-        .lte('date', dateTo);
-
-      if (error) throw error;
+      const transactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('transactions')
+          .select(`
+            amount,
+            debit_account_id,
+            credit_account_id,
+            debit_amount,
+            credit_amount,
+            debit_account:accounts!debit_account_id(number, name, type),
+            credit_account:accounts!credit_account_id(number, name, type)
+          `)
+          .eq('location_id', report.location_id)
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .range(from, to)
+      );
 
       // Definiuj kategorie zgodnie z obrazkiem
       const categoryDefinitions = {
