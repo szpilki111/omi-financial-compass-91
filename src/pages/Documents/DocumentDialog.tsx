@@ -108,6 +108,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   const [isCapturingError, setIsCapturingError] = useState(false);
   const inlineFormRef = useRef<InlineTransactionRowRef>(null);
   const parallelInlineFormRef = useRef<InlineTransactionRowRef>(null);
+  // Flaga: pierwsze załadowanie transakcji zakończone? Dopiero po niej zmiany w
+  // tablicy transactions/parallelTransactions oznaczają dokument jako "brudny".
+  // Dzięki temu samo otwarcie istniejącego dokumentu nie wywołuje fałszywego
+  // ostrzeżenia o niezapisanych zmianach.
+  const initialLoadDoneRef = useRef<boolean>(false);
+  // Czy wczytany dokument ma zapisaną walidację "missing_accounts" (powstał np.
+  // przez „Utwórz dokument z zaznaczonych operacji" – wymaga uzupełnienia kont).
+  const documentHasMissingAccounts = React.useMemo(() => {
+    const ve = (document as any)?.validation_errors;
+    if (!ve) return false;
+    try {
+      const arr = typeof ve === 'string' ? JSON.parse(ve) : ve;
+      return Array.isArray(arr) && arr.some((e: any) => e?.type === 'missing_accounts');
+    } catch {
+      return false;
+    }
+  }, [document]);
   const printRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<DocumentFormData>({
