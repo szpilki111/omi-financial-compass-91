@@ -2266,6 +2266,37 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
               )}
             </div>
 
+            {(!isDocumentBalanced || incompleteRowsCount > 0 || hasInlineDraft) && (
+              <div className="border-2 border-destructive bg-destructive/10 text-destructive p-3 rounded-lg space-y-1">
+                <div className="font-bold flex items-center gap-2">
+                  ⚠️ Dokument nie może zostać zapisany
+                </div>
+                <ul className="text-sm list-disc list-inside space-y-0.5">
+                  {!isDocumentBalanced && (
+                    <li>
+                      Dokument niezbilansowany: różnica{" "}
+                      <strong>
+                        {formatAmount(Math.abs(balanceDifference) * displayMultiplier, displayCurrency)}
+                      </strong>{" "}
+                      (Wn {formatAmount(totalDebitSum * displayMultiplier, displayCurrency)} ≠ Ma{" "}
+                      {formatAmount(totalCreditSum * displayMultiplier, displayCurrency)})
+                    </li>
+                  )}
+                  {incompleteRowsCount > 0 && (
+                    <li>
+                      Niekompletne pola w operacjach: <strong>{incompleteRowsCount}</strong>{" "}
+                      (uzupełnij opis, kwoty Wn/Ma i konta)
+                    </li>
+                  )}
+                  {hasInlineDraft && (
+                    <li>
+                      Niezatwierdzony wiersz roboczy — dokończ wprowadzanie lub usuń wiersz przed zapisem
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             <div className="flex justify-end space-x-2">
               {document && (
                 <Button
@@ -2291,7 +2322,23 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
               <Button
                 type="submit"
                 onClick={form.handleSubmit(onSubmit)}
-                disabled={isLoading || isGeneratingNumber || (isEditingBlocked && Boolean(documentDate))}
+                disabled={
+                  isLoading ||
+                  isGeneratingNumber ||
+                  (isEditingBlocked && Boolean(documentDate)) ||
+                  !canSaveDocument
+                }
+                title={
+                  !canSaveDocument
+                    ? !isDocumentBalanced
+                      ? "Dokument niezbilansowany"
+                      : incompleteRowsCount > 0
+                      ? "Uzupełnij brakujące pola w operacjach"
+                      : hasInlineDraft
+                      ? "Dokończ wprowadzanie operacji w wierszu roboczym"
+                      : undefined
+                    : undefined
+                }
               >
                 {isGeneratingNumber ? "Generowanie numeru..." : isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
               </Button>
