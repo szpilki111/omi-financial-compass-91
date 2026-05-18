@@ -42,12 +42,15 @@ const userSchema = z.object({
   email: z.string().email('Nieprawidłowy adres email'),
   phone: z.string().optional(),
   password: z.string().optional().or(z.literal('')),
-  role: z.enum(['ekonom', 'prowincjal', 'admin', 'proboszcz', 'asystent', 'asystent_ekonoma_prowincjalnego', 'ekonom_prowincjalny'], {
+  role: z.enum(['ekonom', 'prowincjal', 'admin', 'proboszcz', 'asystent', 'asystent_ekonoma_prowincjalnego', 'ekonom_prowincjalny', 'superior'], {
     required_error: 'Wybierz rolę użytkownika',
   }),
   location_ids: z.array(z.string()).default([]),
   new_location_name: z.string().optional(),
-});
+}).refine(
+  (d) => d.role !== 'superior' || (d.location_ids?.length ?? 0) > 0 || !!d.new_location_name?.trim(),
+  { message: 'Rola "Superior" wymaga przypisania co najmniej jednej placówki', path: ['location_ids'] }
+);
 
 type UserFormData = z.infer<typeof userSchema>;
 
@@ -590,6 +593,7 @@ const UserDialog = ({ open, onOpenChange, editingUser }: UserDialogProps) => {
                       <SelectItem value="asystent">Asystent</SelectItem>
                       <SelectItem value="asystent_ekonoma_prowincjalnego">Asystent Ekonoma Prowincjalnego</SelectItem>
                       <SelectItem value="ekonom_prowincjalny">Ekonom Prowincjalny</SelectItem>
+                      <SelectItem value="superior">Superior (tylko podgląd)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
