@@ -37,7 +37,7 @@ interface DocumentsTableProps {
 }
 
 const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading }) => {
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
 
   const isDocumentLocked = (doc: Document): boolean => {
@@ -182,11 +182,11 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
                           e.stopPropagation();
                           onDocumentClick(document);
                         }}
-                        title={locked ? "Podgląd (tylko do odczytu)" : "Edytuj"}
+                        title={locked || isReadOnly ? "Podgląd (tylko do odczytu)" : "Edytuj"}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
+                      {!isReadOnly && <Button
                         variant="ghost"
                         size="icon"
                         onClick={(e) => {
@@ -196,8 +196,8 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
                         title="Kopiuj dokument (utworzy nowy z dzisiejszą datą)"
                       >
                         <Copy className="h-4 w-4" />
-                      </Button>
-                      {!locked && (
+                      </Button>}
+                      {!locked && !isReadOnly && (
                         <Button
                           variant="ghost"
                           size="icon"
