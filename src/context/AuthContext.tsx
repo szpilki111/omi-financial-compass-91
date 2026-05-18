@@ -463,7 +463,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'prowincjal':
         return user.role === 'admin' || user.role === 'prowincjal';
       case 'ekonom':
-        return user.role === 'ekonom' || user.role === 'prowincjal' || user.role === 'admin';
+        return user.role === 'ekonom' || user.role === 'prowincjal' || user.role === 'admin' || user.role === 'superior';
+      case 'superior':
+        return user.role === 'superior' || user.role === 'admin' || user.role === 'prowincjal';
       default:
         return false;
     }
