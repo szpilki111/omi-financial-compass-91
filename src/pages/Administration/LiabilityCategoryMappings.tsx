@@ -15,10 +15,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   loans_given: '1. Pożyczki udzielone',
   loans_taken: '2. Pożyczki zaciągnięte',
   province: '3. Rozliczenia z prowincją',
-  others: '4. Rozliczenia z innymi',
+  province_benefits: '4. Świadczenia na rzecz prowincji',
+  others: '5. Rozliczenia z innymi',
 };
 
-const CATEGORY_KEYS = ['loans_given', 'loans_taken', 'province', 'others'] as const;
+const CATEGORY_KEYS = ['loans_given', 'loans_taken', 'province', 'province_benefits', 'others'] as const;
 
 const LiabilityCategoryMappings: React.FC = () => {
   const { toast } = useToast();
@@ -86,11 +87,25 @@ const LiabilityCategoryMappings: React.FC = () => {
     <Card>
       <CardHeader>
         <CardTitle>Mapowanie kategorii „Należności i zobowiązania" w raporcie</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Zdefiniuj numery kont (prefiksy lub pełne numery analityczne, np. 200, 201-2-15) dla każdej kategorii sekcji C raportu.
-          Mapowanie globalne (bez wyboru placówki) służy jako wartość domyślna; dla konkretnej placówki możesz nadpisać konkretne kategorie.
-          Wiele prefiksów rozdziel przecinkami.
-        </p>
+        <div className="text-sm text-muted-foreground space-y-1">
+          <p>
+            Zdefiniuj numery kont dla każdej kategorii sekcji C raportu. Mapowanie globalne (bez wyboru placówki)
+            służy jako wartość domyślna; dla konkretnej placówki możesz nadpisać konkretne kategorie. Wiele wpisów rozdziel przecinkami.
+          </p>
+          <p>
+            <strong>Składnia dopasowania:</strong>
+          </p>
+          <ul className="list-disc list-inside ml-2">
+            <li><code className="font-mono">201</code> — wszystkie konta zaczynające się od <code>201-</code> (pierwszy segment)</li>
+            <li><code className="font-mono">201-2-10</code> — DOKŁADNIE to konto (bez subkont <code>201-2-10-*</code>)</li>
+            <li><code className="font-mono">201-2-10-*</code> — to konto ORAZ wszystkie jego subkonta</li>
+          </ul>
+          <p className="text-xs italic">
+            Przykład: aby w „Rozliczenia z prowincją" widzieć tylko 201-X-10, a świadczenia parafii / fundację mieć
+            w osobnym wierszu — wpisz w „Rozliczenia z prowincją" np. <code>201-2-10</code>, a w „Świadczenia na rzecz prowincji"
+            np. <code>201-2-10-1, 201-2-10-2</code> (lub odpowiednie pełne numery subkont).
+          </p>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2 max-w-md">
