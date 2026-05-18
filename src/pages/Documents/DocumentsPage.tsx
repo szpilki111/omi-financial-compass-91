@@ -38,7 +38,8 @@ interface Document {
 }
 const DocumentsPage = () => {
   const {
-    user
+    user,
+    isReadOnly
   } = useAuth();
   const {
     toast
@@ -507,19 +508,19 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
                 <Search className="h-4 w-4" />
                 Wyszukaj operacje
               </Button>
-              <Button onClick={() => setIsImportSectionOpen(!isImportSectionOpen)} variant="outline" className="flex items-center gap-2">
+              {!isReadOnly && <Button onClick={() => setIsImportSectionOpen(!isImportSectionOpen)} variant="outline" className="flex items-center gap-2">
                 <FileUp className="h-4 w-4" />
                 Import z pliku
                 {isImportSectionOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-              <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
+              </Button>}
+              {!isReadOnly && <Button onClick={() => setIsDialogOpen(true)} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Nowy dokument
-              </Button>
+              </Button>}
             </div>
           </div>
 
-          {isImportSectionOpen && <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border flex-wrap">
+          {!isReadOnly && isImportSectionOpen && <div className="flex justify-end gap-2 p-4 bg-muted/50 rounded-lg border flex-wrap">
               <Button onClick={() => setIsExcelFormImportOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 Import Rozliczeń Excel
