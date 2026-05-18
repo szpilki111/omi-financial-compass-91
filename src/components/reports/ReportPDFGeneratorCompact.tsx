@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/utils/supabasePagination';
+import { matchesAccount } from '@/utils/liabilityMatching';
 
 interface SyntheticAccount {
   prefix: string;
@@ -59,8 +60,21 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
 
   // Pobieranie danych transakcji
   const { data: reportData } = useQuery({
-    queryKey: ['pdf_report_data', report.id, report.location_id, report.month, report.year],
+    queryKey: ['pdf_report_data_v3', report.id, report.location_id, report.month, report.year],
     queryFn: async () => {
+      // Per-location mapping z fallbackiem do globalnego
+      const { data: mappingRows } = await supabase
+        .from('report_liability_category_mappings')
+        .select('category_key, account_prefixes, location_id')
+        .or(`location_id.eq.${report.location_id},location_id.is.null`);
+      const mappingByKey = new Map<string, string[]>();
+      (mappingRows || []).filter((r: any) => !r.location_id).forEach((r: any) => {
+        mappingByKey.set(r.category_key, r.account_prefixes || []);
+      });
+      (mappingRows || []).filter((r: any) => r.location_id === report.location_id).forEach((r: any) => {
+        mappingByKey.set(r.category_key, r.account_prefixes || []);
+      });
+
       const dateFrom = getFirstDayOfMonth(report.year, report.month);
       const dateTo = getLastDayOfMonth(report.year, report.month);
 
@@ -86,6 +100,8 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
       // Process transactions
       const financialStatusMap = new Map<string, { debits: number; credits: number }>();
       const liabilitiesMap = new Map<string, { receivables: number; liabilities: number }>();
+      // Per FULL account number — wymagane dla mapowań wieloczłonowych (np. 201-2-10)
+      const liabilitiesByAccount = new Map<string, { receivables: number; liabilities: number }>();
       const incomeAccounts: SyntheticAccount[] = [];
       const expenseAccounts: SyntheticAccount[] = [];
       const incomeMap = new Map<string, { name: string; total: number }>();
@@ -113,6 +129,10 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
             const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
             existing.receivables += transactionAmount;
             liabilitiesMap.set(prefix, existing);
+            const fullNum = debit_account.number;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.receivables += transactionAmount;
+            liabilitiesByAccount.set(fullNum, ex2);
           }
 
           // Intentions 210 (Wn = przyjęte)
@@ -148,6 +168,10 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
             const existing = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
             existing.liabilities += transactionAmount;
             liabilitiesMap.set(prefix, existing);
+            const fullNum = credit_account.number;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.liabilities += transactionAmount;
+            liabilitiesByAccount.set(fullNum, ex2);
           }
 
           // Intentions 210 (Ma = odprawione i oddane)
@@ -197,15 +221,30 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
 
       // Build liabilities data
       const liabilitiesData = LIABILITY_CATEGORIES.map(category => {
+        const mapped = mappingByKey.get(category.key);
+        const accountsForCategory = mapped && mapped.length > 0 ? mapped : category.accounts;
         let receivables = 0;
         let liabilities = 0;
-        category.accounts.forEach(acc => {
-          const data = liabilitiesMap.get(acc);
-          if (data) {
-            receivables += data.receivables;
-            liabilities += data.liabilities;
-          }
-        });
+        if (accountsForCategory.length === 0) {
+          return { name: category.name, opening: 0, receivables: 0, liabilities: 0, closing: 0 };
+        }
+        const hasHyphen = accountsForCategory.some((a) => a.includes('-'));
+        if (hasHyphen) {
+          liabilitiesByAccount.forEach((data, accNum) => {
+            if (accountsForCategory.some((acc) => matchesAccount(accNum, acc))) {
+              receivables += data.receivables;
+              liabilities += data.liabilities;
+            }
+          });
+        } else {
+          accountsForCategory.forEach((acc) => {
+            const data = liabilitiesMap.get(acc);
+            if (data) {
+              receivables += data.receivables;
+              liabilities += data.liabilities;
+            }
+          });
+        }
         const opening = 0;
         const closing = opening + receivables - liabilities;
         return { name: category.name, opening, receivables, liabilities, closing };
