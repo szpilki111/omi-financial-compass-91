@@ -1,64 +1,94 @@
-# Napraw wielokrotne rozbijanie operacji
+## Plan naprawy rozbijania operacji
 
-## Problem (zreprodukowany)
+### Zasada główna
+Przycisk **Rozbij** nie może dzielić kwoty „na pół” ani wymyślać nowych proporcji. Ma działać tylko jako mechanizm **uzupełnienia różnicy dokumentu**.
 
-W `handleSplitTransaction` (`src/pages/Documents/DocumentDialog.tsx`, linie 1447–1579) istnieją dwie gałęzie:
+Jeżeli suma dokumentu jest już zbilansowana:
 
-1. **Normalne rozbicie** (oba pola mają kwoty, jedno większe od drugiego) — działa poprawnie: tworzy wiersz uzupełniający z różnicą na mniejszej stronie, druga strona pusta.
-2. **`isAlreadySplit`** (jedna strona pusta, druga ma kwotę) — **buguje**: kopiuje kwotę na **przeciwną** stronę nowego wiersza i przepisuje `debit_account_id`/`credit_account_id` ze starego wiersza (które tam są `undefined`).
+```text
+suma Wn = suma Ma
+```
 
-### Konkretny scenariusz z screenshotu
+kliknięcie **Rozbij** nie tworzy żadnego nowego wiersza. Pokaże tylko komunikat, że dokument jest zbilansowany i nie ma czego rozbijać.
 
-| Krok | Akcja | Wiersz 1 | Wiersz 2 | Wiersz 3 | Suma Wn/Ma |
-|------|-------|----------|----------|----------|------------|
-| 1 | Wpis: 100/100 | 100 (A) / 100 (B) | — | — | 100/100 ✅ |
-| 2 | User zmienia Ma na 50 | 100 (A) / 50 (B) | — | — | 100/50 ❌ |
-| 3 | Klik "Rozbij" w 1 | 100 (A) / 50 (B) | — / 50 (B) | — | 100/100 ✅ |
-| 4 | Klik "Rozbij" w 2 | 100 (A) / 50 (B) | — / 50 (B) | **50 (—) / —** | **150/100** ❌ |
+### Docelowe zachowanie
 
-Krok 4 to bug: zamiast **dalej podzielić** stronę Ma wiersza 2 (np. 30+20 na różne konta Ma), kod skopiował 50 na stronę Wn nowego wiersza, łamiąc bilans i mieszając konta.
+#### 1. Dokument niezbilansowany
+Po kliknięciu **Rozbij** system sprawdzi globalną różnicę całego dokumentu, nie tylko aktualnego wiersza:
 
-## Rozwiązanie
+```text
+różnica = suma Wn - suma Ma
+```
 
-Rozdzielić intencje:
+- jeśli **Wn < Ma**, brakuje kwoty po stronie Wn,
+- jeśli **Ma < Wn**, brakuje kwoty po stronie Ma.
 
-### A. Przycisk "Rozbij" na wierszu częściowo wypełnionym (jedna strona pusta z `_account_id=undefined`)
+Następnie utworzy jeden nowy wiersz z kwotą dokładnie równą brakującej różnicy po mniejszej stronie.
 
-Oznacza: **subdividuj kwotę na tej samej stronie**. Nowy wiersz musi mieć kwotę na **tej samej** stronie co źródło, kwota = `0` (do uzupełnienia przez usera), konto puste, druga strona pusta.
+Przykład:
 
-Dodatkowo: walidacja przy zapisie (już istnieje `incompleteRowsCount`) wymusi uzupełnienie kwoty i konta. Bilans dokumentu (`isDocumentBalanced`) blokuje zapis dopóki suma podziałów nie zgadza się z resztą operacji.
+```text
+Wiersz 1: Wn 100 / Ma 50
+Suma dokumentu: Wn 100 / Ma 50
+Różnica: 50 brakuje po Ma
+Klik Rozbij -> nowy wiersz: Wn — / Ma 50
+Suma dokumentu: Wn 100 / Ma 100
+```
 
-**Edge case**: jeśli wiersz częściowy ma kwotę X i user chce ją podzielić, sensowniej jest od razu zmniejszyć źródłową kwotę o połowę i dać drugą połowę nowemu wierszowi (zachowanie bilansu od ręki). Wybieram tę wersję — żaden wiersz nie zostaje z 0, bilans dokumentu utrzymany.
+#### 2. Dokument zbilansowany
+Jeżeli po pierwszym rozbiciu suma już się zgadza:
 
-### B. Przycisk "Rozbij" na wierszu zbilansowanym (oba pola mają równe kwoty)
+```text
+Wiersz 1: Wn 100 / Ma 50
+Wiersz 2: Wn — / Ma 50
+Suma dokumentu: Wn 100 / Ma 100
+```
 
-Obecnie zwraca toast "Kwoty są równe, nie ma czego rozdzielać" — to też utrudnia użycie. Najczęściej user chce wtedy rozbić **stronę Ma** (lub Wn) na kilka kont. 
+kolejne kliknięcie **Rozbij** na dowolnym wierszu nie zrobi niczego, bo dokument nie ma różnicy do uzupełnienia.
 
-Zachowanie: zamiast błędu, otworzyć istniejący `TransactionSplitDialog` (już zaimplementowany w `src/pages/Documents/TransactionSplitDialog.tsx`, ale obecnie **nie podpięty nigdzie**), który pozwala zdefiniować N pozycji sumujących się do kwoty docelowej. Na submit zastępujemy źródłowy wiersz N wierszami.
+#### 3. Wiersz już częściowy
+Dla wierszy typu:
 
-W pierwszej iteracji wybór strony do rozbicia: domyślnie **Ma** (najczęstszy przypadek księgowy — jeden wpływ/wydatek rozdzielony na kilka kategorii kosztów/przychodów). User może później wybrać przyciskiem strony.
+```text
+Wn — / Ma 50
+```
 
-### C. Normalne rozbicie (różne kwoty) — bez zmian
+system nie będzie już sam dzielił 50 na 25 + 25. To było błędne zachowanie. Taki podział użytkownik powinien wykonać ręcznie przez zmianę kwot, która ponownie spowoduje niezbilansowanie dokumentu, a dopiero wtedy **Rozbij** uzupełni brakującą stronę.
 
-Działa poprawnie, zostawiamy.
+Przykład ręcznego dalszego rozbicia:
 
-## Zakres zmian
+```text
+Start:
+Wiersz 1: Wn 100 / Ma 50
+Wiersz 2: Wn — / Ma 50
+Suma: 100 / 100
 
-**Pliki:**
-- `src/pages/Documents/DocumentDialog.tsx` — przepisanie gałęzi `isAlreadySplit` w `handleSplitTransaction` (linie 1476–1520) tak, żeby:
-  - kwota nowego wiersza była na **tej samej** stronie co źródło,
-  - kwota = połowa źródłowej, źródłowa też zmniejszona o połowę (zaokrąglenie do grosza, reszta zostaje na pierwszym wierszu),
-  - druga strona nowego wiersza pusta (`undefined` amount, `undefined` account_id),
-  - konto na rozbijanej stronie puste w nowym wierszu (user wybiera nowe konto).
+Użytkownik zmienia wiersz 2 na Ma 30:
+Wiersz 1: Wn 100 / Ma 50
+Wiersz 2: Wn — / Ma 30
+Suma: 100 / 80
 
-- (Opcjonalnie, etap 2) podpiąć `TransactionSplitDialog` dla wierszy zbilansowanych — wymaga przycisku wyboru strony i obsługi `onSplit` zastępującej źródłowy wiersz tablicą N nowych wierszy z aktualizacją `display_order`.
+Klik Rozbij -> system doda:
+Wiersz 3: Wn — / Ma 20
+Suma: 100 / 100
+```
 
-## Test po wdrożeniu
+### Zmiany techniczne
 
-Odtworzyć w przeglądarce scenariusz z screenshotu (100/100 → zmiana Ma na 50 → split → split na wierszu 2) i potwierdzić:
-- wiersz 3 powstaje z kwotą po stronie Ma (nie Wn),
-- suma Wn/Ma dokumentu pozostaje 100/100,
-- alert walidacyjny w stopce nie pokazuje "Różnica",
-- przycisk Zapisz blokowany dopiero gdy konta są puste (nie z powodu bilansu).
+W pliku `src/pages/Documents/DocumentDialog.tsx` zmienię `handleSplitTransaction` tak, żeby:
 
-Także scenariusz potrójnego rozbicia po stronie Ma: 100/100 → split → split → split, oczekiwane 4 wiersze, suma 100/100, wszystkie kwoty na Ma sumują się do 100.
+1. Najpierw liczył aktualne sumy dokumentu dla właściwej sekcji: głównej albo równoległej.
+2. Jeżeli różnica dokumentu wynosi `0,00`, natychmiast przerywał działanie bez dodawania wiersza.
+3. Jeżeli dokument jest niezbilansowany, tworzył dokładnie jeden wiersz uzupełniający po mniejszej stronie.
+4. Usunął logikę dzielenia istniejącej częściowej kwoty na pół.
+5. Nie modyfikował kwoty w klikniętym wierszu — nowy wiersz ma tylko uzupełnić brakującą różnicę.
+6. Skopiował opis i typ rozliczenia z klikniętego wiersza, ale konto uzupełnianej strony zostawił puste, żeby użytkownik wskazał właściwe konto.
+
+### Scenariusze kontrolne po wdrożeniu
+
+- `100 / 50` -> **Rozbij** -> dodaje `— / 50`.
+- Po tym suma `100 / 100` -> kolejne **Rozbij** nie dodaje niczego.
+- `100 / 50 + — / 30` -> **Rozbij** -> dodaje `— / 20`.
+- `70 / 100` -> **Rozbij** -> dodaje `30 / —`.
+- Przy różnicy poniżej 1 grosza nie dodaje wiersza.
+- Zapis nadal jest blokowany, jeśli dokument jest niezbilansowany albo nowy wiersz nie ma konta.
