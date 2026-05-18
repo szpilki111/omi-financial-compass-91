@@ -1445,7 +1445,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   };
 
   const handleSplitTransaction = (transactionIndex: number, isParallel: boolean = false) => {
-    // Pobierz AKTUALNĄ transakcję ze stanu, nie z closure - naprawia problem "stale closure"
+    // Pobierz AKTUALNĄ listę transakcji ze stanu, nie z closure
     const transactionList = isParallel ? parallelTransactions : transactions;
     const transaction = transactionList[transactionIndex];
 
@@ -1458,148 +1458,55 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       return;
     }
 
-    const debitAmount = transaction.debit_amount || 0;
-    const creditAmount = transaction.credit_amount || 0;
+    // Suma Wn/Ma TEJ sekcji (głównej albo równoległej).
+    // Rozbijanie uzupełnia brak w danej sekcji — nie miesza sekcji.
+    const sumDebit = transactionList.reduce((s, t) => s + (t.debit_amount || 0), 0);
+    const sumCredit = transactionList.reduce((s, t) => s + (t.credit_amount || 0), 0);
+    const diff = Math.round((sumDebit - sumCredit) * 100) / 100;
 
-    if (debitAmount === 0 && creditAmount === 0) {
+    if (Math.abs(diff) < 0.01) {
       toast({
-        title: "Błąd",
-        description: "Brak kwot do rozdzielenia",
-        variant: "destructive",
+        title: "Nie ma czego rozbijać",
+        description: "Suma Wn i Ma jest równa — dokument jest już zbilansowany.",
       });
       return;
     }
 
-    // Check if this is already a split transaction (one field is empty)
-    const isAlreadySplit = (debitAmount === 0 && creditAmount > 0) || (creditAmount === 0 && debitAmount > 0);
+    // diff > 0 => brakuje po stronie Ma; diff < 0 => brakuje po stronie Wn
+    const missingOnCredit = diff > 0;
+    const missingAmount = Math.abs(diff);
 
-    if (isAlreadySplit) {
-      // Operacja jest już rozbita (jedna strona pusta).
-      // Subdividujemy kwotę PO TEJ SAMEJ stronie — dzielimy na pół,
-      // zachowując bilans dokumentu. Nowy wiersz ma puste konto (user wybierze),
-      // druga strona pozostaje pusta.
-      const filledSideIsDebit = debitAmount > 0;
-      const sourceAmount = filledSideIsDebit ? debitAmount : creditAmount;
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: undefined,
+      description: transaction.description,
+      debit_amount: missingOnCredit ? undefined : missingAmount,
+      credit_amount: missingOnCredit ? missingAmount : undefined,
+      amount: missingAmount,
+      // Konto na uzupełnianej stronie zostawiamy puste — user wskaże właściwe
+      debit_account_id: undefined,
+      credit_account_id: undefined,
+      settlement_type: transaction.settlement_type,
+    };
 
-      // Podział na pół z zachowaniem grosza (reszta idzie do źródłowego wiersza)
-      const halfNew = Math.round((sourceAmount / 2) * 100) / 100;
-      const halfOld = Math.round((sourceAmount - halfNew) * 100) / 100;
+    const insertAndReorder = (prev: Transaction[]): Transaction[] => {
+      const newArray = [...prev];
+      newArray.splice(transactionIndex + 1, 0, newTransaction);
+      return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
+    };
 
-      if (halfNew <= 0 || halfOld <= 0) {
-        toast({
-          title: "Błąd",
-          description: "Kwota zbyt mała, aby ją dalej rozdzielić",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Zaktualizuj kwotę źródłowego wiersza (zmniejsz o połowę)
-      const updateSourceAmount = (t: Transaction): Transaction => ({
-        ...t,
-        debit_amount: filledSideIsDebit ? halfOld : undefined,
-        credit_amount: filledSideIsDebit ? undefined : halfOld,
-        amount: halfOld,
-      });
-
-      // Nowy wiersz: kwota po tej samej stronie, konto puste, druga strona pusta
-      const newTransaction: Transaction = {
-        ...transaction,
-        id: undefined,
-        description: transaction.description,
-        debit_amount: filledSideIsDebit ? halfNew : undefined,
-        credit_amount: filledSideIsDebit ? undefined : halfNew,
-        amount: halfNew,
-        debit_account_id: filledSideIsDebit ? undefined : undefined,
-        credit_account_id: filledSideIsDebit ? undefined : undefined,
-      };
-
-      if (isParallel) {
-        setParallelTransactions((prev) => {
-          if (transactionIndex !== undefined) {
-            const newArray = [...prev];
-            newArray[transactionIndex] = updateSourceAmount(newArray[transactionIndex]);
-            newArray.splice(transactionIndex + 1, 0, newTransaction);
-            // Update display_order for all transactions after insertion
-            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
-          }
-          return [...prev, newTransaction];
-        });
-      } else {
-        setTransactions((prev) => {
-          if (transactionIndex !== undefined) {
-            const newArray = [...prev];
-            newArray[transactionIndex] = updateSourceAmount(newArray[transactionIndex]);
-            newArray.splice(transactionIndex + 1, 0, newTransaction);
-            // Update display_order for all transactions after insertion
-            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
-          }
-          return [...prev, newTransaction];
-        });
-      }
-
-      toast({
-        title: "Kwota rozdzielona",
-        description: `Podzielono ${sourceAmount.toFixed(2)} ${form.getValues("currency")} na ${halfOld.toFixed(2)} + ${halfNew.toFixed(2)} (skoryguj kwoty i wybierz konto)`,
-      });
+    if (isParallel) {
+      setParallelTransactions(insertAndReorder);
     } else {
-      // Normal split: both fields have values
-      const isDebitSmaller = debitAmount < creditAmount;
-      const difference = Math.abs(debitAmount - creditAmount);
-
-      if (difference === 0) {
-        toast({
-          title: "Błąd",
-          description: "Kwoty są równe, nie ma czego rozdzielać",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Create new transaction:
-      // - Field with LARGER amount should be EMPTY (undefined)
-      // - Field with SMALLER amount should have the difference (larger - smaller)
-      const newTransaction: Transaction = {
-        ...transaction,
-        id: undefined,
-        description: transaction.description,
-        debit_amount: isDebitSmaller ? difference : undefined,
-        credit_amount: isDebitSmaller ? undefined : difference,
-        amount: difference,
-        // Only set account on the side that has an amount
-        debit_account_id: isDebitSmaller ? transaction.debit_account_id : undefined,
-        credit_account_id: isDebitSmaller ? undefined : transaction.credit_account_id,
-      };
-
-      if (isParallel) {
-        setParallelTransactions((prev) => {
-          if (transactionIndex !== undefined) {
-            const newArray = [...prev];
-            newArray.splice(transactionIndex + 1, 0, newTransaction);
-            // Update display_order for all transactions after insertion
-            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
-          }
-          return [...prev, newTransaction];
-        });
-      } else {
-        setTransactions((prev) => {
-          if (transactionIndex !== undefined) {
-            const newArray = [...prev];
-            newArray.splice(transactionIndex + 1, 0, newTransaction);
-            // Update display_order for all transactions after insertion
-            return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
-          }
-          return [...prev, newTransaction];
-        });
-      }
-
-      toast({
-        title: "Kwota rozdzielona",
-        description: `Utworzono operację z kwotą: ${difference.toFixed(2)} ${form.getValues("currency")}`,
-      });
+      setTransactions(insertAndReorder);
     }
 
     setHasUnsavedChanges(true);
+
+    toast({
+      title: "Dodano wiersz uzupełniający",
+      description: `Brakowało ${missingAmount.toFixed(2)} ${form.getValues("currency")} po stronie ${missingOnCredit ? "Ma" : "Wn"} — uzupełnij konto.`,
+    });
   };
 
   const handleSelectAll = (checked: boolean) => {
