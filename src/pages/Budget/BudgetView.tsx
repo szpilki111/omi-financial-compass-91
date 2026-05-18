@@ -23,7 +23,7 @@ interface BudgetViewProps {
 }
 
 const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -380,7 +380,7 @@ const BudgetView = ({ budgetId, onEdit, onBack }: BudgetViewProps) => {
           )}
 
           <div className="flex gap-2">
-            {(budget.status === 'draft' || budget.status === 'rejected') && (
+            {!isReadOnly && (budget.status === 'draft' || budget.status === 'rejected') && (
               <Button onClick={() => onEdit(budgetId)} variant="outline">
                 <Edit className="mr-2 h-4 w-4" />
                 Edytuj

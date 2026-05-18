@@ -18,7 +18,7 @@ interface BudgetListProps {
 }
 
 const BudgetList = ({ onView, onEdit, filterYear, filterLocationId, filterStatus, searchText }: BudgetListProps) => {
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
 
   const { data: budgets, isLoading, refetch } = useQuery({
     queryKey: ['budget-plans', user?.id, filterYear, filterLocationId, filterStatus],
@@ -160,7 +160,7 @@ const BudgetList = ({ onView, onEdit, filterYear, filterLocationId, filterStatus
                 <Eye className="mr-1 h-4 w-4" />
                 Zobacz
               </Button>
-              {budget.status === 'draft' && (
+              {!isReadOnly && budget.status === 'draft' && (
                 <Button
                   size="sm"
                   variant="outline"

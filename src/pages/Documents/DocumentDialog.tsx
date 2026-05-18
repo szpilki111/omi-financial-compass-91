@@ -76,7 +76,7 @@ interface DocumentFormData {
 }
 
 const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, locationIdOverride }: DocumentDialogProps) => {
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   // Full list of user's accounts (with pagination, no 1000-row limit)
@@ -804,6 +804,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   };
 
   const onSubmit = async (data: DocumentFormData) => {
+    if (isReadOnly) {
+      toast({ title: "Tryb tylko do odczytu", description: "Nie masz uprawnień do zapisu dokumentów.", variant: "destructive" });
+      return;
+    }
     if (!user?.location || !user?.id) {
       toast({
         title: "Błąd",
@@ -1858,9 +1862,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 >
                   Anuluj
                 </Button>
-                <Button type="submit" disabled={isLoading || isGeneratingNumber || isFullyLocked || (isEditingBlocked && Boolean(documentDate))}>
-                  {isFullyLocked ? "Dokument zablokowany" : isGeneratingNumber ? "Generowanie numeru..." : isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
-                </Button>
+                {!isReadOnly && (
+                  <Button type="submit" disabled={isLoading || isGeneratingNumber || isFullyLocked || (isEditingBlocked && Boolean(documentDate))}>
+                    {isFullyLocked ? "Dokument zablokowany" : isGeneratingNumber ? "Generowanie numeru..." : isLoading ? "Zapisywanie..." : document ? "Zapisz zmiany" : "Utwórz dokument"}
+                  </Button>
+                )}
               </div>
             </form>
           </Form>
@@ -1888,7 +1894,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 )}
               </div>
               <div className="flex gap-2">
-                {selectedTransactions.length > 0 && (
+                {!isReadOnly && selectedTransactions.length > 0 && (
                   <>
                     <Button
                       type="button"
@@ -1912,7 +1918,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                     </Button>
                   </>
                 )}
-                <Button
+                {!isReadOnly && <Button
                   type="button"
                   variant="outline"
                   onClick={() => setShowInlineForm(true)}
@@ -1921,7 +1927,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 >
                   <Plus className="h-4 w-4" />
                   Dodaj operację
-                </Button>
+                </Button>}
               </div>
             </div>
 

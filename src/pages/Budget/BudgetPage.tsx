@@ -23,7 +23,7 @@ type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'deviations' | 'multi-year
 const BudgetPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
@@ -122,14 +122,14 @@ const BudgetPage = () => {
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Porównanie wieloletnie
                 </Button>
-                <Button onClick={() => setIsImportDialogOpen(true)} variant="outline">
+                {!isReadOnly && <Button onClick={() => setIsImportDialogOpen(true)} variant="outline">
                   <FileUp className="mr-2 h-4 w-4" />
                   Import z pliku
-                </Button>
-                <Button onClick={handleCreateNew}>
+                </Button>}
+                {!isReadOnly && <Button onClick={handleCreateNew}>
                   <Plus className="mr-2 h-4 w-4" />
                   Nowy budżet
-                </Button>
+                </Button>}
               </>
             )}
           </div>

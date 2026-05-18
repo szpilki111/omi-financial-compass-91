@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session } from '@supabase/supabase-js';
 import { generateDeviceFingerprint, isDeviceTrusted } from '@/utils/deviceFingerprint';
 
-type Role = 'ekonom' | 'prowincjal' | 'admin' | 'proboszcz' | 'asystent' | 'asystent_ekonoma_prowincjalnego' | 'ekonom_prowincjalny';
+type Role = 'ekonom' | 'prowincjal' | 'admin' | 'proboszcz' | 'asystent' | 'asystent_ekonoma_prowincjalnego' | 'ekonom_prowincjalny' | 'superior';
 
 interface UserData {
   id: string;
@@ -26,6 +26,7 @@ interface AuthContextType {
   checkPermission: (requiredRole: Role | Role[]) => boolean;
   canApproveReports: boolean;
   canCreateReports: boolean;
+  isReadOnly: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   checkPermission: () => false,
   canApproveReports: false,
   canCreateReports: false,
+  isReadOnly: false,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -461,7 +463,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'prowincjal':
         return user.role === 'admin' || user.role === 'prowincjal';
       case 'ekonom':
-        return user.role === 'ekonom' || user.role === 'prowincjal' || user.role === 'admin';
+        return user.role === 'ekonom' || user.role === 'prowincjal' || user.role === 'admin' || user.role === 'superior';
+      case 'superior':
+        return user.role === 'superior' || user.role === 'admin' || user.role === 'prowincjal';
       default:
         return false;
     }
@@ -469,6 +473,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const canApproveReports = user?.role === 'admin' || user?.role === 'prowincjal';
   const canCreateReports = user?.role === 'ekonom' || user?.role === 'proboszcz';
+  const isReadOnly = user?.role === 'superior';
 
   return (
     <AuthContext.Provider
@@ -481,6 +486,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         checkPermission,
         canApproveReports,
         canCreateReports,
+        isReadOnly,
       }}
     >
       {children}
