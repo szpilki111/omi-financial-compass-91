@@ -16,7 +16,7 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterv
 import { pl } from "date-fns/locale";
 
 export function CalendarPage() {
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -271,10 +271,10 @@ export function CalendarPage() {
               </Select>
             )}
             
-            <Button onClick={handleAddEvent}>
+            {!isReadOnly && <Button onClick={handleAddEvent}>
               <Plus className="h-4 w-4 mr-2" />
               Nowe wydarzenie
-            </Button>
+            </Button>}
           </div>
         </div>
 
