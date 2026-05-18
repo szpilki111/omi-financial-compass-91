@@ -75,6 +75,8 @@ const getRoleLabel = (role: string) => {
       return "Asystent Ekonoma Prowincjalnego";
     case "ekonom_prowincjalny":
       return "Ekonom Prowincjalny";
+    case "superior":
+      return "Superior (podgląd)";
     default:
       return role;
   }
