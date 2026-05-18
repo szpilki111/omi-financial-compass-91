@@ -14,7 +14,6 @@ import {
   getIncomeAccountName,
   getExpenseAccountName,
 } from "@/constants/accountNames";
-import { matchesAccount } from "@/utils/liabilityMatching";
 
 interface ExportToExcelFullProps {
   report: Report;
