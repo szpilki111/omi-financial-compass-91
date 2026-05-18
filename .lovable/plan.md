@@ -1,73 +1,170 @@
-## Plan naprawy 3 błędów krytycznych
+# Plan: nowa rola „superior" (read-only) przypisana do placówki
 
-### Błąd 1 — „Utwórz dokument z zaznaczonych operacji" zostawia śmieci w bazie
+## Cel
+Dodać nową rolę użytkownika `superior`, która:
+- jest przypisana do jednej lub wielu konkretnych placówek (np. dom w Poznaniu 2-15),
+- widzi WSZYSTKO co ekonom danej placówki: dokumenty, transakcje, wyszukiwanie kont, raporty, KPIR, budżety, kalendarz, dashboard,
+- NIE może niczego utworzyć, edytować ani usunąć,
+- nie może też zatwierdzać raportów ani składać ich do akceptacji.
 
-**Przyczyna (potwierdzona w kodzie)**
-W `src/pages/AccountSearch/AccountSearchPage.tsx` (`handleCreateDocumentFromSelected`, linie ~373–474) sekwencja jest:
-1. RPC `generate_document_number` — rezerwuje numer (np. `DOMSWK/2026/05/01`).
-2. `INSERT INTO documents` — dokument trafia do bazy z `validation_errors`, ale bez kont.
-3. `INSERT INTO transactions` — transakcje bez kont (`debit_account_id: null`, `credit_account_id: null`).
-4. Dopiero potem otwiera `DocumentDialog` do uzupełnienia.
+## Zakres zmian
 
-Jeśli użytkownik anuluje (X / klik poza / Esc) — dokument i puste transakcje zostają w bazie. Do tego `DocumentDialog` po otwarciu już istniejącego rekordu nie pokazuje czerwonego alertu walidacyjnego (nie wczytuje `validation_errors` z DB do stanu `validationErrors`), a `hasUnsavedChanges` jest `false` (formularz nieedytowany), więc dialog zamyka się bez ostrzeżenia.
+### 1. Baza danych (migracja)
+Rola obecnie jest tekstem w `profiles.role`, więc nie ma enuma do rozszerzenia – wystarczy zezwolić na nową wartość.
 
-**Naprawa**
-- Przejść na model „draft w pamięci": NIE tworzyć dokumentu w bazie do czasu zapisu. Przekazywać do `DocumentDialog` propsy `initialDocumentDraft` + `initialTransactions` (już istnieje wzorzec dla nowego dokumentu — wykorzystać go).
-  - Numer dokumentu generować dopiero w `onSubmit` (tak jak przy zwykłym „Nowy dokument"), żeby nie zużywać numerów na anulowane wpisy.
-  - Po pomyślnym zapisie wyczyścić zaznaczenie (`setSelectedTransactionIds([])`) oraz odświeżyć listę.
-- Dodać „pas bezpieczeństwa" gdyby ktoś jednak utworzył pusty dokument w przyszłości:
-  - W `DocumentDialog` po wczytaniu istniejącego dokumentu, jeśli `validation_errors` zawiera `missing_accounts` (lub jakakolwiek transakcja ma puste konto) — pokazywać czerwony alert na górze dialogu i blokować zamknięcie tak samo jak `checkLastTransactionComplete`.
-  - Dodać RPC/edge function albo trigger SQL `prevent_save_without_accounts`: dokument nie może być zapisany bez przynajmniej jednej kompletnej transakcji (Wn + Ma + kwota). Już istnieje walidacja po stronie UI — trzeba ją wzmocnić serwerowo.
+**Migracja SQL:**
+- W `get_user_filtered_accounts` i `get_user_filtered_accounts_with_analytics` – traktować `superior` jak ekonoma w zakresie widoczności (czyli filtrować po `user_locations`/`location_identifier`), ale bez różnic, bo to tylko SELECT.
+- Aktualizacja polityk RLS – wszędzie tam, gdzie obecnie ekonom ma INSERT/UPDATE/DELETE per-lokalizacja, NIE dodawać `superior`. Dla SELECT dodać `superior` tam, gdzie aktualnie ograniczenie brzmi „ekonom widzi swoje lokalizacje".
 
-### Błąd 2 — saldo otwarcia kwietnia ≠ saldo zamknięcia marca (np. „Gotówka")
+Lista tabel do przejrzenia (na podstawie schematu):
+- `documents` – polityki SELECT: dodać warunek dla superior po `location_id ∈ user_locations`; INSERT/UPDATE/DELETE: BEZ superior (czyli zostaje blokada przez RLS).
+- `transactions` – analogicznie (SELECT po `location_id`/segmenty konta).
+- `accounts` / `analytical_accounts` – SELECT już jest dla wszystkich; nie dodawać INSERT/UPDATE/DELETE.
+- `reports`, `report_account_details`, `report_*` – SELECT przez `can_access_report` lub po location – rozszerzyć tak, żeby superior miał SELECT po swoich `user_locations`, ale NIC poza tym (żadnych submit/approve/edit).
+- `budget_plans`, `budget_items` – SELECT po lokalizacji dla superior; bez INSERT/UPDATE/DELETE.
+- `calendar_events`, `admin_notes`, `notifications` – SELECT po lokalizacji.
+- `locations`, `location_settings`, `location_accounts` – SELECT już jest dla wszystkich zalogowanych, OK.
+- `provincial_fee_*`, `account_*_restrictions`, `knowledge_*` – SELECT jest publiczny dla zalogowanych, OK.
 
-**Przyczyna (potwierdzona w kodzie)**
-W `src/components/reports/ReportViewFull.tsx`, query `report-opening-balances-calculated-v2` (linie 64–130) pobiera transakcje:
-
-```ts
-.from('transactions')
-.select(...)
-.eq('location_id', locationId)
-.lte('date', prevMonthEndStr);
+**Wzorzec dla polityki SELECT** (przykład dla `documents`):
+```sql
+DROP POLICY "Users can view documents from their location" ON public.documents;
+CREATE POLICY "Users can view documents from their location"
+ON public.documents FOR SELECT
+USING (
+  CASE
+    WHEN get_user_role() = ANY (ARRAY['admin','prowincjal']) THEN true
+    WHEN get_user_role() IN ('ekonom','proboszcz','superior','asystent','asystent_ekonoma_prowincjalnego','ekonom_prowincjalny')
+      THEN location_id = ANY (get_user_location_ids())
+    ELSE false
+  END
+);
 ```
 
-Brak paginacji + domyślny limit Supabase **1000 wierszy**. Dla domów takich jak Święty Krzyż, gdzie do końca marca jest >1000 transakcji, część operacji nie wchodzi do salda otwarcia, więc kwiecień startuje z innej kwoty niż zamknięcie marca (a saldo zamknięcia liczone jest z `openingBalance + bieżący miesiąc` w tym samym komponencie, więc tam też propaguje się błąd; ale „Koniec marca" w raporcie marca liczy się z mniejszego okresu i często mieści się w 1000).
+**Twardy bezpiecznik – trigger anty-zapis dla roli superior** (na wypadek, gdyby gdzieś pominięto warunek w RLS):
+```sql
+CREATE OR REPLACE FUNCTION public.block_superior_writes()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+  IF get_user_role() = 'superior' THEN
+    RAISE EXCEPTION 'Rola superior nie ma uprawnień do zapisu (tabela %)', TG_TABLE_NAME
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;$$;
+```
+Podpiąć BEFORE INSERT/UPDATE/DELETE na: `documents`, `transactions`, `reports`, `report_account_details`, `report_*` (pozostałe), `budget_plans`, `budget_items`, `accounts`, `analytical_accounts`, `calendar_events`, `location_*`, `notifications` (jeśli zapisuje user).
 
-To samo ryzyko mają zapytania o saldo otwarcia w innych miejscach (`ReportLiabilitiesTable`, `ExportToExcelFull`, generatory PDF) — sprawdzić i naprawić wszędzie.
+### 2. Frontend – warstwa autoryzacji
 
-**Naprawa**
-- Wprowadzić paginację po stronie klienta (pętla `range(from, from+999)` aż do końca) we wszystkich miejscach pobierających historię transakcji do salda otwarcia. Wzorzec już używany w innych modułach (np. eksport kont).
-- Lepiej: stworzyć RPC `get_opening_balances(location_id, before_date)` zwracający zagregowane salda po `account_number` po stronie SQL (jeden query, brak limitu wierszy w odpowiedzi, dużo szybsze). Wywoływać z `ReportViewFull`, `ReportLiabilitiesTable`, eksportów Excel/PDF.
-- Po naprawie zweryfikować: marzec→kwiecień dla Świętego Krzyża, Laskowic, Poznania, Obry — saldo zamknięcia poprzedniego miesiąca = saldo otwarcia następnego dla każdej kategorii (Kasa, Bank, Lokaty, kategorie pasywne).
+**`src/context/AuthContext.tsx`:**
+- Rozszerzyć typ `Role` o `'superior'`.
+- Dodać do obiektu wystawianego z kontekstu pole `isReadOnly = user?.role === 'superior'`.
+- `canCreateReports` – pozostaje bez `superior`.
+- `canApproveReports` – bez `superior`.
+- W `checkPermission`: dodać obsługę `case 'superior'` (lub po prostu dopuścić tę rolę do tras dla ekonoma w trybie odczytu – patrz niżej).
 
-### Błąd 3 — brak ostrzeżenia o niezapisanych zmianach przy zamknięciu / odświeżeniu
+**`src/components/auth/ProtectedRoute.tsx`:**
+- Dodać `'superior'` do typu Role.
+- Dla tras wymagających `requiredRole="ekonom"` (np. `/kpir`) – zezwolić również dla `superior`, bo to tylko podgląd.
 
-**Przyczyna (potwierdzona w kodzie)**
-W `src/pages/Documents/DocumentDialog.tsx`:
-- Linia 360–362: świadomie usunięto `useEffect` który ustawiał `hasUnsavedChanges` na zmianach `transactions` („powodował fałszywe alerty przy wczytywaniu istniejących dokumentów"). Skutek: edycja/dodanie/usunięcie operacji NIE oznacza dokumentu jako brudnego, więc `handleDialogOpenChange` (linia 501) i `handleCloseDialog` (514) zamykają dialog bez pytania.
-- `beforeunload` (382–392): `e.preventDefault()` + `e.returnValue = ""` jest aktywne zawsze gdy `isOpen`, ale niektóre przeglądarki wymagają też niepustego stringa (`e.returnValue = "..."`) i de facto nie pyta gdy nie ma realnych zmian — tu chcemy pytać tylko gdy są brudne dane, żeby nie irytować przy podglądzie.
+**`src/App.tsx`:**
+- Trasy `/dokumenty`, `/wyszukaj-konta`, `/reports`, `/budzet`, `/wizualizacja`, `/kalendarz`, `/baza-wiedzy`, `/dashboard` – `superior` ma dostęp (nie wymagają `requiredRole`, więc OK).
+- `/kpir` – dziś wymaga `ekonom` – zmienić na `requiredRole={['ekonom','superior','prowincjal','admin']}`.
+- `/administracja` – NIE dla superior (zostaje).
+- `/settings` – dozwolone (własny profil/2FA).
 
-**Naprawa**
-- Wprowadzić poprawne tracking „dirty":
-  - Po wczytaniu dokumentu (lub otwarciu pustego nowego) zapisać snapshot: `initialFormSnapshot`, `initialTransactionsSnapshot`, `initialParallelSnapshot` (deep clone, tylko istotne pola).
-  - Zrobić `useMemo`/`useEffect` `isDirty = !deepEqual(current, initial)` — zarówno dla `form.getValues()`, jak i dla obu list transakcji.
-  - Zastąpić `hasUnsavedChanges` tym wyliczanym `isDirty`. Dzięki temu samo otwarcie dokumentu NIE zaznacza go jako brudnego, ale dodanie/edycja/usunięcie operacji TAK.
-- Pytać o potwierdzenie zawsze gdy `isDirty` przy:
-  - kliknięciu X / kliknięciu poza dialog / Esc — już jest `handleDialogOpenChange`, naprawi się automatycznie po naprawie `isDirty`.
-  - próbie zamknięcia/odświeżenia karty — `beforeunload` ma być warunkowy (`if (!isDirty) return;`), ustawiać `e.preventDefault()` + `e.returnValue = "Masz niezapisane zmiany w dokumencie..."`.
-  - próbie nawigacji w SPA (np. klik w menu boczne) — dodać blokadę `useBlocker` z React Router (jeśli `react-router-dom` v6.4+ jest dostępne) lub guard w `MainLayout`. Jeśli nie ma blokera, przynajmniej `beforeunload` zabezpieczy odświeżenie.
-- `ConfirmCloseDialog` już istnieje i ma 3 opcje (Anuluj / Zamknij bez zapisu / Zapisz) — wystarczy ponownie podpiąć logikę.
+### 3. Frontend – ukrycie/wyłączenie akcji zapisu
 
-### Sekcja techniczna (do wykonania w trybie build)
+Wprowadzić jeden helper `useIsReadOnly()` (lub użyć `isReadOnly` z AuthContext). Następnie w każdym miejscu, gdzie renderujemy CTA zapisu, dopiąć `disabled` lub `hidden`.
 
-Pliki do edycji:
-- `src/pages/AccountSearch/AccountSearchPage.tsx` — przebudować `handleCreateDocumentFromSelected` na model draftu w pamięci, przekazać dane do `DocumentDialog`.
-- `src/pages/Documents/DocumentDialog.tsx` — przyjmować `initialDocumentDraft` + `initialTransactions`, dodać snapshot/`isDirty`, wczytywać `validation_errors` z istniejącego dokumentu, blokować zamknięcie dopóki konta nie uzupełnione, naprawić `beforeunload`.
-- `src/components/reports/ReportViewFull.tsx` — paginacja lub RPC dla `report-opening-balances-calculated-v2`.
-- `src/components/reports/ReportLiabilitiesTable.tsx`, `src/components/reports/ExportToExcelFull.tsx`, `ReportPDFGenerator(Compact).tsx` — to samo dla każdego miejsca liczącego salda otwarcia.
-- (opcjonalnie, zalecane) Migracja: nowa funkcja SQL `public.get_opening_balances(p_location uuid, p_before date)` zwracająca zagregowane salda po `account_number`, używana przez wszystkie raporty.
+Miejsca do zmiany (z grepa po projekcie):
+- **Dokumenty** (`src/pages/Documents/`):
+  - `DocumentsPage.tsx` / `DocumentsTable.tsx` – ukryć przyciski „Nowy dokument", „Import CSV", „Import MT940", „Import Excel", „Duplikuj", „Usuń", „Edytuj" → zostawić tylko „Podgląd".
+  - `DocumentDialog.tsx` – uruchamiać w trybie read-only: wszystkie pola `disabled`, brak przycisku „Zapisz", brak „Dodaj transakcję", brak „Rozbij", brak „Usuń". Pokazać banner „Tryb tylko do odczytu".
+  - `TransactionEditDialog.tsx`, `TransactionSplitDialog.tsx`, `InlineTransactionRow.tsx`, `TransactionForm.tsx` – nie powinny się otwierać; jeśli się otworzą (np. z linku), również read-only.
+- **Wyszukiwarka kont** (`src/pages/AccountSearch/`):
+  - `AccountSearchPage.tsx` – ukryć „Utwórz dokument z zaznaczonych", „Eksport" zostawić.
+  - `TransactionsList.tsx` – ukryć akcje edycji/usuwania.
+- **Raporty** (`src/pages/Reports/`):
+  - `ReportsPage.tsx` – ukryć „Nowy raport" (już opiera się o `canCreateReports`, więc OK).
+  - `ReportDetails.tsx` – ukryć „Złóż do akceptacji", „Edytuj", „Usuń"; sekcja zatwierdzania używa `canApproveReports` – OK.
+  - `ReportForm.tsx` – nie wchodzimy w nią dla superior.
+  - `DeleteReportDialog.tsx` – ukryć trigger.
+- **Budżet** (`src/pages/Budget/`):
+  - `BudgetList.tsx`, `BudgetView.tsx`, `BudgetForm.tsx`, `BudgetItemsTable.tsx`, `BudgetImportDialog.tsx` – ukryć przyciski tworzenia/edycji/importu/zatwierdzania; zostawić podgląd, eksport XLSX, porównania.
+- **KPIR** (`src/pages/KPIR/`):
+  - `KpirPage.tsx`, `KpirTable.tsx`, `KpirOperationDialog.tsx`, `KpirEditDialog.tsx`, `KpirImportDialog.tsx`, `AccountsImport.tsx` – ukryć dodawanie/edycję/import; zostawić tabelę i eksport.
+- **Kalendarz** (`src/pages/Calendar/`):
+  - `EventDialog.tsx`, `CalendarView.tsx` – ukryć „Dodaj wydarzenie", „Edytuj", „Usuń".
+- **Knowledge Base** (`src/pages/KnowledgeBase/`):
+  - Uploady i edycja – ukryć dla superior (zostaje podgląd).
+- **Dashboard** (`src/pages/Dashboard.tsx`):
+  - Quick actions prowadzące do tworzenia – ukryć lub zamienić na linki do podglądu.
+- **Header / Menu**:
+  - `src/components/layout/Header.tsx` – upewnić się, że link do Administracji jest ukryty dla superior (już jest, bo wymaga admin/prowincjał).
+- **Globalne przyciski**:
+  - `ErrorReportButton` – ZOSTAWIĆ (zgłaszanie błędów jest po stronie user_id = auth.uid()).
 
-Weryfikacja po wdrożeniu:
-1. Wejść w „Wyszukaj konto" → zaznaczyć kilka operacji → „Utwórz dokument" → zamknąć X bez zapisu → potwierdzić, że żaden nowy dokument NIE pojawił się na liście.
-2. Wygenerować raport kwietniowy dla Świętego Krzyża, Laskowic, Poznania, Obry — saldo otwarcia każdej pozycji = saldo zamknięcia z marca.
-3. Otworzyć istniejący dokument → dodać operację → kliknąć poza dialog → ma się pojawić `ConfirmCloseDialog`. Otworzyć i tylko podejrzeć (bez zmian) → ma zamknąć bez pytania. Spróbować F5 z brudnym dokumentem → `beforeunload` pyta.
+### 4. UI – Administracja (tworzenie użytkownika superior)
+
+**`src/pages/Administration/UserDialog.tsx`:**
+- W `userSchema` rozszerzyć `z.enum([...])` o `'superior'`.
+- W selektorze ról dodać opcję „Superior (tylko podgląd)".
+- W `UsersManagement.tsx` – w wyświetlaniu roli przetłumaczyć `superior` na „Superior (podgląd)".
+- Walidacja: superior MUSI mieć co najmniej jedną przypisaną lokalizację (`location_ids.length >= 1`) – dodać refinement w zod.
+
+### 5. Edge functions
+- `create-user-admin` – sprawdzić, czy nie ma listy dozwolonych ról; jeśli tak – dodać `superior`.
+- Inne edge functions (notyfikacje, raporty) – brak zmian.
+
+### 6. Test / weryfikacja
+1. Utworzyć użytkownika z rolą superior przypisanego do np. Poznania (2-15).
+2. Zalogować się – sprawdzić, że:
+   - widzi dokumenty, transakcje, raporty, budżety, KPIR tylko dla Poznania,
+   - nie widzi przycisków „Nowy", „Edytuj", „Usuń", „Importuj", „Złóż do akceptacji", „Zatwierdź",
+   - nie ma dostępu do `/administracja`,
+   - próba bezpośredniego POST do `documents` przez API kończy się błędem RLS / triggera `block_superior_writes`,
+   - eksporty (XLSX, PDF) działają,
+   - kalendarz i baza wiedzy są w trybie podglądu.
+3. Potwierdzić, że istniejący ekonom / prowincjał / admin działają bez zmian.
+
+## Szczegóły techniczne (dla dewelopera)
+
+### Helper
+W `AuthContext` dodać:
+```ts
+const isReadOnly = user?.role === 'superior';
+```
+i wyeksportować przez kontekst. Użyć wzorca `const { isReadOnly } = useAuth();` we wszystkich komponentach, w których są CTA zapisu.
+
+### Wzorzec ukrywania CTA
+```tsx
+{!isReadOnly && <Button onClick={handleNew}>Nowy dokument</Button>}
+```
+W formularzach edycji:
+```tsx
+<Input {...field} disabled={isReadOnly || originalDisabled} />
+...
+{!isReadOnly && <Button type="submit">Zapisz</Button>}
+```
+
+### Banner w dialogach (gdy otwarte przez superior)
+W `DocumentDialog`, `TransactionEditDialog`, `BudgetForm` itp. dodać na górze:
+```tsx
+{isReadOnly && (
+  <Alert>Jesteś w trybie tylko do odczytu. Edycja jest niedostępna.</Alert>
+)}
+```
+
+### Zabezpieczenie tras pisanych
+W komponentach z mutacjami (np. `onSubmit` w `DocumentDialog`) dodać guard:
+```ts
+if (isReadOnly) return;
+```
+żeby uniknąć round-tripów do bazy zakończonych błędem RLS.
+
+## Ryzyka
+- Pominięte miejsca z mutacjami → łapie trigger `block_superior_writes` (twarda blokada).
+- Polityki RLS dla `reports`/`report_account_details` używają `can_access_report` – funkcja już opiera się o `get_user_location_ids()`, więc superior automatycznie zyska SELECT bez zmian, o ile mamy go w `user_locations`.
+- Lista ról w wielu plikach – konieczne `rg "'ekonom'"` i ręczne przejrzenie wszystkich gatingów (Dashboard, Header, ProtectedRoute).
