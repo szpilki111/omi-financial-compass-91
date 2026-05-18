@@ -82,7 +82,7 @@ const RouterContent = () => {
       <Route
         path="/kpir"
         element={
-          <ProtectedRoute requiredRole="ekonom">
+          <ProtectedRoute requiredRole={["ekonom", "superior", "prowincjal", "admin"]}>
             <KpirPage />
           </ProtectedRoute>
         }
@@ -90,7 +90,7 @@ const RouterContent = () => {
       <Route
         path="/kpir/nowy"
         element={
-          <ProtectedRoute requiredRole="ekonom">
+          <ProtectedRoute requiredRole={["ekonom", "prowincjal", "admin"]}>
             <KpirPage />
           </ProtectedRoute>
         }
