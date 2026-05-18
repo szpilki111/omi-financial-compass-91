@@ -1,170 +1,90 @@
-# Plan: nowa rola „superior" (read-only) przypisana do placówki
+## Problem 1 — dokument nie waliduje bilansu Wn=Ma ani brakujących kont (wideo)
 
-## Cel
-Dodać nową rolę użytkownika `superior`, która:
-- jest przypisana do jednej lub wielu konkretnych placówek (np. dom w Poznaniu 2-15),
-- widzi WSZYSTKO co ekonom danej placówki: dokumenty, transakcje, wyszukiwanie kont, raporty, KPIR, budżety, kalendarz, dashboard,
-- NIE może niczego utworzyć, edytować ani usunąć,
-- nie może też zatwierdzać raportów ani składać ich do akceptacji.
+Z nagrania widać, że w dialogu dokumentu można:
+- mieć wiersz z kwotą Wn ≠ Ma (np. 55,00 vs 55 655,00),
+- pozostawić konto jako „Wybierz" (puste),
+- po użyciu „Rozdziel kwotę" powstaje pusty wiersz z `0,00 / Wybierz`,
+- mimo że łączne RAZEM Wn (72 369,28) ≠ Ma (127 869,28), nic nie sygnalizuje błędu — stopka pokazuje tylko sumy, brak czerwonego alertu, a „Zapisz zmiany" jest aktywne.
 
-## Zakres zmian
+To regresja — wcześniej taka walidacja istniała.
 
-### 1. Baza danych (migracja)
-Rola obecnie jest tekstem w `profiles.role`, więc nie ma enuma do rozszerzenia – wystarczy zezwolić na nową wartość.
+### Zakres naprawy (frontend: `src/pages/Documents/DocumentDialog.tsx` + ew. `InlineTransactionRow.tsx`, `TransactionSplitDialog.tsx`)
 
-**Migracja SQL:**
-- W `get_user_filtered_accounts` i `get_user_filtered_accounts_with_analytics` – traktować `superior` jak ekonoma w zakresie widoczności (czyli filtrować po `user_locations`/`location_identifier`), ale bez różnic, bo to tylko SELECT.
-- Aktualizacja polityk RLS – wszędzie tam, gdzie obecnie ekonom ma INSERT/UPDATE/DELETE per-lokalizacja, NIE dodawać `superior`. Dla SELECT dodać `superior` tam, gdzie aktualnie ograniczenie brzmi „ekonom widzi swoje lokalizacje".
+1. **Walidacja bilansu na poziomie dokumentu** (po stronie zapisu i jako stały wskaźnik w stopce):
+   - Liczyć `sumWn` i `sumMa` na podstawie aktualnych wierszy (z uwzględnieniem waluty/kursu — tak jak liczone są RAZEM).
+   - Jeśli `|sumWn − sumMa| > 0,005` → w stopce wyświetlić czerwoną informację „Dokument niezbilansowany: różnica X,XX zł" oraz zablokować przycisk „Zapisz zmiany" (disabled + tooltip z powodem).
+   - Dodatkowy guard w `onSubmit`: nawet jeśli ktoś ominie UI, blokować zapis i pokazywać toast błędu.
 
-Lista tabel do przejrzenia (na podstawie schematu):
-- `documents` – polityki SELECT: dodać warunek dla superior po `location_id ∈ user_locations`; INSERT/UPDATE/DELETE: BEZ superior (czyli zostaje blokada przez RLS).
-- `transactions` – analogicznie (SELECT po `location_id`/segmenty konta).
-- `accounts` / `analytical_accounts` – SELECT już jest dla wszystkich; nie dodawać INSERT/UPDATE/DELETE.
-- `reports`, `report_account_details`, `report_*` – SELECT przez `can_access_report` lub po location – rozszerzyć tak, żeby superior miał SELECT po swoich `user_locations`, ale NIC poza tym (żadnych submit/approve/edit).
-- `budget_plans`, `budget_items` – SELECT po lokalizacji dla superior; bez INSERT/UPDATE/DELETE.
-- `calendar_events`, `admin_notes`, `notifications` – SELECT po lokalizacji.
-- `locations`, `location_settings`, `location_accounts` – SELECT już jest dla wszystkich zalogowanych, OK.
-- `provincial_fee_*`, `account_*_restrictions`, `knowledge_*` – SELECT jest publiczny dla zalogowanych, OK.
+2. **Walidacja kompletności wierszy**:
+   - Wiersz jest „pusty/szkic" gdy: kwota Wn=0 i Ma=0 i oba konta = `Wybierz` → przy zapisie pomijać go (po uprzednim potwierdzeniu) albo usuwać.
+   - Wiersz „niekompletny" gdy: kwota > 0 a brak konta po tej stronie, lub konto wybrane a kwota = 0 → czerwony border + komunikat „Wybierz konto / Podaj kwotę". Blokować zapis.
+   - Wiersz „niezbilansowany per‑row" (Wn ≠ Ma w tym samym wierszu) jest dozwolony tylko jeśli istnieje wiersz uzupełniający (split). Inaczej oznaczać go ostrzeżeniem żółtym i wliczać do walidacji sum dokumentu.
 
-**Wzorzec dla polityki SELECT** (przykład dla `documents`):
-```sql
-DROP POLICY "Users can view documents from their location" ON public.documents;
-CREATE POLICY "Users can view documents from their location"
-ON public.documents FOR SELECT
-USING (
-  CASE
-    WHEN get_user_role() = ANY (ARRAY['admin','prowincjal']) THEN true
-    WHEN get_user_role() IN ('ekonom','proboszcz','superior','asystent','asystent_ekonoma_prowincjalnego','ekonom_prowincjalny')
-      THEN location_id = ANY (get_user_location_ids())
-    ELSE false
-  END
-);
-```
+3. **Naprawa „Rozdziel kwotę"** (`TransactionSplitDialog.tsx`):
+   - Po splicie nowo utworzony wiersz powinien dziedziczyć drugą stronę bilansu z wiersza źródłowego (lub być oznaczony jako wymagający uzupełnienia konta), a nie powstawać jako `0,00 / Wybierz`.
+   - Po splicie nie zwalniać aktualizacji RAZEM — sprawdzić, czy stan jest poprawnie odświeżany (memo/refetch).
 
-**Twardy bezpiecznik – trigger anty-zapis dla roli superior** (na wypadek, gdyby gdzieś pominięto warunek w RLS):
-```sql
-CREATE OR REPLACE FUNCTION public.block_superior_writes()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-BEGIN
-  IF get_user_role() = 'superior' THEN
-    RAISE EXCEPTION 'Rola superior nie ma uprawnień do zapisu (tabela %)', TG_TABLE_NAME
-      USING ERRCODE = '42501';
-  END IF;
-  RETURN COALESCE(NEW, OLD);
-END;$$;
-```
-Podpiąć BEFORE INSERT/UPDATE/DELETE na: `documents`, `transactions`, `reports`, `report_account_details`, `report_*` (pozostałe), `budget_plans`, `budget_items`, `accounts`, `analytical_accounts`, `calendar_events`, `location_*`, `notifications` (jeśli zapisuje user).
+4. **Aktualizacja stopki RAZEM w czasie rzeczywistym**:
+   - W filmie po dodaniu wiersza RAZEM przez chwilę nie aktualizuje się. Upewnić się, że suma jest liczona z bieżącego stanu (lokalnego), a nie z DB.
 
-### 2. Frontend – warstwa autoryzacji
+5. **Toast/alert blokujący**:
+   - Przy próbie zapisu z błędami: jeden zbiorczy modal/alert „Nie można zapisać: niezbilansowany dokument / niekompletne wiersze" z listą problemów (numery wierszy).
 
-**`src/context/AuthContext.tsx`:**
-- Rozszerzyć typ `Role` o `'superior'`.
-- Dodać do obiektu wystawianego z kontekstu pole `isReadOnly = user?.role === 'superior'`.
-- `canCreateReports` – pozostaje bez `superior`.
-- `canApproveReports` – bez `superior`.
-- W `checkPermission`: dodać obsługę `case 'superior'` (lub po prostu dopuścić tę rolę do tras dla ekonoma w trybie odczytu – patrz niżej).
+---
 
-**`src/components/auth/ProtectedRoute.tsx`:**
-- Dodać `'superior'` do typu Role.
-- Dla tras wymagających `requiredRole="ekonom"` (np. `/kpir`) – zezwolić również dla `superior`, bo to tylko podgląd.
+## Problem 2 — „Rozliczenia z prowincją" (sekcja C) w raporcie ≠ saldo konta 201‑2‑10 w „programie"
 
-**`src/App.tsx`:**
-- Trasy `/dokumenty`, `/wyszukaj-konta`, `/reports`, `/budzet`, `/wizualizacja`, `/kalendarz`, `/baza-wiedzy`, `/dashboard` – `superior` ma dostęp (nie wymagają `requiredRole`, więc OK).
-- `/kpir` – dziś wymaga `ekonom` – zmienić na `requiredRole={['ekonom','superior','prowincjal','admin']}`.
-- `/administracja` – NIE dla superior (zostaje).
-- `/settings` – dozwolone (własny profil/2FA).
+Przykład: Laskowice, styczeń. W AccountSearch dla 201‑2‑10 saldo = **17 659,37** (zawiera „świadczenia parafii na prowincję 1 160,00" i „fundacja św. Józefa 600,00"). W raporcie sekcja C, wiersz 3 „Rozliczenia z prowincją" = **19 419,37**. Różnica 1 760,00 = 1 160 + 600.
 
-### 3. Frontend – ukrycie/wyłączenie akcji zapisu
+### Diagnoza (kod: `src/components/reports/ReportViewFull.tsx` + warianty PDF/Excel)
 
-Wprowadzić jeden helper `useIsReadOnly()` (lub użyć `isReadOnly` z AuthContext). Następnie w każdym miejscu, gdzie renderujemy CTA zapisu, dopiąć `disabled` lub `hidden`.
+- Domyślny mapping `DEFAULT_LIABILITY_CATEGORIES` używa prefiksu `'201'` (jednoczłonowego). W konsekwencji `getCategoryOpeningBalance` i agregacja używają gałęzi „single‑segment → sumuj wszystko co zaczyna się od `201`" — czyli włącznie z `201‑2‑11`, `201‑2‑12` itd. (subkonta świadczeń parafii i fundacji), które wpadają do tej samej kategorii zamiast być wyłączone.
+- Z opisu wynika, że „świadczenia parafii na prowincję" i „fundacja św. Józefa" księgowane są na osobnych subkontach 201‑*, ale w raporcie traktowane są jak „rozliczenie z prowincją". AccountSearch pokazuje tylko 201‑2‑10, więc nie zawiera tych dwóch pozycji — stąd rozbieżność.
+- Wniosek: kategoria C.3 nie powinna sumować całego prefiksu `201`, lecz tylko konkretne subkonta odpowiadające „czystym" rozliczeniom z prowincją. Mechanizm konfiguracji już istnieje (`report_liability_category_mappings`), ale w bazie nie ma odpowiednich wpisów per‑placówka.
 
-Miejsca do zmiany (z grepa po projekcie):
-- **Dokumenty** (`src/pages/Documents/`):
-  - `DocumentsPage.tsx` / `DocumentsTable.tsx` – ukryć przyciski „Nowy dokument", „Import CSV", „Import MT940", „Import Excel", „Duplikuj", „Usuń", „Edytuj" → zostawić tylko „Podgląd".
-  - `DocumentDialog.tsx` – uruchamiać w trybie read-only: wszystkie pola `disabled`, brak przycisku „Zapisz", brak „Dodaj transakcję", brak „Rozbij", brak „Usuń". Pokazać banner „Tryb tylko do odczytu".
-  - `TransactionEditDialog.tsx`, `TransactionSplitDialog.tsx`, `InlineTransactionRow.tsx`, `TransactionForm.tsx` – nie powinny się otwierać; jeśli się otworzą (np. z linku), również read-only.
-- **Wyszukiwarka kont** (`src/pages/AccountSearch/`):
-  - `AccountSearchPage.tsx` – ukryć „Utwórz dokument z zaznaczonych", „Eksport" zostawić.
-  - `TransactionsList.tsx` – ukryć akcje edycji/usuwania.
-- **Raporty** (`src/pages/Reports/`):
-  - `ReportsPage.tsx` – ukryć „Nowy raport" (już opiera się o `canCreateReports`, więc OK).
-  - `ReportDetails.tsx` – ukryć „Złóż do akceptacji", „Edytuj", „Usuń"; sekcja zatwierdzania używa `canApproveReports` – OK.
-  - `ReportForm.tsx` – nie wchodzimy w nią dla superior.
-  - `DeleteReportDialog.tsx` – ukryć trigger.
-- **Budżet** (`src/pages/Budget/`):
-  - `BudgetList.tsx`, `BudgetView.tsx`, `BudgetForm.tsx`, `BudgetItemsTable.tsx`, `BudgetImportDialog.tsx` – ukryć przyciski tworzenia/edycji/importu/zatwierdzania; zostawić podgląd, eksport XLSX, porównania.
-- **KPIR** (`src/pages/KPIR/`):
-  - `KpirPage.tsx`, `KpirTable.tsx`, `KpirOperationDialog.tsx`, `KpirEditDialog.tsx`, `KpirImportDialog.tsx`, `AccountsImport.tsx` – ukryć dodawanie/edycję/import; zostawić tabelę i eksport.
-- **Kalendarz** (`src/pages/Calendar/`):
-  - `EventDialog.tsx`, `CalendarView.tsx` – ukryć „Dodaj wydarzenie", „Edytuj", „Usuń".
-- **Knowledge Base** (`src/pages/KnowledgeBase/`):
-  - Uploady i edycja – ukryć dla superior (zostaje podgląd).
-- **Dashboard** (`src/pages/Dashboard.tsx`):
-  - Quick actions prowadzące do tworzenia – ukryć lub zamienić na linki do podglądu.
-- **Header / Menu**:
-  - `src/components/layout/Header.tsx` – upewnić się, że link do Administracji jest ukryty dla superior (już jest, bo wymaga admin/prowincjał).
-- **Globalne przyciski**:
-  - `ErrorReportButton` – ZOSTAWIĆ (zgłaszanie błędów jest po stronie user_id = auth.uid()).
+### Zakres naprawy
 
-### 4. UI – Administracja (tworzenie użytkownika superior)
+A. **Logika spójności (frontend, `ReportViewFull.tsx`, `ReportPDFGeneratorCompact.tsx`, `ExportToExcelFull.tsx`):**
+   - Spójnie traktować mapping — jeżeli istnieje mapping dla kategorii (globalny lub per‑lokalizacja), używać go w obu miejscach (saldo otwarcia + ruchy bieżące + PDF/Excel). Obecnie ReportViewFull już to robi, ale upewnić się, że identyczna logika jest w PDF i Excel (regresja możliwa w PDF/Excel — tam są zaszyte stałe prefiksy `201`/`217`).
+   - Dodać dziennikowanie (`console.log`) listy kont, które złożyły się na każdą kategorię — ułatwi audyt.
 
-**`src/pages/Administration/UserDialog.tsx`:**
-- W `userSchema` rozszerzyć `z.enum([...])` o `'superior'`.
-- W selektorze ról dodać opcję „Superior (tylko podgląd)".
-- W `UsersManagement.tsx` – w wyświetlaniu roli przetłumaczyć `superior` na „Superior (podgląd)".
-- Walidacja: superior MUSI mieć co najmniej jedną przypisaną lokalizację (`location_ids.length >= 1`) – dodać refinement w zod.
+B. **UI do konfiguracji mapping per placówka** (Administracja):
+   - Strona „Mapowanie kategorii raportu" (lub rozszerzenie istniejącej `LiabilityCategoryMappings.tsx` — sprawdzić, czy taka istnieje pod ścieżką Administracja → Mapowanie zobowiązań). Tabela: `category_key` × placówka × lista prefiksów / pełnych numerów kont.
+   - Walidacja: dla `province` (Rozliczenia z prowincją) wymagać konkretnych subkont (np. `201‑2‑10`), nie samego `201`.
+   - Podgląd „co wpadnie do kategorii" na żywo (lista kont z bazy pasujących do prefiksów).
 
-### 5. Edge functions
-- `create-user-admin` – sprawdzić, czy nie ma listy dozwolonych ról; jeśli tak – dodać `superior`.
-- Inne edge functions (notyfikacje, raporty) – brak zmian.
+C. **Migracja danych — naprawienie aktualnego mappingu dla Laskowic**:
+   - Dodać per‑location wpis dla `category_key = 'province'` z prefiksem `201‑2‑10` (i analogiczne wpisy dla pozostałych placówek po konsultacji).
+   - Dla pozostałych kategorii (`loans_given`, `loans_taken`, `others`) zweryfikować, że globalny mapping pozostaje poprawny.
+   - Wykonać jako migrację/skrypt insertujący tylko tam, gdzie wpisu jeszcze nie ma (idempotentnie).
 
-### 6. Test / weryfikacja
-1. Utworzyć użytkownika z rolą superior przypisanego do np. Poznania (2-15).
-2. Zalogować się – sprawdzić, że:
-   - widzi dokumenty, transakcje, raporty, budżety, KPIR tylko dla Poznania,
-   - nie widzi przycisków „Nowy", „Edytuj", „Usuń", „Importuj", „Złóż do akceptacji", „Zatwierdź",
-   - nie ma dostępu do `/administracja`,
-   - próba bezpośredniego POST do `documents` przez API kończy się błędem RLS / triggera `block_superior_writes`,
-   - eksporty (XLSX, PDF) działają,
-   - kalendarz i baza wiedzy są w trybie podglądu.
-3. Potwierdzić, że istniejący ekonom / prowincjał / admin działają bez zmian.
+D. **Re‑kalkulacja istniejących raportów**:
+   - Po naprawie dodać przycisk „Przelicz ponownie" już istnieje — upewnić się, że unieważnia cache (queryKey z wersją) i ponownie liczy sekcję C wg nowego mappingu. Wystarczy bump queryKey (`report-full-data-v3`).
 
-## Szczegóły techniczne (dla dewelopera)
+E. **Test akceptacyjny**:
+   - Laskowice / styczeń 2026 → C.3 = 17 659,37 (zgodne z AccountSearch 201‑2‑10).
+   - PDF i Excel pokazują tę samą wartość.
 
-### Helper
-W `AuthContext` dodać:
-```ts
-const isReadOnly = user?.role === 'superior';
-```
-i wyeksportować przez kontekst. Użyć wzorca `const { isReadOnly } = useAuth();` we wszystkich komponentach, w których są CTA zapisu.
+---
 
-### Wzorzec ukrywania CTA
-```tsx
-{!isReadOnly && <Button onClick={handleNew}>Nowy dokument</Button>}
-```
-W formularzach edycji:
-```tsx
-<Input {...field} disabled={isReadOnly || originalDisabled} />
-...
-{!isReadOnly && <Button type="submit">Zapisz</Button>}
-```
+## Pliki do zmiany (szacunkowo)
 
-### Banner w dialogach (gdy otwarte przez superior)
-W `DocumentDialog`, `TransactionEditDialog`, `BudgetForm` itp. dodać na górze:
-```tsx
-{isReadOnly && (
-  <Alert>Jesteś w trybie tylko do odczytu. Edycja jest niedostępna.</Alert>
-)}
-```
+- `src/pages/Documents/DocumentDialog.tsx` — walidacja bilansu, blokada zapisu, alert w stopce.
+- `src/pages/Documents/InlineTransactionRow.tsx` — walidacja wiersza (border/tooltip).
+- `src/pages/Documents/TransactionSplitDialog.tsx` — poprawny stan po splicie.
+- `src/components/reports/ReportViewFull.tsx` — bump queryKey, drobne logi.
+- `src/components/reports/ReportPDFGeneratorCompact.tsx`, `src/components/reports/ExportToExcelFull.tsx` — używać tego samego mechanizmu mappingu co ReportViewFull.
+- `src/pages/Administration/LiabilityCategoryMappings.tsx` (lub utworzyć) — UI konfiguracji per placówka.
+- Migracja SQL — wstawienie per‑location mappingu `province → ['201-2-10']` dla Laskowic (po potwierdzeniu listy placówek/subkont).
 
-### Zabezpieczenie tras pisanych
-W komponentach z mutacjami (np. `onSubmit` w `DocumentDialog`) dodać guard:
-```ts
-if (isReadOnly) return;
-```
-żeby uniknąć round-tripów do bazy zakończonych błędem RLS.
+## Kolejność wdrożenia
+1. Problem 1 — walidacja dokumentu (krytyczne dla danych księgowych).
+2. Problem 2A — wyrównanie logiki PDF/Excel z UI.
+3. Problem 2B — UI mappingu w Administracji.
+4. Problem 2C — migracja danych dla Laskowic (i kolejnych placówek wskazanych przez użytkownika).
+5. Problem 2D/E — re‑kalkulacja i weryfikacja.
 
-## Ryzyka
-- Pominięte miejsca z mutacjami → łapie trigger `block_superior_writes` (twarda blokada).
-- Polityki RLS dla `reports`/`report_account_details` używają `can_access_report` – funkcja już opiera się o `get_user_location_ids()`, więc superior automatycznie zyska SELECT bez zmian, o ile mamy go w `user_locations`.
-- Lista ról w wielu plikach – konieczne `rg "'ekonom'"` i ręczne przejrzenie wszystkich gatingów (Dashboard, Header, ProtectedRoute).
+## Pytania przed wdrożeniem
+- **Dla każdej placówki potrzebuję listy „czystych" subkont 201 do prowincji** — czy zawsze jest to wzorzec `201‑X‑10`, czy zróżnicowane? Jeżeli tak, mogę użyć konwencji nazewniczej i wypełnić mapping automatycznie.
+- Czy świadczenia parafii (1 160) i fundacja (600) powinny pojawiać się w innym wierszu sekcji C (np. nowa pozycja „Świadczenia na rzecz prowincji") czy pomijane całkowicie?
+- Czy w przypadku niezbilansowanego dokumentu chcesz całkowitą blokadę zapisu, czy możliwość zapisu jako „szkic" z czerwonym oznaczeniem (analogicznie do walidacji raportów)?
