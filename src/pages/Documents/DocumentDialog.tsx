@@ -1474,28 +1474,51 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     const isAlreadySplit = (debitAmount === 0 && creditAmount > 0) || (creditAmount === 0 && debitAmount > 0);
 
     if (isAlreadySplit) {
-      // Operacja ma jedną stronę pustą (np. po imporcie MT940/CSV lub po wcześniejszym rozbiciu).
-      // Tworzymy nowy wiersz uzupełniający — kwota brana TYLKO z tej operacji (nie z sumy dokumentu).
-      const filledAmount = debitAmount > 0 ? debitAmount : creditAmount;
+      // Operacja jest już rozbita (jedna strona pusta).
+      // Subdividujemy kwotę PO TEJ SAMEJ stronie — dzielimy na pół,
+      // zachowując bilans dokumentu. Nowy wiersz ma puste konto (user wybierze),
+      // druga strona pozostaje pusta.
       const filledSideIsDebit = debitAmount > 0;
+      const sourceAmount = filledSideIsDebit ? debitAmount : creditAmount;
 
-      // Nowy wiersz: po przeciwnej (pustej) stronie dajemy tę samą kwotę,
-      // strona już wypełniona pozostaje pusta — użytkownik wskaże nowe konto.
+      // Podział na pół z zachowaniem grosza (reszta idzie do źródłowego wiersza)
+      const halfNew = Math.round((sourceAmount / 2) * 100) / 100;
+      const halfOld = Math.round((sourceAmount - halfNew) * 100) / 100;
+
+      if (halfNew <= 0 || halfOld <= 0) {
+        toast({
+          title: "Błąd",
+          description: "Kwota zbyt mała, aby ją dalej rozdzielić",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Zaktualizuj kwotę źródłowego wiersza (zmniejsz o połowę)
+      const updateSourceAmount = (t: Transaction): Transaction => ({
+        ...t,
+        debit_amount: filledSideIsDebit ? halfOld : undefined,
+        credit_amount: filledSideIsDebit ? undefined : halfOld,
+        amount: halfOld,
+      });
+
+      // Nowy wiersz: kwota po tej samej stronie, konto puste, druga strona pusta
       const newTransaction: Transaction = {
         ...transaction,
         id: undefined,
         description: transaction.description,
-        debit_amount: filledSideIsDebit ? undefined : filledAmount,
-        credit_amount: filledSideIsDebit ? filledAmount : undefined,
-        amount: filledAmount,
-        debit_account_id: filledSideIsDebit ? undefined : transaction.debit_account_id,
-        credit_account_id: filledSideIsDebit ? transaction.credit_account_id : undefined,
+        debit_amount: filledSideIsDebit ? halfNew : undefined,
+        credit_amount: filledSideIsDebit ? undefined : halfNew,
+        amount: halfNew,
+        debit_account_id: filledSideIsDebit ? undefined : undefined,
+        credit_account_id: filledSideIsDebit ? undefined : undefined,
       };
 
       if (isParallel) {
         setParallelTransactions((prev) => {
           if (transactionIndex !== undefined) {
             const newArray = [...prev];
+            newArray[transactionIndex] = updateSourceAmount(newArray[transactionIndex]);
             newArray.splice(transactionIndex + 1, 0, newTransaction);
             // Update display_order for all transactions after insertion
             return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
@@ -1506,6 +1529,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
         setTransactions((prev) => {
           if (transactionIndex !== undefined) {
             const newArray = [...prev];
+            newArray[transactionIndex] = updateSourceAmount(newArray[transactionIndex]);
             newArray.splice(transactionIndex + 1, 0, newTransaction);
             // Update display_order for all transactions after insertion
             return newArray.map((t, i) => ({ ...t, display_order: i + 1 }));
@@ -1516,7 +1540,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
       toast({
         title: "Kwota rozdzielona",
-        description: `Utworzono operację z kwotą: ${filledAmount.toFixed(2)} ${form.getValues("currency")}`,
+        description: `Podzielono ${sourceAmount.toFixed(2)} ${form.getValues("currency")} na ${halfOld.toFixed(2)} + ${halfNew.toFixed(2)} (skoryguj kwoty i wybierz konto)`,
       });
     } else {
       // Normal split: both fields have values
