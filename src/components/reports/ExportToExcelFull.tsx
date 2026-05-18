@@ -148,8 +148,6 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const expenseMap = new Map<string, number>();
       const financialStatusMap = new Map<string, { debits: number; credits: number }>();
       const liabilitiesMap = new Map<string, { receivables: number; liabilities: number }>();
-      const liabilitiesByAccount = new Map<string, { receivables: number; liabilities: number }>();
-      const openingBalancesByAccount = new Map<string, number>();
       // Konto 210 jest pasywne: Ma = przyjęte, Wn = odprawione i oddane
       let intentions210Received = 0; // Ma
       let intentions210CelebratedGiven = 0; // Wn
