@@ -1679,6 +1679,44 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   const displayMultiplier = showInPLN && isForeignCurrency ? exchangeRate : 1;
   const displayCurrency = showInPLN && isForeignCurrency ? "PLN" : selectedCurrency;
 
+  // === Walidacja na żywo: bilans Wn=Ma + kompletność wierszy ===
+  const balanceDifference = totalDebitSum - totalCreditSum;
+  const isDocumentBalanced = Math.abs(balanceDifference) <= 0.005;
+
+  const incompleteRowsCount = (() => {
+    const all = [...transactions, ...parallelTransactions];
+    let count = 0;
+    all.forEach((t) => {
+      const hasDebit = !!t.debit_amount && t.debit_amount !== 0;
+      const hasCredit = !!t.credit_amount && t.credit_amount !== 0;
+      const isSplit = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
+      const hasAnyData =
+        hasDebit ||
+        hasCredit ||
+        !!t.debit_account_id ||
+        !!t.credit_account_id ||
+        (t.description && t.description.trim() !== "");
+      if (!hasAnyData) return; // całkowicie pusty wiersz – ignoruj
+      if (!t.description || t.description.trim() === "") {
+        count++;
+      }
+      if (isSplit) {
+        if (hasDebit && !t.debit_account_id) count++;
+        if (hasCredit && !t.credit_account_id) count++;
+      } else {
+        if (!hasDebit) count++;
+        if (!hasCredit) count++;
+        if (!t.debit_account_id) count++;
+        if (!t.credit_account_id) count++;
+      }
+    });
+    return count;
+  })();
+
+  const hasInlineDraft = hasInlineFormData || hasParallelInlineFormData;
+  const canSaveDocument =
+    isDocumentBalanced && incompleteRowsCount === 0 && !hasInlineDraft;
+
   if (checkingBlock) {
     return (
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
