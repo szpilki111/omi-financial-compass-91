@@ -55,7 +55,7 @@ interface Transaction {
 const AccountSearchPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, isReadOnly } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -687,7 +687,7 @@ const AccountSearchPage = () => {
               </Button>
               
               <div className="flex gap-2 ml-auto">
-                {selectedTransactionIds.length > 0 && (
+                {!isReadOnly && selectedTransactionIds.length > 0 && (
                   <Button 
                     variant="default" 
                     onClick={handleCreateDocumentFromSelected}
