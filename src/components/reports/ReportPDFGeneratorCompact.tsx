@@ -38,12 +38,13 @@ const FINANCIAL_STATUS_CATEGORIES = [
   { key: 'lokaty', name: '3. Lokaty bankowe', accounts: ['117'] },
 ];
 
-// Nowa struktura kategorii należności/zobowiązań
+// Nowa struktura kategorii należności/zobowiązań — zsynchronizowana z UI raportu
 const LIABILITY_CATEGORIES = [
-  { name: '1. Pożyczki udzielone', accounts: ['212', '213'] },
-  { name: '2. Pożyczki zaciągnięte', accounts: ['215'] },
-  { name: '3. Rozliczenia z prowincją', accounts: ['201'] },
-  { name: '4. Rozliczenia z innymi', accounts: ['217'] },
+  { key: 'loans_given', name: '1. Pożyczki udzielone', accounts: ['212', '213'] },
+  { key: 'loans_taken', name: '2. Pożyczki zaciągnięte', accounts: ['215'] },
+  { key: 'province', name: '3. Rozliczenia z prowincją', accounts: ['201'] },
+  { key: 'province_benefits', name: '4. Świadczenia na rzecz prowincji', accounts: [] as string[] },
+  { key: 'others', name: '5. Rozliczenia z innymi', accounts: ['217'] },
 ];
 
 const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
