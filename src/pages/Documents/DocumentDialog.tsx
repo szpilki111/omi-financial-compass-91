@@ -988,10 +988,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       }, 0);
 
       toast({
-        title: "Uwaga - dokument zawiera błędy",
-        description: `Zapisuję dokument z ${totalMissingFields} pustymi polami. Uzupełnij je później.`,
-        variant: "default",
+        title: "Nie można zapisać dokumentu",
+        description: `Dokument zawiera ${errors.length} niekompletnych operacji (${totalMissingFields} pustych pól). Uzupełnij wymagane pola (opis, kwoty, konta) i spróbuj ponownie.`,
+        variant: "destructive",
       });
+      setIsLoading(false);
+      return;
     }
 
     // Add incomplete transactions from inline forms to the main list
