@@ -19,7 +19,8 @@ const DEFAULT_LIABILITY_CATEGORIES = [
   { key: 'loans_given', name: '1. Pożyczki udzielone', accounts: ['212', '213'] },
   { key: 'loans_taken', name: '2. Pożyczki zaciągnięte', accounts: ['215'] },
   { key: 'province', name: '3. Rozliczenia z prowincją', accounts: ['201'] },
-  { key: 'others', name: '4. Rozliczenia z innymi', accounts: ['217'] },
+  { key: 'province_benefits', name: '4. Świadczenia na rzecz prowincji', accounts: [] as string[] },
+  { key: 'others', name: '5. Rozliczenia z innymi', accounts: ['217'] },
 ];
 
 export const ReportLiabilitiesTable: React.FC<ReportLiabilitiesTableProps> = ({

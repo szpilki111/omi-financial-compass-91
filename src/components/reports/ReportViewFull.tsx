@@ -11,6 +11,7 @@ import { ReportFinancialStatusTable, DEFAULT_CATEGORIES } from './ReportFinancia
 import { ReportIntentionsTable } from './ReportIntentionsTable';
 import { ReportLiabilitiesTable, DEFAULT_LIABILITY_CATEGORIES } from './ReportLiabilitiesTable';
 import { fetchAllRows } from '@/utils/supabasePagination';
+import { matchesAccount } from '@/utils/liabilityMatching';
 
 interface ReportViewFullProps {
   report: Report;
@@ -63,7 +64,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
   // Fetch opening balances from ALL transactions BEFORE this month
   const { data: openingBalances } = useQuery({
-    queryKey: ['report-opening-balances-calculated-v2', locationId, month, year],
+    queryKey: ['report-opening-balances-calculated-v3', locationId, month, year],
     queryFn: async () => {
       // Calculate end of previous month
       const prevMonthEnd = month === 1 
@@ -135,7 +136,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
   // Fetch transactions for the CURRENT month only
   const { data: transactionData, isLoading } = useQuery({
-    queryKey: ['report-full-data', locationId, month, year],
+    queryKey: ['report-full-data-v3', locationId, month, year],
     queryFn: async () => {
       const firstDayOfMonth = new Date(year, month - 1, 1);
       const lastDayOfMonth = new Date(year, month, 0);
@@ -338,19 +339,19 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     if (!openingBalances) return 0;
     const { balances, balancesByAccount } = openingBalances;
     let total = 0;
-    accounts.forEach(acc => {
-      if (acc.includes('-')) {
-        // Specific multi-segment prefix → match per FULL account number
-        balancesByAccount.forEach((balance, accNum) => {
-          if (accNum === acc || accNum.startsWith(acc + '-')) total += balance;
-        });
-      } else {
-        // Single-segment prefix → use first-segment aggregation
-        balances.forEach((balance, prefix) => {
-          if (prefix === acc) total += balance;
-        });
-      }
-    });
+    if (accounts.length === 0) return 0;
+    const hasHyphen = accounts.some((a) => a.includes('-'));
+    if (hasHyphen) {
+      // Per FULL account-number matching (supports exact and wildcard "-*")
+      balancesByAccount.forEach((balance, accNum) => {
+        if (accounts.some((acc) => matchesAccount(accNum, acc))) total += balance;
+      });
+    } else {
+      // Single-segment prefixes → aggregate first-segment prefix
+      balances.forEach((balance, prefix) => {
+        if (accounts.includes(prefix)) total += balance;
+      });
+    }
     return total;
   };
 
@@ -392,6 +393,17 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     const mapped = liabilityMappings?.byKey.get(category.key);
     const accountsForCategory = mapped && mapped.length > 0 ? mapped : category.accounts;
 
+    if (accountsForCategory.length === 0) {
+      const openingBalance = 0;
+      return {
+        name: category.name,
+        openingBalance,
+        receivables: 0,
+        liabilities: 0,
+        closingBalance: 0,
+      };
+    }
+
     const isSpecific = accountsForCategory.some(a => a.includes('-'));
 
     let receivables = 0;
@@ -399,7 +411,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
     if (isSpecific) {
       // Aggregate by FULL account number against mapped prefixes
       (transactionData?.liabilitiesByAccount || []).forEach(ld => {
-        if (accountsForCategory.some(acc => ld.accountNumber === acc || ld.accountNumber.startsWith(acc + '-'))) {
+        if (accountsForCategory.some(acc => matchesAccount(ld.accountNumber, acc))) {
           receivables += ld.receivables;
           liabilities += ld.liabilities;
         }
