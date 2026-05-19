@@ -979,6 +979,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     // Set validation errors but allow saving
     setValidationErrors(errors);
 
+    // UWAGA: nie blokujemy zapisu z niekompletnymi polami.
+    // Dokument zapisuje się i otrzymuje validation_errors,
+    // dzięki czemu na liście dokumentów pojawia się badge "X pustych pól".
     if (errors.length > 0) {
       const totalMissingFields = errors.reduce((sum, e) => {
         if (e.missingFields) {
@@ -986,14 +989,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
         }
         return sum;
       }, 0);
-
       toast({
-        title: "Nie można zapisać dokumentu",
-        description: `Dokument zawiera ${errors.length} niekompletnych operacji (${totalMissingFields} pustych pól). Uzupełnij wymagane pola (opis, kwoty, konta) i spróbuj ponownie.`,
-        variant: "destructive",
+        title: "Dokument zapisany z brakami",
+        description: `Zapisano dokument zawierający ${errors.length} niekompletnych operacji (${totalMissingFields} pustych pól). Możesz go uzupełnić później.`,
       });
-      setIsLoading(false);
-      return;
     }
 
     // Add incomplete transactions from inline forms to the main list
