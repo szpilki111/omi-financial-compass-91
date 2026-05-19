@@ -2203,10 +2203,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
               )}
             </div>
 
-            {(!isDocumentBalanced || incompleteRowsCount > 0 || hasInlineDraft) && (
-              <div className="border-2 border-destructive bg-destructive/10 text-destructive p-3 rounded-lg space-y-1">
+            {hasDocumentWarnings && (
+              <div className="border-2 border-amber-400 bg-amber-50 text-amber-900 p-3 rounded-lg space-y-1">
                 <div className="font-bold flex items-center gap-2">
-                  ⚠️ Dokument nie może zostać zapisany
+                  ⚠️ Dokument zostanie zapisany jako niekompletny
                 </div>
                 <ul className="text-sm list-disc list-inside space-y-0.5">
                   {!isDocumentBalanced && (
