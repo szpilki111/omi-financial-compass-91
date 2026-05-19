@@ -1030,14 +1030,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     const totalDebit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.debit_amount || 0), 0);
     const totalCredit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.credit_amount || 0), 0);
 
+    // Brak twardej blokady przy niezbilansowaniu — dokument zapisuje się,
+    // a brak bilansu zostanie odnotowany w validation_errors (status na liście).
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      errors.push({
+        type: "unbalanced",
+        message: `Suma WN (${totalDebit.toFixed(2)}) ≠ Suma MA (${totalCredit.toFixed(2)})`,
+      } as any);
       toast({
-        title: "Dokument niezbalansowany",
-        description: `Suma WN (${totalDebit.toFixed(2)}) nie równa się sumie MA (${totalCredit.toFixed(2)}). Dokument nie zostanie zapisany.`,
-        variant: "destructive",
+        title: "Dokument zapisany jako niezbilansowany",
+        description: `Suma WN (${totalDebit.toFixed(2)}) nie równa się sumie MA (${totalCredit.toFixed(2)}). Uzupełnij brakujące kwoty lub konta.`,
       });
-      setIsLoading(false);
-      return;
     }
 
     setIsLoading(true);
