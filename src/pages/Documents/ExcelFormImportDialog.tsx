@@ -377,14 +377,14 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
       return;
     }
 
-    // BLOKADA: Nie pozwól na import jeśli są brakujące konta
+    // BRAK twardej blokady: importujemy wszystkie wiersze, brakujące konta
+    // (m.in. syntetyka wymagająca analityki) zostaną zapisane jako null
+    // i pokazane jako "X pustych pól" w statusie dokumentu na liście.
     if (hasAccountErrors) {
       toast({
-        title: "Błąd importu",
-        description: `Nie można zaimportować pliku. Brakujące konta: ${missingAccounts.join(", ")}`,
-        variant: "destructive",
+        title: "Import z brakami",
+        description: `Dokument zostanie utworzony z brakującymi kontami (${missingAccounts.join(", ")}). Uzupełnij je ręcznie po imporcie.`,
       });
-      return;
     }
 
     const validTransactions = generatedTransactions;
