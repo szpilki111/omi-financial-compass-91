@@ -58,15 +58,23 @@ Funkcja tylko z poziomu administratora (prowincja).
 
 ```text
 Priorytet 1 (krytyczne błędy blokujące pracę):
-  1.1  pusta linijka blokuje zapis + status z liczbą braków
-  1.3  import Excela na konto syntetyczne
-  1.2  eksport raportu do Excela ze starymi saldami
+  [x] 1.1  pusta linijka blokuje zapis + status z liczbą braków
+  [x] 1.3  import Excela na konto syntetyczne
+  [x] 1.2  eksport raportu do Excela ze starymi saldami
+         → ExportToExcelFull używa teraz paginacji (fetchAllRows)
+           oraz mapowań kategorii (per-location/global) i matchesAccount,
+           tak jak ReportViewFull → wartości w pliku zgadzają się 1:1 z UI.
 
 Priorytet 2 (poprawki UX):
-  1.4  edycja z poziomu konta podmienia numer/datę
-  1.5  weryfikacja sald Laskowice
+  [x] 1.4  edycja z poziomu konta podmienia numer/datę
+         → AccountSearchPage otwiera DocumentDialog dopiero gdy
+           editingDocument jest gotowy (nie startuje w trybie "nowy").
+  [ ] 1.5  weryfikacja sald Laskowice (zadanie po stronie użytkownika)
 
-Priorytet 3 (nowa funkcjonalność — osobna wycena):
-  2.1  podgląd obrotów i sald bloku kont (panel administratora)
-  2.2  draft cennika demo
+Priorytet 3 (nowa funkcjonalność):
+  [x] 2.1  podgląd obrotów i sald — nowa zakładka "Obroty i salda (globalnie)"
+           w Administracji (admin/prowincjał): konto + okres (miesiąc/kwartał/rok),
+           tabela pogrupowana po poziomach (prowincja/domy/parafie/dzieła),
+           eksport do Excela.
+  [ ] 2.2  draft cennika demo — do przygotowania osobno (poza kodem aplikacji).
 ```
