@@ -1649,8 +1649,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   })();
 
   const hasInlineDraft = hasInlineFormData || hasParallelInlineFormData;
-  const canSaveDocument =
-    isDocumentBalanced && incompleteRowsCount === 0 && !hasInlineDraft;
+  // Zezwalamy na zapis dokumentu nawet z niekompletnymi danymi.
+  // Pusta końcowa linijka „nowa operacja" nie blokuje zapisu (getCurrentData zwróci null).
+  // Braki są zapisywane do validation_errors i widoczne jako badge na liście dokumentów.
+  const canSaveDocument = true;
+  const hasDocumentWarnings =
+    !isDocumentBalanced || incompleteRowsCount > 0 || hasInlineDraft;
 
   if (checkingBlock) {
     return (
