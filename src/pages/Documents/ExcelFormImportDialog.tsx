@@ -76,20 +76,30 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     return map;
   }, [accounts]);
 
-  // Znajdź konto po numerze
+  // Znajdź konto po numerze.
+  // WAŻNE: nie zwracaj konta syntetycznego (które ma podkonta analityczne) —
+  // operacja musi być księgowana na koncie liściowym (analitycznym).
+  // Jeżeli dla podanego numeru istnieje wiele liści, zwróć undefined żeby pole
+  // pozostało puste i użytkownik wybrał ręcznie właściwą analitykę.
   const findAccount = (accountNumber: string): FilteredAccount | undefined => {
-    // Dokładne dopasowanie
-    if (accountsMap.has(accountNumber)) {
-      return accountsMap.get(accountNumber);
-    }
+    if (!accountNumber) return undefined;
 
-    // Szukaj częściowego dopasowania (prefix)
+    const isLeaf = (acc: FilteredAccount): boolean => !acc.has_analytics;
+
+    // 1. Dokładne dopasowanie do konta liściowego
+    const exact = accountsMap.get(accountNumber);
+    if (exact && isLeaf(exact)) return exact;
+
+    // 2. Jedyne podkonto liściowe pod podanym prefiksem
+    const leaves: FilteredAccount[] = [];
     for (const [number, account] of accountsMap) {
-      if (number.startsWith(accountNumber) || accountNumber.startsWith(number)) {
-        return account;
+      if (number === accountNumber || number.startsWith(accountNumber + "-")) {
+        if (isLeaf(account)) leaves.push(account);
       }
     }
+    if (leaves.length === 1) return leaves[0];
 
+    // Wiele liści lub brak — pozostaw puste pole do ręcznego uzupełnienia.
     return undefined;
   };
 
