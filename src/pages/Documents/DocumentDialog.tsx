@@ -2262,18 +2262,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 disabled={
                   isLoading ||
                   isGeneratingNumber ||
-                  (isEditingBlocked && Boolean(documentDate)) ||
-                  !canSaveDocument
+                  (isEditingBlocked && Boolean(documentDate))
                 }
                 title={
-                  !canSaveDocument
-                    ? !isDocumentBalanced
-                      ? "Dokument niezbilansowany"
-                      : incompleteRowsCount > 0
-                      ? "Uzupełnij brakujące pola w operacjach"
-                      : hasInlineDraft
-                      ? "Dokończ wprowadzanie operacji w wierszu roboczym"
-                      : undefined
+                  hasDocumentWarnings
+                    ? "Dokument zostanie zapisany jako niekompletny (status na liście pokaże liczbę pustych pól)"
                     : undefined
                 }
               >
