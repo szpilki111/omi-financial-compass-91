@@ -311,7 +311,9 @@ const parseAmount = (amountStr: string): number => {
                   // Konto syntetyczne - spróbuj znaleźć jedyne podkonto
                   const subAccounts = accounts.filter(acc => acc.number.startsWith(accountNumber + '-') && !accounts.some(s => s.number.startsWith(acc.number + '-')));
                   if (subAccounts.length === 1) return { account: subAccounts[0], isSynthetic: false, isMissing: false };
-                  return { account: exactMatch, isSynthetic: true, isMissing: false };
+                  // Konto wymaga analityki, a jest wiele podkont — NIE przypisuj syntetyki,
+                  // pozostaw puste pole do ręcznego uzupełnienia.
+                  return { account: undefined, isSynthetic: true, isMissing: false };
                 }
                 
                 // 2. Szukaj konta z lokalizacją użytkownika (np. 420 -> 420-2-3)
