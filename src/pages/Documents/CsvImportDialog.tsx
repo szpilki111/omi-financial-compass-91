@@ -361,8 +361,10 @@ const parseAmount = (amountStr: string): number => {
               // Użyj kwoty (preferuj debitAmount, fallback do creditAmount)
               const amount = debitAmount || creditAmount;
               
-              // Dodaj transakcję nawet jeśli brakuje jednego konta - zostanie uzupełnione ręcznie
-              if (debitResult.account?.id || creditResult.account?.id) {
+              // Dodaj transakcję nawet jeśli BRAKUJE OBU KONT (np. konta syntetyczne).
+              // Brakujące konta zostaną uzupełnione ręcznie, dokument trafi z badge'em
+              // "X pustych pól" na liście.
+              {
                 transactionsToImport.push({
                   document_id: document.id,
                   document_number: documentNumber,
@@ -379,8 +381,6 @@ const parseAmount = (amountStr: string): number => {
                   user_id: user.id,
                   display_order: rowIndex
                 });
-              } else {
-                console.log(`Skipping row ${rowIndex}: no matching accounts for debit="${debitAccountNumber}", credit="${creditAccountNumber}"`);
               }
             }
             
