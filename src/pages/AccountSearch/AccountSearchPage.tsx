@@ -853,11 +853,15 @@ const AccountSearchPage = () => {
       )}
 
       {/* Document Dialog */}
+      {/* Dokument przekazujemy bezpośrednio z editingDocument (świeżo pobrany w handleEditDocument),
+          a dialog otwieramy dopiero gdy mamy dane. Dzięki temu DocumentDialog nigdy nie startuje
+          w trybie "nowy dokument" (null), co wcześniej powodowało wygenerowanie numeru/daty
+          na bieżący miesiąc i nadpisanie oryginalnych wartości edytowanego dokumentu. */}
       <DocumentDialog 
-        isOpen={isDocumentDialogOpen} 
+        isOpen={isDocumentDialogOpen && !!editingDocument} 
         onClose={handleCloseDocumentDialog} 
         onDocumentCreated={handleDocumentUpdated} 
-        document={documentData} 
+        document={editingDocument} 
       />
     </MainLayout>
   );

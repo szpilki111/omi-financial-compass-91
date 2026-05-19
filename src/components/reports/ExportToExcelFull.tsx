@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "@/integrations/supabase/client";
 import { Report } from "@/types/reports";
+import { fetchAllRows } from "@/utils/supabasePagination";
+import { matchesAccount } from "@/utils/liabilityMatching";
 import {
   INCOME_ACCOUNTS,
   EXPENSE_ACCOUNTS,
@@ -31,7 +33,9 @@ const FINANCIAL_STATUS_CATEGORIES = [
   { key: "lokaty", name: "3. Lokaty bankowe", accounts: ["117"] },
 ];
 
-// Nowa struktura kategorii należności/zobowiązań — zsynchronizowana z UI raportu
+// Domyślna struktura kategorii należności/zobowiązań — używana jako fallback,
+// jeżeli baza nie zwróci żadnego mappingu (per-location / global).
+// Musi być zsynchronizowana z DEFAULT_LIABILITY_CATEGORIES w ReportLiabilitiesTable.
 const LIABILITY_CATEGORIES = [
   { key: "loans_given", name: "1. Pożyczki udzielone", accounts: ["212", "213"] },
   { key: "loans_taken", name: "2. Pożyczki zaciągnięte", accounts: ["215"] },
@@ -96,58 +100,85 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const prevMonthEnd = month === 1 ? new Date(year - 1, 11, 31) : new Date(year, month - 1, 0);
       const prevMonthEndStr = formatDateForDB(prevMonthEnd);
 
-      // Pobranie transakcji do końca poprzedniego miesiąca
-      const { data: prevTransactions } = await supabase
-        .from("transactions")
-        .select(
-          `
-          debit_amount, credit_amount, currency, exchange_rate,
-          debit_account:accounts!transactions_debit_account_id_fkey(number),
-          credit_account:accounts!transactions_credit_account_id_fkey(number)
-        `,
-        )
-        .eq("location_id", location_id)
-        .lte("date", prevMonthEndStr);
+      // Pobranie transakcji do końca poprzedniego miesiąca (z paginacją – limit 1000/req)
+      const prevTransactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from("transactions")
+          .select(
+            `
+            debit_amount, credit_amount, currency, exchange_rate,
+            debit_account:accounts!transactions_debit_account_id_fkey(number),
+            credit_account:accounts!transactions_credit_account_id_fkey(number)
+          `,
+          )
+          .eq("location_id", location_id)
+          .lte("date", prevMonthEndStr)
+          .order("date", { ascending: true })
+          .range(from, to),
+      );
 
-      // Oblicz salda otwarcia
+      // Oblicz salda otwarcia – per pierwszy segment (prefix) ORAZ per pełny numer konta,
+      // 1:1 jak w ReportViewFull (potrzebne do mapowań analitycznych z myślnikami).
       const openingBalances = new Map<string, number>();
+      const openingBalancesByAccount = new Map<string, number>();
       prevTransactions?.forEach((tx) => {
         const rate = tx.exchange_rate || 1;
         const curr = tx.currency || "PLN";
 
         if (tx.debit_account?.number) {
-          const prefix = tx.debit_account.number.split("-")[0];
+          const fullNum = tx.debit_account.number;
+          const prefix = fullNum.split("-")[0];
           const amount = getAmountInPLN(tx.debit_amount || 0, curr, rate);
           openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + amount);
+          openingBalancesByAccount.set(fullNum, (openingBalancesByAccount.get(fullNum) || 0) + amount);
         }
         if (tx.credit_account?.number) {
-          const prefix = tx.credit_account.number.split("-")[0];
+          const fullNum = tx.credit_account.number;
+          const prefix = fullNum.split("-")[0];
           const amount = getAmountInPLN(tx.credit_amount || 0, curr, rate);
           openingBalances.set(prefix, (openingBalances.get(prefix) || 0) - amount);
+          openingBalancesByAccount.set(fullNum, (openingBalancesByAccount.get(fullNum) || 0) - amount);
         }
       });
 
-      // Pobranie transakcji bieżącego miesiąca
-      const { data: transactions, error } = await supabase
-        .from("transactions")
-        .select(
-          `
-          *,
-          debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-          credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-        `,
-        )
-        .eq("location_id", location_id)
-        .gte("date", dateFrom)
-        .lte("date", dateTo);
+      // Pobranie transakcji bieżącego miesiąca (z paginacją)
+      const transactions = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from("transactions")
+          .select(
+            `
+            *,
+            debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+            credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
+          `,
+          )
+          .eq("location_id", location_id)
+          .gte("date", dateFrom)
+          .lte("date", dateTo)
+          .order("date", { ascending: true })
+          .range(from, to),
+      );
 
-      if (error) throw error;
+      // Pobranie mapowań kategorii zobowiązań (per-location → fallback do globalnych NULL)
+      const { data: liabilityMappingsRaw } = await supabase
+        .from("report_liability_category_mappings")
+        .select("category_key, account_prefixes, location_id, display_order")
+        .or(`location_id.eq.${location_id},location_id.is.null`);
+      const liabilityMappings = new Map<string, string[]>();
+      (liabilityMappingsRaw || [])
+        .filter((r: any) => !r.location_id)
+        .forEach((r: any) => liabilityMappings.set(r.category_key, r.account_prefixes || []));
+      (liabilityMappingsRaw || [])
+        .filter((r: any) => r.location_id === location_id)
+        .forEach((r: any) => liabilityMappings.set(r.category_key, r.account_prefixes || []));
 
       // Przetwarzanie transakcji
       const incomeMap = new Map<string, number>();
       const expenseMap = new Map<string, number>();
       const financialStatusMap = new Map<string, { debits: number; credits: number }>();
       const liabilitiesMap = new Map<string, { receivables: number; liabilities: number }>();
+      // Aggregacja per pełny numer konta — używana, gdy mapowanie kategorii zawiera myślniki.
+      const liabilitiesByAccount = new Map<string, { receivables: number; liabilities: number }>();
       // Konto 210 jest pasywne: Ma = przyjęte, Wn = odprawione i oddane
       let intentions210Received = 0; // Ma
       let intentions210CelebratedGiven = 0; // Wn
@@ -172,6 +203,10 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
             const ex = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
             ex.liabilities += amountCredit;
             liabilitiesMap.set(prefix, ex);
+            const fullNum = tx.credit_account.number;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.liabilities += amountCredit;
+            liabilitiesByAccount.set(fullNum, ex2);
 
             if (isDom && tx.credit_account.number.startsWith(`200-${locationData?.location_identifier}-`)) {
               const parts = tx.credit_account.number.split("-");
@@ -200,6 +235,10 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
             const ex = liabilitiesMap.get(prefix) || { receivables: 0, liabilities: 0 };
             ex.receivables += amountDebit;
             liabilitiesMap.set(prefix, ex);
+            const fullNum = tx.debit_account.number;
+            const ex2 = liabilitiesByAccount.get(fullNum) || { receivables: 0, liabilities: 0 };
+            ex2.receivables += amountDebit;
+            liabilitiesByAccount.set(fullNum, ex2);
 
             // Track province turnovers on debit side (200-X-15-* accounts)
             if (isDom && tx.debit_account.number.startsWith(`200-${locationData?.location_identifier}-`)) {
@@ -214,13 +253,22 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         }
       });
 
+      // Identyczna logika jak w ReportViewFull: jeżeli lista kont zawiera myślnik,
+      // sumujemy po pełnym numerze konta (z obsługą wildcard "-*"); w przeciwnym razie
+      // sumujemy po pierwszym segmencie (prefiksie).
       const getCategoryOpeningBalance = (accounts: string[]): number => {
+        if (!accounts || accounts.length === 0) return 0;
+        const hasHyphen = accounts.some((a) => a.includes("-"));
         let total = 0;
-        accounts.forEach((acc) => {
-          openingBalances.forEach((balance, prefix) => {
-            if (prefix.startsWith(acc)) total += balance;
+        if (hasHyphen) {
+          openingBalancesByAccount.forEach((balance, accNum) => {
+            if (accounts.some((acc) => matchesAccount(accNum, acc))) total += balance;
           });
-        });
+        } else {
+          openingBalances.forEach((balance, prefix) => {
+            if (accounts.includes(prefix)) total += balance;
+          });
+        }
         return total;
       };
 
@@ -343,16 +391,32 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       sheet1Data.push(["", "Początek miesiąca", "Należności", "Zobowiązania", "Koniec miesiąca"]);
 
       LIABILITY_CATEGORIES.forEach((category) => {
-        let receivables = 0,
-          liabilities = 0;
-        category.accounts.forEach((acc) => {
-          const data = liabilitiesMap.get(acc);
-          if (data) {
-            receivables += data.receivables;
-            liabilities += data.liabilities;
+        const mapped = liabilityMappings.get(category.key);
+        const accountsForCategory = mapped && mapped.length > 0 ? mapped : category.accounts;
+
+        let receivables = 0;
+        let liabilities = 0;
+
+        if (accountsForCategory.length > 0) {
+          const hasHyphen = accountsForCategory.some((a) => a.includes("-"));
+          if (hasHyphen) {
+            liabilitiesByAccount.forEach((data, accNum) => {
+              if (accountsForCategory.some((acc) => matchesAccount(accNum, acc))) {
+                receivables += data.receivables;
+                liabilities += data.liabilities;
+              }
+            });
+          } else {
+            liabilitiesMap.forEach((data, prefix) => {
+              if (accountsForCategory.some((acc) => prefix === acc || prefix.startsWith(acc))) {
+                receivables += data.receivables;
+                liabilities += data.liabilities;
+              }
+            });
           }
-        });
-        const opening = getCategoryOpeningBalance(category.accounts);
+        }
+
+        const opening = getCategoryOpeningBalance(accountsForCategory);
         const closing = opening + receivables - liabilities;
         sheet1Data.push([category.name, opening, receivables, liabilities, closing]);
       });
