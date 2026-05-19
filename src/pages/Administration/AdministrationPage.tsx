@@ -16,6 +16,7 @@ import RemindersManagement from './RemindersManagement';
 import SecuritySettingsManagement from './SecuritySettingsManagement';
 import ProvincialFeeManagement from './ProvincialFeeManagement';
 import LiabilityCategoryMappings from './LiabilityCategoryMappings';
+import GlobalAccountTurnovers from './GlobalAccountTurnovers';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -90,6 +91,9 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="liability-mappings" className="flex-shrink-0">Mapowanie raportu (C)</TabsTrigger>
           )}
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
+            <TabsTrigger value="global-turnovers" className="flex-shrink-0">Obroty i salda (globalnie)</TabsTrigger>
+          )}
         </TabsList>
 
           {/* Lazy loading - render only active tab */}
@@ -162,6 +166,12 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'liability-mappings' && (
             <TabsContent value="liability-mappings" className="space-y-4">
               <LiabilityCategoryMappings />
+            </TabsContent>
+          )}
+
+          {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'global-turnovers' && (
+            <TabsContent value="global-turnovers" className="space-y-4">
+              <GlobalAccountTurnovers />
             </TabsContent>
           )}
       </Tabs>
