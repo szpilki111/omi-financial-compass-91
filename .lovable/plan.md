@@ -1,94 +1,72 @@
-## Plan naprawy rozbijania operacji
+# Rozpiska: błędy do naprawy i nowe funkcje do wyceny
 
-### Zasada główna
-Przycisk **Rozbij** nie może dzielić kwoty „na pół” ani wymyślać nowych proporcji. Ma działać tylko jako mechanizm **uzupełnienia różnicy dokumentu**.
+## 1. Błędy programu do naprawy (w ramach utrzymania)
 
-Jeżeli suma dokumentu jest już zbilansowana:
+### 1.1. Pusta linijka na dokumencie blokuje zapis
+- Pole „nowa operacja" na dole dokumentu (jeszcze niezapisane, służy do dodawania kolejnej operacji) jest traktowane jak nieuzupełniony wiersz i blokuje zapis dokumentu.
+- Oczekiwane zachowanie:
+  - a) Dokument musi się zapisywać nawet z niekompletnymi danymi (puste konta, puste kwoty).
+  - b) Na liście dokumentów w kolumnie status ma być widoczna informacja, ile pól jest pustych / brakujących (np. „Brak 3 pól").
+  - c) Pusta końcowa linijka „dodaj operację" w ogóle nie ma być wliczana do walidacji — to tylko interfejs wprowadzania.
+
+### 1.2. Eksport raportu miesięcznego do Excel pokazuje stare/błędne salda
+- Raport na ekranie (po naprawie sald początkowych) pokazuje już poprawne kwoty.
+- Eksport do Excela tego samego raportu nadal generuje stare, błędne salda początkowe.
+- Eksport musi 1:1 odpowiadać temu, co widać w raporcie na ekranie.
+
+### 1.3. Import z Excela księguje na kontach syntetycznych mimo istniejącej analityki
+- Przy ręcznym wprowadzaniu operacji nie da się wybrać konta syntetycznego, jeśli ma ono analitykę — system wymusza wybór konta analitycznego.
+- Przy imporcie rozliczeń z Excela ta walidacja jest pominięta — operacja zapisuje się na koncie syntetycznym (np. 440, 412) bez żadnego ostrzeżenia.
+- Decyzja użytkownika:
+  - Na podglądzie importu pokazać wizualne ostrzeżenie (czerwone oznaczenie), że konto wymaga analityki.
+  - Zapisać operację z pustym polem konta zamiast z syntetyką.
+  - Brakujące pole ma być widoczne w statusie dokumentu (powiązane z punktem 1.1).
+
+### 1.4. Edycja operacji z poziomu „konta" zmienia numer i datę dokumentu
+- Wejście w konkretne konto → operacja → „Edytuj" przenosi do dokumentu, ale system podmienia numer dokumentu i okres na bieżący miesiąc (np. luty → maj) zamiast zachować oryginalne dane.
+- Wejście tą samą operacją z modułu „Dokumenty" działa poprawnie — problem występuje tylko ze ścieżki przez konto.
+- Numer i data dokumentu nie mogą być nigdy modyfikowane przy samym otwarciu do edycji.
+
+### 1.5. Konsekwencja sald w Laskowicach (do weryfikacji)
+- Salda zobowiązań wobec prowincji w Laskowicach były wcześniej rozjechane, co przeniosło się na kolejne miesiące.
+- Obecnie raporty zasysają salda poprawnie, ale ojciec sprawdzi raz jeszcze; jeśli konieczne — punktowa korekta sald historycznych w Laskowicach.
+
+---
+
+## 2. Nowe funkcje do wyceny
+
+### 2.1. Podgląd obrotów i sald bloku kont (zamiennik funkcji z Symfonii) — najważniejsze
+Funkcja tylko z poziomu administratora (prowincja).
+
+- Formularz: wybór jednego konta syntetycznego (np. 100, 201, 401, 702) + okres (miesiąc / kwartał / rok).
+- Wynik: tabela pokazująca dla wszystkich jednostek prowincji (prowincja → domy → parafie → dzieła OMI):
+  - saldo początkowe okresu
+  - obroty Winien
+  - obroty Ma
+  - saldo końcowe
+- Grupowanie według poziomu jednostki (1 = prowincja, 2 = domy, 3 = parafie, 4 = dzieła).
+- Eksport wyniku do Excela (format do prezentacji, nie wymaga formatu wydruku).
+- Cel: szybki przegląd np. gotówki w całej prowincji (konto 100), rozliczeń każdego domu z prowincją (201), wydatków na artykuły biurowe (401) itd.
+
+### 2.2. Materiały marketingowe / cennik demo
+- Przygotowanie draftu cennika „bazowego" wersji demo, do prezentacji na czerwcowym forum przełożonych wyższych.
+- Ustalenia indywidualne z każdą jurysdykcją, ale potrzebna podstawowa kwota wyjściowa do rozmów.
+
+---
+
+## 3. Status / propozycja kolejności wdrożenia
 
 ```text
-suma Wn = suma Ma
+Priorytet 1 (krytyczne błędy blokujące pracę):
+  1.1  pusta linijka blokuje zapis + status z liczbą braków
+  1.3  import Excela na konto syntetyczne
+  1.2  eksport raportu do Excela ze starymi saldami
+
+Priorytet 2 (poprawki UX):
+  1.4  edycja z poziomu konta podmienia numer/datę
+  1.5  weryfikacja sald Laskowice
+
+Priorytet 3 (nowa funkcjonalność — osobna wycena):
+  2.1  podgląd obrotów i sald bloku kont (panel administratora)
+  2.2  draft cennika demo
 ```
-
-kliknięcie **Rozbij** nie tworzy żadnego nowego wiersza. Pokaże tylko komunikat, że dokument jest zbilansowany i nie ma czego rozbijać.
-
-### Docelowe zachowanie
-
-#### 1. Dokument niezbilansowany
-Po kliknięciu **Rozbij** system sprawdzi globalną różnicę całego dokumentu, nie tylko aktualnego wiersza:
-
-```text
-różnica = suma Wn - suma Ma
-```
-
-- jeśli **Wn < Ma**, brakuje kwoty po stronie Wn,
-- jeśli **Ma < Wn**, brakuje kwoty po stronie Ma.
-
-Następnie utworzy jeden nowy wiersz z kwotą dokładnie równą brakującej różnicy po mniejszej stronie.
-
-Przykład:
-
-```text
-Wiersz 1: Wn 100 / Ma 50
-Suma dokumentu: Wn 100 / Ma 50
-Różnica: 50 brakuje po Ma
-Klik Rozbij -> nowy wiersz: Wn — / Ma 50
-Suma dokumentu: Wn 100 / Ma 100
-```
-
-#### 2. Dokument zbilansowany
-Jeżeli po pierwszym rozbiciu suma już się zgadza:
-
-```text
-Wiersz 1: Wn 100 / Ma 50
-Wiersz 2: Wn — / Ma 50
-Suma dokumentu: Wn 100 / Ma 100
-```
-
-kolejne kliknięcie **Rozbij** na dowolnym wierszu nie zrobi niczego, bo dokument nie ma różnicy do uzupełnienia.
-
-#### 3. Wiersz już częściowy
-Dla wierszy typu:
-
-```text
-Wn — / Ma 50
-```
-
-system nie będzie już sam dzielił 50 na 25 + 25. To było błędne zachowanie. Taki podział użytkownik powinien wykonać ręcznie przez zmianę kwot, która ponownie spowoduje niezbilansowanie dokumentu, a dopiero wtedy **Rozbij** uzupełni brakującą stronę.
-
-Przykład ręcznego dalszego rozbicia:
-
-```text
-Start:
-Wiersz 1: Wn 100 / Ma 50
-Wiersz 2: Wn — / Ma 50
-Suma: 100 / 100
-
-Użytkownik zmienia wiersz 2 na Ma 30:
-Wiersz 1: Wn 100 / Ma 50
-Wiersz 2: Wn — / Ma 30
-Suma: 100 / 80
-
-Klik Rozbij -> system doda:
-Wiersz 3: Wn — / Ma 20
-Suma: 100 / 100
-```
-
-### Zmiany techniczne
-
-W pliku `src/pages/Documents/DocumentDialog.tsx` zmienię `handleSplitTransaction` tak, żeby:
-
-1. Najpierw liczył aktualne sumy dokumentu dla właściwej sekcji: głównej albo równoległej.
-2. Jeżeli różnica dokumentu wynosi `0,00`, natychmiast przerywał działanie bez dodawania wiersza.
-3. Jeżeli dokument jest niezbilansowany, tworzył dokładnie jeden wiersz uzupełniający po mniejszej stronie.
-4. Usunął logikę dzielenia istniejącej częściowej kwoty na pół.
-5. Nie modyfikował kwoty w klikniętym wierszu — nowy wiersz ma tylko uzupełnić brakującą różnicę.
-6. Skopiował opis i typ rozliczenia z klikniętego wiersza, ale konto uzupełnianej strony zostawił puste, żeby użytkownik wskazał właściwe konto.
-
-### Scenariusze kontrolne po wdrożeniu
-
-- `100 / 50` -> **Rozbij** -> dodaje `— / 50`.
-- Po tym suma `100 / 100` -> kolejne **Rozbij** nie dodaje niczego.
-- `100 / 50 + — / 30` -> **Rozbij** -> dodaje `— / 20`.
-- `70 / 100` -> **Rozbij** -> dodaje `30 / —`.
-- Przy różnicy poniżej 1 grosza nie dodaje wiersza.
-- Zapis nadal jest blokowany, jeśli dokument jest niezbilansowany albo nowy wiersz nie ma konta.
