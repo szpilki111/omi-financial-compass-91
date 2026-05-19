@@ -410,14 +410,17 @@ const parseAmount = (amountStr: string): number => {
               
               // Walidacja dokumentu - sprawdź brakujące konta i zapisz błędy
               const validationErrors: { type: string; message: string }[] = [];
-              const incompleteCount = transactionsToImport.filter(
-                t => !t.debit_account_id || !t.credit_account_id
-              ).length;
-              
-              if (incompleteCount > 0) {
+              const missingAccountFieldsCount = transactionsToImport.reduce((sum, t) => {
+                let n = 0;
+                if (!t.debit_account_id) n++;
+                if (!t.credit_account_id) n++;
+                return sum + n;
+              }, 0);
+
+              if (missingAccountFieldsCount > 0) {
                 validationErrors.push({
                   type: 'missing_accounts',
-                  message: `${incompleteCount} operacji wymaga uzupełnienia kont`
+                  message: `${missingAccountFieldsCount} brakujących kont do uzupełnienia`
                 });
                 
                 // Zaktualizuj dokument z błędami walidacji
@@ -429,8 +432,8 @@ const parseAmount = (amountStr: string): number => {
               
               // Buduj szczegółowy komunikat
               let toastMessage = `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami.`;
-              if (incompleteCount > 0) {
-                toastMessage += ` ${incompleteCount} wymaga uzupełnienia kont.`;
+              if (missingAccountFieldsCount > 0) {
+                toastMessage += ` ${missingAccountFieldsCount} pól kont do uzupełnienia.`;
               }
               if (missingAccountNumbers.length > 0) {
                 toastMessage += ` Nieznane konta: ${missingAccountNumbers.slice(0, 5).join(', ')}${missingAccountNumbers.length > 5 ? '...' : ''}.`;
