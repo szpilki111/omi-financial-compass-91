@@ -467,6 +467,27 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         throw transError;
       }
 
+      // Zapisz validation_errors dla dokumentu jeśli są brakujące konta
+      const missingAccountFieldsCount = transactionsToInsert.reduce((sum, t) => {
+        let n = 0;
+        if (!t.debit_account_id) n++;
+        if (!t.credit_account_id) n++;
+        return sum + n;
+      }, 0);
+      if (missingAccountFieldsCount > 0) {
+        await supabase
+          .from("documents")
+          .update({
+            validation_errors: [
+              {
+                type: "missing_accounts",
+                message: `${missingAccountFieldsCount} brakujących kont do uzupełnienia`,
+              },
+            ],
+          })
+          .eq("id", document.id);
+      }
+
       const errorCount = generatedTransactions.length - validTransactions.length;
 
       toast({
