@@ -311,7 +311,9 @@ const parseAmount = (amountStr: string): number => {
                   // Konto syntetyczne - spróbuj znaleźć jedyne podkonto
                   const subAccounts = accounts.filter(acc => acc.number.startsWith(accountNumber + '-') && !accounts.some(s => s.number.startsWith(acc.number + '-')));
                   if (subAccounts.length === 1) return { account: subAccounts[0], isSynthetic: false, isMissing: false };
-                  return { account: exactMatch, isSynthetic: true, isMissing: false };
+                  // Konto wymaga analityki, a jest wiele podkont — NIE przypisuj syntetyki,
+                  // pozostaw puste pole do ręcznego uzupełnienia.
+                  return { account: undefined, isSynthetic: true, isMissing: false };
                 }
                 
                 // 2. Szukaj konta z lokalizacją użytkownika (np. 420 -> 420-2-3)
@@ -359,8 +361,10 @@ const parseAmount = (amountStr: string): number => {
               // Użyj kwoty (preferuj debitAmount, fallback do creditAmount)
               const amount = debitAmount || creditAmount;
               
-              // Dodaj transakcję nawet jeśli brakuje jednego konta - zostanie uzupełnione ręcznie
-              if (debitResult.account?.id || creditResult.account?.id) {
+              // Dodaj transakcję nawet jeśli BRAKUJE OBU KONT (np. konta syntetyczne).
+              // Brakujące konta zostaną uzupełnione ręcznie, dokument trafi z badge'em
+              // "X pustych pól" na liście.
+              {
                 transactionsToImport.push({
                   document_id: document.id,
                   document_number: documentNumber,
@@ -377,8 +381,6 @@ const parseAmount = (amountStr: string): number => {
                   user_id: user.id,
                   display_order: rowIndex
                 });
-              } else {
-                console.log(`Skipping row ${rowIndex}: no matching accounts for debit="${debitAccountNumber}", credit="${creditAccountNumber}"`);
               }
             }
             
@@ -408,14 +410,17 @@ const parseAmount = (amountStr: string): number => {
               
               // Walidacja dokumentu - sprawdź brakujące konta i zapisz błędy
               const validationErrors: { type: string; message: string }[] = [];
-              const incompleteCount = transactionsToImport.filter(
-                t => !t.debit_account_id || !t.credit_account_id
-              ).length;
-              
-              if (incompleteCount > 0) {
+              const missingAccountFieldsCount = transactionsToImport.reduce((sum, t) => {
+                let n = 0;
+                if (!t.debit_account_id) n++;
+                if (!t.credit_account_id) n++;
+                return sum + n;
+              }, 0);
+
+              if (missingAccountFieldsCount > 0) {
                 validationErrors.push({
                   type: 'missing_accounts',
-                  message: `${incompleteCount} operacji wymaga uzupełnienia kont`
+                  message: `${missingAccountFieldsCount} brakujących kont do uzupełnienia`
                 });
                 
                 // Zaktualizuj dokument z błędami walidacji
@@ -427,8 +432,8 @@ const parseAmount = (amountStr: string): number => {
               
               // Buduj szczegółowy komunikat
               let toastMessage = `Utworzono dokument ${documentNumber} z ${transactionsToImport.length} operacjami.`;
-              if (incompleteCount > 0) {
-                toastMessage += ` ${incompleteCount} wymaga uzupełnienia kont.`;
+              if (missingAccountFieldsCount > 0) {
+                toastMessage += ` ${missingAccountFieldsCount} pól kont do uzupełnienia.`;
               }
               if (missingAccountNumbers.length > 0) {
                 toastMessage += ` Nieznane konta: ${missingAccountNumbers.slice(0, 5).join(', ')}${missingAccountNumbers.length > 5 ? '...' : ''}.`;

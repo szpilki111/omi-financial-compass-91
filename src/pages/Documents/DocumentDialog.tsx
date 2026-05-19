@@ -979,6 +979,9 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     // Set validation errors but allow saving
     setValidationErrors(errors);
 
+    // UWAGA: nie blokujemy zapisu z niekompletnymi polami.
+    // Dokument zapisuje się i otrzymuje validation_errors,
+    // dzięki czemu na liście dokumentów pojawia się badge "X pustych pól".
     if (errors.length > 0) {
       const totalMissingFields = errors.reduce((sum, e) => {
         if (e.missingFields) {
@@ -986,14 +989,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
         }
         return sum;
       }, 0);
-
       toast({
-        title: "Nie można zapisać dokumentu",
-        description: `Dokument zawiera ${errors.length} niekompletnych operacji (${totalMissingFields} pustych pól). Uzupełnij wymagane pola (opis, kwoty, konta) i spróbuj ponownie.`,
-        variant: "destructive",
+        title: "Dokument zapisany z brakami",
+        description: `Zapisano dokument zawierający ${errors.length} niekompletnych operacji (${totalMissingFields} pustych pól). Możesz go uzupełnić później.`,
       });
-      setIsLoading(false);
-      return;
     }
 
     // Add incomplete transactions from inline forms to the main list
@@ -1031,14 +1030,17 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
     const totalDebit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.debit_amount || 0), 0);
     const totalCredit = allFinalTransactions.reduce((sum, t) => sum + Math.abs(t.credit_amount || 0), 0);
 
+    // Brak twardej blokady przy niezbilansowaniu — dokument zapisuje się,
+    // a brak bilansu zostanie odnotowany w validation_errors (status na liście).
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      errors.push({
+        type: "unbalanced",
+        message: `Suma WN (${totalDebit.toFixed(2)}) ≠ Suma MA (${totalCredit.toFixed(2)})`,
+      } as any);
       toast({
-        title: "Dokument niezbalansowany",
-        description: `Suma WN (${totalDebit.toFixed(2)}) nie równa się sumie MA (${totalCredit.toFixed(2)}). Dokument nie zostanie zapisany.`,
-        variant: "destructive",
+        title: "Dokument zapisany jako niezbilansowany",
+        description: `Suma WN (${totalDebit.toFixed(2)}) nie równa się sumie MA (${totalCredit.toFixed(2)}). Uzupełnij brakujące kwoty lub konta.`,
       });
-      setIsLoading(false);
-      return;
     }
 
     setIsLoading(true);
@@ -1647,8 +1649,12 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   })();
 
   const hasInlineDraft = hasInlineFormData || hasParallelInlineFormData;
-  const canSaveDocument =
-    isDocumentBalanced && incompleteRowsCount === 0 && !hasInlineDraft;
+  // Zezwalamy na zapis dokumentu nawet z niekompletnymi danymi.
+  // Pusta końcowa linijka „nowa operacja" nie blokuje zapisu (getCurrentData zwróci null).
+  // Braki są zapisywane do validation_errors i widoczne jako badge na liście dokumentów.
+  const canSaveDocument = true;
+  const hasDocumentWarnings =
+    !isDocumentBalanced || incompleteRowsCount > 0 || hasInlineDraft;
 
   if (checkingBlock) {
     return (
@@ -2197,10 +2203,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
               )}
             </div>
 
-            {(!isDocumentBalanced || incompleteRowsCount > 0 || hasInlineDraft) && (
-              <div className="border-2 border-destructive bg-destructive/10 text-destructive p-3 rounded-lg space-y-1">
+            {hasDocumentWarnings && (
+              <div className="border-2 border-amber-400 bg-amber-50 text-amber-900 p-3 rounded-lg space-y-1">
                 <div className="font-bold flex items-center gap-2">
-                  ⚠️ Dokument nie może zostać zapisany
+                  ⚠️ Dokument zostanie zapisany jako niekompletny
                 </div>
                 <ul className="text-sm list-disc list-inside space-y-0.5">
                   {!isDocumentBalanced && (
@@ -2256,18 +2262,11 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
                 disabled={
                   isLoading ||
                   isGeneratingNumber ||
-                  (isEditingBlocked && Boolean(documentDate)) ||
-                  !canSaveDocument
+                  (isEditingBlocked && Boolean(documentDate))
                 }
                 title={
-                  !canSaveDocument
-                    ? !isDocumentBalanced
-                      ? "Dokument niezbilansowany"
-                      : incompleteRowsCount > 0
-                      ? "Uzupełnij brakujące pola w operacjach"
-                      : hasInlineDraft
-                      ? "Dokończ wprowadzanie operacji w wierszu roboczym"
-                      : undefined
+                  hasDocumentWarnings
+                    ? "Dokument zostanie zapisany jako niekompletny (status na liście pokaże liczbę pustych pól)"
                     : undefined
                 }
               >
