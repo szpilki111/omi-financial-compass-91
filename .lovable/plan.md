@@ -4,13 +4,18 @@ Wszystko z `.lovable/plan.md` ma być realnie wdrożone i zweryfikowane. Wyłąc
 
 ---
 
-### Stan obecny
+### Stan obecny — ZAMKNIĘTE
 
 - [x] 1.1, 1.2, 1.3, 1.4 — zrobione we wcześniejszych iteracjach.
-- [~] 2.1 MVP — moduł `GlobalAccountTurnovers.tsx` istnieje (formularz, tabela pogrupowana, eksport XLSX), ale **zakładka ukryta** (`false && ...` w `AdministrationPage.tsx`).
-- [ ] 2.1 standard — brak per-typ-jednostki sheet w XLSX, brak drill-down do listy transakcji, brak per-konto-syntetyczne rozbicia.
-- [ ] 2.1 rozszerzony — brak wykresów (BarChart sald końcowych + PieChart udziału w obrotach).
-- [ ] 1.5 — brak narzędzia weryfikacyjnego dla Laskowic.
+- [x] 1.5 — narzędzie weryfikacji: filtr „tylko placówka" + drill-down + link
+      `Otwórz w module Konta` (`/wyszukaj-konta?account=…&year=…`).
+- [x] 2.1 MVP — zakładka „Obroty i salda (globalnie)" odsłonięta w Administracji.
+- [x] 2.1 standard — drill-down (Dialog z listą transakcji, sumy Wn/Ma, saldo),
+      przełącznik „per pełne konto" (rozbicie 201-…-1 vs 201-…-2),
+      multi-sheet XLSX (Razem + per poziom + opcjonalnie „Per konto").
+- [x] 2.1 rozszerzony — BarChart (top 30 sald końcowych) + PieChart
+      (udział w obrotach Wn + Ma, top 8 + „Pozostałe").
+- [ ] 2.2 — poza zakresem aplikacji (cennik demo, opracowuje użytkownik).
 
 ---
 
