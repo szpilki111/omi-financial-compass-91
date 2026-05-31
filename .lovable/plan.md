@@ -1,80 +1,95 @@
-# Rozpiska: błędy do naprawy i nowe funkcje do wyceny
+## Plan: pełna realizacja wszystkiego (36 h, full approve) — bez 2.2
 
-## 1. Błędy programu do naprawy (w ramach utrzymania)
-
-### 1.1. Pusta linijka na dokumencie blokuje zapis
-- Pole „nowa operacja" na dole dokumentu (jeszcze niezapisane, służy do dodawania kolejnej operacji) jest traktowane jak nieuzupełniony wiersz i blokuje zapis dokumentu.
-- Oczekiwane zachowanie:
-  - a) Dokument musi się zapisywać nawet z niekompletnymi danymi (puste konta, puste kwoty).
-  - b) Na liście dokumentów w kolumnie status ma być widoczna informacja, ile pól jest pustych / brakujących (np. „Brak 3 pól").
-  - c) Pusta końcowa linijka „dodaj operację" w ogóle nie ma być wliczana do walidacji — to tylko interfejs wprowadzania.
-
-### 1.2. Eksport raportu miesięcznego do Excel pokazuje stare/błędne salda
-- Raport na ekranie (po naprawie sald początkowych) pokazuje już poprawne kwoty.
-- Eksport do Excela tego samego raportu nadal generuje stare, błędne salda początkowe.
-- Eksport musi 1:1 odpowiadać temu, co widać w raporcie na ekranie.
-
-### 1.3. Import z Excela księguje na kontach syntetycznych mimo istniejącej analityki
-- Przy ręcznym wprowadzaniu operacji nie da się wybrać konta syntetycznego, jeśli ma ono analitykę — system wymusza wybór konta analitycznego.
-- Przy imporcie rozliczeń z Excela ta walidacja jest pominięta — operacja zapisuje się na koncie syntetycznym (np. 440, 412) bez żadnego ostrzeżenia.
-- Decyzja użytkownika:
-  - Na podglądzie importu pokazać wizualne ostrzeżenie (czerwone oznaczenie), że konto wymaga analityki.
-  - Zapisać operację z pustym polem konta zamiast z syntetyką.
-  - Brakujące pole ma być widoczne w statusie dokumentu (powiązane z punktem 1.1).
-
-### 1.4. Edycja operacji z poziomu „konta" zmienia numer i datę dokumentu
-- Wejście w konkretne konto → operacja → „Edytuj" przenosi do dokumentu, ale system podmienia numer dokumentu i okres na bieżący miesiąc (np. luty → maj) zamiast zachować oryginalne dane.
-- Wejście tą samą operacją z modułu „Dokumenty" działa poprawnie — problem występuje tylko ze ścieżki przez konto.
-- Numer i data dokumentu nie mogą być nigdy modyfikowane przy samym otwarciu do edycji.
-
-### 1.5. Konsekwencja sald w Laskowicach (do weryfikacji)
-- Salda zobowiązań wobec prowincji w Laskowicach były wcześniej rozjechane, co przeniosło się na kolejne miesiące.
-- Obecnie raporty zasysają salda poprawnie, ale ojciec sprawdzi raz jeszcze; jeśli konieczne — punktowa korekta sald historycznych w Laskowicach.
+Wszystko z `.lovable/plan.md` ma być realnie wdrożone i zweryfikowane. Wyłączamy tylko **2.2** (cennik demo, poza kodem).
 
 ---
 
-## 2. Nowe funkcje do wyceny
+### Stan obecny
 
-### 2.1. Podgląd obrotów i sald bloku kont (zamiennik funkcji z Symfonii) — najważniejsze
-Funkcja tylko z poziomu administratora (prowincja).
-
-- Formularz: wybór jednego konta syntetycznego (np. 100, 201, 401, 702) + okres (miesiąc / kwartał / rok).
-- Wynik: tabela pokazująca dla wszystkich jednostek prowincji (prowincja → domy → parafie → dzieła OMI):
-  - saldo początkowe okresu
-  - obroty Winien
-  - obroty Ma
-  - saldo końcowe
-- Grupowanie według poziomu jednostki (1 = prowincja, 2 = domy, 3 = parafie, 4 = dzieła).
-- Eksport wyniku do Excela (format do prezentacji, nie wymaga formatu wydruku).
-- Cel: szybki przegląd np. gotówki w całej prowincji (konto 100), rozliczeń każdego domu z prowincją (201), wydatków na artykuły biurowe (401) itd.
-
-### 2.2. Materiały marketingowe / cennik demo
-- Przygotowanie draftu cennika „bazowego" wersji demo, do prezentacji na czerwcowym forum przełożonych wyższych.
-- Ustalenia indywidualne z każdą jurysdykcją, ale potrzebna podstawowa kwota wyjściowa do rozmów.
+- [x] 1.1, 1.2, 1.3, 1.4 — zrobione we wcześniejszych iteracjach.
+- [~] 2.1 MVP — moduł `GlobalAccountTurnovers.tsx` istnieje (formularz, tabela pogrupowana, eksport XLSX), ale **zakładka ukryta** (`false && ...` w `AdministrationPage.tsx`).
+- [ ] 2.1 standard — brak per-typ-jednostki sheet w XLSX, brak drill-down do listy transakcji, brak per-konto-syntetyczne rozbicia.
+- [ ] 2.1 rozszerzony — brak wykresów (BarChart sald końcowych + PieChart udziału w obrotach).
+- [ ] 1.5 — brak narzędzia weryfikacyjnego dla Laskowic.
 
 ---
 
-## 3. Status / propozycja kolejności wdrożenia
+### A. Przywrócenie zakładki 2.1
 
-```text
-Priorytet 1 (krytyczne błędy blokujące pracę):
-  [x] 1.1  pusta linijka blokuje zapis + status z liczbą braków
-  [x] 1.3  import Excela na konto syntetyczne
-  [x] 1.2  eksport raportu do Excela ze starymi saldami
-         → ExportToExcelFull używa teraz paginacji (fetchAllRows)
-           oraz mapowań kategorii (per-location/global) i matchesAccount,
-           tak jak ReportViewFull → wartości w pliku zgadzają się 1:1 z UI.
+Plik: `src/pages/Administration/AdministrationPage.tsx`
+- Usunąć obie flagi `false &&` (przy `TabsTrigger` i `TabsContent` dla `global-turnovers`).
+- Pozostawić warunek roli `admin` / `prowincjal`.
 
-Priorytet 2 (poprawki UX):
-  [x] 1.4  edycja z poziomu konta podmienia numer/datę
-         → AccountSearchPage otwiera DocumentDialog dopiero gdy
-           editingDocument jest gotowy (nie startuje w trybie "nowy").
-  [ ] 1.5  weryfikacja sald Laskowice (zadanie po stronie użytkownika)
+---
 
-Priorytet 3 (nowa funkcjonalność):
-  [x] 2.1  podgląd obrotów i sald — nowa zakładka "Obroty i salda (globalnie)"
-           w Administracji (admin/prowincjał): konto + okres (miesiąc/kwartał/rok),
-           tabela pogrupowana po poziomach (prowincja/domy/parafie/dzieła),
-           eksport do Excela.
-  [ ] 2.2  draft cennika demo — do przygotowania osobno (poza kodem aplikacji).
-```
+### B. 2.1 wariant standard — drill-down i rozbicia
+
+Plik: `src/pages/Administration/GlobalAccountTurnovers.tsx`
+
+#### B1. Drill-down z wiersza placówki do listy transakcji
+- Każdy wiersz tabeli wyniku ma kolumnę „Akcje" z przyciskiem `Eye` → otwiera `Dialog` (`@/components/ui/dialog`) z listą transakcji danej placówki na wskazanym koncie w wybranym okresie.
+- W dialogu: tabela `data | numer dokumentu | opis | Wn (PLN) | Ma (PLN) | konto pełne`, sortowanie po dacie rosnąco.
+- Dane: dorzucić do `runQuery` selekcję pól `id, date, description, document_id, debit_account.number, credit_account.number` (już w zapytaniu `curTx`); trzymać `curTx` w stanie i filtrować w pamięci po `location_id` i prefiksie.
+- Stopka dialogu: sumy Wn / Ma + saldo okresu.
+- Drugi przycisk w dialogu: „Otwórz w module Konta" — `useNavigate` do `/konta` z query stringiem `?location=<id>&accountPrefix=<prefix>&dateFrom=<...>&dateTo=<...>` (sparsować w `AccountSearchPage` — patrz D).
+
+#### B2. Rozbicie per konto syntetyczne pełnego numeru
+- W tabeli głównej dodać przełącznik (`Switch`) „Pokaż per pełne konto". Gdy włączony, agregacja jest nie po `location_id`, ale po `(location_id, fullAccountNumber)` — używamy całego `accounts.number`, nie samego prefiksu. Wyświetlamy kolumnę „Konto" przed „Placówka".
+- Pomocna gdy prefix `201` rozbija się na `201-{loc}-1`, `201-{loc}-2`.
+
+#### B3. Multi-sheet XLSX
+- Funkcja `exportXlsx`:
+  - sheet 1 „Razem" (obecny output),
+  - sheet 2..N po jednym dla każdego poziomu (`Prowincja`, `Domy`, `Parafie`, `Dzieła OMI`) z tymi samymi kolumnami i sumą,
+  - jeśli włączony przełącznik per-konto (B2), dodatkowy sheet „Per konto".
+- Nagłówki pogrubione, autosize kolumn jak dziś, format PLN.
+
+---
+
+### C. 2.1 wariant rozszerzony — wykresy
+
+Plik: `src/pages/Administration/GlobalAccountTurnovers.tsx`
+
+- Import: `import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'` (recharts już w projekcie).
+- `useMemo` `barData`: rekordy `Math.abs(closing) > 0.01`, sort desc po `closing`, top 30; `{ id, name: identifier, closing, locationName }`. Komunikat „pokazano 30 z N" gdy więcej niż 30.
+- `useMemo` `pieData`: per placówka `debit + credit`, sort desc, top 8 + „Pozostałe"; udział %.
+- Siatka `grid gap-4 md:grid-cols-2` nad tabelą (renderowana tylko gdy `results.length > 0`):
+  - **BarChart** „Salda końcowe (placówki)": X = `identifier`, Y = PLN; `Cell fill={r.closing >= 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}`; tooltip: `locationName` + `formatPLN(closing)`.
+  - **PieChart** „Udział w obrotach (Wn + Ma)": `dataKey="value"`; kolory cyklicznie z `hsl(var(--chart-1))`..`hsl(var(--chart-5))`; legenda + tooltip `formatPLN` + `%`.
+- Każdy wykres w `ResponsiveContainer` o wysokości `h-72`.
+
+---
+
+### D. Pkt 1.5 — narzędzie weryfikacyjne dla Laskowic
+
+Pliki: `src/pages/Administration/GlobalAccountTurnovers.tsx`, `src/pages/AccountSearch/AccountSearchPage.tsx`
+
+- `AccountSearchPage`: przy mountcie czytać `useSearchParams` i jeśli są `location`, `accountPrefix`, opcjonalnie `dateFrom`/`dateTo` — prefillować stan i automatycznie wywoływać wyszukiwanie.
+- W drill-down dialogu (B1) przycisk „Otwórz w module Konta" buduje URL z tych parametrów.
+- Dodatkowo w `GlobalAccountTurnovers`: filtr „Tylko placówka…" (dropdown po `locations`) — ułatwia ojcu wskazanie Laskowic i porównanie sald.
+
+---
+
+### E. Aktualizacja `.lovable/plan.md`
+
+- Sekcja 3:
+  - `[x] 2.1  podgląd obrotów i sald — pełny pakiet (MVP + standard + rozszerzony)` z listą podpunktów: zakładka aktywna, drill-down, per-konto-syntetyczne, multi-sheet XLSX, wykresy.
+  - `[x] 1.5  narzędzie weryfikacji w module Obroty i salda + drill-down do AccountSearchPage; korekta historyczna pozostaje do osobnego zlecenia po decyzji ojca`.
+  - `[ ] 2.2` — wyraźnie poza zakresem aplikacji.
+
+---
+
+### Weryfikacja po wdrożeniu
+
+1. Login jako admin → `/administracja` → zakładka „Obroty i salda (globalnie)" widoczna i otwiera moduł.
+2. Konto `100`, miesiąc bieżący → tabela + dwa wykresy się renderują; eksport XLSX = wiele arkuszy (Razem, Prowincja, Domy, Parafie, Dzieła).
+3. Konto `201`, rok, przełącznik per-konto włączony → wiersze rozbite na `201-…-1` i `201-…-2`; eksport zawiera arkusz „Per konto".
+4. Kliknięcie wiersza (placówka) → dialog z transakcjami; sumy Wn/Ma zgadzają się z wierszem tabeli; przycisk „Otwórz w module Konta" przenosi do `AccountSearchPage` z prefillem i auto-wynikiem.
+5. Build TS bez błędów; brak ostrzeżeń recharts w konsoli.
+
+---
+
+### Poza zakresem (świadomie)
+
+- 2.2 — cennik demo, opracowuje użytkownik poza aplikacją.
+- Migracja historycznych sald Laskowic — wymaga oddzielnej akceptacji po weryfikacji.
