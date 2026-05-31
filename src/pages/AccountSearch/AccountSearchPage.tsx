@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/layout/MainLayout';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Search, TrendingUp, Eye, X, FileSpreadsheet, FilePlus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
@@ -54,6 +54,7 @@ interface Transaction {
 
 const AccountSearchPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user, isReadOnly } = useAuth();
   const { toast } = useToast();
@@ -73,6 +74,34 @@ const AccountSearchPage = () => {
 
   // Use central hook for fetching accounts with restrictions applied
   const { data: allFilteredAccounts = [] } = useFilteredAccounts();
+
+  // Auto-select konta na podstawie query stringa (?account=100&year=2025)
+  // używane m.in. przez drill-down z modułu "Obroty i salda (globalnie)" — pkt 1.5.
+  useEffect(() => {
+    if (selectedAccount) return;
+    if (!allFilteredAccounts || allFilteredAccounts.length === 0) return;
+    const accParam = searchParams.get('account');
+    const yearParam = searchParams.get('year');
+    if (!accParam) return;
+    // Najpierw szukaj dokładnego dopasowania, potem po prefiksie pierwszego segmentu.
+    const exact = allFilteredAccounts.find((a) => a.number === accParam);
+    const byPrefix = exact
+      ? null
+      : allFilteredAccounts
+          .filter((a) => a.number.split('-')[0] === accParam)
+          .sort((a, b) => a.number.length - b.number.length)[0];
+    const match = exact || byPrefix;
+    if (match) {
+      setSelectedAccount(match as Account);
+      setSearchTerm(`${match.number} - ${match.name}`);
+      if (yearParam) {
+        const y = parseInt(yearParam, 10);
+        if (!isNaN(y)) setSelectedYear(y);
+      }
+      // Wyczyść query string, żeby kolejne reloady nie nadpisywały ręcznych zmian.
+      setSearchParams({}, { replace: true });
+    }
+  }, [allFilteredAccounts, searchParams, selectedAccount, setSearchParams]);
 
   // Filter accounts by search term (client-side)
   const accounts = useMemo(() => {
