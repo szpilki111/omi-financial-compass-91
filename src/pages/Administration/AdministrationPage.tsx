@@ -91,9 +91,7 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="liability-mappings" className="flex-shrink-0">Mapowanie raportu (C)</TabsTrigger>
           )}
-          {/* Zakładka "Obroty i salda (globalnie)" — UKRYTA do czasu wyceny i akceptacji oferty (pkt 2.1 planu).
-              Kod modułu pozostaje w repo (GlobalAccountTurnovers.tsx), wystarczy odkomentować trigger i TabsContent poniżej. */}
-          {false && (user.role === 'admin' || user.role === 'prowincjal') && (
+          {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="global-turnovers" className="flex-shrink-0">Obroty i salda (globalnie)</TabsTrigger>
           )}
         </TabsList>
@@ -171,7 +169,7 @@ const AdministrationPage = () => {
             </TabsContent>
           )}
 
-          {false && (user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'global-turnovers' && (
+          {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'global-turnovers' && (
             <TabsContent value="global-turnovers" className="space-y-4">
               <GlobalAccountTurnovers />
             </TabsContent>
