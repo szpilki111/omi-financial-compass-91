@@ -140,6 +140,7 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [drillRow, setDrillRow] = useState<ResultRow | null>(null);
   const [locationSearch, setLocationSearch] = useState<string>('');
   const [accountSearch, setAccountSearch] = useState<string>('');
+  const accountSearchRef = React.useRef<HTMLInputElement>(null);
 
   const { data: accountPrefixes } = useQuery({
     queryKey: ['global-account-prefixes'],
@@ -589,10 +590,16 @@ const GlobalAccountTurnovers: React.FC = () => {
               <SelectContent position="popper" className="max-h-[60vh]">
                 <div className="sticky top-0 z-10 bg-popover p-2 border-b">
                   <Input
+                    ref={accountSearchRef}
                     placeholder="Szukaj konta…"
                     value={accountSearch}
-                    onChange={(e) => setAccountSearch(e.target.value)}
+                    onChange={(e) => {
+                      setAccountSearch(e.target.value);
+                      // Radix przy filtrowaniu przenosi fokus na listę — wracamy do inputa
+                      requestAnimationFrame(() => accountSearchRef.current?.focus());
+                    }}
                     onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="h-8"
                   />
                 </div>
