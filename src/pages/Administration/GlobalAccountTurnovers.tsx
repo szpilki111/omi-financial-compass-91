@@ -139,6 +139,7 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [curTxState, setCurTxState] = useState<TxRow[]>([]);
   const [drillRow, setDrillRow] = useState<ResultRow | null>(null);
   const [locationSearch, setLocationSearch] = useState<string>('');
+  const [accountSearch, setAccountSearch] = useState<string>('');
 
   const { data: accountPrefixes } = useQuery({
     queryKey: ['global-account-prefixes'],
@@ -581,18 +582,33 @@ const GlobalAccountTurnovers: React.FC = () => {
         <div className="grid gap-4 md:grid-cols-6">
           <div className="space-y-2">
             <Label htmlFor="acc">Konto (pierwszy segment)</Label>
-            <Input
-              id="acc"
-              value={accountPrefix}
-              onChange={(e) => setAccountPrefix(e.target.value)}
-              list="account-prefix-list"
-              placeholder="np. 100, 201, 401, 702"
-            />
-            <datalist id="account-prefix-list">
-              {(accountPrefixes || []).map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
+            <Select value={accountPrefix} onValueChange={(v) => setAccountPrefix(v)}>
+              <SelectTrigger id="acc">
+                <SelectValue placeholder="np. 100, 201, 401, 702" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-[60vh]">
+                <div className="sticky top-0 z-10 bg-popover p-2 border-b">
+                  <Input
+                    placeholder="Szukaj konta…"
+                    value={accountSearch}
+                    onChange={(e) => setAccountSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="h-8"
+                  />
+                </div>
+                {(accountPrefixes || [])
+                  .filter((p) => {
+                    const q = accountSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return p.toLowerCase().includes(q);
+                  })
+                  .map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
