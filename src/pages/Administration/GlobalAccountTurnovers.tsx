@@ -667,14 +667,30 @@ const GlobalAccountTurnovers: React.FC = () => {
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="max-h-[60vh]">
+                <div className="sticky top-0 z-10 bg-popover p-2 border-b">
+                  <Input
+                    placeholder="Szukaj placówki…"
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="h-8"
+                  />
+                </div>
                 <SelectItem value="all">Wszystkie placówki</SelectItem>
-                {(locations || []).map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.location_identifier ? `[${l.location_identifier}] ` : ''}
-                    {l.name}
-                  </SelectItem>
-                ))}
+                {(locations || [])
+                  .filter((l) => {
+                    const q = locationSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    const id = (l.location_identifier || '').toLowerCase();
+                    return l.name.toLowerCase().includes(q) || id.includes(q);
+                  })
+                  .map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.location_identifier ? `[${l.location_identifier}] ` : ''}
+                      {l.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
