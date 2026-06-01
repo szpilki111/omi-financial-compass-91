@@ -138,6 +138,7 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [curTxState, setCurTxState] = useState<TxRow[]>([]);
   const [drillRow, setDrillRow] = useState<ResultRow | null>(null);
+  const [locationSearch, setLocationSearch] = useState<string>('');
 
   const { data: accountPrefixes } = useQuery({
     queryKey: ['global-account-prefixes'],
@@ -217,10 +218,42 @@ const GlobalAccountTurnovers: React.FC = () => {
          credit_account:accounts!transactions_credit_account_id_fkey(number),
          document:documents(document_number)`;
 
+      // OPTYMALIZACJA: najpierw pobieramy ID kont pasujących do prefiksu,
+      // żeby filtrować transakcje po stronie bazy (zamiast pobierać wszystko).
+      const matchingAccounts = await fetchAllRows<{ id: string; number: string }>((from, to) =>
+        supabase
+          .from('accounts')
+          .select('id, number')
+          .like('number', `${prefix}-%`)
+          .range(from, to)
+      );
+      // Dorzucamy też konta równe prefiksowi (gdyby istniało konto bez segmentów)
+      const exactRows = await fetchAllRows<{ id: string; number: string }>((from, to) =>
+        supabase
+          .from('accounts')
+          .select('id, number')
+          .eq('number', prefix)
+          .range(from, to)
+      );
+      const accountIds = Array.from(
+        new Set([...matchingAccounts, ...exactRows].map((a) => a.id))
+      );
+
+      if (accountIds.length === 0) {
+        setResults([]);
+        setCurTxState([]);
+        toast.info(`Brak kont z prefiksem ${prefix}`);
+        return;
+      }
+
+      // Filtr po debit_account_id LUB credit_account_id (PostgREST or=)
+      const accountFilter = `debit_account_id.in.(${accountIds.join(',')}),credit_account_id.in.(${accountIds.join(',')})`;
+
       const prevTx = await fetchAllRows<TxRow>((from, to) =>
         supabase
           .from('transactions')
           .select(selectFields)
+          .or(accountFilter)
           .lte('date', prevDate)
           .order('date', { ascending: true })
           .range(from, to)
@@ -230,6 +263,7 @@ const GlobalAccountTurnovers: React.FC = () => {
         supabase
           .from('transactions')
           .select(selectFields)
+          .or(accountFilter)
           .gte('date', dateFrom)
           .lte('date', dateTo)
           .order('date', { ascending: true })
@@ -633,14 +667,30 @@ const GlobalAccountTurnovers: React.FC = () => {
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="max-h-[60vh]">
+                <div className="sticky top-0 z-10 bg-popover p-2 border-b">
+                  <Input
+                    placeholder="Szukaj placówki…"
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="h-8"
+                  />
+                </div>
                 <SelectItem value="all">Wszystkie placówki</SelectItem>
-                {(locations || []).map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.location_identifier ? `[${l.location_identifier}] ` : ''}
-                    {l.name}
-                  </SelectItem>
-                ))}
+                {(locations || [])
+                  .filter((l) => {
+                    const q = locationSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    const id = (l.location_identifier || '').toLowerCase();
+                    return l.name.toLowerCase().includes(q) || id.includes(q);
+                  })
+                  .map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.location_identifier ? `[${l.location_identifier}] ` : ''}
+                      {l.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
