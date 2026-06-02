@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/utils/supabasePagination';
 import { useAuth } from '@/context/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -133,11 +134,16 @@ const DocumentsPage = () => {
       const docIds = (data || []).map(d => d.id);
       let allTransactions: any[] = [];
       if (docIds.length > 0) {
-        const { data: txData } = await supabase
-          .from('transactions')
-          .select('document_id, debit_amount, credit_amount, amount, currency, exchange_rate')
-          .in('document_id', docIds);
-        allTransactions = txData || [];
+        // FIX: pojedyncze .in() bez paginacji ucinało wyniki na 1000 wierszy,
+        // przez co dokumenty na końcu listy miały transaction_count = 0
+        // mimo istniejących transakcji. Używamy fetchAllRows.
+        allTransactions = await fetchAllRows<any>((from, to) =>
+          supabase
+            .from('transactions')
+            .select('document_id, debit_amount, credit_amount, amount, currency, exchange_rate')
+            .in('document_id', docIds)
+            .range(from, to)
+        );
       }
 
       // Group transactions by document_id

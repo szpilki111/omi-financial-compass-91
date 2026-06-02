@@ -141,6 +141,7 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [locationSearch, setLocationSearch] = useState<string>('');
   const [accountSearch, setAccountSearch] = useState<string>('');
   const accountSearchRef = React.useRef<HTMLInputElement>(null);
+  const locationSearchRef = React.useRef<HTMLInputElement>(null);
 
   const { data: accountPrefixes } = useQuery({
     queryKey: ['global-account-prefixes'],
@@ -248,29 +249,58 @@ const GlobalAccountTurnovers: React.FC = () => {
         return;
       }
 
-      // Filtr po debit_account_id LUB credit_account_id (PostgREST or=)
-      const accountFilter = `debit_account_id.in.(${accountIds.join(',')}),credit_account_id.in.(${accountIds.join(',')})`;
+      // FIX 400 Bad Request: pojedyncze .or() z dwoma .in.(...) tworzy URL > 8KB
+      // dla syntetycznych kont z dużą liczbą subkont (np. 110). Robimy dwa równoległe
+      // zapytania per strona (debit/credit) + chunkujemy listę id po 500.
+      const chunkIds = (arr: string[], size: number): string[][] => {
+        const out: string[][] = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
 
-      const prevTx = await fetchAllRows<TxRow>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(selectFields)
-          .or(accountFilter)
-          .lte('date', prevDate)
-          .order('date', { ascending: true })
-          .range(from, to)
-      );
+      const fetchSideTx = async (
+        side: 'debit_account_id' | 'credit_account_id',
+        ids: string[],
+        applyDate: (q: any) => any
+      ): Promise<TxRow[]> => {
+        const chunks = chunkIds(ids, 500);
+        const lists = await Promise.all(
+          chunks.map((idChunk) =>
+            fetchAllRows<TxRow>((from, to) => {
+              let q = supabase
+                .from('transactions')
+                .select(selectFields)
+                .in(side, idChunk);
+              q = applyDate(q);
+              return q.order('date', { ascending: true }).range(from, to);
+            })
+          )
+        );
+        return lists.flat();
+      };
 
-      const curTx = await fetchAllRows<TxRow>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(selectFields)
-          .or(accountFilter)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .range(from, to)
-      );
+      const mergeUnique = (a: TxRow[], b: TxRow[]): TxRow[] => {
+        const map = new Map<string, TxRow>();
+        a.forEach((t) => map.set(t.id, t));
+        b.forEach((t) => map.set(t.id, t));
+        return Array.from(map.values());
+      };
+
+      const [prevDeb, prevCr] = await Promise.all([
+        fetchSideTx('debit_account_id', accountIds, (q) => q.lte('date', prevDate)),
+        fetchSideTx('credit_account_id', accountIds, (q) => q.lte('date', prevDate)),
+      ]);
+      const prevTx = mergeUnique(prevDeb, prevCr);
+
+      const [curDeb, curCr] = await Promise.all([
+        fetchSideTx('debit_account_id', accountIds, (q) =>
+          q.gte('date', dateFrom).lte('date', dateTo)
+        ),
+        fetchSideTx('credit_account_id', accountIds, (q) =>
+          q.gte('date', dateFrom).lte('date', dateTo)
+        ),
+      ]);
+      const curTx = mergeUnique(curDeb, curCr);
 
       const matchesPrefix = (num?: string | null) =>
         !!num && num.split('-')[0] === prefix;
@@ -434,6 +464,24 @@ const GlobalAccountTurnovers: React.FC = () => {
     return top.map((r) => ({ ...r, pct: (r.value / sum) * 100 }));
   }, [results]);
 
+  // Fallback dla wykresu kołowego: jeśli brak obrotów w okresie,
+  // pokażemy udział |salda końcowego|.
+  const pieFallbackData = useMemo(() => {
+    if (!results) return [];
+    const all = results
+      .map((r) => ({ name: r.identifier || r.locationName, value: Math.abs(r.closing) }))
+      .filter((r) => r.value > 0.01)
+      .sort((a, b) => b.value - a.value);
+    const top = all.slice(0, 8);
+    const restSum = all.slice(8).reduce((s, r) => s + r.value, 0);
+    if (restSum > 0.01) top.push({ name: 'Pozostałe', value: restSum });
+    const sum = top.reduce((s, r) => s + r.value, 0) || 1;
+    return top.map((r) => ({ ...r, pct: (r.value / sum) * 100 }));
+  }, [results]);
+
+  const pieUsesFallback = pieData.length === 0 && pieFallbackData.length > 0;
+  const pieDisplayData = pieData.length > 0 ? pieData : pieFallbackData;
+
   // === Drill-down ===
   const drillTransactions = useMemo(() => {
     if (!drillRow) return [];
@@ -583,11 +631,27 @@ const GlobalAccountTurnovers: React.FC = () => {
         <div className="grid gap-4 md:grid-cols-6">
           <div className="space-y-2">
             <Label htmlFor="acc">Konto (pierwszy segment)</Label>
-            <Select value={accountPrefix} onValueChange={(v) => setAccountPrefix(v)}>
+            <Select
+              value={accountPrefix}
+              onValueChange={(v) => setAccountPrefix(v)}
+              onOpenChange={(open) => {
+                if (open) {
+                  setAccountSearch('');
+                  // Po otwarciu Radix najpierw fokusuje wybrany item; przekierowujemy fokus na input
+                  setTimeout(() => accountSearchRef.current?.focus(), 50);
+                }
+              }}
+            >
               <SelectTrigger id="acc">
                 <SelectValue placeholder="np. 100, 201, 401, 702" />
               </SelectTrigger>
-              <SelectContent position="popper" className="max-h-[60vh]">
+              <SelectContent
+                position="popper"
+                collisionPadding={16}
+                style={{
+                  maxHeight: 'var(--radix-select-content-available-height)',
+                }}
+              >
                 <div className="sticky top-0 z-10 bg-popover p-2 border-b">
                   <Input
                     ref={accountSearchRef}
@@ -686,17 +750,37 @@ const GlobalAccountTurnovers: React.FC = () => {
 
           <div className="space-y-2">
             <Label>Placówka (opcjonalnie)</Label>
-            <Select value={locationFilter} onValueChange={(v) => setLocationFilter(v)}>
+            <Select
+              value={locationFilter}
+              onValueChange={(v) => setLocationFilter(v)}
+              onOpenChange={(open) => {
+                if (open) {
+                  setLocationSearch('');
+                  setTimeout(() => locationSearchRef.current?.focus(), 50);
+                }
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent position="popper" className="max-h-[60vh]">
+              <SelectContent
+                position="popper"
+                collisionPadding={16}
+                style={{
+                  maxHeight: 'var(--radix-select-content-available-height)',
+                }}
+              >
                 <div className="sticky top-0 z-10 bg-popover p-2 border-b">
                   <Input
+                    ref={locationSearchRef}
                     placeholder="Szukaj placówki…"
                     value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
+                    onChange={(e) => {
+                      setLocationSearch(e.target.value);
+                      requestAnimationFrame(() => locationSearchRef.current?.focus());
+                    }}
                     onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="h-8"
                   />
                 </div>
@@ -796,14 +880,27 @@ const GlobalAccountTurnovers: React.FC = () => {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Udział w obrotach (Wn + Ma)</CardTitle>
-                  <p className="text-xs text-muted-foreground">Top 8 placówek + „Pozostałe"</p>
+                  <CardTitle className="text-base">
+                    {pieUsesFallback
+                      ? 'Udział wg salda końcowego'
+                      : 'Udział w obrotach (Wn + Ma)'}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {pieUsesFallback
+                      ? 'Brak obrotów w okresie — pokazano |saldo końcowe|. Top 8 placówek + „Pozostałe"'
+                      : 'Top 8 placówek + „Pozostałe"'}
+                  </p>
                 </CardHeader>
                 <CardContent className="h-72">
+                  {pieDisplayData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                      Brak danych do wykresu w wybranym okresie.
+                    </div>
+                  ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={pieData}
+                        data={pieDisplayData}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
@@ -812,7 +909,7 @@ const GlobalAccountTurnovers: React.FC = () => {
                         label={(entry: any) => `${entry.name} (${entry.pct.toFixed(1)}%)`}
                         labelLine={false}
                       >
-                        {pieData.map((_, idx) => (
+                        {pieDisplayData.map((_, idx) => (
                           <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                         ))}
                       </Pie>
@@ -829,6 +926,7 @@ const GlobalAccountTurnovers: React.FC = () => {
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
