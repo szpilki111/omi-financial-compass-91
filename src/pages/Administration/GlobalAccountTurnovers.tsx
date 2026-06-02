@@ -844,14 +844,27 @@ const GlobalAccountTurnovers: React.FC = () => {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Udział w obrotach (Wn + Ma)</CardTitle>
-                  <p className="text-xs text-muted-foreground">Top 8 placówek + „Pozostałe"</p>
+                  <CardTitle className="text-base">
+                    {pieUsesFallback
+                      ? 'Udział wg salda końcowego'
+                      : 'Udział w obrotach (Wn + Ma)'}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {pieUsesFallback
+                      ? 'Brak obrotów w okresie — pokazano |saldo końcowe|. Top 8 placówek + „Pozostałe"'
+                      : 'Top 8 placówek + „Pozostałe"'}
+                  </p>
                 </CardHeader>
                 <CardContent className="h-72">
+                  {pieDisplayData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                      Brak danych do wykresu w wybranym okresie.
+                    </div>
+                  ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={pieData}
+                        data={pieDisplayData}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
@@ -860,7 +873,7 @@ const GlobalAccountTurnovers: React.FC = () => {
                         label={(entry: any) => `${entry.name} (${entry.pct.toFixed(1)}%)`}
                         labelLine={false}
                       >
-                        {pieData.map((_, idx) => (
+                        {pieDisplayData.map((_, idx) => (
                           <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                         ))}
                       </Pie>
@@ -877,6 +890,7 @@ const GlobalAccountTurnovers: React.FC = () => {
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
