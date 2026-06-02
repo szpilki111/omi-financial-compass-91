@@ -631,11 +631,27 @@ const GlobalAccountTurnovers: React.FC = () => {
         <div className="grid gap-4 md:grid-cols-6">
           <div className="space-y-2">
             <Label htmlFor="acc">Konto (pierwszy segment)</Label>
-            <Select value={accountPrefix} onValueChange={(v) => setAccountPrefix(v)}>
+            <Select
+              value={accountPrefix}
+              onValueChange={(v) => setAccountPrefix(v)}
+              onOpenChange={(open) => {
+                if (open) {
+                  setAccountSearch('');
+                  // Po otwarciu Radix najpierw fokusuje wybrany item; przekierowujemy fokus na input
+                  setTimeout(() => accountSearchRef.current?.focus(), 50);
+                }
+              }}
+            >
               <SelectTrigger id="acc">
                 <SelectValue placeholder="np. 100, 201, 401, 702" />
               </SelectTrigger>
-              <SelectContent position="popper" className="max-h-[60vh]">
+              <SelectContent
+                position="popper"
+                collisionPadding={16}
+                style={{
+                  maxHeight: 'var(--radix-select-content-available-height)',
+                }}
+              >
                 <div className="sticky top-0 z-10 bg-popover p-2 border-b">
                   <Input
                     ref={accountSearchRef}
