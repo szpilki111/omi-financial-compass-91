@@ -141,6 +141,7 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [locationSearch, setLocationSearch] = useState<string>('');
   const [accountSearch, setAccountSearch] = useState<string>('');
   const accountSearchRef = React.useRef<HTMLInputElement>(null);
+  const locationSearchRef = React.useRef<HTMLInputElement>(null);
 
   const { data: accountPrefixes } = useQuery({
     queryKey: ['global-account-prefixes'],
@@ -248,29 +249,58 @@ const GlobalAccountTurnovers: React.FC = () => {
         return;
       }
 
-      // Filtr po debit_account_id LUB credit_account_id (PostgREST or=)
-      const accountFilter = `debit_account_id.in.(${accountIds.join(',')}),credit_account_id.in.(${accountIds.join(',')})`;
+      // FIX 400 Bad Request: pojedyncze .or() z dwoma .in.(...) tworzy URL > 8KB
+      // dla syntetycznych kont z dużą liczbą subkont (np. 110). Robimy dwa równoległe
+      // zapytania per strona (debit/credit) + chunkujemy listę id po 500.
+      const chunkIds = (arr: string[], size: number): string[][] => {
+        const out: string[][] = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
 
-      const prevTx = await fetchAllRows<TxRow>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(selectFields)
-          .or(accountFilter)
-          .lte('date', prevDate)
-          .order('date', { ascending: true })
-          .range(from, to)
-      );
+      const fetchSideTx = async (
+        side: 'debit_account_id' | 'credit_account_id',
+        ids: string[],
+        applyDate: (q: any) => any
+      ): Promise<TxRow[]> => {
+        const chunks = chunkIds(ids, 500);
+        const lists = await Promise.all(
+          chunks.map((idChunk) =>
+            fetchAllRows<TxRow>((from, to) => {
+              let q = supabase
+                .from('transactions')
+                .select(selectFields)
+                .in(side, idChunk);
+              q = applyDate(q);
+              return q.order('date', { ascending: true }).range(from, to);
+            })
+          )
+        );
+        return lists.flat();
+      };
 
-      const curTx = await fetchAllRows<TxRow>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(selectFields)
-          .or(accountFilter)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .range(from, to)
-      );
+      const mergeUnique = (a: TxRow[], b: TxRow[]): TxRow[] => {
+        const map = new Map<string, TxRow>();
+        a.forEach((t) => map.set(t.id, t));
+        b.forEach((t) => map.set(t.id, t));
+        return Array.from(map.values());
+      };
+
+      const [prevDeb, prevCr] = await Promise.all([
+        fetchSideTx('debit_account_id', accountIds, (q) => q.lte('date', prevDate)),
+        fetchSideTx('credit_account_id', accountIds, (q) => q.lte('date', prevDate)),
+      ]);
+      const prevTx = mergeUnique(prevDeb, prevCr);
+
+      const [curDeb, curCr] = await Promise.all([
+        fetchSideTx('debit_account_id', accountIds, (q) =>
+          q.gte('date', dateFrom).lte('date', dateTo)
+        ),
+        fetchSideTx('credit_account_id', accountIds, (q) =>
+          q.gte('date', dateFrom).lte('date', dateTo)
+        ),
+      ]);
+      const curTx = mergeUnique(curDeb, curCr);
 
       const matchesPrefix = (num?: string | null) =>
         !!num && num.split('-')[0] === prefix;
