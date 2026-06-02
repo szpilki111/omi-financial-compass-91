@@ -464,6 +464,24 @@ const GlobalAccountTurnovers: React.FC = () => {
     return top.map((r) => ({ ...r, pct: (r.value / sum) * 100 }));
   }, [results]);
 
+  // Fallback dla wykresu kołowego: jeśli brak obrotów w okresie,
+  // pokażemy udział |salda końcowego|.
+  const pieFallbackData = useMemo(() => {
+    if (!results) return [];
+    const all = results
+      .map((r) => ({ name: r.identifier || r.locationName, value: Math.abs(r.closing) }))
+      .filter((r) => r.value > 0.01)
+      .sort((a, b) => b.value - a.value);
+    const top = all.slice(0, 8);
+    const restSum = all.slice(8).reduce((s, r) => s + r.value, 0);
+    if (restSum > 0.01) top.push({ name: 'Pozostałe', value: restSum });
+    const sum = top.reduce((s, r) => s + r.value, 0) || 1;
+    return top.map((r) => ({ ...r, pct: (r.value / sum) * 100 }));
+  }, [results]);
+
+  const pieUsesFallback = pieData.length === 0 && pieFallbackData.length > 0;
+  const pieDisplayData = pieData.length > 0 ? pieData : pieFallbackData;
+
   // === Drill-down ===
   const drillTransactions = useMemo(() => {
     if (!drillRow) return [];
