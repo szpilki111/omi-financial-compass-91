@@ -750,17 +750,37 @@ const GlobalAccountTurnovers: React.FC = () => {
 
           <div className="space-y-2">
             <Label>Placówka (opcjonalnie)</Label>
-            <Select value={locationFilter} onValueChange={(v) => setLocationFilter(v)}>
+            <Select
+              value={locationFilter}
+              onValueChange={(v) => setLocationFilter(v)}
+              onOpenChange={(open) => {
+                if (open) {
+                  setLocationSearch('');
+                  setTimeout(() => locationSearchRef.current?.focus(), 50);
+                }
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent position="popper" className="max-h-[60vh]">
+              <SelectContent
+                position="popper"
+                collisionPadding={16}
+                style={{
+                  maxHeight: 'var(--radix-select-content-available-height)',
+                }}
+              >
                 <div className="sticky top-0 z-10 bg-popover p-2 border-b">
                   <Input
+                    ref={locationSearchRef}
                     placeholder="Szukaj placówki…"
                     value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
+                    onChange={(e) => {
+                      setLocationSearch(e.target.value);
+                      requestAnimationFrame(() => locationSearchRef.current?.focus());
+                    }}
                     onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="h-8"
                   />
                 </div>
