@@ -277,7 +277,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
 
     // Znajdź konto gotówki/banku
     const cashAccount = findAccount(data.cashAccountNumber);
-    const cashAccountError = !cashAccount ? `Nie znaleziono konta ${data.cashAccountNumber}` : undefined;
+    const cashAccountError = !cashAccount ? buildAccountErrorMessage(data.cashAccountNumber) : undefined;
 
     // Dla przychodów: Winien=gotówka/bank, Ma=przychód
     for (const income of data.incomeItems) {
