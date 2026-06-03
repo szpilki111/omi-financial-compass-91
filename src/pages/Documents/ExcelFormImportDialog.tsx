@@ -298,7 +298,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         creditAccountId: creditAccount?.id || null,
         type: "income",
         hasError,
-        errorMessage: !creditAccount ? `Nie znaleziono konta ${extendedAccountNumber}` : cashAccountError,
+        errorMessage: !creditAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
       });
     }
 
@@ -321,7 +321,7 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         creditAccountId: cashAccount?.id || null,
         type: "expense",
         hasError,
-        errorMessage: !debitAccount ? `Nie znaleziono konta ${extendedAccountNumber}` : cashAccountError,
+        errorMessage: !debitAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
       });
     }
 
