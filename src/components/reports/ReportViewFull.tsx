@@ -136,7 +136,8 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
   // Fetch opening balances from ALL transactions BEFORE this month
   const { data: openingBalances } = useQuery({
-    queryKey: ['report-opening-balances-calculated-v3', locationId, month, year],
+    queryKey: ['report-opening-balances-calculated-v4-byacc', locationId, month, year, homeAccountIds?.length || 0],
+    enabled: !!locationId && !!month && !!year && !!homeAccountIds,
     queryFn: async () => {
       // Calculate end of previous month
       const prevMonthEnd = month === 1 
@@ -152,19 +153,13 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         return amount * exchangeRate;
       };
 
-      // Fetch ALL transactions up to end of previous month (z paginacją – limit 1000/req)
-      const allTransactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
-            debit_amount, credit_amount, currency, exchange_rate,
-            debit_account:accounts!transactions_debit_account_id_fkey(number),
-            credit_account:accounts!transactions_credit_account_id_fkey(number)
-          `)
-          .eq('location_id', locationId)
-          .lte('date', prevMonthEndStr)
-          .order('date', { ascending: true })
-          .range(from, to)
+      // Pobierz transakcje dotyczące kont domu (niezależnie od location_id transakcji)
+      const allTransactions = await fetchTransactionsForAccounts(
+        homeAccountIds || [],
+        `id, debit_amount, credit_amount, currency, exchange_rate,
+         debit_account:accounts!transactions_debit_account_id_fkey(number),
+         credit_account:accounts!transactions_credit_account_id_fkey(number)`,
+        (q) => q.lte('date', prevMonthEndStr),
       );
       console.log('📊 Pobrano transakcji do salda otwarcia:', allTransactions.length);
 
@@ -203,12 +198,12 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       return { balances, balancesByAccount };
     },
-    enabled: !!locationId && !!month && !!year
   });
 
   // Fetch transactions for the CURRENT month only
   const { data: transactionData, isLoading } = useQuery({
-    queryKey: ['report-full-data-v3', locationId, month, year],
+    queryKey: ['report-full-data-v4-byacc', locationId, month, year, homeAccountIds?.length || 0],
+    enabled: !!locationId && !!month && !!year && !!homeAccountIds,
     queryFn: async () => {
       const firstDayOfMonth = new Date(year, month - 1, 1);
       const lastDayOfMonth = new Date(year, month, 0);
@@ -217,20 +212,13 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       console.log('📅 Pobieram transakcje TYLKO za okres:', dateFrom, '-', dateTo);
 
-      // Fetch all transactions for the month ONLY (z paginacją – limit 1000/req)
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
-            *,
-            debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-            credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-          `)
-          .eq('location_id', locationId)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .range(from, to)
+      // Pobierz transakcje miesiąca dotyczące kont domu (niezależnie od location_id transakcji)
+      const transactions = await fetchTransactionsForAccounts(
+        homeAccountIds || [],
+        `*,
+         debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+         credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)`,
+        (q) => q.gte('date', dateFrom).lte('date', dateTo),
       );
 
       console.log('📊 Pobrano transakcji za bieżący miesiąc:', transactions?.length);
@@ -387,7 +375,6 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         intentionsCelebrated: intentions210CelebratedGiven
       };
     },
-    enabled: !!locationId && !!month && !!year
   });
 
   if (isLoading) {
