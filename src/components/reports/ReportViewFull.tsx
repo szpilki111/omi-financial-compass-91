@@ -32,6 +32,78 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
+  // Pobierz identyfikator placówki (np. "2-15") aby filtrować transakcje
+  // na podstawie numerów kont (segmenty 2-3), a nie tylko po location_id transakcji.
+  // To kluczowe: transakcje utworzone przez Prowincję, dotyczące kont domu (np.
+  // PROW/2026/02/084 z kontami 201-2-13-*), muszą być uwzględnione w raporcie
+  // tego domu — Account Search pokazuje je poprawnie, raport miesięczny pomijał.
+  const { data: homeAccountIds } = useQuery({
+    queryKey: ['report-home-account-ids', locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      // 1. Pobierz location_identifier placówki
+      const { data: loc, error: locErr } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', locationId)
+        .maybeSingle();
+      if (locErr) throw locErr;
+      const identifier = loc?.location_identifier;
+      if (!identifier) return [] as string[];
+
+      // 2. Pobierz WSZYSTKIE konta, których segmenty 2-3 = identyfikatorowi placówki
+      //    (np. identifier="2-15" → konta typu "X-2-15" oraz "X-2-15-Y")
+      const pattern = `%-${identifier}`;
+      const patternSub = `%-${identifier}-%`;
+      const accs = await fetchAllRows<{ id: string }>((from, to) =>
+        supabase
+          .from('accounts')
+          .select('id, number')
+          .or(`number.like.${pattern},number.like.${patternSub}`)
+          .range(from, to)
+      );
+      return accs.map((a) => a.id);
+    },
+  });
+
+  // Helper – pobiera wszystkie transakcje, których któraś strona dotyczy podanych kont.
+  // Dzieli IDs na paczki po 300 by nie przekroczyć limitu długości URL PostgREST
+  // i wykonuje dwa równoległe zapytania (debit / credit) z paginacją.
+  const fetchTransactionsForAccounts = async (
+    accountIds: string[],
+    selectClause: string,
+    extraFilter?: (q: any) => any,
+  ): Promise<any[]> => {
+    if (!accountIds || accountIds.length === 0) return [];
+    const CHUNK = 300;
+    const chunks: string[][] = [];
+    for (let i = 0; i < accountIds.length; i += CHUNK) {
+      chunks.push(accountIds.slice(i, i + CHUNK));
+    }
+    const fetchSide = async (side: 'debit_account_id' | 'credit_account_id') => {
+      const all: any[] = [];
+      for (const ids of chunks) {
+        const part = await fetchAllRows<any>((from, to) => {
+          let q: any = supabase.from('transactions').select(selectClause).in(side, ids);
+          if (extraFilter) q = extraFilter(q);
+          return q.order('date', { ascending: true }).range(from, to);
+        });
+        all.push(...part);
+      }
+      return all;
+    };
+    const [d, c] = await Promise.all([fetchSide('debit_account_id'), fetchSide('credit_account_id')]);
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const tx of [...d, ...c]) {
+      if (!seen.has(tx.id)) {
+        seen.add(tx.id);
+        out.push(tx);
+      }
+    }
+    return out;
+  };
+
   // Fetch liability category mappings (prefer per-location, fallback to global NULL)
   const { data: liabilityMappings } = useQuery({
     queryKey: ['report-liability-mappings', locationId],
@@ -64,7 +136,8 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
   // Fetch opening balances from ALL transactions BEFORE this month
   const { data: openingBalances } = useQuery({
-    queryKey: ['report-opening-balances-calculated-v3', locationId, month, year],
+    queryKey: ['report-opening-balances-calculated-v4-byacc', locationId, month, year, homeAccountIds?.length || 0],
+    enabled: !!locationId && !!month && !!year && !!homeAccountIds,
     queryFn: async () => {
       // Calculate end of previous month
       const prevMonthEnd = month === 1 
@@ -80,19 +153,13 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         return amount * exchangeRate;
       };
 
-      // Fetch ALL transactions up to end of previous month (z paginacją – limit 1000/req)
-      const allTransactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
-            debit_amount, credit_amount, currency, exchange_rate,
-            debit_account:accounts!transactions_debit_account_id_fkey(number),
-            credit_account:accounts!transactions_credit_account_id_fkey(number)
-          `)
-          .eq('location_id', locationId)
-          .lte('date', prevMonthEndStr)
-          .order('date', { ascending: true })
-          .range(from, to)
+      // Pobierz transakcje dotyczące kont domu (niezależnie od location_id transakcji)
+      const allTransactions = await fetchTransactionsForAccounts(
+        homeAccountIds || [],
+        `id, debit_amount, credit_amount, currency, exchange_rate,
+         debit_account:accounts!transactions_debit_account_id_fkey(number),
+         credit_account:accounts!transactions_credit_account_id_fkey(number)`,
+        (q) => q.lte('date', prevMonthEndStr),
       );
       console.log('📊 Pobrano transakcji do salda otwarcia:', allTransactions.length);
 
@@ -131,12 +198,12 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       return { balances, balancesByAccount };
     },
-    enabled: !!locationId && !!month && !!year
   });
 
   // Fetch transactions for the CURRENT month only
   const { data: transactionData, isLoading } = useQuery({
-    queryKey: ['report-full-data-v3', locationId, month, year],
+    queryKey: ['report-full-data-v4-byacc', locationId, month, year, homeAccountIds?.length || 0],
+    enabled: !!locationId && !!month && !!year && !!homeAccountIds,
     queryFn: async () => {
       const firstDayOfMonth = new Date(year, month - 1, 1);
       const lastDayOfMonth = new Date(year, month, 0);
@@ -145,20 +212,13 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
 
       console.log('📅 Pobieram transakcje TYLKO za okres:', dateFrom, '-', dateTo);
 
-      // Fetch all transactions for the month ONLY (z paginacją – limit 1000/req)
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
-            *,
-            debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-            credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-          `)
-          .eq('location_id', locationId)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .range(from, to)
+      // Pobierz transakcje miesiąca dotyczące kont domu (niezależnie od location_id transakcji)
+      const transactions = await fetchTransactionsForAccounts(
+        homeAccountIds || [],
+        `*,
+         debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+         credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)`,
+        (q) => q.gte('date', dateFrom).lte('date', dateTo),
       );
 
       console.log('📊 Pobrano transakcji za bieżący miesiąc:', transactions?.length);
@@ -315,7 +375,6 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         intentionsCelebrated: intentions210CelebratedGiven
       };
     },
-    enabled: !!locationId && !!month && !!year
   });
 
   if (isLoading) {

@@ -95,13 +95,16 @@ const LEVEL_LABELS: Record<number, string> = {
 const PIE_COLORS = [
   'hsl(var(--primary))',
   'hsl(var(--destructive))',
-  'hsl(var(--accent))',
-  'hsl(var(--secondary))',
-  'hsl(var(--muted-foreground))',
-  'hsl(210 70% 50%)',
-  'hsl(35 85% 55%)',
-  'hsl(150 60% 45%)',
-  'hsl(280 60% 55%)',
+  'hsl(35 90% 50%)',     // pomarańcz
+  'hsl(150 65% 40%)',    // zieleń
+  'hsl(280 65% 55%)',    // fiolet
+  'hsl(195 80% 45%)',    // cyjan
+  'hsl(45 95% 50%)',     // żółty
+  'hsl(330 70% 55%)',    // róż
+  'hsl(165 70% 38%)',    // turkus
+  'hsl(15 80% 55%)',     // koral
+  'hsl(255 60% 55%)',    // indygo
+  'hsl(95 55% 42%)',     // limonka
 ];
 
 const formatPLN = (n: number) =>
