@@ -32,6 +32,78 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   month,
   year
 }) => {
+  // Pobierz identyfikator placówki (np. "2-15") aby filtrować transakcje
+  // na podstawie numerów kont (segmenty 2-3), a nie tylko po location_id transakcji.
+  // To kluczowe: transakcje utworzone przez Prowincję, dotyczące kont domu (np.
+  // PROW/2026/02/084 z kontami 201-2-13-*), muszą być uwzględnione w raporcie
+  // tego domu — Account Search pokazuje je poprawnie, raport miesięczny pomijał.
+  const { data: homeAccountIds } = useQuery({
+    queryKey: ['report-home-account-ids', locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      // 1. Pobierz location_identifier placówki
+      const { data: loc, error: locErr } = await supabase
+        .from('locations')
+        .select('location_identifier')
+        .eq('id', locationId)
+        .maybeSingle();
+      if (locErr) throw locErr;
+      const identifier = loc?.location_identifier;
+      if (!identifier) return [] as string[];
+
+      // 2. Pobierz WSZYSTKIE konta, których segmenty 2-3 = identyfikatorowi placówki
+      //    (np. identifier="2-15" → konta typu "X-2-15" oraz "X-2-15-Y")
+      const pattern = `%-${identifier}`;
+      const patternSub = `%-${identifier}-%`;
+      const accs = await fetchAllRows<{ id: string }>((from, to) =>
+        supabase
+          .from('accounts')
+          .select('id, number')
+          .or(`number.like.${pattern},number.like.${patternSub}`)
+          .range(from, to)
+      );
+      return accs.map((a) => a.id);
+    },
+  });
+
+  // Helper – pobiera wszystkie transakcje, których któraś strona dotyczy podanych kont.
+  // Dzieli IDs na paczki po 300 by nie przekroczyć limitu długości URL PostgREST
+  // i wykonuje dwa równoległe zapytania (debit / credit) z paginacją.
+  const fetchTransactionsForAccounts = async (
+    accountIds: string[],
+    selectClause: string,
+    extraFilter?: (q: any) => any,
+  ): Promise<any[]> => {
+    if (!accountIds || accountIds.length === 0) return [];
+    const CHUNK = 300;
+    const chunks: string[][] = [];
+    for (let i = 0; i < accountIds.length; i += CHUNK) {
+      chunks.push(accountIds.slice(i, i + CHUNK));
+    }
+    const fetchSide = async (side: 'debit_account_id' | 'credit_account_id') => {
+      const all: any[] = [];
+      for (const ids of chunks) {
+        const part = await fetchAllRows<any>((from, to) => {
+          let q: any = supabase.from('transactions').select(selectClause).in(side, ids);
+          if (extraFilter) q = extraFilter(q);
+          return q.order('date', { ascending: true }).range(from, to);
+        });
+        all.push(...part);
+      }
+      return all;
+    };
+    const [d, c] = await Promise.all([fetchSide('debit_account_id'), fetchSide('credit_account_id')]);
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const tx of [...d, ...c]) {
+      if (!seen.has(tx.id)) {
+        seen.add(tx.id);
+        out.push(tx);
+      }
+    }
+    return out;
+  };
+
   // Fetch liability category mappings (prefer per-location, fallback to global NULL)
   const { data: liabilityMappings } = useQuery({
     queryKey: ['report-liability-mappings', locationId],
