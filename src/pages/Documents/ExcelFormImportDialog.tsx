@@ -103,6 +103,35 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     return undefined;
   };
 
+  // Diagnoza dla brakującego konta — rozróżnia "konto nie istnieje" od
+  // "konto istnieje, ale ma wiele podkont analitycznych".
+  const diagnoseAccount = (accountNumber: string): { exists: boolean; leaves: FilteredAccount[] } => {
+    const leaves: FilteredAccount[] = [];
+    let exists = accountsMap.has(accountNumber);
+    for (const [number, account] of accountsMap) {
+      if (number === accountNumber || number.startsWith(accountNumber + "-")) {
+        exists = true;
+        if (!account.has_analytics) leaves.push(account);
+      }
+    }
+    return { exists, leaves };
+  };
+
+  const buildAccountErrorMessage = (accountNumber: string): string => {
+    const { exists, leaves } = diagnoseAccount(accountNumber);
+    if (!exists) return `Nie znaleziono konta ${accountNumber}`;
+    if (leaves.length > 1) {
+      const sample = leaves
+        .slice(0, 3)
+        .map((l) => l.number)
+        .join(", ");
+      const more = leaves.length > 3 ? ` (i ${leaves.length - 3} więcej)` : "";
+      return `Konto ${accountNumber} ma kilka podkont analitycznych — wybierz właściwe ręcznie. Dostępne: ${sample}${more}`;
+    }
+    // exists ale 0 liści (np. tylko parent active) — traktuj jak brak konta księgowalnego
+    return `Konto ${accountNumber} istnieje, ale nie ma aktywnego konta analitycznego do zaksięgowania`;
+  };
+
   // Parsowanie pliku Excel - dostosowane do szablonu
   // Układ szablonu:
   // Wiersz 1: Informacja "Wypełniamy tylko komórki zacienione."
