@@ -1,6 +1,6 @@
- import React, { useState } from 'react';
+import React, { useState } from 'react';
  import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,6 +29,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, canApproveReports } = useAuth();
+  const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -190,11 +191,20 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
       // Aktualizuj szczegóły raportu w bazie danych
       await updateReportDetails(reportId, { ...summary, openingBalance });
       
-      // Odśwież dane bez reload strony
-      await refetchFinancial();
+      // Unieważnij cache widoku raportu (ReportViewFull, salda otwarcia, breakdown)
+      // — dzięki temu sekcje C/D oraz tabele liczone live od razu pokażą nowe wartości.
+      await Promise.all([
+        refetchFinancial(),
+        queryClient.invalidateQueries({ queryKey: ['report-full-data-v4-byacc'] }),
+        queryClient.invalidateQueries({ queryKey: ['report-opening-balances-calculated-v4-byacc'] }),
+        queryClient.invalidateQueries({ queryKey: ['report-home-account-ids'] }),
+        queryClient.invalidateQueries({ queryKey: ['report-liability-mappings'] }),
+        queryClient.invalidateQueries({ queryKey: ['report-accounts-breakdown'] }),
+        queryClient.invalidateQueries({ queryKey: ['ytd-cashflow'] }),
+      ]);
       
       toast({
-        title: "Sumy przeliczone",
+        title: "Raport przeliczony",
         description: `Saldo otwarcia: ${openingBalance.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Przychody: ${summary.income.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}, Koszty: ${summary.expense.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`,
       });
     } catch (error) {
@@ -473,14 +483,14 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ reportId: propReportId })
             size="sm" 
             onClick={handleRefreshSums} 
             disabled={isRefreshing}
-            title="Przelicza sumaryczne przychody i koszty na podstawie wszystkich transakcji w okresie oraz pobiera saldo otwarcia."
+            title="Przelicza cały raport (przychody, koszty, należności/zobowiązania, salda otwarcia) na podstawie aktualnych transakcji — w tym wpisów wygenerowanych z poziomu Prowincji."
           >
             {isRefreshing ? (
               <Spinner size="sm" className="mr-2" />
             ) : (
               <RefreshCcwIcon size={16} className="mr-2" />
             )}
-            Przelicz sumy
+            Przelicz dane raportu
           </Button>
         </div>
       )}
