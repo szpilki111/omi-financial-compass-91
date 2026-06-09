@@ -1,5 +1,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 
 interface LiabilityRow {
   name: string;
@@ -36,7 +38,23 @@ export const ReportLiabilitiesTable: React.FC<ReportLiabilitiesTableProps> = ({
 
   return (
     <div className={`${className}`}>
-      <h3 className="text-lg font-bold mb-3">C. Należności i zobowiązania</h3>
+      <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+        C. Należności i zobowiązania
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Informacja">
+                <Info className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm text-xs leading-relaxed">
+              Saldo „Rozliczenia z prowincją" obejmuje wszystkie księgowania na kontach 201 placówki,
+              łącznie z zatwierdzonymi subwencjami z prowincji (Wn 201) — także wpisami wygenerowanymi
+              przez Prowincję. Wpływy kasowe zmniejszają należność po stronie Ma.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </h3>
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
