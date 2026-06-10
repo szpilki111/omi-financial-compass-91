@@ -192,7 +192,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         const curr = tx.currency || 'PLN';
         
         // Debit side (Wn) - increases balance
-        if (tx.debit_account?.number) {
+        if (tx.debit_account?.number && homeAccountNumbers?.has(tx.debit_account.number)) {
           const fullNum = tx.debit_account.number;
           const prefix = fullNum.split('-')[0];
           const rawAmount = tx.debit_amount || 0;
@@ -202,7 +202,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         }
         
         // Credit side (Ma) - decreases balance
-        if (tx.credit_account?.number) {
+        if (tx.credit_account?.number && homeAccountNumbers?.has(tx.credit_account.number)) {
           const fullNum = tx.credit_account.number;
           const prefix = fullNum.split('-')[0];
           const rawAmount = tx.credit_amount || 0;
