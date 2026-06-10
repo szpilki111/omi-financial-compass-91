@@ -37,7 +37,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
   // To kluczowe: transakcje utworzone przez Prowincję, dotyczące kont domu (np.
   // PROW/2026/02/084 z kontami 201-2-13-*), muszą być uwzględnione w raporcie
   // tego domu — Account Search pokazuje je poprawnie, raport miesięczny pomijał.
-  const { data: homeAccountIds } = useQuery({
+  const { data: homeAccounts } = useQuery({
     queryKey: ['report-home-account-ids', locationId],
     enabled: !!locationId,
     queryFn: async () => {
@@ -49,22 +49,40 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         .maybeSingle();
       if (locErr) throw locErr;
       const identifier = loc?.location_identifier;
-      if (!identifier) return [] as string[];
+      if (!identifier) return { ids: [] as string[], numbers: new Set<string>() };
 
-      // 2. Pobierz WSZYSTKIE konta, których segmenty 2-3 = identyfikatorowi placówki
-      //    (np. identifier="2-15" → konta typu "X-2-15" oraz "X-2-15-Y")
+      // 2. Pobierz kandydatów wzorcem LIKE, a następnie ścisłe dopasowanie po segmentach,
+      //    by uniknąć kolizji typu identifier="2-10" łapiącego konta "459-4-2-10" lub
+      //    "217-4-2-10-1-1" należące do innej placówki (4-2).
       const pattern = `%-${identifier}`;
       const patternSub = `%-${identifier}-%`;
-      const accs = await fetchAllRows<{ id: string }>((from, to) =>
+      const accs = await fetchAllRows<{ id: string; number: string }>((from, to) =>
         supabase
           .from('accounts')
           .select('id, number')
           .or(`number.like.${pattern},number.like.${patternSub}`)
           .range(from, to)
       );
-      return accs.map((a) => a.id);
+      const idParts = identifier.split('-');
+      const seg1 = idParts[0];
+      const seg2 = idParts[1]; // może być undefined dla jednoczłonowych (Prowincja "1")
+      const matches = accs.filter((a) => {
+        const p = a.number.split('-');
+        if (seg2 === undefined) {
+          // jednoczłonowy identyfikator (np. "1") – segment 2 konta = identifier,
+          // a konto nie powinno mieć kolejnego segmentu placówki domowej
+          return p[1] === seg1;
+        }
+        return p[1] === seg1 && p[2] === seg2;
+      });
+      return {
+        ids: matches.map((a) => a.id),
+        numbers: new Set<string>(matches.map((a) => a.number)),
+      };
     },
   });
+  const homeAccountIds = homeAccounts?.ids;
+  const homeAccountNumbers = homeAccounts?.numbers;
 
   // Helper – pobiera wszystkie transakcje, których któraś strona dotyczy podanych kont.
   // Dzieli IDs na paczki po 300 by nie przekroczyć limitu długości URL PostgREST
