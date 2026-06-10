@@ -280,7 +280,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         const curr = tx.currency || 'PLN';
 
         // Credit side processing
-        if (tx.credit_account) {
+        if (tx.credit_account && homeAccountNumbers?.has(tx.credit_account.number)) {
           const accNum = tx.credit_account.number;
           const prefix = accNum.split('-')[0];
           const rawAmount = tx.credit_amount || tx.amount || 0;
@@ -326,7 +326,7 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         }
 
         // Debit side processing
-        if (tx.debit_account) {
+        if (tx.debit_account && homeAccountNumbers?.has(tx.debit_account.number)) {
           const accNum = tx.debit_account.number;
           const prefix = accNum.split('-')[0];
           const rawAmount = tx.debit_amount || tx.amount || 0;
