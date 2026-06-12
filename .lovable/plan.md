@@ -1,39 +1,35 @@
-# Naprawa: raport pobiera transakcje obcych placówek (rozjazd salda 201)
+# Naprawa: konto syntetyczne 110-2-12 nie pokazuje pełnych obrotów
 
-## Diagnoza (potwierdzona na danych)
+## Diagnoza (potwierdzona w bazie)
 
-Dla Laskowic (2-10), styczeń 2026:
-- **Program (konto 201-2-10)**: Wn 20 000,00 / Ma 6 882,46 / saldo końcowe 17 629,37 ✓
-- **Raport (C.3 Rozliczenia z prowincją)**: Należności 22 309,67 / Zobowiązania 7 182,46 / koniec 19 639,04 ✗
+Wyszukiwarka kont (`src/pages/AccountSearch/AccountSearchPage.tsx`) buduje listę powiązanych kont poprawnie – dla 110-2-12 zwraca 8 ID (sam syntetyk + 110-2-12-1 … 110-2-12-5-2). Problem leży w dwóch zapytaniach pobierających transakcje:
 
-Odtworzyłem błędne liczby raportu w SQL co do grosza. Przyczyna:
+1. `account-transactions` (linie ~135–163) – `supabase.from('transactions').select(...).or(orConditions).gte/lte('date',...).order('date').` **Brak paginacji.**
+2. `account-opening-balance` (linie ~166–225) – analogicznie, **brak paginacji.**
 
-**Błąd 1 — dopasowanie „kont domu" po wzorcu tekstowym.** Raport pobiera konta placówki wzorcem `LIKE '%-2-10'` oraz `'%-2-10-%'`. Ten wzorzec łapie też konta INNYCH placówek, w których ciąg „2-10" występuje głębiej, np. konta Prokury Misyjnej (4-2): `459-4-2-10`, `217-4-2-10-1-1`. Przez to raport Laskowic zaciągnął transakcje Prokury, których drugą stroną jest `201-4-2-3` — stąd dokładnie +2 309,67 (Wn) i +300,00 (Ma).
+Supabase/PostgREST ma domyślny limit **1000 wierszy na zapytanie**. Sprawdziłem w bazie: dla 110-2-12 + wszystkich analityk za 2026 r. mamy **1148 transakcji** (sam styczeń: 195, w tym 157 na 110-2-12-2). Wynik zapytania jest obcinany — stąd „brakujące" obroty na koncie syntetycznym w UI i jednocześnie poprawne sumy gdy wybierze się tylko jedną analitykę (każda mieści się w 1000).
 
-**Skala**: problem globalny — np. dla Obry (2-1) wzorzec fałszywie łapie ponad 60 obcych kont (`217-4-2-1-*`, `110-2-2-1`, `100-4-2-1`...). Dotyczy WSZYSTKICH sekcji raportu (przychody 7xx, koszty 4xx, stan finansowy 1xx, należności 2xx, intencje 210) — to tłumaczy też zgłaszane rozjazdy na kontach 1xx i „raz dobrze, raz źle" w różnych domach.
+To samo tłumaczy, dlaczego raport miesięczny pokazuje dane prawidłowo – `ReportViewFull.tsx` używa już helpera `fetchAllRows` z `src/utils/supabasePagination.ts` (paginowane pobieranie po 1000).
 
-**Błąd 2 — zliczanie obu stron transakcji.** Nawet przy poprawnej liście kont, agregacja dodaje do raportu OBIE strony transakcji, także gdy druga strona to konto innej placówki (np. transakcja mieszana dom↔prowincja). Powinna liczyć tylko stronę należącą do domu.
+## Plan zmian
 
-Saldo początkowe liczone jest tą samą logiką, więc błąd kumuluje się i przenosi na kolejne miesiące — dokładnie jak opisał o. ekonom. Przycisk „Przelicz dane raportu" nie pomagał, bo sekcja C i tak liczy się na żywo z tych samych (błędnych) zapytań.
+Wszystkie zmiany w `src/pages/AccountSearch/AccountSearchPage.tsx`. Nic w bazie ani logice raportów.
 
-## Plan naprawy
+### 1. Paginacja zapytania `account-transactions`
+- Importować `fetchAllRows` z `@/utils/supabasePagination`.
+- Zamiast pojedynczego zapytania użyć `fetchAllRows<Transaction>((from, to) => supabase.from('transactions').select(...).or(orConditions).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }).range(from, to))`.
+- Jeżeli `relatedAccountIds.length` jest duże (>~150), `orConditions` może przekroczyć limit długości URL — wtedy dzielić ID na paczki po 150 i scalać wyniki przez `Map<id, tx>` aby zdeduplikować (analogicznie do `fetchTransactionsForAccounts` w `ReportViewFull.tsx`). Dla bieżących danych (max kilkanaście kont) jedna paczka wystarczy, ale dodać guard.
 
-**Plik: `src/components/reports/ReportViewFull.tsx`** (jedyne miejsce z tą logiką):
+### 2. Paginacja zapytania `account-opening-balance`
+- To samo podejście — `fetchAllRows` z filtrem `.lte('date', endOfPrevYear)`.
+- Bez tego saldo otwarcia dla syntetyków z długą historią też będzie zaniżone (efekt narastający w kolejnych latach).
 
-1. **Poprawne wyznaczanie kont domu** (zapytanie `report-home-account-ids`): po pobraniu kandydatów wzorcem LIKE dodać ścisły filtr po segmentach — konto należy do placówki tylko gdy `segment2-segment3 === location_identifier` (dla identyfikatorów dwuczłonowych, np. „2-10") albo `segment2 === identifier` (jednoczłonowe, np. Prowincja „1"). Zwracać też numery kont (potrzebne w pkt. 2).
+### 3. Weryfikacja
+- Otworzyć 110-2-12 dla 2026: suma `Obroty Wn` i `Obroty Ma` w widoku miesięcznym musi równać się sumie tych samych kolumn z poszczególnych analityk 110-2-12-1 … 110-2-12-5-2.
+- Sprawdzić wybiórczo inną placówkę (np. 110-2-13) – ten sam mechanizm naprawi wszystkie syntetyki, nie tylko Łeby.
+- Eksport XLSX/PDF z Wyszukiwarki kont korzysta z tych samych danych – po fixie automatycznie poprawny.
 
-2. **Zliczanie tylko strony domu w agregacji**: w obu pętlach (saldo otwarcia + obroty miesiąca) przed dodaniem kwoty sprawdzić, czy konto danej strony (Wn/Ma) przechodzi ten sam test segmentów. Strona należąca do innej placówki jest pomijana. Dotyczy wszystkich sekcji: 7xx, 4xx, 1xx, 2xx, 210.
-
-3. Bez zmian w mapowaniach (`province` = [201] zostaje), bez zmian w bazie — to czysto frontendowa poprawka logiki liczenia.
-
-## Weryfikacja
-
-- Laskowice styczeń: C.3 musi pokazać 4 511,83 / 20 000,00 / 6 882,46 / 17 629,37 (zgodnie z Wyszukiwarką kont).
-- Kontrolnie Obra (2-1, najbardziej dotknięta) i Warszawa — porównanie raportu z obrotami kont.
-- Salda przechodzą poprawnie na kolejne miesiące (luty/marzec Laskowic: 17 629,37 → 12 339,37 → 6 795,65).
-
-## Szczegóły techniczne
-
-- Test segmentów: `const p = number.split('-'); p[1] === seg1 && p[2] === seg2` (identyfikator „2-10" → seg1="2", seg2="10"); zapobiega to kolizjom typu `217-4-2-10-1-1`.
-- Hook zwróci `Set` numerów/id kont domu, używany zarówno do pobierania transakcji, jak i do filtrowania stron w agregacji.
-- Zapytania o transakcje (`fetchTransactionsForAccounts`) bez zmian — po zawężeniu listy kont przestaną pobierać obce transakcje.
+## Czego NIE ruszam
+- Raporty miesięczne („Rozliczenia z prowincją" itd.) – tam paginacja już jest, dane są zgodne z wyciągami.
+- Schemat bazy, RLS, edge functions.
+- Logika filtrowania kont (`useFilteredAccounts`) – konta synthetyczne są dostępne poprawnie.
