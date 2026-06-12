@@ -12,6 +12,7 @@ import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { useFilteredAccounts } from '@/hooks/useFilteredAccounts';
+import { fetchAllRows } from '@/utils/supabasePagination';
 import AccountSelector from './AccountSelector';
 import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
@@ -138,26 +139,49 @@ const AccountSearchPage = () => {
       if (!selectedAccount || relatedAccountIds.length === 0) return [];
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
-      
-      // Buduj warunek OR dla wszystkich powiązanych kont
-      const orConditions = relatedAccountIds
-        .flatMap(id => [`debit_account_id.eq.${id}`, `credit_account_id.eq.${id}`])
-        .join(',');
-      
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          document:documents(id, document_number, document_name, currency, exchange_rate),
-          debitAccount:accounts!transactions_debit_account_id_fkey(id, number, name, type),
-          creditAccount:accounts!transactions_credit_account_id_fkey(id, number, name, type)
-        `)
-        .or(orConditions)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false });
-      if (error) throw error;
-      return data as Transaction[];
+
+      // Pobierz transakcje dla obu stron (debit/credit) z paginacją – Supabase tnie
+      // domyślnie do 1000 wierszy na zapytanie, co przy kontach syntetycznych
+      // z wieloma analitykami powodowało brakujące obroty. Dzielimy też ID na
+      // paczki by nie przekroczyć limitu długości URL przy dużych syntetykach.
+      const CHUNK = 150;
+      const idChunks: string[][] = [];
+      for (let i = 0; i < relatedAccountIds.length; i += CHUNK) {
+        idChunks.push(relatedAccountIds.slice(i, i + CHUNK));
+      }
+      const selectClause = `*,
+        document:documents(id, document_number, document_name, currency, exchange_rate),
+        debitAccount:accounts!transactions_debit_account_id_fkey(id, number, name, type),
+        creditAccount:accounts!transactions_credit_account_id_fkey(id, number, name, type)`;
+
+      const fetchSide = async (side: 'debit_account_id' | 'credit_account_id') => {
+        const all: any[] = [];
+        for (const ids of idChunks) {
+          const part = await fetchAllRows<any>((from, to) =>
+            supabase
+              .from('transactions')
+              .select(selectClause)
+              .in(side, ids)
+              .gte('date', startDate)
+              .lte('date', endDate)
+              .order('date', { ascending: false })
+              .range(from, to),
+          );
+          all.push(...part);
+        }
+        return all;
+      };
+      const [d, c] = await Promise.all([fetchSide('debit_account_id'), fetchSide('credit_account_id')]);
+      const seen = new Set<string>();
+      const merged: Transaction[] = [];
+      for (const tx of [...d, ...c]) {
+        if (!seen.has(tx.id)) {
+          seen.add(tx.id);
+          merged.push(tx as Transaction);
+        }
+      }
+      merged.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      return merged;
     },
     enabled: !!selectedAccount && relatedAccountIds.length > 0
   });
@@ -168,19 +192,40 @@ const AccountSearchPage = () => {
     queryFn: async () => {
       if (!selectedAccount || relatedAccountIds.length === 0) return { plnBalance: 0, currencyBalances: new Map<string, number>() };
       const endOfPrevYear = `${selectedYear - 1}-12-31`;
-      
-      const orConditions = relatedAccountIds
-        .flatMap(id => [`debit_account_id.eq.${id}`, `credit_account_id.eq.${id}`])
-        .join(',');
-      
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('debit_account_id, credit_account_id, debit_amount, credit_amount, amount, currency, exchange_rate, document:documents(currency, exchange_rate)')
-        .or(orConditions)
-        .lte('date', endOfPrevYear);
-      
-      if (error) throw error;
-      
+
+      // Paginowane pobieranie z obu stron (debit/credit) – bez tego saldo otwarcia
+      // dla syntetyków z długą historią było zaniżone (limit 1000 wierszy).
+      const CHUNK = 150;
+      const idChunks: string[][] = [];
+      for (let i = 0; i < relatedAccountIds.length; i += CHUNK) {
+        idChunks.push(relatedAccountIds.slice(i, i + CHUNK));
+      }
+      const sel = 'id, debit_account_id, credit_account_id, debit_amount, credit_amount, amount, currency, exchange_rate, document:documents(currency, exchange_rate)';
+      const fetchSide = async (side: 'debit_account_id' | 'credit_account_id') => {
+        const all: any[] = [];
+        for (const ids of idChunks) {
+          const part = await fetchAllRows<any>((from, to) =>
+            supabase
+              .from('transactions')
+              .select(sel)
+              .in(side, ids)
+              .lte('date', endOfPrevYear)
+              .range(from, to),
+          );
+          all.push(...part);
+        }
+        return all;
+      };
+      const [d, c] = await Promise.all([fetchSide('debit_account_id'), fetchSide('credit_account_id')]);
+      const seen = new Set<string>();
+      const data: any[] = [];
+      for (const tx of [...d, ...c]) {
+        if (!seen.has(tx.id)) {
+          seen.add(tx.id);
+          data.push(tx);
+        }
+      }
+
       const relatedAccountIdsSet = new Set(relatedAccountIds);
       
       let plnBalance = 0;
