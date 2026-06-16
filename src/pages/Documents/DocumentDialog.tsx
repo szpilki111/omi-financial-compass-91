@@ -1291,8 +1291,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
         return prev.filter((_, i) => i !== index && i !== index + 1);
       }
-      // Don't allow removing provincial fee transactions directly
-      if (tx.is_provincial_fee) return prev;
       return prev.filter((_, i) => i !== index);
     });
     setValidationErrors([]);
@@ -1304,7 +1302,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
         return prev.filter((_, i) => i !== index && i !== index + 1);
       }
-      if (tx.is_provincial_fee) return prev;
       return prev.filter((_, i) => i !== index);
     });
     setValidationErrors([]);
@@ -2710,9 +2707,8 @@ const EditableTransactionRow = React.forwardRef<
           />
         </TableCell>
         <TableCell>
-          {!isProvincialFee ? (
-            <div className="flex gap-1">
-              {onCopy && (
+          <div className="flex gap-1">
+            {!isProvincialFee && onCopy && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -2724,7 +2720,7 @@ const EditableTransactionRow = React.forwardRef<
                   <Copy className="h-4 w-4" />
                 </Button>
               )}
-              {onSplit && (
+            {!isProvincialFee && onSplit && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -2742,15 +2738,12 @@ const EditableTransactionRow = React.forwardRef<
                 size="icon"
                 onClick={onDelete}
                 className="text-destructive hover:text-destructive/80"
-                title="Usuń"
+                title={isProvincialFee ? "Usuń automat prowincyjny" : "Usuń"}
                 disabled={isEditingBlocked}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-            </div>
-          ) : (
-            <span className="text-xs text-muted-foreground italic">Auto</span>
-          )}
+          </div>
         </TableCell>
       </TableRow>
     );
