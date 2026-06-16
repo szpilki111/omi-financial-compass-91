@@ -1,35 +1,28 @@
-# Naprawa: konto syntetyczne 110-2-12 nie pokazuje pełnych obrotów
+## Problem
 
-## Diagnoza (potwierdzona w bazie)
+Automatyczny wiersz „procent na prowincję" (50%/30%) jest oznaczony jako `is_provincial_fee` (rozpoznawany po opisie `procent na prowincję`) i w UI ma w kolumnie akcji tylko etykietę **„Auto"** zamiast kosza. Funkcje `removeTransaction` / `removeParallelTransaction` dodatkowo twardo blokują usunięcie takiego wiersza (`if (tx.is_provincial_fee) return prev;`).
 
-Wyszukiwarka kont (`src/pages/AccountSearch/AccountSearchPage.tsx`) buduje listę powiązanych kont poprawnie – dla 110-2-12 zwraca 8 ID (sam syntetyk + 110-2-12-1 … 110-2-12-5-2). Problem leży w dwóch zapytaniach pobierających transakcje:
+Skutek (Lubliniec, maj): po skopiowaniu dokumentu wiersz prowincyjny zostaje jako osierocony zapis bez kont (świeci się na czerwono), nie da się go usunąć inaczej niż przez skasowanie całego dokumentu — co blokuje złożenie raportu.
 
-1. `account-transactions` (linie ~135–163) – `supabase.from('transactions').select(...).or(orConditions).gte/lte('date',...).order('date').` **Brak paginacji.**
-2. `account-opening-balance` (linie ~166–225) – analogicznie, **brak paginacji.**
+## Rozwiązanie
 
-Supabase/PostgREST ma domyślny limit **1000 wierszy na zapytanie**. Sprawdziłem w bazie: dla 110-2-12 + wszystkich analityk za 2026 r. mamy **1148 transakcji** (sam styczeń: 195, w tym 157 na 110-2-12-2). Wynik zapytania jest obcinany — stąd „brakujące" obroty na koncie syntetycznym w UI i jednocześnie poprawne sumy gdy wybierze się tylko jedną analitykę (każda mieści się w 1000).
+Pozwolić usuwać pojedynczy wiersz „procent na prowincję" ręcznie, zachowując dotychczasową logikę „usuń bazę → usuń też powiązany automat".
 
-To samo tłumaczy, dlaczego raport miesięczny pokazuje dane prawidłowo – `ReportViewFull.tsx` używa już helpera `fetchAllRows` z `src/utils/supabasePagination.ts` (paginowane pobieranie po 1000).
+### Zmiany w `src/pages/Documents/DocumentDialog.tsx`
 
-## Plan zmian
+1. **`removeTransaction` (linia 1287) i `removeParallelTransaction` (linia 1301)** — usunąć linijkę `if (tx.is_provincial_fee) return prev;`. Pozostała logika (gdy usuwamy bazę z następującym po niej wierszem prowincyjnym, kasujemy oba) zostaje bez zmian.
 
-Wszystkie zmiany w `src/pages/AccountSearch/AccountSearchPage.tsx`. Nic w bazie ani logice raportów.
+2. **`EditableTransactionRow` render akcji (linia ~2713)** — zamiast `isProvincialFee ? <span>Auto</span> : <akcje>` pokazywać dla wiersza prowincyjnego sam przycisk kosza (bez „Kopiuj" i „Rozdziel", które nie mają sensu dla automatu). Tooltip: „Usuń automat prowincyjny".
 
-### 1. Paginacja zapytania `account-transactions`
-- Importować `fetchAllRows` z `@/utils/supabasePagination`.
-- Zamiast pojedynczego zapytania użyć `fetchAllRows<Transaction>((from, to) => supabase.from('transactions').select(...).or(orConditions).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }).range(from, to))`.
-- Jeżeli `relatedAccountIds.length` jest duże (>~150), `orConditions` może przekroczyć limit długości URL — wtedy dzielić ID na paczki po 150 i scalać wyniki przez `Map<id, tx>` aby zdeduplikować (analogicznie do `fetchTransactionsForAccounts` w `ReportViewFull.tsx`). Dla bieżących danych (max kilkanaście kont) jedna paczka wystarczy, ale dodać guard.
+### Czego NIE ruszamy
 
-### 2. Paginacja zapytania `account-opening-balance`
-- To samo podejście — `fetchAllRows` z filtrem `.lte('date', endOfPrevYear)`.
-- Bez tego saldo otwarcia dla syntetyków z długą historią też będzie zaniżone (efekt narastający w kolejnych latach).
+- Logiki tworzenia automatu (`useProvincialFee`).
+- `duplicate_document` w bazie — duplikowanie nadal kopiuje wiersz z `description = 'procent na prowincję'`, ale teraz da się go ręcznie usunąć po skopiowaniu.
+- Zapisu w DB — usunięcie po stronie stanu front-endu trafia do istniejącej ścieżki `supabase.from("transactions").delete().in("id", ...)` w `handleSave` (linia ~1106).
+- Walidacji / blokad raportu — czerwone podświetlenie zniknie naturalnie po usunięciu pustego wiersza.
 
-### 3. Weryfikacja
-- Otworzyć 110-2-12 dla 2026: suma `Obroty Wn` i `Obroty Ma` w widoku miesięcznym musi równać się sumie tych samych kolumn z poszczególnych analityk 110-2-12-1 … 110-2-12-5-2.
-- Sprawdzić wybiórczo inną placówkę (np. 110-2-13) – ten sam mechanizm naprawi wszystkie syntetyki, nie tylko Łeby.
-- Eksport XLSX/PDF z Wyszukiwarki kont korzysta z tych samych danych – po fixie automatycznie poprawny.
+## Weryfikacja
 
-## Czego NIE ruszam
-- Raporty miesięczne („Rozliczenia z prowincją" itd.) – tam paginacja już jest, dane są zgodne z wyciągami.
-- Schemat bazy, RLS, edge functions.
-- Logika filtrowania kont (`useFilteredAccounts`) – konta synthetyczne są dostępne poprawnie.
+1. Otworzyć dokument Lublińca z osieroconym wierszem prowincyjnym → w wierszu „Auto" widać kosz → klik → wiersz znika → Zapisz → dokument przestaje być na czerwono → raport za maj da się złożyć.
+2. Stary scenariusz: usunięcie bazowego wiersza nadal kasuje powiązany automat (oba wiersze znikają jednym kliknięciem).
+3. Dodanie nowego dokumentu z kontem 7xx z automatem → automat tworzy się jak dotąd; można go osobno usunąć, jeżeli ekonom się rozmyśli.
