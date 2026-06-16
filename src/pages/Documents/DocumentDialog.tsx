@@ -1291,8 +1291,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
         return prev.filter((_, i) => i !== index && i !== index + 1);
       }
-      // Don't allow removing provincial fee transactions directly
-      if (tx.is_provincial_fee) return prev;
       return prev.filter((_, i) => i !== index);
     });
     setValidationErrors([]);
@@ -1304,7 +1302,6 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       if (!tx.is_provincial_fee && prev[index + 1]?.is_provincial_fee) {
         return prev.filter((_, i) => i !== index && i !== index + 1);
       }
-      if (tx.is_provincial_fee) return prev;
       return prev.filter((_, i) => i !== index);
     });
     setValidationErrors([]);
