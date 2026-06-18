@@ -241,7 +241,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const amountDebit = getAmountInPLN(tx.debit_amount || tx.amount || 0, curr, rate);
 
         // Credit side
-        if (tx.credit_account) {
+        if (tx.credit_account && homeAccountNumbers.has(tx.credit_account.number)) {
           const prefix = tx.credit_account.number.split("-")[0];
           if (prefix.startsWith("7")) incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amountCredit);
           if (prefix.startsWith("1")) {
@@ -273,7 +273,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         }
 
         // Debit side
-        if (tx.debit_account) {
+        if (tx.debit_account && homeAccountNumbers.has(tx.debit_account.number)) {
           const prefix = tx.debit_account.number.split("-")[0];
           if (prefix.startsWith("4")) expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amountDebit);
           if (prefix.startsWith("1")) {
