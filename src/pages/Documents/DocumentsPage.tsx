@@ -132,6 +132,47 @@ const DocumentsPage = () => {
       const from = (currentPage - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      const searchRaw = debouncedSearch.trim();
+      const hasSearch = searchRaw.length > 0;
+      const ilikePattern = `%${searchRaw.replace(/[,()]/g, ' ')}%`;
+      const dateQ = hasSearch ? parseDateQuery(searchRaw) : null;
+      const amountQ = hasSearch ? parseAmountQuery(searchRaw) : null;
+
+      // Pre-fetch: ID dokumentów pasujących pośrednio (lokalizacja, opis/kwota transakcji)
+      let indirectDocIds: string[] = [];
+      if (hasSearch) {
+        const locPromise = supabase.from('locations').select('id').ilike('name', ilikePattern);
+        const txDescPromise = fetchAllRows<{ document_id: string }>((f, t2) =>
+          supabase.from('transactions').select('document_id').ilike('description', ilikePattern).range(f, t2)
+        );
+        const txAmountPromise = amountQ !== null
+          ? fetchAllRows<{ document_id: string }>((f, t2) =>
+              supabase.from('transactions').select('document_id')
+                .or(`amount.eq.${amountQ},debit_amount.eq.${amountQ},credit_amount.eq.${amountQ}`)
+                .range(f, t2)
+            )
+          : Promise.resolve([] as { document_id: string }[]);
+        const [locRes, txDescRows, txAmountRows] = await Promise.all([locPromise, txDescPromise, txAmountPromise]);
+        const locIds = (locRes.data || []).map((l: any) => l.id);
+        let docIdsFromLoc: string[] = [];
+        if (locIds.length > 0) {
+          const locDocs = await fetchAllRows<{ id: string }>((f, t2) =>
+            supabase.from('documents').select('id').in('location_id', locIds).range(f, t2)
+          );
+          docIdsFromLoc = locDocs.map(d => d.id);
+        }
+        const set = new Set<string>([
+          ...docIdsFromLoc,
+          ...txDescRows.map(r => r.document_id).filter(Boolean),
+          ...txAmountRows.map(r => r.document_id).filter(Boolean),
+        ]);
+        indirectDocIds = Array.from(set);
+        if (indirectDocIds.length > MAX_INDIRECT_IDS) {
+          console.warn(`[search] Zbyt wiele pośrednich trafień (${indirectDocIds.length}), przycinam do ${MAX_INDIRECT_IDS}`);
+          indirectDocIds = indirectDocIds.slice(0, MAX_INDIRECT_IDS);
+        }
+      }
+
       let query = supabase.from('documents').select(`
           *,
           locations(name),
@@ -145,10 +186,20 @@ const DocumentsPage = () => {
         query = query.eq('location_id', selectedLocationId);
       }
 
-      // Server-side search filter
-      if (debouncedSearch.trim()) {
-        const s = `%${debouncedSearch.trim()}%`;
-        query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
+      // Server-side OR po wielu polach (+ dopasowania pośrednie + data/zakres)
+      if (hasSearch) {
+        const orParts: string[] = [
+          `document_number.ilike.${ilikePattern}`,
+          `document_name.ilike.${ilikePattern}`,
+        ];
+        if (dateQ?.exact) orParts.push(`document_date.eq.${dateQ.exact}`);
+        if (dateQ?.from && dateQ?.to) {
+          orParts.push(`and(document_date.gte.${dateQ.from},document_date.lte.${dateQ.to})`);
+        }
+        if (indirectDocIds.length > 0) {
+          orParts.push(`id.in.(${indirectDocIds.join(',')})`);
+        }
+        query = query.or(orParts.join(','));
       }
 
       const { data, error, count } = await query.range(from, to);
