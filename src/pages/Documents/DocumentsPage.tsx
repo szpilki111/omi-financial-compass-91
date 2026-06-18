@@ -18,6 +18,34 @@ import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PAGE_SIZE = 50;
+const MAX_INDIRECT_IDS = 500;
+
+/** YYYY-MM-DD | DD.MM.YYYY | YYYY-MM | MM.YYYY */
+function parseDateQuery(s: string): { exact?: string; from?: string; to?: string } | null {
+  const t = s.trim();
+  let m: RegExpMatchArray | null;
+  if ((m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return { exact: `${m[1]}-${m[2]}-${m[3]}` };
+  if ((m = t.match(/^(\d{2})\.(\d{2})\.(\d{4})$/))) return { exact: `${m[3]}-${m[2]}-${m[1]}` };
+  if ((m = t.match(/^(\d{4})-(\d{2})$/))) {
+    const y = +m[1], mo = +m[2];
+    const last = new Date(y, mo, 0).getDate();
+    return { from: `${m[1]}-${m[2]}-01`, to: `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}` };
+  }
+  if ((m = t.match(/^(\d{2})\.(\d{4})$/))) {
+    const y = +m[2], mo = +m[1];
+    const last = new Date(y, mo, 0).getDate();
+    return { from: `${m[2]}-${m[1]}-01`, to: `${m[2]}-${m[1]}-${String(last).padStart(2, '0')}` };
+  }
+  return null;
+}
+
+function parseAmountQuery(s: string): number | null {
+  const t = s.trim().replace(/\s/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
 interface Document {
   id: string;
   document_number: string;
@@ -104,6 +132,47 @@ const DocumentsPage = () => {
       const from = (currentPage - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      const searchRaw = debouncedSearch.trim();
+      const hasSearch = searchRaw.length > 0;
+      const ilikePattern = `%${searchRaw.replace(/[,()]/g, ' ')}%`;
+      const dateQ = hasSearch ? parseDateQuery(searchRaw) : null;
+      const amountQ = hasSearch ? parseAmountQuery(searchRaw) : null;
+
+      // Pre-fetch: ID dokumentów pasujących pośrednio (lokalizacja, opis/kwota transakcji)
+      let indirectDocIds: string[] = [];
+      if (hasSearch) {
+        const locPromise = supabase.from('locations').select('id').ilike('name', ilikePattern);
+        const txDescPromise = fetchAllRows<{ document_id: string }>((f, t2) =>
+          supabase.from('transactions').select('document_id').ilike('description', ilikePattern).range(f, t2)
+        );
+        const txAmountPromise = amountQ !== null
+          ? fetchAllRows<{ document_id: string }>((f, t2) =>
+              supabase.from('transactions').select('document_id')
+                .or(`amount.eq.${amountQ},debit_amount.eq.${amountQ},credit_amount.eq.${amountQ}`)
+                .range(f, t2)
+            )
+          : Promise.resolve([] as { document_id: string }[]);
+        const [locRes, txDescRows, txAmountRows] = await Promise.all([locPromise, txDescPromise, txAmountPromise]);
+        const locIds = (locRes.data || []).map((l: any) => l.id);
+        let docIdsFromLoc: string[] = [];
+        if (locIds.length > 0) {
+          const locDocs = await fetchAllRows<{ id: string }>((f, t2) =>
+            supabase.from('documents').select('id').in('location_id', locIds).range(f, t2)
+          );
+          docIdsFromLoc = locDocs.map(d => d.id);
+        }
+        const set = new Set<string>([
+          ...docIdsFromLoc,
+          ...txDescRows.map(r => r.document_id).filter(Boolean),
+          ...txAmountRows.map(r => r.document_id).filter(Boolean),
+        ]);
+        indirectDocIds = Array.from(set);
+        if (indirectDocIds.length > MAX_INDIRECT_IDS) {
+          console.warn(`[search] Zbyt wiele pośrednich trafień (${indirectDocIds.length}), przycinam do ${MAX_INDIRECT_IDS}`);
+          indirectDocIds = indirectDocIds.slice(0, MAX_INDIRECT_IDS);
+        }
+      }
+
       let query = supabase.from('documents').select(`
           *,
           locations(name),
@@ -117,10 +186,20 @@ const DocumentsPage = () => {
         query = query.eq('location_id', selectedLocationId);
       }
 
-      // Server-side search filter
-      if (debouncedSearch.trim()) {
-        const s = `%${debouncedSearch.trim()}%`;
-        query = query.or(`document_number.ilike.${s},document_name.ilike.${s}`);
+      // Server-side OR po wielu polach (+ dopasowania pośrednie + data/zakres)
+      if (hasSearch) {
+        const orParts: string[] = [
+          `document_number.ilike.${ilikePattern}`,
+          `document_name.ilike.${ilikePattern}`,
+        ];
+        if (dateQ?.exact) orParts.push(`document_date.eq.${dateQ.exact}`);
+        if (dateQ?.from && dateQ?.to) {
+          orParts.push(`and(document_date.gte.${dateQ.from},document_date.lte.${dateQ.to})`);
+        }
+        if (indirectDocIds.length > 0) {
+          orParts.push(`id.in.(${indirectDocIds.join(',')})`);
+        }
+        query = query.or(orParts.join(','));
       }
 
       const { data, error, count } = await query.range(from, to);
@@ -572,7 +651,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
             </div>}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input ref={searchInputRef} placeholder="Szukaj po numerze lub nazwie..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
+            <Input ref={searchInputRef} placeholder="Szukaj: numer, nazwa, lokalizacja, data (RRRR-MM), kwota, opis transakcji..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
           </div>
         </div>
 
