@@ -1,59 +1,42 @@
 ## Problem
 
-Obecnie wyszukiwarka na stronie Dokumenty filtruje serwerowo tylko po dwóch polach:
-- `document_number`
-- `document_name`
+Użytkownik (parafia Wrocław) zgłasza, że w **eksporcie Excel raportu miesięcznego** kwoty w sekcji „Rozliczenia z prowincją" (konto 201) są inne niż:
+- to, co widać w obrotach kont (Account Search),
+- to, co pokazuje raport miesięczny w UI (`ReportViewFull`).
 
-Nie da się znaleźć dokumentu po opisie transakcji, nazwie placówki, dacie ani kwocie — stąd wrażenie "ograniczenia".
+## Przyczyna
 
-## Cel
+`src/components/reports/ExportToExcelFull.tsx` pobiera transakcje z filtrem **`.eq("location_id", location_id)`** — zarówno dla salda otwarcia (linie 104–118), jak i dla obrotów bieżącego miesiąca (linie 145–160).
 
-Wyszukiwarka znajduje dokument, jeśli wpisana fraza pasuje do dowolnego z:
-1. numer dokumentu
-2. nazwa dokumentu
-3. nazwa lokalizacji (Oblaci)
-4. data dokumentu (np. `2025-05`, `05.2025`, `15.05.2025`)
-5. kwota transakcji (np. `1234,56` lub `1234.56`)
-6. opis dowolnej transakcji w dokumencie
+Tymczasem `ReportViewFull.tsx` (UI raportu) używa innej, poprawnej strategii: pobiera **wszystkie konta placówki** (po `location_identifier`, segmenty 2 i 3 numeru konta) i ściąga transakcje, których którakolwiek strona (Wn lub Ma) wskazuje te konta — **niezależnie od `location_id` transakcji**.
 
-Wszystkie warunki działają jako OR. Wyszukiwanie pozostaje serwerowe (paginacja po wszystkich dokumentach w bazie, nie tylko bieżąca strona).
+To kluczowe dla rozliczeń z prowincją: gdy **Prowincja** księguje dokument (np. `PROW/2026/02/084`) na koncie placówki `201-3-…-*` (subwencja, zatwierdzona kontrybucja itd.), taka transakcja ma `location_id` Prowincji, a nie parafii. Tooltip w `ReportLiabilitiesTable.tsx` (linie 50–53) wprost mówi, że saldo 201 musi obejmować również wpisy generowane przez Prowincję — UI to robi, eksport nie.
 
-## Zmiany w kodzie
+Efekt: eksport pomija transakcje Prowincji na kontach 201-x-y-* parafii → inne (mniejsze) kwoty w sekcji „C. Rozliczenia z prowincją" oraz w saldzie otwarcia/zamknięcia.
 
-Plik: `src/pages/Documents/DocumentsPage.tsx`, funkcja `queryFn` dla `['documents', ...]`.
+## Zakres zmian
 
-Nowa logika (gdy `debouncedSearch` jest niepusty):
+Plik: `src/components/reports/ExportToExcelFull.tsx`
 
-1. **Normalizacja frazy** — przyciąć spacje, zamienić przecinek na kropkę dla wariantu kwotowego, spróbować zinterpretować jako datę w formatach `YYYY-MM-DD`, `DD.MM.YYYY`, `YYYY-MM`, `MM.YYYY`.
+1. **Zreplikować logikę z `ReportViewFull`** — pobrać `homeAccountIds` i `homeAccountNumbers` placówki na podstawie `location_identifier` i ścisłego dopasowania segmentów 2 i 3 numeru konta (z fallbackiem dla jednoczłonowego identyfikatora typu „1" = Prowincja).
 
-2. **Pre-fetch ID dokumentów pasujących pośrednio** (równolegle, każde z `fetchAllRows` żeby nie obciąć na 1000):
-   - `locations`: `id` gdzie `name ILIKE %fraza%` → potem `documents.location_id IN (...)`.
-   - `transactions`: `document_id` gdzie `description ILIKE %fraza%` **lub** (jeśli fraza parsuje się jako liczba) `amount = X` lub `debit_amount = X` lub `credit_amount = X`.
-   - Zbiór `matchedDocIds` = unia obu list.
+2. **Zamienić oba zapytania o transakcje** (otwarcie + bieżący miesiąc) na pobieranie po stronach Wn/Ma odwołujących się do `homeAccountIds`:
+   - Paczki po 300 ID (limit długości URL PostgREST), równolegle dla `debit_account_id` i `credit_account_id`.
+   - Deduplikacja po `id` transakcji.
+   - Zachować obecny zakres dat (`lte prevMonthEndStr` / `gte..lte` dla bieżącego miesiąca).
 
-3. **Główne zapytanie `documents`** — `.or(...)` z warunkami:
-   - `document_number.ilike.%fraza%`
-   - `document_name.ilike.%fraza%`
-   - `id.in.(matchedDocIds)` (jeśli niepuste)
-   - `document_date.eq.YYYY-MM-DD` (jeśli sparsowano pełną datę)
-   - dla miesięcznej frazy (`YYYY-MM`): `document_date.gte.YYYY-MM-01,document_date.lte.YYYY-MM-<last>`
+3. **Filtrowanie po stronie księgowania** — w pętli sumującej obroty i salda otwarcia uwzględniać kwotę dla strony Wn/Ma **tylko jeśli** dane konto należy do `homeAccountNumbers` (analogicznie jak w `ReportViewFull`, linie 195+). Zapobiega to liczeniu drugiej strony przeciwstawnej księgowania, która należy do innej placówki.
 
-   Reszta (paginacja `range(from,to)`, sortowanie, filtr lokalizacji dla admina) bez zmian.
-
-4. **Limit bezpieczeństwa** — jeśli `matchedDocIds` > 500 elementów, ciąć do pierwszych 500 i logować w konsoli (URL `.in()` ma limit długości). Przy realnym użyciu (jedna fraza opisu) tyle nie wystąpi; gdyby było — użytkownik dostanie pierwsze trafienia i komunikat w toaście "Zawęź wyszukiwanie".
-
-## Czego NIE zmieniam
-
-- Brak migracji SQL — pełnotekstowy indeks na razie zbędny, baza ma ~tysiące dokumentów.
-- Brak zmian w RLS — używamy tylko istniejących polityk SELECT dla `documents`, `locations`, `transactions`.
-- Brak zmian w UI — input wyszukiwarki pozostaje ten sam, tylko placeholder zaktualizuję na: „Szukaj: numer, nazwa, lokalizacja, data, kwota, opis transakcji”.
-- Liczenie sumy/ilości transakcji per dokument — bez zmian (już używa `fetchAllRows`).
+4. **Bez zmian**: cała pozostała logika eksportu (mapowanie kategorii, mapowania zobowiązań per-location, formatowanie, układ arkuszy, sekcja „Świadczenia na prowincję" tylko dla `isDom`, czcionki, marginesy).
 
 ## Weryfikacja
 
-1. Wpisać fragment opisu transakcji znanego dokumentu → dokument pojawia się na liście.
-2. Wpisać nazwę placówki (np. „Łeba”) → wszystkie dokumenty tej placówki.
-3. Wpisać `2025-05` → wszystkie dokumenty z maja 2025.
-4. Wpisać kwotę np. `1500,00` → dokumenty zawierające taką transakcję.
-5. Wpisać numer/nazwę dokumentu → działa jak dziś.
-6. Pusta fraza → cała lista bez filtra.
+- Otworzyć raport miesięczny parafii Wrocław za miesiąc zgłoszony przez użytkownika.
+- Porównać sekcję „C. Należności i zobowiązania" → wiersz „3. Rozliczenia z prowincją" (Początek, Należności, Zobowiązania, Koniec) w UI vs. wyeksportowany Excel — kwoty muszą być **identyczne**.
+- Sprawdzić, że suma A (Stan finansowy) i suma I/II (Przychody/Rozchody) w eksporcie nadal zgadzają się z UI (te nie powinny się zmienić w typowych przypadkach, ale logika będzie spójna).
+
+## Czego NIE zmieniam
+
+- Brak zmian w bazie danych / RLS / migracji.
+- Brak zmian w `ReportViewFull`, `ReportLiabilitiesTable`, `ReportAccountsBreakdown`.
+- Brak zmian w innych raportach / KPiR / wyszukiwarce kont.
