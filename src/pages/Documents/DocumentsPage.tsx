@@ -18,6 +18,34 @@ import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PAGE_SIZE = 50;
+const MAX_INDIRECT_IDS = 500;
+
+/** YYYY-MM-DD | DD.MM.YYYY | YYYY-MM | MM.YYYY */
+function parseDateQuery(s: string): { exact?: string; from?: string; to?: string } | null {
+  const t = s.trim();
+  let m: RegExpMatchArray | null;
+  if ((m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return { exact: `${m[1]}-${m[2]}-${m[3]}` };
+  if ((m = t.match(/^(\d{2})\.(\d{2})\.(\d{4})$/))) return { exact: `${m[3]}-${m[2]}-${m[1]}` };
+  if ((m = t.match(/^(\d{4})-(\d{2})$/))) {
+    const y = +m[1], mo = +m[2];
+    const last = new Date(y, mo, 0).getDate();
+    return { from: `${m[1]}-${m[2]}-01`, to: `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}` };
+  }
+  if ((m = t.match(/^(\d{2})\.(\d{4})$/))) {
+    const y = +m[2], mo = +m[1];
+    const last = new Date(y, mo, 0).getDate();
+    return { from: `${m[2]}-${m[1]}-01`, to: `${m[2]}-${m[1]}-${String(last).padStart(2, '0')}` };
+  }
+  return null;
+}
+
+function parseAmountQuery(s: string): number | null {
+  const t = s.trim().replace(/\s/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
 interface Document {
   id: string;
   document_number: string;
