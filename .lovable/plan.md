@@ -1,28 +1,59 @@
 ## Problem
 
-Automatyczny wiersz „procent na prowincję" (50%/30%) jest oznaczony jako `is_provincial_fee` (rozpoznawany po opisie `procent na prowincję`) i w UI ma w kolumnie akcji tylko etykietę **„Auto"** zamiast kosza. Funkcje `removeTransaction` / `removeParallelTransaction` dodatkowo twardo blokują usunięcie takiego wiersza (`if (tx.is_provincial_fee) return prev;`).
+Obecnie wyszukiwarka na stronie Dokumenty filtruje serwerowo tylko po dwóch polach:
+- `document_number`
+- `document_name`
 
-Skutek (Lubliniec, maj): po skopiowaniu dokumentu wiersz prowincyjny zostaje jako osierocony zapis bez kont (świeci się na czerwono), nie da się go usunąć inaczej niż przez skasowanie całego dokumentu — co blokuje złożenie raportu.
+Nie da się znaleźć dokumentu po opisie transakcji, nazwie placówki, dacie ani kwocie — stąd wrażenie "ograniczenia".
 
-## Rozwiązanie
+## Cel
 
-Pozwolić usuwać pojedynczy wiersz „procent na prowincję" ręcznie, zachowując dotychczasową logikę „usuń bazę → usuń też powiązany automat".
+Wyszukiwarka znajduje dokument, jeśli wpisana fraza pasuje do dowolnego z:
+1. numer dokumentu
+2. nazwa dokumentu
+3. nazwa lokalizacji (Oblaci)
+4. data dokumentu (np. `2025-05`, `05.2025`, `15.05.2025`)
+5. kwota transakcji (np. `1234,56` lub `1234.56`)
+6. opis dowolnej transakcji w dokumencie
 
-### Zmiany w `src/pages/Documents/DocumentDialog.tsx`
+Wszystkie warunki działają jako OR. Wyszukiwanie pozostaje serwerowe (paginacja po wszystkich dokumentach w bazie, nie tylko bieżąca strona).
 
-1. **`removeTransaction` (linia 1287) i `removeParallelTransaction` (linia 1301)** — usunąć linijkę `if (tx.is_provincial_fee) return prev;`. Pozostała logika (gdy usuwamy bazę z następującym po niej wierszem prowincyjnym, kasujemy oba) zostaje bez zmian.
+## Zmiany w kodzie
 
-2. **`EditableTransactionRow` render akcji (linia ~2713)** — zamiast `isProvincialFee ? <span>Auto</span> : <akcje>` pokazywać dla wiersza prowincyjnego sam przycisk kosza (bez „Kopiuj" i „Rozdziel", które nie mają sensu dla automatu). Tooltip: „Usuń automat prowincyjny".
+Plik: `src/pages/Documents/DocumentsPage.tsx`, funkcja `queryFn` dla `['documents', ...]`.
 
-### Czego NIE ruszamy
+Nowa logika (gdy `debouncedSearch` jest niepusty):
 
-- Logiki tworzenia automatu (`useProvincialFee`).
-- `duplicate_document` w bazie — duplikowanie nadal kopiuje wiersz z `description = 'procent na prowincję'`, ale teraz da się go ręcznie usunąć po skopiowaniu.
-- Zapisu w DB — usunięcie po stronie stanu front-endu trafia do istniejącej ścieżki `supabase.from("transactions").delete().in("id", ...)` w `handleSave` (linia ~1106).
-- Walidacji / blokad raportu — czerwone podświetlenie zniknie naturalnie po usunięciu pustego wiersza.
+1. **Normalizacja frazy** — przyciąć spacje, zamienić przecinek na kropkę dla wariantu kwotowego, spróbować zinterpretować jako datę w formatach `YYYY-MM-DD`, `DD.MM.YYYY`, `YYYY-MM`, `MM.YYYY`.
+
+2. **Pre-fetch ID dokumentów pasujących pośrednio** (równolegle, każde z `fetchAllRows` żeby nie obciąć na 1000):
+   - `locations`: `id` gdzie `name ILIKE %fraza%` → potem `documents.location_id IN (...)`.
+   - `transactions`: `document_id` gdzie `description ILIKE %fraza%` **lub** (jeśli fraza parsuje się jako liczba) `amount = X` lub `debit_amount = X` lub `credit_amount = X`.
+   - Zbiór `matchedDocIds` = unia obu list.
+
+3. **Główne zapytanie `documents`** — `.or(...)` z warunkami:
+   - `document_number.ilike.%fraza%`
+   - `document_name.ilike.%fraza%`
+   - `id.in.(matchedDocIds)` (jeśli niepuste)
+   - `document_date.eq.YYYY-MM-DD` (jeśli sparsowano pełną datę)
+   - dla miesięcznej frazy (`YYYY-MM`): `document_date.gte.YYYY-MM-01,document_date.lte.YYYY-MM-<last>`
+
+   Reszta (paginacja `range(from,to)`, sortowanie, filtr lokalizacji dla admina) bez zmian.
+
+4. **Limit bezpieczeństwa** — jeśli `matchedDocIds` > 500 elementów, ciąć do pierwszych 500 i logować w konsoli (URL `.in()` ma limit długości). Przy realnym użyciu (jedna fraza opisu) tyle nie wystąpi; gdyby było — użytkownik dostanie pierwsze trafienia i komunikat w toaście "Zawęź wyszukiwanie".
+
+## Czego NIE zmieniam
+
+- Brak migracji SQL — pełnotekstowy indeks na razie zbędny, baza ma ~tysiące dokumentów.
+- Brak zmian w RLS — używamy tylko istniejących polityk SELECT dla `documents`, `locations`, `transactions`.
+- Brak zmian w UI — input wyszukiwarki pozostaje ten sam, tylko placeholder zaktualizuję na: „Szukaj: numer, nazwa, lokalizacja, data, kwota, opis transakcji”.
+- Liczenie sumy/ilości transakcji per dokument — bez zmian (już używa `fetchAllRows`).
 
 ## Weryfikacja
 
-1. Otworzyć dokument Lublińca z osieroconym wierszem prowincyjnym → w wierszu „Auto" widać kosz → klik → wiersz znika → Zapisz → dokument przestaje być na czerwono → raport za maj da się złożyć.
-2. Stary scenariusz: usunięcie bazowego wiersza nadal kasuje powiązany automat (oba wiersze znikają jednym kliknięciem).
-3. Dodanie nowego dokumentu z kontem 7xx z automatem → automat tworzy się jak dotąd; można go osobno usunąć, jeżeli ekonom się rozmyśli.
+1. Wpisać fragment opisu transakcji znanego dokumentu → dokument pojawia się na liście.
+2. Wpisać nazwę placówki (np. „Łeba”) → wszystkie dokumenty tej placówki.
+3. Wpisać `2025-05` → wszystkie dokumenty z maja 2025.
+4. Wpisać kwotę np. `1500,00` → dokumenty zawierające taką transakcję.
+5. Wpisać numer/nazwę dokumentu → działa jak dziś.
+6. Pusta fraza → cała lista bez filtra.
