@@ -100,21 +100,79 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
       const prevMonthEnd = month === 1 ? new Date(year - 1, 11, 31) : new Date(year, month - 1, 0);
       const prevMonthEndStr = formatDateForDB(prevMonthEnd);
 
-      // Pobranie transakcji do końca poprzedniego miesiąca (z paginacją – limit 1000/req)
-      const prevTransactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from("transactions")
-          .select(
-            `
-            debit_amount, credit_amount, currency, exchange_rate,
-            debit_account:accounts!transactions_debit_account_id_fkey(number),
-            credit_account:accounts!transactions_credit_account_id_fkey(number)
-          `,
-          )
-          .eq("location_id", location_id)
-          .lte("date", prevMonthEndStr)
-          .order("date", { ascending: true })
-          .range(from, to),
+      // ───────────────────────────────────────────────────────────────
+      // Pobierz WSZYSTKIE konta placówki (po location_identifier, segmenty 2 i 3)
+      // — identycznie jak ReportViewFull. Dzięki temu uwzględnimy transakcje
+      // utworzone przez Prowincję na kontach placówki (np. 201-x-y-*),
+      // które mają location_id Prowincji, nie placówki.
+      // ───────────────────────────────────────────────────────────────
+      const identifier = locationData?.location_identifier as string | undefined;
+      let homeAccountIds: string[] = [];
+      const homeAccountNumbers = new Set<string>();
+      if (identifier) {
+        const idParts = identifier.split("-");
+        const seg1 = idParts[0];
+        const seg2 = idParts[1]; // może być undefined (np. Prowincja "1")
+        const pattern = `%-${identifier}`;
+        const patternSub = `%-${identifier}-%`;
+        const accs = await fetchAllRows<{ id: string; number: string }>((from, to) =>
+          supabase
+            .from("accounts")
+            .select("id, number")
+            .or(`number.like.${pattern},number.like.${patternSub}`)
+            .range(from, to),
+        );
+        const matches = accs.filter((a) => {
+          const p = a.number.split("-");
+          if (seg2 === undefined) return p[1] === seg1;
+          return p[1] === seg1 && p[2] === seg2;
+        });
+        homeAccountIds = matches.map((a) => a.id);
+        matches.forEach((a) => homeAccountNumbers.add(a.number));
+      }
+
+      // Helper: pobiera transakcje, których strona Wn lub Ma odwołuje się
+      // do kont placówki — niezależnie od location_id transakcji.
+      const fetchTxForHomeAccounts = async (
+        selectClause: string,
+        extraFilter: (q: any) => any,
+      ): Promise<any[]> => {
+        if (homeAccountIds.length === 0) return [];
+        const CHUNK = 300;
+        const chunks: string[][] = [];
+        for (let i = 0; i < homeAccountIds.length; i += CHUNK) {
+          chunks.push(homeAccountIds.slice(i, i + CHUNK));
+        }
+        const fetchSide = async (side: "debit_account_id" | "credit_account_id") => {
+          const all: any[] = [];
+          for (const ids of chunks) {
+            const part = await fetchAllRows<any>((from, to) => {
+              let q: any = supabase.from("transactions").select(selectClause).in(side, ids);
+              q = extraFilter(q);
+              return q.order("date", { ascending: true }).range(from, to);
+            });
+            all.push(...part);
+          }
+          return all;
+        };
+        const [d, c] = await Promise.all([fetchSide("debit_account_id"), fetchSide("credit_account_id")]);
+        const seen = new Set<string>();
+        const out: any[] = [];
+        for (const tx of [...d, ...c]) {
+          if (!seen.has(tx.id)) {
+            seen.add(tx.id);
+            out.push(tx);
+          }
+        }
+        return out;
+      };
+
+      // Pobranie transakcji do końca poprzedniego miesiąca
+      const prevTransactions = await fetchTxForHomeAccounts(
+        `id, debit_amount, credit_amount, currency, exchange_rate,
+         debit_account:accounts!transactions_debit_account_id_fkey(number),
+         credit_account:accounts!transactions_credit_account_id_fkey(number)`,
+        (q) => q.lte("date", prevMonthEndStr),
       );
 
       // Oblicz salda otwarcia – per pierwszy segment (prefix) ORAZ per pełny numer konta,
@@ -125,14 +183,16 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const rate = tx.exchange_rate || 1;
         const curr = tx.currency || "PLN";
 
-        if (tx.debit_account?.number) {
+        // Liczymy TYLKO stronę, która należy do kont placówki — przeciwstawna
+        // strona transakcji może być z innej placówki (np. Prowincji).
+        if (tx.debit_account?.number && homeAccountNumbers.has(tx.debit_account.number)) {
           const fullNum = tx.debit_account.number;
           const prefix = fullNum.split("-")[0];
           const amount = getAmountInPLN(tx.debit_amount || 0, curr, rate);
           openingBalances.set(prefix, (openingBalances.get(prefix) || 0) + amount);
           openingBalancesByAccount.set(fullNum, (openingBalancesByAccount.get(fullNum) || 0) + amount);
         }
-        if (tx.credit_account?.number) {
+        if (tx.credit_account?.number && homeAccountNumbers.has(tx.credit_account.number)) {
           const fullNum = tx.credit_account.number;
           const prefix = fullNum.split("-")[0];
           const amount = getAmountInPLN(tx.credit_amount || 0, curr, rate);
@@ -141,22 +201,12 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         }
       });
 
-      // Pobranie transakcji bieżącego miesiąca (z paginacją)
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from("transactions")
-          .select(
-            `
-            *,
-            debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
-            credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
-          `,
-          )
-          .eq("location_id", location_id)
-          .gte("date", dateFrom)
-          .lte("date", dateTo)
-          .order("date", { ascending: true })
-          .range(from, to),
+      // Pobranie transakcji bieżącego miesiąca (po kontach placówki, nie po location_id)
+      const transactions = await fetchTxForHomeAccounts(
+        `*,
+         debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
+         credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)`,
+        (q) => q.gte("date", dateFrom).lte("date", dateTo),
       );
 
       // Pobranie mapowań kategorii zobowiązań (per-location → fallback do globalnych NULL)
@@ -191,7 +241,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         const amountDebit = getAmountInPLN(tx.debit_amount || tx.amount || 0, curr, rate);
 
         // Credit side
-        if (tx.credit_account) {
+        if (tx.credit_account && homeAccountNumbers.has(tx.credit_account.number)) {
           const prefix = tx.credit_account.number.split("-")[0];
           if (prefix.startsWith("7")) incomeMap.set(prefix, (incomeMap.get(prefix) || 0) + amountCredit);
           if (prefix.startsWith("1")) {
@@ -223,7 +273,7 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
         }
 
         // Debit side
-        if (tx.debit_account) {
+        if (tx.debit_account && homeAccountNumbers.has(tx.debit_account.number)) {
           const prefix = tx.debit_account.number.split("-")[0];
           if (prefix.startsWith("4")) expenseMap.set(prefix, (expenseMap.get(prefix) || 0) + amountDebit);
           if (prefix.startsWith("1")) {
