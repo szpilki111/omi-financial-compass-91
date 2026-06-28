@@ -93,14 +93,11 @@ const DocumentsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
-  // Debounce search term
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setCurrentPage(1);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Wyszukiwanie uruchamia się dopiero po zatwierdzeniu (Enter / klik lupy)
+  const submitSearch = () => {
+    setDebouncedSearch(searchTerm);
+    setCurrentPage(1);
+  };
 
   // Fetch locations for filter (only for admin/prowincjal)
   const {
@@ -650,8 +647,27 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
               </Select>
             </div>}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input ref={searchInputRef} placeholder="Szukaj: numer, nazwa, lokalizacja, data (RRRR-MM), kwota, opis transakcji..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-11" />
+            <button
+              type="button"
+              onClick={submitSearch}
+              aria-label="Szukaj"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <Input
+              ref={searchInputRef}
+              placeholder="Szukaj: numer, nazwa, lokalizacja, data (RRRR-MM), kwota, opis transakcji... (Enter aby szukać)"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitSearch();
+                }
+              }}
+              className="pl-11"
+            />
           </div>
         </div>
 
