@@ -104,7 +104,11 @@ export const ReportViewFull: React.FC<ReportViewFullProps> = ({
         const part = await fetchAllRows<any>((from, to) => {
           let q: any = supabase.from('transactions').select(selectClause).in(side, ids);
           if (extraFilter) q = extraFilter(q);
-          return q.order('date', { ascending: true }).range(from, to);
+          // Tie-breaker po `id` — bez niego paginacja jest niestabilna (date nie jest unikalne)
+          return q
+            .order('date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to);
         });
         all.push(...part);
       }

@@ -218,6 +218,7 @@ const DocumentsPage = () => {
             .from('transactions')
             .select('document_id, debit_amount, credit_amount, amount, currency, exchange_rate')
             .in('document_id', docIds)
+            .order('id', { ascending: true })
             .range(from, to)
         );
       }

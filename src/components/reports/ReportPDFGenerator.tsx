@@ -85,6 +85,7 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
           .gte('date', dateFrom)
           .lte('date', dateTo)
           .order('date', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -194,6 +195,7 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
           .gte('date', dateFrom)
           .lte('date', dateTo)
           .order('date', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 

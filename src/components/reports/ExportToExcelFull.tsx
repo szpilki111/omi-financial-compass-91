@@ -149,7 +149,11 @@ export const ExportToExcelFull: React.FC<ExportToExcelFullProps> = ({ report, lo
             const part = await fetchAllRows<any>((from, to) => {
               let q: any = supabase.from("transactions").select(selectClause).in(side, ids);
               q = extraFilter(q);
-              return q.order("date", { ascending: true }).range(from, to);
+              // Tie-breaker po `id` — stabilna paginacja (date nie jest unikalne)
+              return q
+                .order("date", { ascending: true })
+                .order("id", { ascending: true })
+                .range(from, to);
             });
             all.push(...part);
           }
