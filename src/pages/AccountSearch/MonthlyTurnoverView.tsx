@@ -86,7 +86,12 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
 
     const openingCurrency = new Map<string, number>(runningCurrency);
     const closingCurrency = new Map<string, number>();
+    const periodCurrency = new Map<string, number>();
     currencies.forEach((c) => {
+      periodCurrency.set(
+        c,
+        (monthData.debitByCurrency?.get(c) || 0) - (monthData.creditByCurrency?.get(c) || 0),
+      );
       const val =
         (openingCurrency.get(c) || 0) +
         (monthData.debitByCurrency?.get(c) || 0) -
@@ -101,6 +106,7 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
       closingBalance,
       openingCurrency,
       closingCurrency,
+      periodCurrency,
     };
   });
 
