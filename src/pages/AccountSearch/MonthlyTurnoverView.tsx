@@ -235,7 +235,7 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
                       ) : (
                         <TableCell className={`text-right font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatCurrency(balance)}
-                          <ForeignLines values={monthData.closingCurrency} />
+                          <ForeignLines values={monthData.periodCurrency} />
                         </TableCell>
                       )}
                       <TableCell>
