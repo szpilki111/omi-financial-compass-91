@@ -210,21 +210,26 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
                       {isBalanceAccount && (
                         <TableCell className="text-right font-medium">
                           {formatCurrency(monthData.openingBalance || 0)}
+                          <ForeignLines values={monthData.openingCurrency} />
                         </TableCell>
                       )}
                       <TableCell className="text-right text-red-600 font-medium">
                         {formatCurrency(monthData.debit)}
+                        <ForeignLines values={monthData.debitByCurrency} />
                       </TableCell>
                       <TableCell className="text-right text-green-600 font-medium">
                         {formatCurrency(monthData.credit)}
+                        <ForeignLines values={monthData.creditByCurrency} />
                       </TableCell>
                       {isBalanceAccount ? (
                         <TableCell className={`text-right font-bold ${monthData.closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatCurrency(monthData.closingBalance || 0)}
+                          <ForeignLines values={monthData.closingCurrency} />
                         </TableCell>
                       ) : (
                         <TableCell className={`text-right font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatCurrency(balance)}
+                          <ForeignLines values={monthData.closingCurrency} />
                         </TableCell>
                       )}
                       <TableCell>
@@ -251,16 +256,20 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
                   {isBalanceAccount && (
                     <TableCell className="text-right">
                       {formatCurrency(openingBalanceForYear)}
+                      <ForeignLines values={openingCurrencyBalances} />
                     </TableCell>
                   )}
                   <TableCell className="text-right text-red-600">
                     {formatCurrency(totalDebit)}
+                    <ForeignLines values={totalDebitCurrency} />
                   </TableCell>
                   <TableCell className="text-right text-green-600">
                     {formatCurrency(totalCredit)}
+                    <ForeignLines values={totalCreditCurrency} />
                   </TableCell>
                   <TableCell className={`text-right ${finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(isBalanceAccount ? finalBalance : (totalDebit - totalCredit))}
+                    <ForeignLines values={finalCurrency} />
                   </TableCell>
                   <TableCell></TableCell>
                 </TableRow>
