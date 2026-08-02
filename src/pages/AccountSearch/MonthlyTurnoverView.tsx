@@ -27,6 +27,10 @@ interface MonthlyData {
   debit: number;
   credit: number;
   openingBalance?: number;
+  /** Obroty Wn w walutach obcych (kwoty oryginalne, bez przeliczenia) */
+  debitByCurrency?: Map<string, number>;
+  /** Obroty Ma w walutach obcych (kwoty oryginalne, bez przeliczenia) */
+  creditByCurrency?: Map<string, number>;
 }
 
 interface MonthlyTurnoverViewProps {
@@ -34,6 +38,8 @@ interface MonthlyTurnoverViewProps {
   selectedAccount: Account;
   onViewMonth: (month: number) => void;
   openingBalanceForYear?: number;
+  /** Salda otwarcia roku w walutach obcych (kwoty oryginalne) */
+  openingCurrencyBalances?: Map<string, number>;
 }
 
 const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
@@ -41,6 +47,7 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
   selectedAccount,
   onViewMonth,
   openingBalanceForYear = 0,
+  openingCurrencyBalances,
 }) => {
   // Determine if this is a balance account (0xx, 1xx, 2xx) that should show opening/closing balances
   const accountPrefix = selectedAccount.number.split('-')[0];
@@ -51,16 +58,49 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
   // Sort monthly data chronologically (oldest first) for calculating running balance
   const sortedMonthlyData = [...monthlyData].sort((a, b) => a.month.localeCompare(b.month));
   
+  // Zbiór walut obcych występujących na koncie (saldo otwarcia + obroty)
+  const currencies = React.useMemo(() => {
+    const set = new Set<string>();
+    openingCurrencyBalances?.forEach((v, c) => {
+      if (Math.abs(v) > 0.005) set.add(c);
+    });
+    monthlyData.forEach((m) => {
+      m.debitByCurrency?.forEach((v, c) => {
+        if (Math.abs(v) > 0.005) set.add(c);
+      });
+      m.creditByCurrency?.forEach((v, c) => {
+        if (Math.abs(v) > 0.005) set.add(c);
+      });
+    });
+    return Array.from(set).sort();
+  }, [monthlyData, openingCurrencyBalances]);
+
   // Calculate opening balance for each month based on cumulative transactions
   let runningBalance = openingBalanceForYear;
+  const runningCurrency = new Map<string, number>();
+  currencies.forEach((c) => runningCurrency.set(c, openingCurrencyBalances?.get(c) || 0));
   const dataWithBalances = sortedMonthlyData.map((monthData) => {
     const openingBalance = runningBalance;
     const closingBalance = openingBalance + monthData.debit - monthData.credit;
     runningBalance = closingBalance;
+
+    const openingCurrency = new Map<string, number>(runningCurrency);
+    const closingCurrency = new Map<string, number>();
+    currencies.forEach((c) => {
+      const val =
+        (openingCurrency.get(c) || 0) +
+        (monthData.debitByCurrency?.get(c) || 0) -
+        (monthData.creditByCurrency?.get(c) || 0);
+      closingCurrency.set(c, val);
+      runningCurrency.set(c, val);
+    });
+
     return {
       ...monthData,
       openingBalance,
       closingBalance,
+      openingCurrency,
+      closingCurrency,
     };
   });
 
@@ -72,8 +112,55 @@ const MonthlyTurnoverView: React.FC<MonthlyTurnoverViewProps> = ({
   const totalCredit = monthlyData.reduce((sum, m) => sum + m.credit, 0);
   const finalBalance = openingBalanceForYear + totalDebit - totalCredit;
 
+  const sumByCurrency = (
+    picker: (m: MonthlyData) => Map<string, number> | undefined,
+  ): Map<string, number> => {
+    const out = new Map<string, number>();
+    currencies.forEach((c) => {
+      out.set(
+        c,
+        monthlyData.reduce((s, m) => s + (picker(m)?.get(c) || 0), 0),
+      );
+    });
+    return out;
+  };
+  const totalDebitCurrency = sumByCurrency((m) => m.debitByCurrency);
+  const totalCreditCurrency = sumByCurrency((m) => m.creditByCurrency);
+  const finalCurrency = new Map<string, number>();
+  currencies.forEach((c) =>
+    finalCurrency.set(
+      c,
+      (openingCurrencyBalances?.get(c) || 0) +
+        (totalDebitCurrency.get(c) || 0) -
+        (totalCreditCurrency.get(c) || 0),
+    ),
+  );
+
   const formatCurrency = (value: number) => {
     return value.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
+  };
+
+  const formatForeign = (value: number, code: string) =>
+    `(${value.toLocaleString('pl-PL', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${code})`;
+
+  // Nawias z walutą pokazujemy tylko dla kont, na których faktycznie są
+  // kwoty przeliczane z walut obcych (analogicznie do paska walutowego u góry).
+  const ForeignLines: React.FC<{ values?: Map<string, number> }> = ({ values }) => {
+    if (!values || currencies.length === 0) return null;
+    const lines = currencies
+      .map((c) => ({ c, v: values.get(c) || 0 }))
+      .filter((x) => Math.abs(x.v) > 0.005);
+    if (lines.length === 0) return null;
+    return (
+      <div className="text-xs font-normal text-muted-foreground">
+        {lines.map(({ c, v }) => (
+          <div key={c}>{formatForeign(v, c)}</div>
+        ))}
+      </div>
+    );
   };
 
   return (
