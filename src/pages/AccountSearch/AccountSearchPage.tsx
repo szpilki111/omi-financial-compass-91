@@ -373,7 +373,9 @@ const AccountSearchPage = () => {
           monthName: format(parseISO(transaction.date), 'LLLL yyyy', { locale: pl }),
           transactions: [],
           debit: 0,
-          credit: 0
+          credit: 0,
+          debitByCurrency: new Map<string, number>(),
+          creditByCurrency: new Map<string, number>()
         };
       }
       acc[month].transactions.push(transaction);
@@ -385,6 +387,28 @@ const AccountSearchPage = () => {
       }
       if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
         acc[month].credit += (transaction.credit_amount ?? transaction.amount ?? 0) * exchangeRate;
+      }
+
+      // Rozbicie walutowe – TYLKO dla kwot przeliczanych z walut obcych.
+      // Ta sama logika wyboru waluty co w currencyTotals (pasek u góry).
+      const docCurrency = transaction.document?.currency;
+      const txCurrency = transaction.currency;
+      const currency = (docCurrency && docCurrency !== 'PLN') ? docCurrency
+                      : (txCurrency && txCurrency !== 'PLN') ? txCurrency
+                      : 'PLN';
+      if (currency !== 'PLN') {
+        if (relatedAccountIdsSet.has(transaction.debit_account_id)) {
+          acc[month].debitByCurrency.set(
+            currency,
+            (acc[month].debitByCurrency.get(currency) || 0) + (transaction.debit_amount ?? transaction.amount ?? 0),
+          );
+        }
+        if (relatedAccountIdsSet.has(transaction.credit_account_id)) {
+          acc[month].creditByCurrency.set(
+            currency,
+            (acc[month].creditByCurrency.get(currency) || 0) + (transaction.credit_amount ?? transaction.amount ?? 0),
+          );
+        }
       }
       return acc;
     }, {} as Record<string, any>);
@@ -865,6 +889,7 @@ const AccountSearchPage = () => {
                   setShowTurnover(false);
                 }}
                 openingBalanceForYear={openingBalanceData.plnBalance}
+                openingCurrencyBalances={openingBalanceData.currencyBalances}
               />
             ) : (
               <TransactionsList 
