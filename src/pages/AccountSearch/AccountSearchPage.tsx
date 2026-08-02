@@ -165,6 +165,7 @@ const AccountSearchPage = () => {
               .gte('date', startDate)
               .lte('date', endDate)
               .order('date', { ascending: false })
+              .order('id', { ascending: true })
               .range(from, to),
           );
           all.push(...part);
@@ -210,6 +211,7 @@ const AccountSearchPage = () => {
               .select(sel)
               .in(side, ids)
               .lte('date', endOfPrevYear)
+              .order('id', { ascending: true })
               .range(from, to),
           );
           all.push(...part);

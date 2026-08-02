@@ -6,6 +6,11 @@
  *   const rows = await fetchAllRows((from, to) =>
  *     supabase.from('transactions').select('...').eq(...).range(from, to)
  *   );
+ *
+ * WAŻNE: zapytanie MUSI mieć deterministyczne (unikalne) sortowanie, np.
+ * `.order('date').order('id')`. Przy sortowaniu po nieunikalnej kolumnie
+ * Postgres nie gwarantuje stabilnej kolejności między stronami — część
+ * wierszy się dubluje, a część nie zostaje pobrana wcale (gubione obroty).
  */
 export async function fetchAllRows<T>(
   buildQuery: (from: number, to: number) => any,
