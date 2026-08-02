@@ -94,6 +94,7 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
           .gte('date', dateFrom)
           .lte('date', dateTo)
           .order('date', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 

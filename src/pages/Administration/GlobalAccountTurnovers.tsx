@@ -275,7 +275,13 @@ const GlobalAccountTurnovers: React.FC = () => {
                 .select(selectFields)
                 .in(side, idChunk);
               q = applyDate(q);
-              return q.order('date', { ascending: true }).range(from, to);
+              // UWAGA: `date` nie jest unikalne — bez tie-breakera po `id`
+              // paginacja (range) jest niestabilna i gubi/duplikuje wiersze,
+              // co powodowało błędne salda początkowe przy >1000 zapisach.
+              return q
+                .order('date', { ascending: true })
+                .order('id', { ascending: true })
+                .range(from, to);
             })
           )
         );
