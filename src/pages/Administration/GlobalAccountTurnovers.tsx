@@ -199,6 +199,34 @@ const GlobalAccountTurnovers: React.FC = () => {
     };
   }, [periodType, year, month, quarter]);
 
+  // Przypisanie konta do placówki na podstawie SEGMENTÓW numeru konta (segment 2 i 3),
+  // a nie po `transactions.location_id`. Dokument zaksięgowany przez Prowincję na koncie
+  // domu (np. 110-2-13-1) należy do domu, nie do Prowincji — inaczej przy wskazaniu
+  // konkretnej placówki „zasysało” konta innych domów i parafii, psując sumy sald.
+  const resolveLocationIdForAccount = React.useCallback(
+    (accNumber?: string | null): string | null => {
+      if (!accNumber || !locations) return null;
+      const p = accNumber.split('-');
+      if (p.length < 2) return null;
+      const two = p.length >= 3 ? `${p[1]}-${p[2]}` : null;
+      const one = p[1];
+      // Najpierw dopasowanie dwuczłonowe (np. „2-13”), potem jednoczłonowe (np. „1” = Prowincja).
+      // Jednoczłonowy identyfikator dopasowujemy WYŁĄCZNIE gdy żadna placówka nie ma
+      // identyfikatora dwuczłonowego zaczynającego się tym samym segmentem — chroni to
+      // Prowincję („1”) przed wciąganiem kont „100-2-13”.
+      if (two) {
+        const m = locations.find((l) => l.location_identifier === two);
+        if (m) return m.id;
+      }
+      const m1 = locations.find((l) => l.location_identifier === one);
+      if (m1) return m1.id;
+      return null;
+    },
+    [locations]
+  );
+
+  const UNASSIGNED = '__unassigned__';
+
   const periodLabel = useMemo(() => {
     if (periodType === 'year') return `${year}`;
     if (periodType === 'quarter') return `Q${quarter} ${year}`;
@@ -245,7 +273,24 @@ const GlobalAccountTurnovers: React.FC = () => {
         new Set([...matchingAccounts, ...exactRows].map((a) => a.id))
       );
 
-      if (accountIds.length === 0) {
+      // Gdy wskazano konkretną placówkę – ograniczamy konta JUŻ na tym etapie
+      // (mniej danych do pobrania i brak kont obcych placówek w wynikach).
+      const allAccounts = [...matchingAccounts, ...exactRows];
+      const accountLoc = new Map<string, string | null>();
+      allAccounts.forEach((a) => accountLoc.set(a.number, resolveLocationIdForAccount(a.number)));
+
+      const scopedAccountIds =
+        locationFilter === 'all'
+          ? accountIds
+          : Array.from(
+              new Set(
+                allAccounts
+                  .filter((a) => accountLoc.get(a.number) === locationFilter)
+                  .map((a) => a.id)
+              )
+            );
+
+      if (scopedAccountIds.length === 0) {
         setResults([]);
         setCurTxState([]);
         toast.info(`Brak kont z prefiksem ${prefix}`);
@@ -296,16 +341,16 @@ const GlobalAccountTurnovers: React.FC = () => {
       };
 
       const [prevDeb, prevCr] = await Promise.all([
-        fetchSideTx('debit_account_id', accountIds, (q) => q.lte('date', prevDate)),
-        fetchSideTx('credit_account_id', accountIds, (q) => q.lte('date', prevDate)),
+        fetchSideTx('debit_account_id', scopedAccountIds, (q) => q.lte('date', prevDate)),
+        fetchSideTx('credit_account_id', scopedAccountIds, (q) => q.lte('date', prevDate)),
       ]);
       const prevTx = mergeUnique(prevDeb, prevCr);
 
       const [curDeb, curCr] = await Promise.all([
-        fetchSideTx('debit_account_id', accountIds, (q) =>
+        fetchSideTx('debit_account_id', scopedAccountIds, (q) =>
           q.gte('date', dateFrom).lte('date', dateTo)
         ),
-        fetchSideTx('credit_account_id', accountIds, (q) =>
+        fetchSideTx('credit_account_id', scopedAccountIds, (q) =>
           q.gte('date', dateFrom).lte('date', dateTo)
         ),
       ]);
@@ -332,10 +377,10 @@ const GlobalAccountTurnovers: React.FC = () => {
       ) => {
         const r = tx.exchange_rate || 1;
         const c = tx.currency || 'PLN';
-        const locId = tx.location_id;
-        if (!locId) return;
         const accNumber = side === 'debit' ? tx.debit_account?.number : tx.credit_account?.number;
         if (!matchesPrefix(accNumber)) return;
+        // Placówka wynika z numeru konta, nie z location_id dokumentu.
+        const locId = resolveLocationIdForAccount(accNumber) || UNASSIGNED;
         const key = keyFor(locId, accNumber);
         const amt = side === 'debit' ? tx.debit_amount : tx.credit_amount;
         target.set(key, (target.get(key) || 0) + sign * toPLN(amt, c, r));
@@ -370,7 +415,7 @@ const GlobalAccountTurnovers: React.FC = () => {
         const cr = credit.get(key) || 0;
         return {
           locationId: locId,
-          locationName: loc?.name || '(nieznana)',
+          locationName: loc?.name || (locId === UNASSIGNED ? '(nieprzypisane)' : '(nieznana)'),
           identifier: loc?.location_identifier || '',
           level: getLevel(loc?.location_identifier || null),
           accountNumber: perAccount ? accountFor.get(key) : undefined,
@@ -497,18 +542,19 @@ const GlobalAccountTurnovers: React.FC = () => {
     const prefix = accountPrefix.trim();
     return curTxState
       .filter((tx) => {
-        if (tx.location_id !== drillRow.locationId) return false;
         const d = tx.debit_account?.number;
         const c = tx.credit_account?.number;
         const matchesAccount = (acc?: string | null) => {
           if (!acc) return false;
+          const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+          if (locId !== drillRow.locationId) return false;
           if (drillRow.accountNumber) return acc === drillRow.accountNumber;
           return acc.split('-')[0] === prefix;
         };
         return matchesAccount(d) || matchesAccount(c);
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [drillRow, curTxState, accountPrefix]);
+  }, [drillRow, curTxState, accountPrefix, resolveLocationIdForAccount]);
 
   const drillTotals = useMemo(() => {
     if (!drillRow) return { debit: 0, credit: 0 };
@@ -520,6 +566,8 @@ const GlobalAccountTurnovers: React.FC = () => {
       const ccy = tx.currency || 'PLN';
       const matchesAccount = (acc?: string | null) => {
         if (!acc) return false;
+        const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+        if (locId !== drillRow.locationId) return false;
         if (drillRow.accountNumber) return acc === drillRow.accountNumber;
         return acc.split('-')[0] === prefix;
       };
@@ -527,7 +575,7 @@ const GlobalAccountTurnovers: React.FC = () => {
       if (matchesAccount(tx.credit_account?.number)) cSum += toPLN(tx.credit_amount, ccy, r);
     });
     return { debit: dSum, credit: cSum };
-  }, [drillTransactions, drillRow, accountPrefix]);
+  }, [drillTransactions, drillRow, accountPrefix, resolveLocationIdForAccount]);
 
   const openInAccountsModule = (row: ResultRow) => {
     const params = new URLSearchParams();
@@ -1086,6 +1134,8 @@ const GlobalAccountTurnovers: React.FC = () => {
                     const prefix = accountPrefix.trim();
                     const matchesAccount = (acc?: string | null) => {
                       if (!acc) return false;
+                      const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+                      if (drillRow && locId !== drillRow.locationId) return false;
                       if (drillRow?.accountNumber) return acc === drillRow.accountNumber;
                       return acc.split('-')[0] === prefix;
                     };
