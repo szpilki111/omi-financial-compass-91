@@ -1134,6 +1134,8 @@ const GlobalAccountTurnovers: React.FC = () => {
                     const prefix = accountPrefix.trim();
                     const matchesAccount = (acc?: string | null) => {
                       if (!acc) return false;
+                      const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+                      if (drillRow && locId !== drillRow.locationId) return false;
                       if (drillRow?.accountNumber) return acc === drillRow.accountNumber;
                       return acc.split('-')[0] === prefix;
                     };
