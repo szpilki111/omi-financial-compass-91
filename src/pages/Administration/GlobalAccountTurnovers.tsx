@@ -542,18 +542,19 @@ const GlobalAccountTurnovers: React.FC = () => {
     const prefix = accountPrefix.trim();
     return curTxState
       .filter((tx) => {
-        if (tx.location_id !== drillRow.locationId) return false;
         const d = tx.debit_account?.number;
         const c = tx.credit_account?.number;
         const matchesAccount = (acc?: string | null) => {
           if (!acc) return false;
+          const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+          if (locId !== drillRow.locationId) return false;
           if (drillRow.accountNumber) return acc === drillRow.accountNumber;
           return acc.split('-')[0] === prefix;
         };
         return matchesAccount(d) || matchesAccount(c);
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [drillRow, curTxState, accountPrefix]);
+  }, [drillRow, curTxState, accountPrefix, resolveLocationIdForAccount]);
 
   const drillTotals = useMemo(() => {
     if (!drillRow) return { debit: 0, credit: 0 };
@@ -565,6 +566,8 @@ const GlobalAccountTurnovers: React.FC = () => {
       const ccy = tx.currency || 'PLN';
       const matchesAccount = (acc?: string | null) => {
         if (!acc) return false;
+        const locId = resolveLocationIdForAccount(acc) || UNASSIGNED;
+        if (locId !== drillRow.locationId) return false;
         if (drillRow.accountNumber) return acc === drillRow.accountNumber;
         return acc.split('-')[0] === prefix;
       };
@@ -572,7 +575,7 @@ const GlobalAccountTurnovers: React.FC = () => {
       if (matchesAccount(tx.credit_account?.number)) cSum += toPLN(tx.credit_amount, ccy, r);
     });
     return { debit: dSum, credit: cSum };
-  }, [drillTransactions, drillRow, accountPrefix]);
+  }, [drillTransactions, drillRow, accountPrefix, resolveLocationIdForAccount]);
 
   const openInAccountsModule = (row: ResultRow) => {
     const params = new URLSearchParams();
