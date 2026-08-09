@@ -336,88 +336,23 @@ const GlobalAccountTurnovers: React.FC = () => {
       ]);
       const curTx = mergeUnique(curDeb, curCr);
 
-      const matchesPrefix = (num?: string | null) =>
-        !!num && num.split('-')[0] === prefix;
-
-      // Key builder: per pełne konto albo per placówka
-      const keyFor = (locId: string, accNumber?: string | null): string =>
-        perAccount && accNumber ? `${locId}__${accNumber}` : locId;
-
-      const opening = new Map<string, number>();
-      const debit = new Map<string, number>();
-      const credit = new Map<string, number>();
-      const accountFor = new Map<string, string>(); // key → fullAccountNumber (gdy perAccount)
-      const locFor = new Map<string, string>(); // key → locationId
-
-      const apply = (
-        tx: TxRow,
-        target: Map<string, number>,
-        side: 'debit' | 'credit',
-        sign: 1 | -1
-      ) => {
-        const r = tx.exchange_rate || 1;
-        const c = tx.currency || 'PLN';
-        const accNumber = side === 'debit' ? tx.debit_account?.number : tx.credit_account?.number;
-        if (!matchesPrefix(accNumber)) return;
-        // Placówka wynika z numeru konta, nie z location_id dokumentu.
-        const locId = resolveLocationIdForAccount(accNumber) || UNASSIGNED;
-        const key = keyFor(locId, accNumber);
-        const amt = side === 'debit' ? tx.debit_amount : tx.credit_amount;
-        target.set(key, (target.get(key) || 0) + sign * toPLN(amt, c, r));
-        if (!locFor.has(key)) locFor.set(key, locId);
-        if (perAccount && accNumber) accountFor.set(key, accNumber);
-      };
-
-      prevTx.forEach((tx) => {
-        apply(tx, opening, 'debit', 1);
-        apply(tx, opening, 'credit', -1);
-      });
-
-      curTx.forEach((tx) => {
-        apply(tx, debit, 'debit', 1);
-        apply(tx, credit, 'credit', 1);
-      });
-
-      // Suma wszystkich kluczy z dowolnej mapy
-      const allKeys = new Set<string>([
-        ...Array.from(opening.keys()),
-        ...Array.from(debit.keys()),
-        ...Array.from(credit.keys()),
-      ]);
-
-      const locById = new Map(locations.map((l) => [l.id, l]));
-
-      const rows: ResultRow[] = Array.from(allKeys).map((key) => {
-        const locId = locFor.get(key) || key.split('__')[0];
-        const loc = locById.get(locId);
-        const op = opening.get(key) || 0;
-        const d = debit.get(key) || 0;
-        const cr = credit.get(key) || 0;
-        return {
-          locationId: locId,
-          locationName: loc?.name || (locId === UNASSIGNED ? '(nieprzypisane)' : '(nieznana)'),
-          identifier: loc?.location_identifier || '',
-          level: getLevel(loc?.location_identifier || null),
-          accountNumber: perAccount ? accountFor.get(key) : undefined,
-          opening: op,
-          debit: d,
-          credit: cr,
-          closing: op + d - cr,
-        };
-      });
-
-      const filtered = rows.filter(
-        (r) =>
-          Math.abs(r.opening) > 0.005 ||
-          Math.abs(r.debit) > 0.005 ||
-          Math.abs(r.credit) > 0.005
-      );
+      // Agregacja we WSPÓLNYM silniku (`turnoverEngine`) — ta sama logika jest
+      // pokryta testami jednostkowymi i używana przez kontrolę zgodności.
+      const filtered = aggregateTurnovers({
+        prefix,
+        prevTx: prevTx as unknown as EngineTx[],
+        curTx: curTx as unknown as EngineTx[],
+        locations,
+        perAccount,
+      }) as ResultRow[];
 
       const byLocation =
         locationFilter === 'all' ? filtered : filtered.filter((r) => r.locationId === locationFilter);
 
       setResults(byLocation);
       setCurTxState(curTx);
+      setPrevTxState(prevTx);
+      setConsistency(null);
       if (byLocation.length === 0) {
         toast.info('Brak obrotów i sald na wskazanym koncie w wybranym okresie');
       }
@@ -437,12 +372,17 @@ const GlobalAccountTurnovers: React.FC = () => {
       arr.push(r);
       byLevel.set(r.level, arr);
     });
-    const order = [1, 2, 3, 4, 0];
+    // Kolejność poziomów wyliczana dynamicznie, żeby ŻADEN wiersz nie zginął
+    // (np. spółki = poziom 5). „Pozostałe” (0) na końcu.
+    const order = Array.from(byLevel.keys())
+      .sort((a, b) => a - b)
+      .filter((l) => l !== 0)
+      .concat(byLevel.has(0) ? [0] : []);
     return order
       .filter((l) => byLevel.has(l))
       .map((l) => ({
         level: l,
-        label: LEVEL_LABELS[l],
+        label: getLocationLevelLabel(l),
         rows: (byLevel.get(l) || []).sort((a, b) => {
           const cmp = a.identifier.localeCompare(b.identifier, 'pl', { numeric: true });
           if (cmp !== 0) return cmp;
