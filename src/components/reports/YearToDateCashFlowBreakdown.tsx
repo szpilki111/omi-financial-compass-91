@@ -2,6 +2,7 @@
  import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchHomeAccounts, fetchTransactionsForAccounts } from '@/utils/homeAccounts';
 import { Spinner } from '@/components/ui/Spinner';
 
 interface AccountBalance {
@@ -76,10 +77,14 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
       const dateFrom = getFirstDayOfMonth(year, month);
       const dateTo = getLastDayOfMonth(year, month);
 
-      // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
+      // Filtrujemy po KONTACH placówki (segmenty 2 i 3), nie po location_id zapisu —
+      // inaczej gubimy operacje zaksięgowane przez inną placówkę na kontach tej placówki.
+      const home = await fetchHomeAccounts(locationId);
+      const homeNumbers = home.numbers;
+      const transactions = await fetchTransactionsForAccounts(
+        home.ids,
+        `
+          id,
           amount,
           debit_account_id,
           credit_account_id,
@@ -87,18 +92,18 @@ const YearToDateCashFlowBreakdown: React.FC<YearToDateCashFlowBreakdownProps> = 
           credit_amount,
           debit_account:accounts!debit_account_id(number, name, type),
           credit_account:accounts!credit_account_id(number, name, type)
-        `)
-        .eq('location_id', locationId)
-        .gte('date', dateFrom)
-        .lte('date', dateTo);
-
-      if (error) throw error;
+        `,
+        (q) => q.gte('date', dateFrom).lte('date', dateTo),
+      );
 
       const restrictedPrefixes = restrictionData?.restrictedPrefixes || [];
 
-      // Funkcja do sprawdzania czy konto jest ograniczone
+      // Konto pomijamy, gdy jest zastrzeżone LUB nie należy do tej placówki
+      // (druga strona zapisu może dotyczyć obcego konta).
       const isAccountRestricted = (accountNumber: string) => {
-        if (!accountNumber || restrictedPrefixes.length === 0) return false;
+        if (!accountNumber) return true;
+        if (homeNumbers.size > 0 && !homeNumbers.has(accountNumber)) return true;
+        if (restrictedPrefixes.length === 0) return false;
         const accountPrefix = accountNumber.split('-')[0];
         return restrictedPrefixes.includes(accountPrefix);
       };

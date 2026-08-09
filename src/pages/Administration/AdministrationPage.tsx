@@ -17,6 +17,7 @@ import SecuritySettingsManagement from './SecuritySettingsManagement';
 import ProvincialFeeManagement from './ProvincialFeeManagement';
 import LiabilityCategoryMappings from './LiabilityCategoryMappings';
 import GlobalAccountTurnovers from './GlobalAccountTurnovers';
+import DataIntegrityReport from './DataIntegrityReport';
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -93,6 +94,9 @@ const AdministrationPage = () => {
           )}
           {(user.role === 'admin' || user.role === 'prowincjal') && (
             <TabsTrigger value="global-turnovers" className="flex-shrink-0">Obroty i salda (globalnie)</TabsTrigger>
+          )}
+          {user.role === 'admin' && (
+            <TabsTrigger value="data-integrity" className="flex-shrink-0">Spójność danych</TabsTrigger>
           )}
         </TabsList>
 
@@ -172,6 +176,12 @@ const AdministrationPage = () => {
           {(user.role === 'admin' || user.role === 'prowincjal') && activeTab === 'global-turnovers' && (
             <TabsContent value="global-turnovers" className="space-y-4">
               <GlobalAccountTurnovers />
+            </TabsContent>
+          )}
+
+          {user.role === 'admin' && activeTab === 'data-integrity' && (
+            <TabsContent value="data-integrity" className="space-y-4">
+              <DataIntegrityReport />
             </TabsContent>
           )}
       </Tabs>

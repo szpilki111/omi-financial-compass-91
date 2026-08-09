@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/context/AuthContext";
+import { fetchHomeAccounts, fetchTransactionsForAccounts } from "@/utils/homeAccounts";
 
 interface AccountBreakdown {
   account_number: string;
@@ -102,11 +103,15 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
         dateTo = getLastDayOfMonth(year, month);
       }
 
-      // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
-      const { data: transactions, error } = await supabase
-        .from("transactions")
-        .select(
-          `
+      // WAŻNE: filtrujemy po KONTACH placówki (segmenty 2 i 3), a nie po
+      // `transactions.location_id` — inaczej operacje zaksięgowane przez inną
+      // placówkę na kontach tej placówki (np. subwencja z Prowincji) nie wchodzą
+      // do raportu, choć widać je w „Wyszukaj konta”.
+      const home = await fetchHomeAccounts(locationId);
+      const transactions = await fetchTransactionsForAccounts(
+        home.ids,
+        `
+          id,
           amount,
           debit_account_id,
           credit_account_id,
@@ -117,12 +122,9 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
           debit_account:accounts!debit_account_id(number, name, type),
           credit_account:accounts!credit_account_id(number, name, type)
         `,
-        )
-        .eq("location_id", locationId)
-        .gte("date", dateFrom)
-        .lte("date", dateTo);
-
-      if (error) throw error;
+        (q) => q.gte("date", dateFrom).lte("date", dateTo),
+      );
+      const homeNumbers = home.numbers;
 
       const restrictedPrefixes = restrictionData?.restrictedPrefixes || [];
 
@@ -147,6 +149,8 @@ const ReportAccountsBreakdown: React.FC<ReportAccountsBreakdownProps> = ({
       // UWAGA: Konta 200 są teraz w kategorii należności/zobowiązań, nie w przychodach/kosztach
       const isRelevantAccount = (accountNumber: string) => {
         if (!accountNumber) return false;
+        // Konto musi należeć do TEJ placówki (druga strona zapisu może być obca)
+        if (homeNumbers.size > 0 && !homeNumbers.has(accountNumber)) return false;
         // Skip restricted accounts
         if (isAccountRestricted(accountNumber)) return false;
         // Konta 200 nie są już liczone do przychodów/kosztów

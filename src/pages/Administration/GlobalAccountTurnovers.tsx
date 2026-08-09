@@ -48,6 +48,19 @@ import {
 } from 'recharts';
 import { fetchAllRows } from '@/utils/supabasePagination';
 import { formatDateForDB, getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
+import {
+  UNASSIGNED_LOCATION,
+  getLocationLevel,
+  getLocationLevelLabel,
+  resolveLocationIdForAccount as resolveLocIdForAccount,
+} from '@/utils/locationAccountMatching';
+import {
+  aggregateByAccount,
+  aggregateTurnovers,
+  round2,
+  toPLN,
+  type EngineTx,
+} from '@/utils/turnoverEngine';
 
 type PeriodType = 'month' | 'quarter' | 'year';
 
@@ -84,14 +97,6 @@ interface ResultRow {
   closing: number;
 }
 
-const LEVEL_LABELS: Record<number, string> = {
-  1: 'Prowincja',
-  2: 'Domy',
-  3: 'Parafie',
-  4: 'Dzieła OMI',
-  0: 'Pozostałe',
-};
-
 const PIE_COLORS = [
   'hsl(var(--primary))',
   'hsl(var(--destructive))',
@@ -113,18 +118,6 @@ const formatPLN = (n: number) =>
     maximumFractionDigits: 2,
   }).format(n || 0);
 
-const getLevel = (identifier: string | null): number => {
-  if (!identifier) return 0;
-  const first = identifier.charAt(0);
-  const n = parseInt(first, 10);
-  return isNaN(n) ? 0 : n;
-};
-
-const toPLN = (amount: number, currency?: string | null, rate?: number | null) => {
-  if (!currency || currency === 'PLN' || !rate || rate === 1) return amount || 0;
-  return (amount || 0) * rate;
-};
-
 const GlobalAccountTurnovers: React.FC = () => {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
@@ -140,6 +133,10 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [results, setResults] = useState<ResultRow[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [curTxState, setCurTxState] = useState<TxRow[]>([]);
+  const [prevTxState, setPrevTxState] = useState<TxRow[]>([]);
+  const [consistency, setConsistency] = useState<
+    { ok: boolean; lines: string[] } | null
+  >(null);
   const [drillRow, setDrillRow] = useState<ResultRow | null>(null);
   const [locationSearch, setLocationSearch] = useState<string>('');
   const [accountSearch, setAccountSearch] = useState<string>('');
@@ -204,28 +201,11 @@ const GlobalAccountTurnovers: React.FC = () => {
   // domu (np. 110-2-13-1) należy do domu, nie do Prowincji — inaczej przy wskazaniu
   // konkretnej placówki „zasysało” konta innych domów i parafii, psując sumy sald.
   const resolveLocationIdForAccount = React.useCallback(
-    (accNumber?: string | null): string | null => {
-      if (!accNumber || !locations) return null;
-      const p = accNumber.split('-');
-      if (p.length < 2) return null;
-      const two = p.length >= 3 ? `${p[1]}-${p[2]}` : null;
-      const one = p[1];
-      // Najpierw dopasowanie dwuczłonowe (np. „2-13”), potem jednoczłonowe (np. „1” = Prowincja).
-      // Jednoczłonowy identyfikator dopasowujemy WYŁĄCZNIE gdy żadna placówka nie ma
-      // identyfikatora dwuczłonowego zaczynającego się tym samym segmentem — chroni to
-      // Prowincję („1”) przed wciąganiem kont „100-2-13”.
-      if (two) {
-        const m = locations.find((l) => l.location_identifier === two);
-        if (m) return m.id;
-      }
-      const m1 = locations.find((l) => l.location_identifier === one);
-      if (m1) return m1.id;
-      return null;
-    },
+    (accNumber?: string | null): string | null => resolveLocIdForAccount(accNumber, locations),
     [locations]
   );
 
-  const UNASSIGNED = '__unassigned__';
+  const UNASSIGNED = UNASSIGNED_LOCATION;
 
   const periodLabel = useMemo(() => {
     if (periodType === 'year') return `${year}`;
@@ -356,88 +336,23 @@ const GlobalAccountTurnovers: React.FC = () => {
       ]);
       const curTx = mergeUnique(curDeb, curCr);
 
-      const matchesPrefix = (num?: string | null) =>
-        !!num && num.split('-')[0] === prefix;
-
-      // Key builder: per pełne konto albo per placówka
-      const keyFor = (locId: string, accNumber?: string | null): string =>
-        perAccount && accNumber ? `${locId}__${accNumber}` : locId;
-
-      const opening = new Map<string, number>();
-      const debit = new Map<string, number>();
-      const credit = new Map<string, number>();
-      const accountFor = new Map<string, string>(); // key → fullAccountNumber (gdy perAccount)
-      const locFor = new Map<string, string>(); // key → locationId
-
-      const apply = (
-        tx: TxRow,
-        target: Map<string, number>,
-        side: 'debit' | 'credit',
-        sign: 1 | -1
-      ) => {
-        const r = tx.exchange_rate || 1;
-        const c = tx.currency || 'PLN';
-        const accNumber = side === 'debit' ? tx.debit_account?.number : tx.credit_account?.number;
-        if (!matchesPrefix(accNumber)) return;
-        // Placówka wynika z numeru konta, nie z location_id dokumentu.
-        const locId = resolveLocationIdForAccount(accNumber) || UNASSIGNED;
-        const key = keyFor(locId, accNumber);
-        const amt = side === 'debit' ? tx.debit_amount : tx.credit_amount;
-        target.set(key, (target.get(key) || 0) + sign * toPLN(amt, c, r));
-        if (!locFor.has(key)) locFor.set(key, locId);
-        if (perAccount && accNumber) accountFor.set(key, accNumber);
-      };
-
-      prevTx.forEach((tx) => {
-        apply(tx, opening, 'debit', 1);
-        apply(tx, opening, 'credit', -1);
-      });
-
-      curTx.forEach((tx) => {
-        apply(tx, debit, 'debit', 1);
-        apply(tx, credit, 'credit', 1);
-      });
-
-      // Suma wszystkich kluczy z dowolnej mapy
-      const allKeys = new Set<string>([
-        ...Array.from(opening.keys()),
-        ...Array.from(debit.keys()),
-        ...Array.from(credit.keys()),
-      ]);
-
-      const locById = new Map(locations.map((l) => [l.id, l]));
-
-      const rows: ResultRow[] = Array.from(allKeys).map((key) => {
-        const locId = locFor.get(key) || key.split('__')[0];
-        const loc = locById.get(locId);
-        const op = opening.get(key) || 0;
-        const d = debit.get(key) || 0;
-        const cr = credit.get(key) || 0;
-        return {
-          locationId: locId,
-          locationName: loc?.name || (locId === UNASSIGNED ? '(nieprzypisane)' : '(nieznana)'),
-          identifier: loc?.location_identifier || '',
-          level: getLevel(loc?.location_identifier || null),
-          accountNumber: perAccount ? accountFor.get(key) : undefined,
-          opening: op,
-          debit: d,
-          credit: cr,
-          closing: op + d - cr,
-        };
-      });
-
-      const filtered = rows.filter(
-        (r) =>
-          Math.abs(r.opening) > 0.005 ||
-          Math.abs(r.debit) > 0.005 ||
-          Math.abs(r.credit) > 0.005
-      );
+      // Agregacja we WSPÓLNYM silniku (`turnoverEngine`) — ta sama logika jest
+      // pokryta testami jednostkowymi i używana przez kontrolę zgodności.
+      const filtered = aggregateTurnovers({
+        prefix,
+        prevTx: prevTx as unknown as EngineTx[],
+        curTx: curTx as unknown as EngineTx[],
+        locations,
+        perAccount,
+      }) as ResultRow[];
 
       const byLocation =
         locationFilter === 'all' ? filtered : filtered.filter((r) => r.locationId === locationFilter);
 
       setResults(byLocation);
       setCurTxState(curTx);
+      setPrevTxState(prevTx);
+      setConsistency(null);
       if (byLocation.length === 0) {
         toast.info('Brak obrotów i sald na wskazanym koncie w wybranym okresie');
       }
@@ -457,12 +372,17 @@ const GlobalAccountTurnovers: React.FC = () => {
       arr.push(r);
       byLevel.set(r.level, arr);
     });
-    const order = [1, 2, 3, 4, 0];
+    // Kolejność poziomów wyliczana dynamicznie, żeby ŻADEN wiersz nie zginął
+    // (np. spółki = poziom 5). „Pozostałe” (0) na końcu.
+    const order = Array.from(byLevel.keys())
+      .sort((a, b) => a - b)
+      .filter((l) => l !== 0)
+      .concat(byLevel.has(0) ? [0] : []);
     return order
       .filter((l) => byLevel.has(l))
       .map((l) => ({
         level: l,
-        label: LEVEL_LABELS[l],
+        label: getLocationLevelLabel(l),
         rows: (byLevel.get(l) || []).sort((a, b) => {
           const cmp = a.identifier.localeCompare(b.identifier, 'pl', { numeric: true });
           if (cmp !== 0) return cmp;
@@ -483,6 +403,85 @@ const GlobalAccountTurnovers: React.FC = () => {
       { opening: 0, debit: 0, credit: 0, closing: 0 }
     );
   }, [results]);
+
+  // KONTROLA „suma wierszy = RAZEM”: gdyby jakiś wiersz nie trafił do żadnej
+  // grupy poziomów (np. nowy poziom placówek), suma z tabeli rozjechałaby się
+  // z sumą RAZEM. Alert pokazuje różnicę zamiast milczeć.
+  const groupedSumMismatch = useMemo(() => {
+    if (!grouped || !totals) return null;
+    const sum = grouped
+      .flatMap((g) => g.rows)
+      .reduce(
+        (acc, r) => ({
+          opening: acc.opening + r.opening,
+          debit: acc.debit + r.debit,
+          credit: acc.credit + r.credit,
+          closing: acc.closing + r.closing,
+        }),
+        { opening: 0, debit: 0, credit: 0, closing: 0 }
+      );
+    const diffs: string[] = [];
+    (['opening', 'debit', 'credit', 'closing'] as const).forEach((k) => {
+      const d = round2(sum[k] - totals[k]);
+      if (Math.abs(d) > 0.005) diffs.push(`${k}: ${formatPLN(d)}`);
+    });
+    return diffs.length > 0 ? diffs.join(', ') : null;
+  }, [grouped, totals]);
+
+  // KONTROLA ZGODNOŚCI: niezależna ścieżka licząca obroty per pełny numer konta
+  // (bez podziału na placówki) i porównanie jej z wynikiem w tabeli.
+  const runConsistencyCheck = () => {
+    if (!results || !locations) return;
+    const prefix = accountPrefix.trim();
+    const byAcc = aggregateByAccount(
+      prefix,
+      prevTxState as unknown as EngineTx[],
+      curTxState as unknown as EngineTx[]
+    );
+
+    // sumy z niezależnej ścieżki, ograniczone do wybranej placówki
+    const expected = { opening: 0, debit: 0, credit: 0, closing: 0 };
+    const perAccountLines: string[] = [];
+    byAcc.forEach((v, accNumber) => {
+      const locId = resolveLocationIdForAccount(accNumber) || UNASSIGNED;
+      if (locationFilter !== 'all' && locId !== locationFilter) return;
+      expected.opening += v.opening;
+      expected.debit += v.debit;
+      expected.credit += v.credit;
+      expected.closing += v.closing;
+      if (perAccount) {
+        const row = results.find(
+          (r) => r.accountNumber === accNumber && r.locationId === locId
+        );
+        const rd = round2((row?.debit || 0) - v.debit);
+        const rc = round2((row?.credit || 0) - v.credit);
+        const ro = round2((row?.opening || 0) - v.opening);
+        if (Math.abs(rd) > 0.005 || Math.abs(rc) > 0.005 || Math.abs(ro) > 0.005) {
+          perAccountLines.push(
+            `${accNumber}: różnica Wn ${formatPLN(rd)}, Ma ${formatPLN(rc)}, saldo pocz. ${formatPLN(ro)}`
+          );
+        }
+      }
+    });
+
+    const lines: string[] = [];
+    (['opening', 'debit', 'credit', 'closing'] as const).forEach((k) => {
+      const label = {
+        opening: 'saldo początkowe',
+        debit: 'obroty Wn',
+        credit: 'obroty Ma',
+        closing: 'saldo końcowe',
+      }[k];
+      const d = round2((totals?.[k] || 0) - expected[k]);
+      if (Math.abs(d) > 0.005) lines.push(`${label}: różnica ${formatPLN(d)} zł`);
+    });
+    lines.push(...perAccountLines);
+    if (groupedSumMismatch) lines.push(`suma wierszy ≠ RAZEM (${groupedSumMismatch})`);
+
+    setConsistency({ ok: lines.length === 0, lines });
+    if (lines.length === 0) toast.success('Kontrola zgodności: brak rozbieżności');
+    else toast.error(`Kontrola zgodności: ${lines.length} rozbieżności`);
+  };
 
   // === Wykresy ===
   const barData = useMemo(() => {
@@ -876,7 +875,44 @@ const GlobalAccountTurnovers: React.FC = () => {
 
         {results && grouped && totals && results.length > 0 && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            {groupedSumMismatch && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm">
+                <strong>Uwaga:</strong> suma wierszy w tabeli nie zgadza się z wierszem RAZEM
+                ({groupedSumMismatch}). Zgłoś to — oznacza wiersz pominięty w grupowaniu.
+              </div>
+            )}
+
+            {consistency && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  consistency.ok
+                    ? 'border-primary bg-primary/10'
+                    : 'border-destructive bg-destructive/10'
+                }`}
+              >
+                {consistency.ok ? (
+                  <span>
+                    Kontrola zgodności: wynik globalny zgadza się z obrotami liczonymi
+                    per konto (saldo początkowe, Wn, Ma, saldo końcowe).
+                  </span>
+                ) : (
+                  <div className="space-y-1">
+                    <strong>Kontrola zgodności wykryła rozbieżności:</strong>
+                    <ul className="list-disc pl-5">
+                      {consistency.lines.map((l, i) => (
+                        <li key={i}>{l}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={runConsistencyCheck} className="gap-2">
+                <Search className="h-4 w-4" />
+                Kontrola zgodności
+              </Button>
               <Button variant="outline" onClick={exportXlsx} className="gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 Eksport do Excela (wiele arkuszy)

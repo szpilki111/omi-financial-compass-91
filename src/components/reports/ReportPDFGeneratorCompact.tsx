@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/utils/supabasePagination';
+import { fetchHomeAccounts, fetchTransactionsForAccounts, maskForeignSides } from '@/utils/homeAccounts';
 import { matchesAccount } from '@/utils/liabilityMatching';
 
 interface SyntheticAccount {
@@ -78,10 +79,12 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
       const dateFrom = getFirstDayOfMonth(report.year, report.month);
       const dateTo = getLastDayOfMonth(report.year, report.month);
 
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
+      const home = await fetchHomeAccounts(report.location_id);
+      const transactions = maskForeignSides(
+        await fetchTransactionsForAccounts(
+          home.ids,
+          `
+            id,
             amount,
             debit_account_id,
             credit_account_id,
@@ -89,13 +92,10 @@ const ReportPDFGeneratorCompact: React.FC<ReportPDFGeneratorCompactProps> = ({
             credit_amount,
             debit_account:accounts!debit_account_id(number, name, type),
             credit_account:accounts!credit_account_id(number, name, type)
-          `)
-          .eq('location_id', report.location_id)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to)
+          `,
+          (q) => q.gte('date', dateFrom).lte('date', dateTo),
+        ),
+        home.numbers,
       );
 
       // Process transactions

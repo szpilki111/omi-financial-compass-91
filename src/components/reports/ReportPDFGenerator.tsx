@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/utils/supabasePagination';
+import { fetchHomeAccounts, fetchTransactionsForAccounts, maskForeignSides } from '@/utils/homeAccounts';
 
 interface AccountBreakdown {
   account_number: string;
@@ -66,11 +67,13 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      // Pobierz wszystkie transakcje dla danej lokalizacji w okresie
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
+      // Zapisy po KONTACH placówki (segmenty 2 i 3), nie po location_id zapisu
+      const home = await fetchHomeAccounts(report.location_id);
+      const transactions = maskForeignSides(
+        await fetchTransactionsForAccounts(
+          home.ids,
+          `
+            id,
             amount,
             debit_account_id,
             credit_account_id,
@@ -80,13 +83,10 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
             document_number,
             debit_account:accounts!debit_account_id(number, name, type),
             credit_account:accounts!credit_account_id(number, name, type)
-          `)
-          .eq('location_id', report.location_id)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to)
+          `,
+          (q) => q.gte('date', dateFrom).lte('date', dateTo),
+        ),
+        home.numbers,
       );
 
       // Funkcja do sprawdzania czy konto należy do kategorii przychodów/kosztów
@@ -179,10 +179,12 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
+      const home = await fetchHomeAccounts(report.location_id);
+      const transactions = maskForeignSides(
+        await fetchTransactionsForAccounts(
+          home.ids,
+          `
+            id,
             amount,
             debit_account_id,
             credit_account_id,
@@ -190,13 +192,10 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
             credit_amount,
             debit_account:accounts!debit_account_id(number, name, type),
             credit_account:accounts!credit_account_id(number, name, type)
-          `)
-          .eq('location_id', report.location_id)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to)
+          `,
+          (q) => q.gte('date', dateFrom).lte('date', dateTo),
+        ),
+        home.numbers,
       );
 
       // Definiuj kategorie zgodnie z obrazkiem
