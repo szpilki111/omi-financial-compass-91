@@ -179,10 +179,12 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split('T')[0];
       const dateTo = lastDayOfMonth.toISOString().split('T')[0];
 
-      const transactions = await fetchAllRows<any>((from, to) =>
-        supabase
-          .from('transactions')
-          .select(`
+      const home = await fetchHomeAccounts(report.location_id);
+      const transactions = maskForeignSides(
+        await fetchTransactionsForAccounts(
+          home.ids,
+          `
+            id,
             amount,
             debit_account_id,
             credit_account_id,
@@ -190,13 +192,10 @@ const ReportPDFGenerator: React.FC<ReportPDFGeneratorProps> = ({
             credit_amount,
             debit_account:accounts!debit_account_id(number, name, type),
             credit_account:accounts!credit_account_id(number, name, type)
-          `)
-          .eq('location_id', report.location_id)
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to)
+          `,
+          (q) => q.gte('date', dateFrom).lte('date', dateTo),
+        ),
+        home.numbers,
       );
 
       // Definiuj kategorie zgodnie z obrazkiem
