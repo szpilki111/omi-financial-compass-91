@@ -404,6 +404,85 @@ const GlobalAccountTurnovers: React.FC = () => {
     );
   }, [results]);
 
+  // KONTROLA „suma wierszy = RAZEM”: gdyby jakiś wiersz nie trafił do żadnej
+  // grupy poziomów (np. nowy poziom placówek), suma z tabeli rozjechałaby się
+  // z sumą RAZEM. Alert pokazuje różnicę zamiast milczeć.
+  const groupedSumMismatch = useMemo(() => {
+    if (!grouped || !totals) return null;
+    const sum = grouped
+      .flatMap((g) => g.rows)
+      .reduce(
+        (acc, r) => ({
+          opening: acc.opening + r.opening,
+          debit: acc.debit + r.debit,
+          credit: acc.credit + r.credit,
+          closing: acc.closing + r.closing,
+        }),
+        { opening: 0, debit: 0, credit: 0, closing: 0 }
+      );
+    const diffs: string[] = [];
+    (['opening', 'debit', 'credit', 'closing'] as const).forEach((k) => {
+      const d = round2(sum[k] - totals[k]);
+      if (Math.abs(d) > 0.005) diffs.push(`${k}: ${formatPLN(d)}`);
+    });
+    return diffs.length > 0 ? diffs.join(', ') : null;
+  }, [grouped, totals]);
+
+  // KONTROLA ZGODNOŚCI: niezależna ścieżka licząca obroty per pełny numer konta
+  // (bez podziału na placówki) i porównanie jej z wynikiem w tabeli.
+  const runConsistencyCheck = () => {
+    if (!results || !locations) return;
+    const prefix = accountPrefix.trim();
+    const byAcc = aggregateByAccount(
+      prefix,
+      prevTxState as unknown as EngineTx[],
+      curTxState as unknown as EngineTx[]
+    );
+
+    // sumy z niezależnej ścieżki, ograniczone do wybranej placówki
+    const expected = { opening: 0, debit: 0, credit: 0, closing: 0 };
+    const perAccountLines: string[] = [];
+    byAcc.forEach((v, accNumber) => {
+      const locId = resolveLocationIdForAccount(accNumber) || UNASSIGNED;
+      if (locationFilter !== 'all' && locId !== locationFilter) return;
+      expected.opening += v.opening;
+      expected.debit += v.debit;
+      expected.credit += v.credit;
+      expected.closing += v.closing;
+      if (perAccount) {
+        const row = results.find(
+          (r) => r.accountNumber === accNumber && r.locationId === locId
+        );
+        const rd = round2((row?.debit || 0) - v.debit);
+        const rc = round2((row?.credit || 0) - v.credit);
+        const ro = round2((row?.opening || 0) - v.opening);
+        if (Math.abs(rd) > 0.005 || Math.abs(rc) > 0.005 || Math.abs(ro) > 0.005) {
+          perAccountLines.push(
+            `${accNumber}: różnica Wn ${formatPLN(rd)}, Ma ${formatPLN(rc)}, saldo pocz. ${formatPLN(ro)}`
+          );
+        }
+      }
+    });
+
+    const lines: string[] = [];
+    (['opening', 'debit', 'credit', 'closing'] as const).forEach((k) => {
+      const label = {
+        opening: 'saldo początkowe',
+        debit: 'obroty Wn',
+        credit: 'obroty Ma',
+        closing: 'saldo końcowe',
+      }[k];
+      const d = round2((totals?.[k] || 0) - expected[k]);
+      if (Math.abs(d) > 0.005) lines.push(`${label}: różnica ${formatPLN(d)} zł`);
+    });
+    lines.push(...perAccountLines);
+    if (groupedSumMismatch) lines.push(`suma wierszy ≠ RAZEM (${groupedSumMismatch})`);
+
+    setConsistency({ ok: lines.length === 0, lines });
+    if (lines.length === 0) toast.success('Kontrola zgodności: brak rozbieżności');
+    else toast.error(`Kontrola zgodności: ${lines.length} rozbieżności`);
+  };
+
   // === Wykresy ===
   const barData = useMemo(() => {
     if (!results) return [];
@@ -796,7 +875,44 @@ const GlobalAccountTurnovers: React.FC = () => {
 
         {results && grouped && totals && results.length > 0 && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            {groupedSumMismatch && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm">
+                <strong>Uwaga:</strong> suma wierszy w tabeli nie zgadza się z wierszem RAZEM
+                ({groupedSumMismatch}). Zgłoś to — oznacza wiersz pominięty w grupowaniu.
+              </div>
+            )}
+
+            {consistency && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  consistency.ok
+                    ? 'border-primary bg-primary/10'
+                    : 'border-destructive bg-destructive/10'
+                }`}
+              >
+                {consistency.ok ? (
+                  <span>
+                    Kontrola zgodności: wynik globalny zgadza się z obrotami liczonymi
+                    per konto (saldo początkowe, Wn, Ma, saldo końcowe).
+                  </span>
+                ) : (
+                  <div className="space-y-1">
+                    <strong>Kontrola zgodności wykryła rozbieżności:</strong>
+                    <ul className="list-disc pl-5">
+                      {consistency.lines.map((l, i) => (
+                        <li key={i}>{l}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={runConsistencyCheck} className="gap-2">
+                <Search className="h-4 w-4" />
+                Kontrola zgodności
+              </Button>
               <Button variant="outline" onClick={exportXlsx} className="gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 Eksport do Excela (wiele arkuszy)
