@@ -2,6 +2,7 @@
  import { getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchHomeAccounts, fetchTransactionsForAccounts } from '@/utils/homeAccounts';
 import { Spinner } from '@/components/ui/Spinner';
 
 interface AccountBalance {
