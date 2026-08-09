@@ -48,6 +48,19 @@ import {
 } from 'recharts';
 import { fetchAllRows } from '@/utils/supabasePagination';
 import { formatDateForDB, getFirstDayOfMonth, getLastDayOfMonth } from '@/utils/dateUtils';
+import {
+  UNASSIGNED_LOCATION,
+  getLocationLevel,
+  getLocationLevelLabel,
+  resolveLocationIdForAccount as resolveLocIdForAccount,
+} from '@/utils/locationAccountMatching';
+import {
+  aggregateByAccount,
+  aggregateTurnovers,
+  round2,
+  toPLN,
+  type EngineTx,
+} from '@/utils/turnoverEngine';
 
 type PeriodType = 'month' | 'quarter' | 'year';
 
@@ -84,14 +97,6 @@ interface ResultRow {
   closing: number;
 }
 
-const LEVEL_LABELS: Record<number, string> = {
-  1: 'Prowincja',
-  2: 'Domy',
-  3: 'Parafie',
-  4: 'Dzieła OMI',
-  0: 'Pozostałe',
-};
-
 const PIE_COLORS = [
   'hsl(var(--primary))',
   'hsl(var(--destructive))',
@@ -112,18 +117,6 @@ const formatPLN = (n: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n || 0);
-
-const getLevel = (identifier: string | null): number => {
-  if (!identifier) return 0;
-  const first = identifier.charAt(0);
-  const n = parseInt(first, 10);
-  return isNaN(n) ? 0 : n;
-};
-
-const toPLN = (amount: number, currency?: string | null, rate?: number | null) => {
-  if (!currency || currency === 'PLN' || !rate || rate === 1) return amount || 0;
-  return (amount || 0) * rate;
-};
 
 const GlobalAccountTurnovers: React.FC = () => {
   const navigate = useNavigate();
