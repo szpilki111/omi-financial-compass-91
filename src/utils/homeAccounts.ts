@@ -93,3 +93,20 @@ export const fetchTransactionsForAccounts = async (
   }
   return out;
 };
+
+/**
+ * Zeruje (null) tę stronę zapisu, która dotyczy konta obcej placówki.
+ * Dzięki temu wszystkie agregacje typu `if (debit_account) {...}` liczą wyłącznie
+ * konta danej placówki, bez zmiany ich logiki.
+ */
+export const maskForeignSides = <T extends { debit_account?: any; credit_account?: any }>(
+  transactions: T[],
+  homeNumbers: Set<string>
+): T[] => {
+  if (!homeNumbers || homeNumbers.size === 0) return transactions;
+  return transactions.map((tx) => ({
+    ...tx,
+    debit_account: tx.debit_account && homeNumbers.has(tx.debit_account.number) ? tx.debit_account : null,
+    credit_account: tx.credit_account && homeNumbers.has(tx.credit_account.number) ? tx.credit_account : null,
+  }));
+};
