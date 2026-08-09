@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/context/AuthContext";
+import { fetchHomeAccounts, fetchTransactionsForAccounts } from "@/utils/homeAccounts";
 
 interface AccountBreakdown {
   account_number: string;
