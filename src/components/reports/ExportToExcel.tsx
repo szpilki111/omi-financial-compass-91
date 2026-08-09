@@ -4,6 +4,7 @@ import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchHomeAccounts, fetchTransactionsForAccounts, maskForeignSides } from "@/utils/homeAccounts";
 
 interface ExportToExcelProps {
   reportId: string;
@@ -51,21 +52,21 @@ export const ExportToExcel: React.FC<ExportToExcelProps> = ({
       const dateFrom = firstDayOfMonth.toISOString().split("T")[0];
       const dateTo = lastDayOfMonth.toISOString().split("T")[0];
 
-      // Fetch transactions for the period
-      const { data: transactions, error: transactionsError } = await supabase
-        .from("transactions")
-        .select(
+      // Zapisy pobieramy po KONTACH placówki (segmenty 2 i 3), nie po location_id —
+      // spójnie z widokiem raportu i eksportem pełnym.
+      const home = await fetchHomeAccounts(locationId);
+      const transactions = maskForeignSides(
+        await fetchTransactionsForAccounts(
+          home.ids,
           `
           *,
           debit_account:accounts!transactions_debit_account_id_fkey(id, number, name),
           credit_account:accounts!transactions_credit_account_id_fkey(id, number, name)
         `,
-        )
-        .eq("location_id", locationId)
-        .gte("date", dateFrom)
-        .lte("date", dateTo);
-
-      if (transactionsError) throw transactionsError;
+          (q) => q.gte("date", dateFrom).lte("date", dateTo),
+        ),
+        home.numbers,
+      );
 
       // Funkcja do wyodrębnienia numeru konta syntetycznego (max 3 segmenty)
       const getSyntheticAccountNumber = (accountNumber: string): string => {
