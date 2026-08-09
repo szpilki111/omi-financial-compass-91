@@ -133,6 +133,10 @@ const GlobalAccountTurnovers: React.FC = () => {
   const [results, setResults] = useState<ResultRow[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [curTxState, setCurTxState] = useState<TxRow[]>([]);
+  const [prevTxState, setPrevTxState] = useState<TxRow[]>([]);
+  const [consistency, setConsistency] = useState<
+    { ok: boolean; lines: string[] } | null
+  >(null);
   const [drillRow, setDrillRow] = useState<ResultRow | null>(null);
   const [locationSearch, setLocationSearch] = useState<string>('');
   const [accountSearch, setAccountSearch] = useState<string>('');
@@ -197,28 +201,11 @@ const GlobalAccountTurnovers: React.FC = () => {
   // domu (np. 110-2-13-1) należy do domu, nie do Prowincji — inaczej przy wskazaniu
   // konkretnej placówki „zasysało” konta innych domów i parafii, psując sumy sald.
   const resolveLocationIdForAccount = React.useCallback(
-    (accNumber?: string | null): string | null => {
-      if (!accNumber || !locations) return null;
-      const p = accNumber.split('-');
-      if (p.length < 2) return null;
-      const two = p.length >= 3 ? `${p[1]}-${p[2]}` : null;
-      const one = p[1];
-      // Najpierw dopasowanie dwuczłonowe (np. „2-13”), potem jednoczłonowe (np. „1” = Prowincja).
-      // Jednoczłonowy identyfikator dopasowujemy WYŁĄCZNIE gdy żadna placówka nie ma
-      // identyfikatora dwuczłonowego zaczynającego się tym samym segmentem — chroni to
-      // Prowincję („1”) przed wciąganiem kont „100-2-13”.
-      if (two) {
-        const m = locations.find((l) => l.location_identifier === two);
-        if (m) return m.id;
-      }
-      const m1 = locations.find((l) => l.location_identifier === one);
-      if (m1) return m1.id;
-      return null;
-    },
+    (accNumber?: string | null): string | null => resolveLocIdForAccount(accNumber, locations),
     [locations]
   );
 
-  const UNASSIGNED = '__unassigned__';
+  const UNASSIGNED = UNASSIGNED_LOCATION;
 
   const periodLabel = useMemo(() => {
     if (periodType === 'year') return `${year}`;
