@@ -1,9 +1,19 @@
  import { KpirTransaction } from "@/types/kpir";
  import { getFirstDayOfMonth, getLastDayOfMonth } from "./dateUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "./supabasePagination";
+import {
+  LocationLike,
+  resolveLocationIdForAccount,
+} from "./locationAccountMatching";
 
 /**
- * Oblicza podsumowanie finansowe na podstawie transakcji dla jednej lub wielu lokalizacji i okresu
+ * Oblicza podsumowanie finansowe na podstawie transakcji dla jednej lub wielu lokalizacji i okresu.
+ *
+ * WAŻNE: przypisanie zapisu do placówki wynika z SEGMENTÓW numeru konta (2 i 3),
+ * a nie z `transactions.location_id`. Dokument zaksięgowany przez Prowincję na koncie
+ * placówki (np. `400-2-13-1`) należy do tej placówki — tak samo jak w raporcie
+ * miesięcznym i w widoku „Obroty i salda (globalnie)”.
  */
 export const calculateFinancialSummary = async (
   locationIds: string | string[] | null | undefined,
@@ -16,117 +26,89 @@ export const calculateFinancialSummary = async (
       ? (Array.isArray(locationIds) ? locationIds : [locationIds])
       : null;
 
-    let query = supabase
-      .from('transactions')
-      .select(`
-        id,
-        date,
-        document_number,
-        document_id,
-        description,
-        amount,
-        debit_account_id,
-        credit_account_id,
-        settlement_type,
-        currency,
-        exchange_rate,
-        location_id,
-        debit_amount,
-        credit_amount,
-        debit_account:accounts!debit_account_id(number, name),
-        credit_account:accounts!credit_account_id(number, name),
-        document:documents!document_id(currency, exchange_rate)
-      `)
-      .order('date', { ascending: false });
+    // Lista placówek potrzebna do dopasowania po numerze konta
+    const { data: locationsData, error: locError } = await supabase
+      .from('locations')
+      .select('id, name, location_identifier');
+    if (locError) throw locError;
+    const locations = (locationsData || []) as LocationLike[];
 
-    // Filtr po lokalizacjach
-    if (locationIdsArray && locationIdsArray.length > 0) {
-      if (locationIdsArray.length === 1) {
-        query = query.eq('location_id', locationIdsArray[0]);
-      } else {
-        query = query.in('location_id', locationIdsArray);
-      }
-    }
+    const selectedSet =
+      locationIdsArray && locationIdsArray.length > 0 ? new Set(locationIdsArray) : null;
 
-    // Zastosuj filtr daty od
-    if (dateFrom) {
-      query = query.gte('date', dateFrom);
-    }
-    
-    // Zastosuj filtr daty do
-    if (dateTo) {
-      query = query.lte('date', dateTo);
-    }
+    // Paginacja z deterministycznym sortowaniem – bez tego przy >1000 wierszy
+    // część zapisów gubi się między stronami.
+    const transactions = await fetchAllRows<any>((from, to) => {
+      let query = supabase
+        .from('transactions')
+        .select(`
+          id,
+          date,
+          document_number,
+          document_id,
+          description,
+          amount,
+          debit_account_id,
+          credit_account_id,
+          settlement_type,
+          currency,
+          exchange_rate,
+          debit_amount,
+          credit_amount,
+          debit_account:accounts!debit_account_id(number, name),
+          credit_account:accounts!credit_account_id(number, name),
+          document:documents!document_id(currency, exchange_rate)
+        `)
+        .order('date', { ascending: false })
+        .order('id', { ascending: true });
 
-    const { data: transactions, error } = await query;
+      if (dateFrom) query = query.gte('date', dateFrom);
+      if (dateTo) query = query.lte('date', dateTo);
 
-    if (error) {
-      console.error("❌ Błąd pobierania transakcji:", error);
-      throw error;
-    }
-
-    console.log(`✅ Pobrano ${transactions?.length || 0} transakcji dla lokalizacji`, {
-      locationIdsArray,
-      dateFrom,
-      dateTo,
-      transactionsCount: transactions?.length || 0
+      return query.range(from, to);
     });
 
     if (!transactions || transactions.length === 0) {
-      console.log('⚠️ Brak transakcji do analizy');
       return { income: 0, expense: 0, balance: 0, transactions: [] };
     }
 
     // Funkcja do wyciągania bazowego numeru konta (bez sufiksu lokalizacji)
     const getBaseAccount = (num: string) => num?.split('-')[0] || '';
 
+    /** Czy konto należy do jednej z wybranych placówek (po segmentach numeru). */
+    const accountInScope = (accountNumber: string) => {
+      if (!selectedSet) return true;
+      const locId = resolveLocationIdForAccount(accountNumber, locations);
+      return !!locId && selectedSet.has(locId);
+    };
+
     let income = 0;
     let expense = 0;
 
-    // Analiza każdej transakcji
-    // PRZYCHODY: tylko 7xx MA (zgodnie z nowym planem - usunięto 2xx)
-    // KOSZTY: tylko 4xx WN (zgodnie z nowym planem - usunięto 2xx)
+    // PRZYCHODY: tylko 7xx MA, KOSZTY: tylko 4xx WN
     // WAŻNE: Dla walut obcych przeliczamy po kursie z dokumentu!
-    transactions.forEach((transaction: any, index: number) => {
+    transactions.forEach((transaction: any) => {
       const debitNum = transaction.debit_account?.number || '';
       const creditNum = transaction.credit_account?.number || '';
       const baseDebit = getBaseAccount(debitNum);
       const baseCredit = getBaseAccount(creditNum);
-      
-      // Pobierz kurs z dokumentu (jeśli waluta obca) - PRZELICZENIE NA PLN
+
       const docCurrency = transaction.document?.currency || transaction.currency || 'PLN';
       const docExchangeRate = transaction.document?.exchange_rate || transaction.exchange_rate || 1;
       const multiplier = docCurrency !== 'PLN' ? docExchangeRate : 1;
 
-      // PRZYCHODY: tylko 7xx MA - przeliczone na PLN
-      if (baseCredit && baseCredit.startsWith('7')) {
+      if (baseCredit && baseCredit.startsWith('7') && accountInScope(creditNum)) {
         const rawAmount = transaction.credit_amount ?? transaction.amount ?? 0;
-        const amount = rawAmount * multiplier;
-        if (rawAmount > 0) {
-          income += amount;
-          console.log(`  ✅ PRZYCHÓD [${index}]: ${creditNum} (${baseCredit}) → ${rawAmount} ${docCurrency} × ${multiplier} = ${amount.toFixed(2)} PLN`);
-        }
+        if (rawAmount > 0) income += rawAmount * multiplier;
       }
 
-      // KOSZTY: tylko 4xx WN - przeliczone na PLN
-      if (baseDebit && baseDebit.startsWith('4')) {
+      if (baseDebit && baseDebit.startsWith('4') && accountInScope(debitNum)) {
         const rawAmount = transaction.debit_amount ?? transaction.amount ?? 0;
-        const amount = rawAmount * multiplier;
-        if (rawAmount > 0) {
-          expense += amount;
-          console.log(`  ✅ KOSZT [${index}]: ${debitNum} (${baseDebit}) → ${rawAmount} ${docCurrency} × ${multiplier} = ${amount.toFixed(2)} PLN`);
-        }
+        if (rawAmount > 0) expense += rawAmount * multiplier;
       }
     });
 
     const balance = income - expense;
-
-    console.log(`✅ PODSUMOWANIE:`, {
-      income,
-      expense,
-      balance,
-      transactionsAnalyzed: transactions.length
-    });
 
     return {
       income,
@@ -139,6 +121,7 @@ export const calculateFinancialSummary = async (
     return { income: 0, expense: 0, balance: 0, transactions: [] };
   }
 };
+
 
 /**
  * Pobiera saldo otwarcia dla danego miesiąca i roku
