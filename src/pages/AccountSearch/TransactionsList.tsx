@@ -268,18 +268,34 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {transaction.document_id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditDocument(transaction.document_id!)}
-                            className="flex items-center gap-1"
-                          >
-                            <Edit className="h-3 w-3" />
-                            Edytuj
-                          </Button>
-                        )}
+                        <div className="flex justify-end gap-1">
+                          {onEditTransaction && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditTransaction(transaction.id)}
+                              className="flex items-center gap-1"
+                              title="Edytuj tylko tę operację"
+                            >
+                              <PenLine className="h-3 w-3" />
+                              Edytuj operację
+                            </Button>
+                          )}
+                          {transaction.document_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditDocument(transaction.document_id!)}
+                              className="flex items-center gap-1"
+                              title="Otwórz cały dokument"
+                            >
+                              <Edit className="h-3 w-3" />
+                              Dokument
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
+
                     </TableRow>
                   );
                 })}
