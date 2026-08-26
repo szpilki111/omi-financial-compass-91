@@ -18,6 +18,8 @@ import ProvincialFeeManagement from './ProvincialFeeManagement';
 import LiabilityCategoryMappings from './LiabilityCategoryMappings';
 import GlobalAccountTurnovers from './GlobalAccountTurnovers';
 import DataIntegrityReport from './DataIntegrityReport';
+import CalculationConsistencyCheck from './CalculationConsistencyCheck';
+
 
 const AdministrationPage = () => {
   const { user } = useAuth();
