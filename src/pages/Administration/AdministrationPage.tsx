@@ -98,6 +98,10 @@ const AdministrationPage = () => {
           {user.role === 'admin' && (
             <TabsTrigger value="data-integrity" className="flex-shrink-0">Spójność danych</TabsTrigger>
           )}
+          {user.role === 'admin' && (
+            <TabsTrigger value="consistency-check" className="flex-shrink-0">Kontrola zgodności</TabsTrigger>
+          )}
+
         </TabsList>
 
           {/* Lazy loading - render only active tab */}
