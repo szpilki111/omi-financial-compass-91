@@ -73,7 +73,9 @@ const AccountSearchPage = () => {
   const [pendingDraftDocId, setPendingDraftDocId] = useState<string | null>(null);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+
 
   // Use central hook for fetching accounts with restrictions applied
   const { data: allFilteredAccounts = [] } = useFilteredAccounts();
