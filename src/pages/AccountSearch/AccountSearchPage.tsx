@@ -18,6 +18,8 @@ import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
+import EditOperationDialog from './EditOperationDialog';
+
 import XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 
@@ -71,7 +73,9 @@ const AccountSearchPage = () => {
   const [pendingDraftDocId, setPendingDraftDocId] = useState<string | null>(null);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+
 
   // Use central hook for fetching accounts with restrictions applied
   const { data: allFilteredAccounts = [] } = useFilteredAccounts();
@@ -897,6 +901,8 @@ const AccountSearchPage = () => {
                 selectedAccount={selectedAccount} 
                 isLoading={transactionsLoading} 
                 onEditDocument={handleEditDocument} 
+                onEditTransaction={isReadOnly ? undefined : (id) => setEditingTransactionId(id)}
+
                 selectedMonth={selectedMonth} 
                 onClearMonthFilter={() => setSelectedMonth(null)}
                 selectedTransactionIds={selectedTransactionIds}
@@ -964,6 +970,19 @@ const AccountSearchPage = () => {
         onDocumentCreated={handleDocumentUpdated} 
         document={editingDocument} 
       />
+
+      {/* Edycja pojedynczej operacji (bez otwierania całego dokumentu) */}
+      <EditOperationDialog
+        isOpen={!!editingTransactionId}
+        transactionId={editingTransactionId}
+        onClose={() => setEditingTransactionId(null)}
+        onSaved={() => {
+          setEditingTransactionId(null);
+          queryClient.invalidateQueries({ queryKey: ['account-transactions'] });
+          queryClient.invalidateQueries({ queryKey: ['account-opening-balance'] });
+        }}
+      />
+
     </MainLayout>
   );
 };

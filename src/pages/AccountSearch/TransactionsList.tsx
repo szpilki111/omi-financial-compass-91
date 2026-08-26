@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Edit, X, FileText } from 'lucide-react';
+import { Edit, X, FileText, PenLine } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -53,6 +53,7 @@ interface TransactionsListProps {
   selectedAccount: Account;
   isLoading: boolean;
   onEditDocument: (documentId: string) => void;
+  onEditTransaction?: (transactionId: string) => void;
   selectedMonth: number | null;
   onClearMonthFilter: () => void;
   selectedTransactionIds?: string[];
@@ -65,12 +66,14 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
   selectedAccount,
   isLoading,
   onEditDocument,
+  onEditTransaction,
   selectedMonth,
   onClearMonthFilter,
   selectedTransactionIds = [],
   onSelectionChange,
   relatedAccountIds = [],
 }) => {
+
   const relatedSet = useMemo(() => {
     const s = new Set(relatedAccountIds);
     if (s.size === 0) s.add(selectedAccount.id);
@@ -265,18 +268,34 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {transaction.document_id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditDocument(transaction.document_id!)}
-                            className="flex items-center gap-1"
-                          >
-                            <Edit className="h-3 w-3" />
-                            Edytuj
-                          </Button>
-                        )}
+                        <div className="flex justify-end gap-1">
+                          {onEditTransaction && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditTransaction(transaction.id)}
+                              className="flex items-center gap-1"
+                              title="Edytuj tylko tę operację"
+                            >
+                              <PenLine className="h-3 w-3" />
+                              Edytuj operację
+                            </Button>
+                          )}
+                          {transaction.document_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditDocument(transaction.document_id!)}
+                              className="flex items-center gap-1"
+                              title="Otwórz cały dokument"
+                            >
+                              <Edit className="h-3 w-3" />
+                              Dokument
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
+
                     </TableRow>
                   );
                 })}

@@ -18,6 +18,8 @@ import ProvincialFeeManagement from './ProvincialFeeManagement';
 import LiabilityCategoryMappings from './LiabilityCategoryMappings';
 import GlobalAccountTurnovers from './GlobalAccountTurnovers';
 import DataIntegrityReport from './DataIntegrityReport';
+import CalculationConsistencyCheck from './CalculationConsistencyCheck';
+
 
 const AdministrationPage = () => {
   const { user } = useAuth();
@@ -98,6 +100,10 @@ const AdministrationPage = () => {
           {user.role === 'admin' && (
             <TabsTrigger value="data-integrity" className="flex-shrink-0">Spójność danych</TabsTrigger>
           )}
+          {user.role === 'admin' && (
+            <TabsTrigger value="consistency-check" className="flex-shrink-0">Kontrola zgodności</TabsTrigger>
+          )}
+
         </TabsList>
 
           {/* Lazy loading - render only active tab */}
@@ -184,6 +190,13 @@ const AdministrationPage = () => {
               <DataIntegrityReport />
             </TabsContent>
           )}
+
+          {user.role === 'admin' && activeTab === 'consistency-check' && (
+            <TabsContent value="consistency-check" className="space-y-4">
+              <CalculationConsistencyCheck />
+            </TabsContent>
+          )}
+
       </Tabs>
     </div>
   </MainLayout>
