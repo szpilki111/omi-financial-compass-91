@@ -970,6 +970,19 @@ const AccountSearchPage = () => {
         onDocumentCreated={handleDocumentUpdated} 
         document={editingDocument} 
       />
+
+      {/* Edycja pojedynczej operacji (bez otwierania całego dokumentu) */}
+      <EditOperationDialog
+        isOpen={!!editingTransactionId}
+        transactionId={editingTransactionId}
+        onClose={() => setEditingTransactionId(null)}
+        onSaved={() => {
+          setEditingTransactionId(null);
+          queryClient.invalidateQueries({ queryKey: ['account-transactions'] });
+          queryClient.invalidateQueries({ queryKey: ['account-opening-balance'] });
+        }}
+      />
+
     </MainLayout>
   );
 };
