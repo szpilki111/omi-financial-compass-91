@@ -188,6 +188,13 @@ const AdministrationPage = () => {
               <DataIntegrityReport />
             </TabsContent>
           )}
+
+          {user.role === 'admin' && activeTab === 'consistency-check' && (
+            <TabsContent value="consistency-check" className="space-y-4">
+              <CalculationConsistencyCheck />
+            </TabsContent>
+          )}
+
       </Tabs>
     </div>
   </MainLayout>
