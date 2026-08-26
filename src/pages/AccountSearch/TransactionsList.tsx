@@ -53,6 +53,7 @@ interface TransactionsListProps {
   selectedAccount: Account;
   isLoading: boolean;
   onEditDocument: (documentId: string) => void;
+  onEditTransaction?: (transactionId: string) => void;
   selectedMonth: number | null;
   onClearMonthFilter: () => void;
   selectedTransactionIds?: string[];
@@ -65,12 +66,14 @@ const TransactionsList: React.FC<TransactionsListProps> = ({
   selectedAccount,
   isLoading,
   onEditDocument,
+  onEditTransaction,
   selectedMonth,
   onClearMonthFilter,
   selectedTransactionIds = [],
   onSelectionChange,
   relatedAccountIds = [],
 }) => {
+
   const relatedSet = useMemo(() => {
     const s = new Set(relatedAccountIds);
     if (s.size === 0) s.add(selectedAccount.id);
