@@ -18,6 +18,8 @@ import TransactionsList from './TransactionsList';
 import MonthlyTurnoverView from './MonthlyTurnoverView';
 import PrintableAccountTurnover from './PrintableAccountTurnover';
 import DocumentDialog from '@/pages/Documents/DocumentDialog';
+import EditOperationDialog from './EditOperationDialog';
+
 import XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 
