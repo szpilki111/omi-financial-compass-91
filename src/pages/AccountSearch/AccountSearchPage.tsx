@@ -901,6 +901,8 @@ const AccountSearchPage = () => {
                 selectedAccount={selectedAccount} 
                 isLoading={transactionsLoading} 
                 onEditDocument={handleEditDocument} 
+                onEditTransaction={isReadOnly ? undefined : (id) => setEditingTransactionId(id)}
+
                 selectedMonth={selectedMonth} 
                 onClearMonthFilter={() => setSelectedMonth(null)}
                 selectedTransactionIds={selectedTransactionIds}
