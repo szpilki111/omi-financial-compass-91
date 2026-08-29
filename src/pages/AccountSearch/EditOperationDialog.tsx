@@ -15,6 +15,12 @@ import ExchangeRateManager from '@/components/ExchangeRateManager';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import {
+  validateDocumentTransactions,
+  describeValidationError,
+  DocumentValidationResult,
+} from '@/utils/documentValidation';
+import { Transaction } from '@/pages/Documents/types';
 
 interface EditOperationDialogProps {
   isOpen: boolean;
@@ -104,6 +110,75 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
 
   const isProvincialFee = (tx?.description || '') === PROVINCIAL_FEE_DESC;
 
+  // Wszystkie operacje dokumentu — do kontroli spójności całego dokumentu.
+  const { data: docRows, refetch: refetchDocRows } = useQuery({
+    queryKey: ['edit-operation-doc-rows', tx?.document_id],
+    enabled: !!tx?.document_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(
+          'id, description, debit_amount, credit_amount, amount, debit_account_id, credit_account_id, is_parallel, display_order',
+        )
+        .eq('document_id', tx!.document_id!)
+        .order('is_parallel', { ascending: true })
+        .order('display_order', { ascending: true })
+        .order('id', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  /** Mapuje wiersze z bazy na model walidacji, podmieniając edytowany wiersz na dane z formularza. */
+  const buildRows = (
+    rows: any[] | undefined,
+    override?: { id: string; description: string; debit_amount: number; credit_amount: number; debit_account_id: string; credit_account_id: string },
+  ): { list: Transaction[]; mainCount: number } => {
+    const list = (rows || []).map((r) => {
+      const base = {
+        id: r.id,
+        description: r.description || '',
+        debit_amount: r.debit_amount ?? undefined,
+        credit_amount: r.credit_amount ?? undefined,
+        debit_account_id: r.debit_account_id || '',
+        credit_account_id: r.credit_account_id || '',
+        amount: r.amount ?? 0,
+      } as Transaction;
+      if (override && r.id === override.id) {
+        return {
+          ...base,
+          description: override.description,
+          debit_amount: override.debit_amount,
+          credit_amount: override.credit_amount,
+          debit_account_id: override.debit_account_id,
+          credit_account_id: override.credit_account_id,
+        } as Transaction;
+      }
+      return base;
+    });
+    const mainCount = (rows || []).filter((r) => !r.is_parallel).length;
+    return { list, mainCount };
+  };
+
+  // Podgląd stanu dokumentu z uwzględnieniem aktualnych (jeszcze niezapisanych) zmian.
+  const docState: DocumentValidationResult | null = React.useMemo(() => {
+    if (!tx || !docRows) return null;
+    const { list, mainCount } = buildRows(docRows, {
+      id: tx.id,
+      description: form.description,
+      debit_amount: form.debit_amount,
+      credit_amount: form.credit_amount,
+      debit_account_id: form.debit_account_id,
+      credit_account_id: form.credit_account_id,
+    });
+    return validateDocumentTransactions(list, mainCount);
+  }, [tx, docRows, form]);
+
+  const editedRowIndex = React.useMemo(() => {
+    if (!tx || !docRows) return -1;
+    return docRows.findIndex((r: any) => r.id === tx.id);
+  }, [tx, docRows]);
+
   useEffect(() => {
     if (!tx) return;
     setForm({
@@ -164,9 +239,30 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
         .eq('id', tx.id);
       if (updError) throw updError;
 
+      // Ponowna walidacja CAŁEGO dokumentu na świeżych danych i aktualizacja statusu.
+      let summary = 'Zmiany w wierszu zostały zapisane.';
+      if (tx.document_id) {
+        const { data: fresh } = await refetchDocRows();
+        const { list, mainCount } = buildRows(fresh as any[]);
+        const result = validateDocumentTransactions(list, mainCount);
+        await supabase
+          .from('documents')
+          .update({
+            validation_errors:
+              result.errors.length > 0 ? (JSON.parse(JSON.stringify(result.errors)) as any) : null,
+          })
+          .eq('id', tx.document_id);
+        summary =
+          result.errors.length === 0
+            ? 'Dokument jest poprawny i zbilansowany.'
+            : `Dokument nadal ma ${result.errors.length} ${
+                result.errors.length === 1 ? 'problem' : 'problemów'
+              } — otwórz dokument, aby je poprawić.`;
+      }
+
       toast({
         title: 'Operacja zapisana',
-        description: 'Zmiany w wierszu zostały zapisane.',
+        description: summary,
       });
       onSaved();
     } catch (e: any) {
@@ -293,6 +389,58 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
                 </div>
               </div>
             </div>
+
+            {docState && (
+              <div className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Stan dokumentu</Label>
+                  <span
+                    className={
+                      docState.errors.length === 0
+                        ? 'text-xs text-green-700'
+                        : 'text-xs text-destructive'
+                    }
+                  >
+                    {docState.errors.length === 0
+                      ? 'Brak uwag — dokument poprawny'
+                      : `${docState.errors.length} ${docState.errors.length === 1 ? 'uwaga' : 'uwag'}`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                  <div>
+                    <span className="text-muted-foreground">Suma Wn: </span>
+                    {docState.totalDebit.toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Suma Ma: </span>
+                    {docState.totalCredit.toFixed(2)}
+                  </div>
+                  <div className={docState.isBalanced ? '' : 'text-destructive font-semibold'}>
+                    <span className="text-muted-foreground">Różnica: </span>
+                    {docState.difference.toFixed(2)}
+                  </div>
+                </div>
+                {docState.errors.length > 0 && (
+                  <ul className="list-disc pl-5 text-xs space-y-1">
+                    {docState.errors.map((e, i) => {
+                      const isThisRow =
+                        e.type === 'incomplete_transaction' && e.transactionIndex === editedRowIndex;
+                      return (
+                        <li key={i} className={isThisRow ? 'text-destructive' : 'text-muted-foreground'}>
+                          {describeValidationError(e)}
+                          {isThisRow ? ' — edytowany wiersz' : ''}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {docState.errors.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Uwagi dotyczące innych operacji nie blokują zapisu — popraw je w oknie dokumentu.
+                  </p>
+                )}
+              </div>
+            )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>

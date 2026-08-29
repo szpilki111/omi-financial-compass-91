@@ -46,6 +46,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFilteredAccounts } from "@/hooks/useFilteredAccounts";
 import { useProvincialFee } from "@/hooks/useProvincialFee";
+import { validateTransactionFields } from "@/utils/documentValidation";
 
 interface DocumentDialogProps {
   isOpen: boolean;
@@ -915,66 +916,10 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
       });
     }
 
-    // Function to count missing fields in a transaction - supports negative amounts
-    const countMissingFields = (transaction: Transaction) => {
-      let count = 0;
-
-      // Check if this is a split transaction (one side empty, other filled) - use !== 0 for negative amounts
-      const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
-      const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
-      const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
-
-      if (!transaction.description || transaction.description.trim() === "") count++;
-
-      // For split transactions, only validate the filled side
-      if (isSplitTransaction) {
-        if (hasDebit && !transaction.debit_account_id) count++;
-        if (hasCredit && !transaction.credit_account_id) count++;
-      } else {
-        // For normal transactions, both sides must be filled - use !== 0 for negative amounts
-        if (!transaction.debit_amount || transaction.debit_amount === 0) count++;
-        if (!transaction.credit_amount || transaction.credit_amount === 0) count++;
-        if (!transaction.debit_account_id) count++;
-        if (!transaction.credit_account_id) count++;
-      }
-
-      return count;
-    };
-
-    // Check ALL transactions including inline form data
-    transactionsToValidate.forEach((transaction, index) => {
-      const missingCount = countMissingFields(transaction);
-
-      if (missingCount > 0) {
-        const missingFields: ValidationError["missingFields"] = {};
-
-        // Check if this is a split transaction - use !== 0 for negative amounts
-        const hasDebit = transaction.debit_amount && transaction.debit_amount !== 0;
-        const hasCredit = transaction.credit_amount && transaction.credit_amount !== 0;
-        const isSplitTransaction = (hasDebit && !hasCredit) || (!hasDebit && hasCredit);
-
-        if (!transaction.description || transaction.description.trim() === "") missingFields.description = true;
-
-        if (isSplitTransaction) {
-          // For split transactions, only validate the filled side
-          if (hasDebit && !transaction.debit_account_id) missingFields.debit_account_id = true;
-          if (hasCredit && !transaction.credit_account_id) missingFields.credit_account_id = true;
-        } else {
-          // For normal transactions, validate both sides - use === 0 for negative amounts
-          if (!transaction.debit_amount || transaction.debit_amount === 0) missingFields.debit_amount = true;
-          if (!transaction.credit_amount || transaction.credit_amount === 0) missingFields.credit_amount = true;
-          if (!transaction.debit_account_id) missingFields.debit_account_id = true;
-          if (!transaction.credit_account_id) missingFields.credit_account_id = true;
-        }
-
-        errors.push({
-          type: "incomplete_transaction",
-          transactionIndex: index,
-          isParallel: index >= transactions.length,
-          missingFields,
-        });
-      }
-    });
+    // Walidacja pól operacji — wspólna logika (src/utils/documentValidation.ts)
+    validateTransactionFields(transactionsToValidate, transactions.length).forEach((e) =>
+      errors.push(e as ValidationError),
+    );
 
     // Set validation errors but allow saving
     setValidationErrors(errors);
