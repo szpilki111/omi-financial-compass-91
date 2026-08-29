@@ -46,6 +46,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFilteredAccounts } from "@/hooks/useFilteredAccounts";
 import { useProvincialFee } from "@/hooks/useProvincialFee";
+import { validateTransactionFields } from "@/utils/documentValidation";
 
 interface DocumentDialogProps {
   isOpen: boolean;
