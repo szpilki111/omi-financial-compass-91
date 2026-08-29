@@ -110,6 +110,75 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
 
   const isProvincialFee = (tx?.description || '') === PROVINCIAL_FEE_DESC;
 
+  // Wszystkie operacje dokumentu — do kontroli spójności całego dokumentu.
+  const { data: docRows, refetch: refetchDocRows } = useQuery({
+    queryKey: ['edit-operation-doc-rows', tx?.document_id],
+    enabled: !!tx?.document_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(
+          'id, description, debit_amount, credit_amount, amount, debit_account_id, credit_account_id, is_parallel, display_order',
+        )
+        .eq('document_id', tx!.document_id!)
+        .order('is_parallel', { ascending: true })
+        .order('display_order', { ascending: true })
+        .order('id', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  /** Mapuje wiersze z bazy na model walidacji, podmieniając edytowany wiersz na dane z formularza. */
+  const buildRows = (
+    rows: any[] | undefined,
+    override?: { id: string; description: string; debit_amount: number; credit_amount: number; debit_account_id: string; credit_account_id: string },
+  ): { list: Transaction[]; mainCount: number } => {
+    const list = (rows || []).map((r) => {
+      const base = {
+        id: r.id,
+        description: r.description || '',
+        debit_amount: r.debit_amount ?? undefined,
+        credit_amount: r.credit_amount ?? undefined,
+        debit_account_id: r.debit_account_id || '',
+        credit_account_id: r.credit_account_id || '',
+        amount: r.amount ?? 0,
+      } as Transaction;
+      if (override && r.id === override.id) {
+        return {
+          ...base,
+          description: override.description,
+          debit_amount: override.debit_amount,
+          credit_amount: override.credit_amount,
+          debit_account_id: override.debit_account_id,
+          credit_account_id: override.credit_account_id,
+        } as Transaction;
+      }
+      return base;
+    });
+    const mainCount = (rows || []).filter((r) => !r.is_parallel).length;
+    return { list, mainCount };
+  };
+
+  // Podgląd stanu dokumentu z uwzględnieniem aktualnych (jeszcze niezapisanych) zmian.
+  const docState: DocumentValidationResult | null = React.useMemo(() => {
+    if (!tx || !docRows) return null;
+    const { list, mainCount } = buildRows(docRows, {
+      id: tx.id,
+      description: form.description,
+      debit_amount: form.debit_amount,
+      credit_amount: form.credit_amount,
+      debit_account_id: form.debit_account_id,
+      credit_account_id: form.credit_account_id,
+    });
+    return validateDocumentTransactions(list, mainCount);
+  }, [tx, docRows, form]);
+
+  const editedRowIndex = React.useMemo(() => {
+    if (!tx || !docRows) return -1;
+    return docRows.findIndex((r: any) => r.id === tx.id);
+  }, [tx, docRows]);
+
   useEffect(() => {
     if (!tx) return;
     setForm({
