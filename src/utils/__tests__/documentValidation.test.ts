@@ -38,13 +38,13 @@ describe('documentValidation', () => {
 
   it('wykrywa braki kont i kwot', () => {
     const r = validateDocumentTransactions([
-      row({ debit_account_id: '', credit_amount: 0, description: '' }),
+      row({ debit_account_id: '', credit_account_id: '', description: '' }),
     ]);
     const err = r.errors.find((e) => e.type === 'incomplete_transaction');
     expect(err?.missingFields).toMatchObject({
       description: true,
-      credit_amount: true,
       debit_account_id: true,
+      credit_account_id: true,
     });
   });
 
