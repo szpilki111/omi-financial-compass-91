@@ -31,9 +31,10 @@ describe('documentValidation', () => {
     expect(r.errors.some((e) => e.type === 'unbalanced')).toBe(true);
   });
 
-  it('toleruje różnicę do 0,01', () => {
-    const r = validateDocumentTransactions([row({ credit_amount: 100.01 })]);
+  it('toleruje groszową różnicę zaokrągleniową', () => {
+    const r = validateDocumentTransactions([row({ credit_amount: 100.005 })]);
     expect(r.isBalanced).toBe(true);
+    expect(r.errors.some((e) => e.type === 'unbalanced')).toBe(false);
   });
 
   it('wykrywa braki kont i kwot', () => {
