@@ -239,9 +239,30 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
         .eq('id', tx.id);
       if (updError) throw updError;
 
+      // Ponowna walidacja CAŁEGO dokumentu na świeżych danych i aktualizacja statusu.
+      let summary = 'Zmiany w wierszu zostały zapisane.';
+      if (tx.document_id) {
+        const { data: fresh } = await refetchDocRows();
+        const { list, mainCount } = buildRows(fresh as any[]);
+        const result = validateDocumentTransactions(list, mainCount);
+        await supabase
+          .from('documents')
+          .update({
+            validation_errors:
+              result.errors.length > 0 ? (JSON.parse(JSON.stringify(result.errors)) as any) : null,
+          })
+          .eq('id', tx.document_id);
+        summary =
+          result.errors.length === 0
+            ? 'Dokument jest poprawny i zbilansowany.'
+            : `Dokument nadal ma ${result.errors.length} ${
+                result.errors.length === 1 ? 'problem' : 'problemów'
+              } — otwórz dokument, aby je poprawić.`;
+      }
+
       toast({
         title: 'Operacja zapisana',
-        description: 'Zmiany w wierszu zostały zapisane.',
+        description: summary,
       });
       onSaved();
     } catch (e: any) {
