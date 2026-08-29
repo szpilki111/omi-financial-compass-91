@@ -390,6 +390,58 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
               </div>
             </div>
 
+            {docState && (
+              <div className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Stan dokumentu</Label>
+                  <span
+                    className={
+                      docState.errors.length === 0
+                        ? 'text-xs text-green-700'
+                        : 'text-xs text-destructive'
+                    }
+                  >
+                    {docState.errors.length === 0
+                      ? 'Brak uwag — dokument poprawny'
+                      : `${docState.errors.length} ${docState.errors.length === 1 ? 'uwaga' : 'uwag'}`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                  <div>
+                    <span className="text-muted-foreground">Suma Wn: </span>
+                    {docState.totalDebit.toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Suma Ma: </span>
+                    {docState.totalCredit.toFixed(2)}
+                  </div>
+                  <div className={docState.isBalanced ? '' : 'text-destructive font-semibold'}>
+                    <span className="text-muted-foreground">Różnica: </span>
+                    {docState.difference.toFixed(2)}
+                  </div>
+                </div>
+                {docState.errors.length > 0 && (
+                  <ul className="list-disc pl-5 text-xs space-y-1">
+                    {docState.errors.map((e, i) => {
+                      const isThisRow =
+                        e.type === 'incomplete_transaction' && e.transactionIndex === editedRowIndex;
+                      return (
+                        <li key={i} className={isThisRow ? 'text-destructive' : 'text-muted-foreground'}>
+                          {describeValidationError(e)}
+                          {isThisRow ? ' — edytowany wiersz' : ''}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {docState.errors.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Uwagi dotyczące innych operacji nie blokują zapisu — popraw je w oknie dokumentu.
+                  </p>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         )}
