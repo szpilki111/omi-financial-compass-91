@@ -15,6 +15,12 @@ import ExchangeRateManager from '@/components/ExchangeRateManager';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import {
+  validateDocumentTransactions,
+  describeValidationError,
+  DocumentValidationResult,
+} from '@/utils/documentValidation';
+import { Transaction } from '@/pages/Documents/types';
 
 interface EditOperationDialogProps {
   isOpen: boolean;
