@@ -98,10 +98,12 @@ export const validateDocumentTransactions = (
     errors.push({ type: 'no_operations', message: 'Dokument nie zawiera żadnych operacji.' });
   }
 
-  const totalDebit = transactions.reduce((sum, t) => sum + Math.abs(t.debit_amount || 0), 0);
-  const totalCredit = transactions.reduce((sum, t) => sum + Math.abs(t.credit_amount || 0), 0);
-  const difference = totalDebit - totalCredit;
-  const isBalanced = Math.abs(difference) <= 0.01;
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+  const totalDebit = round2(transactions.reduce((sum, t) => sum + Math.abs(t.debit_amount || 0), 0));
+  const totalCredit = round2(transactions.reduce((sum, t) => sum + Math.abs(t.credit_amount || 0), 0));
+  const difference = round2(totalDebit - totalCredit);
+  // Bilans musi zgadzać się do grosza (spójnie z oknem dokumentu)
+  const isBalanced = Math.abs(difference) < 0.005;
 
   if (transactions.length > 0 && !isBalanced) {
     errors.push({
