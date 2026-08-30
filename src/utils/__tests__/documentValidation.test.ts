@@ -31,10 +31,16 @@ describe('documentValidation', () => {
     expect(r.errors.some((e) => e.type === 'unbalanced')).toBe(true);
   });
 
-  it('toleruje groszową różnicę zaokrągleniową', () => {
-    const r = validateDocumentTransactions([row({ credit_amount: 100.005 })]);
+  it('toleruje różnicę poniżej grosza (błąd zmiennoprzecinkowy)', () => {
+    const r = validateDocumentTransactions([row({ credit_amount: 100.0000001 })]);
     expect(r.isBalanced).toBe(true);
     expect(r.errors.some((e) => e.type === 'unbalanced')).toBe(false);
+  });
+
+  it('traktuje różnicę 0,01 zł jako niezbilansowanie', () => {
+    const r = validateDocumentTransactions([row({ credit_amount: 100.01 })]);
+    expect(r.isBalanced).toBe(false);
+    expect(r.errors.some((e) => e.type === 'unbalanced')).toBe(true);
   });
 
   it('wykrywa braki kont i kwot', () => {

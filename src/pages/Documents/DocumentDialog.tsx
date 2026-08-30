@@ -977,7 +977,7 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
 
     // Brak twardej blokady przy niezbilansowaniu — dokument zapisuje się,
     // a brak bilansu zostanie odnotowany w validation_errors (status na liście).
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    if (Math.abs(Math.round((totalDebit - totalCredit) * 100) / 100) >= 0.005) {
       errors.push({
         type: "unbalanced",
         message: `Suma WN (${totalDebit.toFixed(2)}) ≠ Suma MA (${totalCredit.toFixed(2)})`,

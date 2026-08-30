@@ -208,7 +208,7 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
     if (
       form.debit_amount > 0 &&
       form.credit_amount > 0 &&
-      Math.abs(form.debit_amount - form.credit_amount) >= 0.01
+      Math.abs(Math.round((form.debit_amount - form.credit_amount) * 100) / 100) >= 0.005
     )
       return 'Kwoty Wn i Ma muszą być równe (operacja niezbilansowana).';
     if ((tx?.currency || 'PLN') !== 'PLN' && (!form.exchange_rate || form.exchange_rate <= 0))
