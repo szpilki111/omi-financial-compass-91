@@ -349,13 +349,41 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
               </SelectContent>
             </Select>
           </div>
-          
-          {(searchMonth !== 'all' || searchYear !== 'all') && (
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="location-filter" className="text-sm text-gray-600">Placówka:</label>
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Wszystkie" />
+              </SelectTrigger>
+              <SelectContent>
+                <div className="p-2">
+                  <input
+                    autoFocus
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="Szukaj placówki..."
+                    className="w-full h-8 px-2 text-sm border rounded-md"
+                  />
+                </div>
+                <SelectItem value="all">Wszystkie placówki</SelectItem>
+                {filteredLocationOptions.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(searchMonth !== 'all' || searchYear !== 'all' || filterLocation !== 'all') && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="flex items-center gap-1">
               <X className="h-3 w-3" />
               Wyczyść
             </Button>
           )}
+
         </div>
         
         {filteredAndSortedReports.length !== reports.length && (
