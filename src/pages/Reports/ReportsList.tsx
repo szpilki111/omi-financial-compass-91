@@ -73,7 +73,26 @@ const monthNames = [
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 0 }) => {
   const [searchMonth, setSearchMonth] = useState<string>('all');
   const [searchYear, setSearchYear] = useState<string>('all');
+  const [filterLocation, setFilterLocation] = useState<string>('all');
+  const [locationQuery, setLocationQuery] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Wszystkie placówki (do filtrowania i wykrywania braków raportów)
+  const { data: allLocations } = useQuery({
+    queryKey: ['all-locations-for-reports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name');
+      if (error) {
+        console.error('❌ Błąd pobierania placówek:', error);
+        return [] as { id: string; name: string }[];
+      }
+      return (data || []) as { id: string; name: string }[];
+    }
+  });
+
 
   // Pobierz lokalizacje użytkownika
   const { data: userLocations } = useQuery({
@@ -192,6 +211,11 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
       const yearNumber = parseInt(searchYear);
       filtered = filtered.filter(report => report.year === yearNumber);
     }
+
+    // Filtrowanie po placówce
+    if (filterLocation && filterLocation !== 'all') {
+      filtered = filtered.filter(report => report.location_id === filterLocation);
+    }
     
     // Sortowanie chronologiczne (najnowsze najpierw)
     return filtered.sort((a, b) => {
@@ -200,7 +224,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
       }
       return b.month - a.month; // Miesiąc malejąco w tym samym roku
     });
-  }, [reports, searchMonth, searchYear]);
+  }, [reports, searchMonth, searchYear, filterLocation]);
 
   // Unikalne lata z raportów do selektora
   const availableYears = useMemo(() => {
@@ -209,10 +233,33 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
     return years.sort((a, b) => b - a); // Najnowsze lata najpierw
   }, [reports]);
 
+  // Placówki bez raportu za wybrany miesiąc i rok
+  const missingLocations = useMemo(() => {
+    if (!allLocations || searchMonth === 'all' || searchYear === 'all') return [];
+    const monthNumber = parseInt(searchMonth);
+    const yearNumber = parseInt(searchYear);
+    const withReport = new Set(
+      (reports || [])
+        .filter(r => r.month === monthNumber && r.year === yearNumber)
+        .map(r => r.location_id)
+    );
+    return allLocations.filter(loc => !withReport.has(loc.id));
+  }, [allLocations, reports, searchMonth, searchYear]);
+
+  const filteredLocationOptions = useMemo(() => {
+    const list = allLocations || [];
+    const q = locationQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(loc => loc.name.toLowerCase().includes(q));
+  }, [allLocations, locationQuery]);
+
   const clearFilters = () => {
     setSearchMonth('all');
     setSearchYear('all');
+    setFilterLocation('all');
+    setLocationQuery('');
   };
+
 
   const handleReportDeleted = () => {
     console.log('🔄 Raport został usunięty - odświeżanie listy');
@@ -302,13 +349,41 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
               </SelectContent>
             </Select>
           </div>
-          
-          {(searchMonth !== 'all' || searchYear !== 'all') && (
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="location-filter" className="text-sm text-gray-600">Placówka:</label>
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Wszystkie" />
+              </SelectTrigger>
+              <SelectContent>
+                <div className="p-2">
+                  <input
+                    autoFocus
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="Szukaj placówki..."
+                    className="w-full h-8 px-2 text-sm border rounded-md"
+                  />
+                </div>
+                <SelectItem value="all">Wszystkie placówki</SelectItem>
+                {filteredLocationOptions.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(searchMonth !== 'all' || searchYear !== 'all' || filterLocation !== 'all') && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="flex items-center gap-1">
               <X className="h-3 w-3" />
               Wyczyść
             </Button>
           )}
+
         </div>
         
         {filteredAndSortedReports.length !== reports.length && (
@@ -317,6 +392,31 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
           </div>
         )}
       </div>
+
+      {/* Placówki bez raportu za wybrany okres */}
+      {searchMonth !== 'all' && searchYear !== 'all' && (
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">
+              Placówki bez raportu ({monthNames[parseInt(searchMonth) - 1]} {searchYear}): {missingLocations.length}
+            </span>
+          </div>
+          {missingLocations.length === 0 ? (
+            <p className="text-sm text-green-700">Wszystkie placówki złożyły raport za ten okres.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {missingLocations.map((loc) => (
+                <span key={loc.id} className="text-xs px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200">
+                  {loc.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+
 
       {/* Tabela raportów */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
