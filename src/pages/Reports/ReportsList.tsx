@@ -211,6 +211,11 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
       const yearNumber = parseInt(searchYear);
       filtered = filtered.filter(report => report.year === yearNumber);
     }
+
+    // Filtrowanie po placówce
+    if (filterLocation && filterLocation !== 'all') {
+      filtered = filtered.filter(report => report.location_id === filterLocation);
+    }
     
     // Sortowanie chronologiczne (najnowsze najpierw)
     return filtered.sort((a, b) => {
@@ -219,7 +224,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
       }
       return b.month - a.month; // Miesiąc malejąco w tym samym roku
     });
-  }, [reports, searchMonth, searchYear]);
+  }, [reports, searchMonth, searchYear, filterLocation]);
 
   // Unikalne lata z raportów do selektora
   const availableYears = useMemo(() => {
@@ -228,10 +233,33 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
     return years.sort((a, b) => b - a); // Najnowsze lata najpierw
   }, [reports]);
 
+  // Placówki bez raportu za wybrany miesiąc i rok
+  const missingLocations = useMemo(() => {
+    if (!allLocations || searchMonth === 'all' || searchYear === 'all') return [];
+    const monthNumber = parseInt(searchMonth);
+    const yearNumber = parseInt(searchYear);
+    const withReport = new Set(
+      (reports || [])
+        .filter(r => r.month === monthNumber && r.year === yearNumber)
+        .map(r => r.location_id)
+    );
+    return allLocations.filter(loc => !withReport.has(loc.id));
+  }, [allLocations, reports, searchMonth, searchYear]);
+
+  const filteredLocationOptions = useMemo(() => {
+    const list = allLocations || [];
+    const q = locationQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(loc => loc.name.toLowerCase().includes(q));
+  }, [allLocations, locationQuery]);
+
   const clearFilters = () => {
     setSearchMonth('all');
     setSearchYear('all');
+    setFilterLocation('all');
+    setLocationQuery('');
   };
+
 
   const handleReportDeleted = () => {
     console.log('🔄 Raport został usunięty - odświeżanie listy');
