@@ -383,12 +383,10 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
                 <Label className="text-base font-medium">Winien</Label>
                 <div>
                   <Label className="text-sm">Kwota</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
+                  <AmountField
                     value={form.debit_amount}
                     disabled={readOnly}
-                    onChange={(e) => set('debit_amount', parseFloat(e.target.value) || 0)}
+                    onChange={(v) => set('debit_amount', v)}
                   />
                 </div>
                 <div>
