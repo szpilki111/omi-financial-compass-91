@@ -393,6 +393,31 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
         )}
       </div>
 
+      {/* Placówki bez raportu za wybrany okres */}
+      {searchMonth !== 'all' && searchYear !== 'all' && (
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">
+              Placówki bez raportu ({monthNames[parseInt(searchMonth) - 1]} {searchYear}): {missingLocations.length}
+            </span>
+          </div>
+          {missingLocations.length === 0 ? (
+            <p className="text-sm text-green-700">Wszystkie placówki złożyły raport za ten okres.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {missingLocations.map((loc) => (
+                <span key={loc.id} className="text-xs px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200">
+                  {loc.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+
+
       {/* Tabela raportów */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <Table>
