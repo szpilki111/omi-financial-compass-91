@@ -73,7 +73,26 @@ const monthNames = [
 const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 0 }) => {
   const [searchMonth, setSearchMonth] = useState<string>('all');
   const [searchYear, setSearchYear] = useState<string>('all');
+  const [filterLocation, setFilterLocation] = useState<string>('all');
+  const [locationQuery, setLocationQuery] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Wszystkie placówki (do filtrowania i wykrywania braków raportów)
+  const { data: allLocations } = useQuery({
+    queryKey: ['all-locations-for-reports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .order('name');
+      if (error) {
+        console.error('❌ Błąd pobierania placówek:', error);
+        return [] as { id: string; name: string }[];
+      }
+      return (data || []) as { id: string; name: string }[];
+    }
+  });
+
 
   // Pobierz lokalizacje użytkownika
   const { data: userLocations } = useQuery({
