@@ -405,12 +405,10 @@ const EditOperationDialog: React.FC<EditOperationDialogProps> = ({
                 <Label className="text-base font-medium">Ma</Label>
                 <div>
                   <Label className="text-sm">Kwota</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
+                  <AmountField
                     value={form.credit_amount}
                     disabled={readOnly}
-                    onChange={(e) => set('credit_amount', parseFloat(e.target.value) || 0)}
+                    onChange={(v) => set('credit_amount', v)}
                   />
                 </div>
                 <div>
