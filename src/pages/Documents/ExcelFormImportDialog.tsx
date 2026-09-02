@@ -770,15 +770,20 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
                 <span className="animate-spin mr-2">⏳</span>
                 Importowanie...
               </>
-            ) : hasAccountErrors ? (
+            ) : hasMissingAccounts ? (
               <>
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Brakujące konta
               </>
+            ) : hasEmptyAccounts ? (
+              <>
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Importuj mimo braków ({effectiveTransactions.length})
+              </>
             ) : (
               <>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Importuj {generatedTransactions.length} operacji
+                Importuj {effectiveTransactions.length} operacji
               </>
             )}
           </Button>
