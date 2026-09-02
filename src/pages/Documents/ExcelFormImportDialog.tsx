@@ -499,17 +499,16 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
       return;
     }
 
-    // BRAK twardej blokady: importujemy wszystkie wiersze, brakujące konta
-    // (m.in. syntetyka wymagająca analityki) zostaną zapisane jako null
-    // i pokazane jako "X pustych pól" w statusie dokumentu na liście.
-    if (hasAccountErrors) {
+    // BRAK twardej blokady dla kont niejednoznacznych: importujemy wszystkie wiersze,
+    // niewskazane konta zostaną zapisane jako null i pokazane jako "X pustych pól".
+    if (hasEmptyAccounts) {
       toast({
         title: "Import z brakami",
-        description: `Dokument zostanie utworzony z brakującymi kontami (${missingAccounts.join(", ")}). Uzupełnij je ręcznie po imporcie.`,
+        description: `Dokument zostanie utworzony z pustymi kontami (${ambiguousAccounts.join(", ")}). Uzupełnij je ręcznie po imporcie.`,
       });
     }
 
-    const validTransactions = generatedTransactions;
+    const validTransactions = effectiveTransactions;
 
     setLoading(true);
 
