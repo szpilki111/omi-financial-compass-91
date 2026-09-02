@@ -355,6 +355,9 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     setParseError(null);
     setParsedData(null);
     setGeneratedTransactions([]);
+    setOverrides({});
+    setLastChoice(null);
+    setPendingBulkPrefix(null);
 
     try {
       const data = await parseExcelFile(selectedFile);
