@@ -64,6 +64,10 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   const [generatedTransactions, setGeneratedTransactions] = useState<GeneratedTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const [parseError, setParseError] = useState<string | null>(null);
+  // Ręczne wskazania kont dla pozycji niejednoznacznych: klucz "<index>-debit" | "<index>-credit"
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [lastChoice, setLastChoice] = useState<{ number: string; accountId: string } | null>(null);
+  const [pendingBulkPrefix, setPendingBulkPrefix] = useState<string | null>(null);
 
   const { data: accounts = [] } = useFilteredAccounts();
   const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
