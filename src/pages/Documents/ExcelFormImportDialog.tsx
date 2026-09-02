@@ -542,6 +542,8 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     setFile(null);
     setParsedData(null);
     setGeneratedTransactions([]);
+    setOverrides({});
+    setPendingBulkPrefix(null);
     setParseError(null);
     setDocumentDate(new Date());
     onClose();
