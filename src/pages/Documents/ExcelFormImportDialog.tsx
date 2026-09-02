@@ -362,21 +362,106 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     }
   };
 
-  // Sprawdź czy są błędy kont - blokada importu
-  const hasAccountErrors = generatedTransactions.some((t) => t.hasError);
+  // Mapa id -> numer konta (do pokazania wybranej analityki)
+  const accountNumberById = useMemo(() => {
+    const map = new Map<string, string>();
+    accounts.forEach((acc) => map.set(acc.id, acc.number));
+    return map;
+  }, [accounts]);
+
+  // Zastosowanie ręcznych wyborów użytkownika do wygenerowanych transakcji
+  const effectiveTransactions = useMemo(() => {
+    return generatedTransactions.map((t, index) => {
+      const debitOverride = overrides[`${index}-debit`];
+      const creditOverride = overrides[`${index}-credit`];
+
+      const debitAccountId = debitOverride || t.debitAccountId;
+      const creditAccountId = creditOverride || t.creditAccountId;
+      const debitErrorKind = debitAccountId ? undefined : t.debitErrorKind;
+      const creditErrorKind = creditAccountId ? undefined : t.creditErrorKind;
+
+      const kinds = [debitErrorKind, creditErrorKind].filter(Boolean) as ("missing" | "ambiguous")[];
+      const hasMissing = kinds.includes("missing");
+      const hasEmpty = kinds.includes("ambiguous");
+
+      let errorMessage: string | undefined;
+      if (hasMissing) {
+        const number = debitErrorKind === "missing" ? t.debitAccountNumber : t.creditAccountNumber;
+        errorMessage = `Nie znaleziono konta ${number}`;
+      } else if (hasEmpty) {
+        const number = debitErrorKind === "ambiguous" ? t.debitAccountNumber : t.creditAccountNumber;
+        errorMessage = `Wskaż analitykę dla konta ${number}`;
+      }
+
+      return {
+        ...t,
+        debitAccountId,
+        creditAccountId,
+        debitErrorKind,
+        creditErrorKind,
+        hasMissing,
+        hasEmpty,
+        hasError: hasMissing || hasEmpty,
+        errorMessage,
+      };
+    });
+  }, [generatedTransactions, overrides]);
+
+  const hasMissingAccounts = effectiveTransactions.some((t) => t.hasMissing);
+  const hasEmptyAccounts = effectiveTransactions.some((t) => t.hasEmpty);
+
   const missingAccounts = useMemo(() => {
     const missing = new Set<string>();
-    generatedTransactions.forEach((t) => {
-      if (t.hasError && t.errorMessage) {
-        // Wyciągnij numer konta z komunikatu błędu
-        const match = t.errorMessage.match(/Nie znaleziono konta (.+)/);
-        if (match) {
-          missing.add(match[1]);
-        }
-      }
+    effectiveTransactions.forEach((t) => {
+      if (t.debitErrorKind === "missing") missing.add(t.debitAccountNumber);
+      if (t.creditErrorKind === "missing") missing.add(t.creditAccountNumber);
     });
     return Array.from(missing);
-  }, [generatedTransactions]);
+  }, [effectiveTransactions]);
+
+  const ambiguousAccounts = useMemo(() => {
+    const ambiguous = new Set<string>();
+    effectiveTransactions.forEach((t) => {
+      if (t.debitErrorKind === "ambiguous") ambiguous.add(t.debitAccountNumber);
+      if (t.creditErrorKind === "ambiguous") ambiguous.add(t.creditAccountNumber);
+    });
+    return Array.from(ambiguous);
+  }, [effectiveTransactions]);
+
+  // Ustawienie ręcznego wyboru konta dla pojedynczego wiersza
+  const setOverride = (index: number, side: "debit" | "credit", accountId: string) => {
+    setOverrides((prev) => ({ ...prev, [`${index}-${side}`]: accountId }));
+    const number = side === "debit"
+      ? generatedTransactions[index]?.debitAccountNumber
+      : generatedTransactions[index]?.creditAccountNumber;
+    const sameCount = generatedTransactions.filter(
+      (t, i) =>
+        i !== index &&
+        ((t.debitErrorKind === "ambiguous" && t.debitAccountNumber === number) ||
+          (t.creditErrorKind === "ambiguous" && t.creditAccountNumber === number)),
+    ).length;
+    setLastChoice(number ? { number, accountId } : null);
+    setPendingBulkPrefix(sameCount > 0 && number ? number : null);
+  };
+
+  // Zastosowanie ostatniego wyboru do wszystkich pozycji z tym samym numerem konta
+  const applyBulk = (number: string) => {
+    if (!lastChoice || lastChoice.number !== number) return;
+    setOverrides((prev) => {
+      const next = { ...prev };
+      generatedTransactions.forEach((t, i) => {
+        if (t.debitErrorKind === "ambiguous" && t.debitAccountNumber === number && !next[`${i}-debit`]) {
+          next[`${i}-debit`] = lastChoice.accountId;
+        }
+        if (t.creditErrorKind === "ambiguous" && t.creditAccountNumber === number && !next[`${i}-credit`]) {
+          next[`${i}-credit`] = lastChoice.accountId;
+        }
+      });
+      return next;
+    });
+    setPendingBulkPrefix(null);
+  };
+
 
   const handleImport = async () => {
     if (provincialFeeConfigured && !provincialFeeReady) {
