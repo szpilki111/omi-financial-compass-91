@@ -580,9 +580,9 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     }
   };
 
-  const validCount = generatedTransactions.filter((t) => !t.hasError).length;
-  const errorCount = generatedTransactions.filter((t) => t.hasError).length;
-  const totalAmount = generatedTransactions.reduce((sum, t) => sum + t.debitAmount, 0);
+  const validCount = effectiveTransactions.filter((t) => !t.hasError).length;
+  const errorCount = effectiveTransactions.filter((t) => t.hasError).length;
+  const totalAmount = effectiveTransactions.reduce((sum, t) => sum + t.debitAmount, 0);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
