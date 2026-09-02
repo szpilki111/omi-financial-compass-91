@@ -283,9 +283,16 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     const transactions: GeneratedTransaction[] = [];
     const locationSuffix = data.locationCode;
 
+    // Rozróżnienie: konto nieistniejące vs wymagające wskazania analityki
+    const errorKind = (accountNumber: string): "missing" | "ambiguous" => {
+      const { exists, leaves } = diagnoseAccount(accountNumber);
+      return exists && leaves.length > 1 ? "ambiguous" : "missing";
+    };
+
     // Znajdź konto gotówki/banku
     const cashAccount = findAccount(data.cashAccountNumber);
     const cashAccountError = !cashAccount ? buildAccountErrorMessage(data.cashAccountNumber) : undefined;
+    const cashKind = !cashAccount ? errorKind(data.cashAccountNumber) : undefined;
 
     // Dla przychodów: Winien=gotówka/bank, Ma=przychód
     for (const income of data.incomeItems) {
@@ -301,9 +308,11 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         debitAmount: income.amount,
         debitAccountNumber: data.cashAccountNumber,
         debitAccountId: cashAccount?.id || null,
+        debitErrorKind: cashKind,
         creditAmount: income.amount,
         creditAccountNumber: extendedAccountNumber,
         creditAccountId: creditAccount?.id || null,
+        creditErrorKind: !creditAccount ? errorKind(extendedAccountNumber) : undefined,
         type: "income",
         hasError,
         errorMessage: !creditAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
@@ -324,9 +333,11 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         debitAmount: expense.amount,
         debitAccountNumber: extendedAccountNumber,
         debitAccountId: debitAccount?.id || null,
+        debitErrorKind: !debitAccount ? errorKind(extendedAccountNumber) : undefined,
         creditAmount: expense.amount,
         creditAccountNumber: data.cashAccountNumber,
         creditAccountId: cashAccount?.id || null,
+        creditErrorKind: cashKind,
         type: "expense",
         hasError,
         errorMessage: !debitAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
