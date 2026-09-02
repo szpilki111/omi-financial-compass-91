@@ -762,7 +762,8 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
           </Button>
           <Button
             onClick={handleImport}
-            disabled={loading || !parsedData || generatedTransactions.length === 0 || hasAccountErrors}
+            variant={hasEmptyAccounts ? "secondary" : "default"}
+            disabled={loading || !parsedData || effectiveTransactions.length === 0 || hasMissingAccounts}
           >
             {loading ? (
               <>
