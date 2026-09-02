@@ -721,33 +721,82 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {generatedTransactions.map((transaction, index) => (
-                        <tr key={index} className={transaction.hasError ? "bg-destructive/10" : "hover:bg-muted/50"}>
-                          <td className="px-3 py-2 text-xs">
-                            <Badge variant={transaction.type === "income" ? "default" : "secondary"}>
-                              {transaction.type === "income" ? "Przychód" : "Rozchód"}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2 text-xs max-w-[150px] truncate">{transaction.description}</td>
-                          <td className="px-3 py-2 text-xs text-right font-mono">
-                            {new Intl.NumberFormat("pl-PL", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }).format(transaction.debitAmount)}
-                          </td>
-                          <td className="px-3 py-2 text-xs font-mono">{transaction.debitAccountNumber}</td>
-                          <td className="px-3 py-2 text-xs font-mono">{transaction.creditAccountNumber}</td>
-                          <td className="px-3 py-2 text-xs">
-                            {transaction.hasError ? (
-                              <span className="text-destructive" title={transaction.errorMessage}>
-                                ❌ {transaction.errorMessage}
-                              </span>
-                            ) : (
-                              <span className="text-green-600">✓</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {effectiveTransactions.map((transaction, index) => {
+                        const renderAccountCell = (side: "debit" | "credit") => {
+                          const number = side === "debit" ? transaction.debitAccountNumber : transaction.creditAccountNumber;
+                          const id = side === "debit" ? transaction.debitAccountId : transaction.creditAccountId;
+                          const kind = side === "debit" ? transaction.debitErrorKind : transaction.creditErrorKind;
+
+                          if (id || kind === undefined) {
+                            return (
+                              <div className="font-mono">
+                                {id && overrides[`${index}-${side}`] ? (
+                                  <span className="text-green-700">{accountNumberById.get(id) || number}</span>
+                                ) : (
+                                  number
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (kind === "missing") {
+                            return <div className="font-mono text-destructive">{number}</div>;
+                          }
+
+                          return (
+                            <div className="min-w-[170px] space-y-1">
+                              <div className="font-mono text-[11px] text-muted-foreground">{number}</div>
+                              <AccountCombobox
+                                value=""
+                                side={side}
+                                className="h-8 text-xs"
+                                onChange={(accountId) => setOverride(index, side, accountId)}
+                              />
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <tr
+                            key={index}
+                            className={
+                              transaction.hasMissing
+                                ? "bg-destructive/10"
+                                : transaction.hasEmpty
+                                  ? "bg-amber-50"
+                                  : "hover:bg-muted/50"
+                            }
+                          >
+                            <td className="px-3 py-2 text-xs align-top">
+                              <Badge variant={transaction.type === "income" ? "default" : "secondary"}>
+                                {transaction.type === "income" ? "Przychód" : "Rozchód"}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 text-xs max-w-[150px] truncate align-top">{transaction.description}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono align-top">
+                              {new Intl.NumberFormat("pl-PL", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }).format(transaction.debitAmount)}
+                            </td>
+                            <td className="px-3 py-2 text-xs align-top">{renderAccountCell("debit")}</td>
+                            <td className="px-3 py-2 text-xs align-top">{renderAccountCell("credit")}</td>
+                            <td className="px-3 py-2 text-xs align-top">
+                              {transaction.hasMissing ? (
+                                <span className="text-destructive" title={transaction.errorMessage}>
+                                  ❌ {transaction.errorMessage}
+                                </span>
+                              ) : transaction.hasEmpty ? (
+                                <span className="text-amber-700" title={transaction.errorMessage}>
+                                  ⚠ {transaction.errorMessage}
+                                </span>
+                              ) : (
+                                <span className="text-green-600">✓</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </ScrollArea>
