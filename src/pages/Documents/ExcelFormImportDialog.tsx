@@ -684,8 +684,40 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
                 </span>
               </div>
 
+              {/* Alert o kontach do wskazania - NIE blokuje importu */}
+              {ambiguousAccounts.length > 0 && (
+                <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Konta do wskazania</AlertTitle>
+                  <AlertDescription>
+                    Poniższe konta mają kilka podkont analitycznych — wskaż właściwe w tabeli poniżej lub zaimportuj
+                    dokument z pustym polem i uzupełnij je później:
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {ambiguousAccounts.map((account) => (
+                        <div key={account} className="flex items-center gap-1">
+                          <Badge variant="outline" className="font-mono">
+                            {account}
+                          </Badge>
+                          {pendingBulkPrefix === account && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applyBulk(account)}
+                            >
+                              Zastosuj wybór do wszystkich pozycji z {account}
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Alert o brakujących kontach - blokada importu */}
-              {hasAccountErrors && missingAccounts.length > 0 && (
+              {missingAccounts.length > 0 && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Import zablokowany - brakujące konta</AlertTitle>
