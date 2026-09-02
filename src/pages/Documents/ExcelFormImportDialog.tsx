@@ -46,6 +46,9 @@ interface GeneratedTransaction {
   type: "income" | "expense";
   hasError: boolean;
   errorMessage?: string;
+  // "missing" = konto nie istnieje (blokuje import), "ambiguous" = wymaga wskazania analityki
+  debitErrorKind?: "missing" | "ambiguous";
+  creditErrorKind?: "missing" | "ambiguous";
 }
 
 interface ExcelFormImportDialogProps {
