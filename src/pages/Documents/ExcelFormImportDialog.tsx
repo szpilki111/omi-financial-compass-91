@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from "xlsx";
+import { AccountCombobox } from "@/pages/Documents/AccountCombobox";
 
 // Struktura sparsowanych danych z formularza Excel
 interface ExcelFormData {
@@ -46,6 +47,9 @@ interface GeneratedTransaction {
   type: "income" | "expense";
   hasError: boolean;
   errorMessage?: string;
+  // "missing" = konto nie istnieje (blokuje import), "ambiguous" = wymaga wskazania analityki
+  debitErrorKind?: "missing" | "ambiguous";
+  creditErrorKind?: "missing" | "ambiguous";
 }
 
 interface ExcelFormImportDialogProps {
@@ -61,6 +65,10 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
   const [generatedTransactions, setGeneratedTransactions] = useState<GeneratedTransaction[]>([]);
   const [documentDate, setDocumentDate] = useState<Date>(new Date());
   const [parseError, setParseError] = useState<string | null>(null);
+  // Ręczne wskazania kont dla pozycji niejednoznacznych: klucz "<index>-debit" | "<index>-credit"
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [lastChoice, setLastChoice] = useState<{ number: string; accountId: string } | null>(null);
+  const [pendingBulkPrefix, setPendingBulkPrefix] = useState<string | null>(null);
 
   const { data: accounts = [] } = useFilteredAccounts();
   const { generateProvincialFeesForImport, isReady: provincialFeeReady, isConfigured: provincialFeeConfigured } = useProvincialFee();
@@ -275,9 +283,16 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     const transactions: GeneratedTransaction[] = [];
     const locationSuffix = data.locationCode;
 
+    // Rozróżnienie: konto nieistniejące vs wymagające wskazania analityki
+    const errorKind = (accountNumber: string): "missing" | "ambiguous" => {
+      const { exists, leaves } = diagnoseAccount(accountNumber);
+      return exists && leaves.length > 1 ? "ambiguous" : "missing";
+    };
+
     // Znajdź konto gotówki/banku
     const cashAccount = findAccount(data.cashAccountNumber);
     const cashAccountError = !cashAccount ? buildAccountErrorMessage(data.cashAccountNumber) : undefined;
+    const cashKind = !cashAccount ? errorKind(data.cashAccountNumber) : undefined;
 
     // Dla przychodów: Winien=gotówka/bank, Ma=przychód
     for (const income of data.incomeItems) {
@@ -293,9 +308,11 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         debitAmount: income.amount,
         debitAccountNumber: data.cashAccountNumber,
         debitAccountId: cashAccount?.id || null,
+        debitErrorKind: cashKind,
         creditAmount: income.amount,
         creditAccountNumber: extendedAccountNumber,
         creditAccountId: creditAccount?.id || null,
+        creditErrorKind: !creditAccount ? errorKind(extendedAccountNumber) : undefined,
         type: "income",
         hasError,
         errorMessage: !creditAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
@@ -316,9 +333,11 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
         debitAmount: expense.amount,
         debitAccountNumber: extendedAccountNumber,
         debitAccountId: debitAccount?.id || null,
+        debitErrorKind: !debitAccount ? errorKind(extendedAccountNumber) : undefined,
         creditAmount: expense.amount,
         creditAccountNumber: data.cashAccountNumber,
         creditAccountId: cashAccount?.id || null,
+        creditErrorKind: cashKind,
         type: "expense",
         hasError,
         errorMessage: !debitAccount ? buildAccountErrorMessage(extendedAccountNumber) : cashAccountError,
@@ -336,6 +355,9 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     setParseError(null);
     setParsedData(null);
     setGeneratedTransactions([]);
+    setOverrides({});
+    setLastChoice(null);
+    setPendingBulkPrefix(null);
 
     try {
       const data = await parseExcelFile(selectedFile);
@@ -362,21 +384,106 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     }
   };
 
-  // Sprawdź czy są błędy kont - blokada importu
-  const hasAccountErrors = generatedTransactions.some((t) => t.hasError);
+  // Mapa id -> numer konta (do pokazania wybranej analityki)
+  const accountNumberById = useMemo(() => {
+    const map = new Map<string, string>();
+    accounts.forEach((acc) => map.set(acc.id, acc.number));
+    return map;
+  }, [accounts]);
+
+  // Zastosowanie ręcznych wyborów użytkownika do wygenerowanych transakcji
+  const effectiveTransactions = useMemo(() => {
+    return generatedTransactions.map((t, index) => {
+      const debitOverride = overrides[`${index}-debit`];
+      const creditOverride = overrides[`${index}-credit`];
+
+      const debitAccountId = debitOverride || t.debitAccountId;
+      const creditAccountId = creditOverride || t.creditAccountId;
+      const debitErrorKind = debitAccountId ? undefined : t.debitErrorKind;
+      const creditErrorKind = creditAccountId ? undefined : t.creditErrorKind;
+
+      const kinds = [debitErrorKind, creditErrorKind].filter(Boolean) as ("missing" | "ambiguous")[];
+      const hasMissing = kinds.includes("missing");
+      const hasEmpty = kinds.includes("ambiguous");
+
+      let errorMessage: string | undefined;
+      if (hasMissing) {
+        const number = debitErrorKind === "missing" ? t.debitAccountNumber : t.creditAccountNumber;
+        errorMessage = `Nie znaleziono konta ${number}`;
+      } else if (hasEmpty) {
+        const number = debitErrorKind === "ambiguous" ? t.debitAccountNumber : t.creditAccountNumber;
+        errorMessage = `Wskaż analitykę dla konta ${number}`;
+      }
+
+      return {
+        ...t,
+        debitAccountId,
+        creditAccountId,
+        debitErrorKind,
+        creditErrorKind,
+        hasMissing,
+        hasEmpty,
+        hasError: hasMissing || hasEmpty,
+        errorMessage,
+      };
+    });
+  }, [generatedTransactions, overrides]);
+
+  const hasMissingAccounts = effectiveTransactions.some((t) => t.hasMissing);
+  const hasEmptyAccounts = effectiveTransactions.some((t) => t.hasEmpty);
+
   const missingAccounts = useMemo(() => {
     const missing = new Set<string>();
-    generatedTransactions.forEach((t) => {
-      if (t.hasError && t.errorMessage) {
-        // Wyciągnij numer konta z komunikatu błędu
-        const match = t.errorMessage.match(/Nie znaleziono konta (.+)/);
-        if (match) {
-          missing.add(match[1]);
-        }
-      }
+    effectiveTransactions.forEach((t) => {
+      if (t.debitErrorKind === "missing") missing.add(t.debitAccountNumber);
+      if (t.creditErrorKind === "missing") missing.add(t.creditAccountNumber);
     });
     return Array.from(missing);
-  }, [generatedTransactions]);
+  }, [effectiveTransactions]);
+
+  const ambiguousAccounts = useMemo(() => {
+    const ambiguous = new Set<string>();
+    effectiveTransactions.forEach((t) => {
+      if (t.debitErrorKind === "ambiguous") ambiguous.add(t.debitAccountNumber);
+      if (t.creditErrorKind === "ambiguous") ambiguous.add(t.creditAccountNumber);
+    });
+    return Array.from(ambiguous);
+  }, [effectiveTransactions]);
+
+  // Ustawienie ręcznego wyboru konta dla pojedynczego wiersza
+  const setOverride = (index: number, side: "debit" | "credit", accountId: string) => {
+    setOverrides((prev) => ({ ...prev, [`${index}-${side}`]: accountId }));
+    const number = side === "debit"
+      ? generatedTransactions[index]?.debitAccountNumber
+      : generatedTransactions[index]?.creditAccountNumber;
+    const sameCount = generatedTransactions.filter(
+      (t, i) =>
+        i !== index &&
+        ((t.debitErrorKind === "ambiguous" && t.debitAccountNumber === number) ||
+          (t.creditErrorKind === "ambiguous" && t.creditAccountNumber === number)),
+    ).length;
+    setLastChoice(number ? { number, accountId } : null);
+    setPendingBulkPrefix(sameCount > 0 && number ? number : null);
+  };
+
+  // Zastosowanie ostatniego wyboru do wszystkich pozycji z tym samym numerem konta
+  const applyBulk = (number: string) => {
+    if (!lastChoice || lastChoice.number !== number) return;
+    setOverrides((prev) => {
+      const next = { ...prev };
+      generatedTransactions.forEach((t, i) => {
+        if (t.debitErrorKind === "ambiguous" && t.debitAccountNumber === number && !next[`${i}-debit`]) {
+          next[`${i}-debit`] = lastChoice.accountId;
+        }
+        if (t.creditErrorKind === "ambiguous" && t.creditAccountNumber === number && !next[`${i}-credit`]) {
+          next[`${i}-credit`] = lastChoice.accountId;
+        }
+      });
+      return next;
+    });
+    setPendingBulkPrefix(null);
+  };
+
 
   const handleImport = async () => {
     if (provincialFeeConfigured && !provincialFeeReady) {
@@ -406,17 +513,16 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
       return;
     }
 
-    // BRAK twardej blokady: importujemy wszystkie wiersze, brakujące konta
-    // (m.in. syntetyka wymagająca analityki) zostaną zapisane jako null
-    // i pokazane jako "X pustych pól" w statusie dokumentu na liście.
-    if (hasAccountErrors) {
+    // BRAK twardej blokady dla kont niejednoznacznych: importujemy wszystkie wiersze,
+    // niewskazane konta zostaną zapisane jako null i pokazane jako "X pustych pól".
+    if (hasEmptyAccounts) {
       toast({
         title: "Import z brakami",
-        description: `Dokument zostanie utworzony z brakującymi kontami (${missingAccounts.join(", ")}). Uzupełnij je ręcznie po imporcie.`,
+        description: `Dokument zostanie utworzony z pustymi kontami (${ambiguousAccounts.join(", ")}). Uzupełnij je ręcznie po imporcie.`,
       });
     }
 
-    const validTransactions = generatedTransactions;
+    const validTransactions = effectiveTransactions;
 
     setLoading(true);
 
@@ -542,6 +648,8 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     setFile(null);
     setParsedData(null);
     setGeneratedTransactions([]);
+    setOverrides({});
+    setPendingBulkPrefix(null);
     setParseError(null);
     setDocumentDate(new Date());
     onClose();
@@ -580,9 +688,9 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
     }
   };
 
-  const validCount = generatedTransactions.filter((t) => !t.hasError).length;
-  const errorCount = generatedTransactions.filter((t) => t.hasError).length;
-  const totalAmount = generatedTransactions.reduce((sum, t) => sum + t.debitAmount, 0);
+  const validCount = effectiveTransactions.filter((t) => !t.hasError).length;
+  const errorCount = effectiveTransactions.filter((t) => t.hasError).length;
+  const totalAmount = effectiveTransactions.reduce((sum, t) => sum + t.debitAmount, 0);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -684,8 +792,40 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
                 </span>
               </div>
 
+              {/* Alert o kontach do wskazania - NIE blokuje importu */}
+              {ambiguousAccounts.length > 0 && (
+                <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Konta do wskazania</AlertTitle>
+                  <AlertDescription>
+                    Poniższe konta mają kilka podkont analitycznych — wskaż właściwe w tabeli poniżej lub zaimportuj
+                    dokument z pustym polem i uzupełnij je później:
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {ambiguousAccounts.map((account) => (
+                        <div key={account} className="flex items-center gap-1">
+                          <Badge variant="outline" className="font-mono">
+                            {account}
+                          </Badge>
+                          {pendingBulkPrefix === account && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applyBulk(account)}
+                            >
+                              Zastosuj wybór do wszystkich pozycji z {account}
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Alert o brakujących kontach - blokada importu */}
-              {hasAccountErrors && missingAccounts.length > 0 && (
+              {missingAccounts.length > 0 && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Import zablokowany - brakujące konta</AlertTitle>
@@ -721,33 +861,82 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {generatedTransactions.map((transaction, index) => (
-                        <tr key={index} className={transaction.hasError ? "bg-destructive/10" : "hover:bg-muted/50"}>
-                          <td className="px-3 py-2 text-xs">
-                            <Badge variant={transaction.type === "income" ? "default" : "secondary"}>
-                              {transaction.type === "income" ? "Przychód" : "Rozchód"}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2 text-xs max-w-[150px] truncate">{transaction.description}</td>
-                          <td className="px-3 py-2 text-xs text-right font-mono">
-                            {new Intl.NumberFormat("pl-PL", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }).format(transaction.debitAmount)}
-                          </td>
-                          <td className="px-3 py-2 text-xs font-mono">{transaction.debitAccountNumber}</td>
-                          <td className="px-3 py-2 text-xs font-mono">{transaction.creditAccountNumber}</td>
-                          <td className="px-3 py-2 text-xs">
-                            {transaction.hasError ? (
-                              <span className="text-destructive" title={transaction.errorMessage}>
-                                ❌ {transaction.errorMessage}
-                              </span>
-                            ) : (
-                              <span className="text-green-600">✓</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {effectiveTransactions.map((transaction, index) => {
+                        const renderAccountCell = (side: "debit" | "credit") => {
+                          const number = side === "debit" ? transaction.debitAccountNumber : transaction.creditAccountNumber;
+                          const id = side === "debit" ? transaction.debitAccountId : transaction.creditAccountId;
+                          const kind = side === "debit" ? transaction.debitErrorKind : transaction.creditErrorKind;
+
+                          if (id || kind === undefined) {
+                            return (
+                              <div className="font-mono">
+                                {id && overrides[`${index}-${side}`] ? (
+                                  <span className="text-green-700">{accountNumberById.get(id) || number}</span>
+                                ) : (
+                                  number
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (kind === "missing") {
+                            return <div className="font-mono text-destructive">{number}</div>;
+                          }
+
+                          return (
+                            <div className="min-w-[170px] space-y-1">
+                              <div className="font-mono text-[11px] text-muted-foreground">{number}</div>
+                              <AccountCombobox
+                                value=""
+                                side={side}
+                                className="h-8 text-xs"
+                                onChange={(accountId) => setOverride(index, side, accountId)}
+                              />
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <tr
+                            key={index}
+                            className={
+                              transaction.hasMissing
+                                ? "bg-destructive/10"
+                                : transaction.hasEmpty
+                                  ? "bg-amber-50"
+                                  : "hover:bg-muted/50"
+                            }
+                          >
+                            <td className="px-3 py-2 text-xs align-top">
+                              <Badge variant={transaction.type === "income" ? "default" : "secondary"}>
+                                {transaction.type === "income" ? "Przychód" : "Rozchód"}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 text-xs max-w-[150px] truncate align-top">{transaction.description}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono align-top">
+                              {new Intl.NumberFormat("pl-PL", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }).format(transaction.debitAmount)}
+                            </td>
+                            <td className="px-3 py-2 text-xs align-top">{renderAccountCell("debit")}</td>
+                            <td className="px-3 py-2 text-xs align-top">{renderAccountCell("credit")}</td>
+                            <td className="px-3 py-2 text-xs align-top">
+                              {transaction.hasMissing ? (
+                                <span className="text-destructive" title={transaction.errorMessage}>
+                                  ❌ {transaction.errorMessage}
+                                </span>
+                              ) : transaction.hasEmpty ? (
+                                <span className="text-amber-700" title={transaction.errorMessage}>
+                                  ⚠ {transaction.errorMessage}
+                                </span>
+                              ) : (
+                                <span className="text-green-600">✓</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </ScrollArea>
@@ -762,22 +951,28 @@ const ExcelFormImportDialog: React.FC<ExcelFormImportDialogProps> = ({ open, onC
           </Button>
           <Button
             onClick={handleImport}
-            disabled={loading || !parsedData || generatedTransactions.length === 0 || hasAccountErrors}
+            variant={hasEmptyAccounts ? "secondary" : "default"}
+            disabled={loading || !parsedData || effectiveTransactions.length === 0 || hasMissingAccounts}
           >
             {loading ? (
               <>
                 <span className="animate-spin mr-2">⏳</span>
                 Importowanie...
               </>
-            ) : hasAccountErrors ? (
+            ) : hasMissingAccounts ? (
               <>
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Brakujące konta
               </>
+            ) : hasEmptyAccounts ? (
+              <>
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Importuj mimo braków ({effectiveTransactions.length})
+              </>
             ) : (
               <>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Importuj {generatedTransactions.length} operacji
+                Importuj {effectiveTransactions.length} operacji
               </>
             )}
           </Button>
