@@ -8,9 +8,9 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// W kontekstach niezabezpieczonych (http://) przeglądarka blokuje Web Locks API
-// ("LockManager.request: request() is not allowed in this context").
-// Używamy wtedy prostej kolejki w pamięci zamiast navigator.locks.
+// Niektóre przeglądarki (tryb prywatny, osadzone widoki, http://) blokują Web Locks API:
+// "LockManager.request: request() is not allowed in this context".
+// Dlatego zawsze używamy własnej kolejki w pamięci zamiast navigator.locks.
 let lockChain: Promise<unknown> = Promise.resolve();
 
 const memoryLock = async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
@@ -19,19 +19,12 @@ const memoryLock = async <R>(_name: string, _acquireTimeout: number, fn: () => P
   return run;
 };
 
-const supportsWebLocks = (() => {
-  try {
-    return typeof navigator !== 'undefined' && !!navigator.locks && window.isSecureContext;
-  } catch {
-    return false;
-  }
-})();
-
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    ...(supportsWebLocks ? {} : { lock: memoryLock }),
+    lock: memoryLock,
   },
+
 });
