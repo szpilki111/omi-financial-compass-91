@@ -917,7 +917,10 @@ export type Database = {
           bank_account: string | null
           city: string | null
           created_at: string
+          frozen_at: string | null
+          frozen_by: string | null
           id: string
+          is_active: boolean
           location_identifier: string | null
           name: string
           nip: string | null
@@ -930,7 +933,10 @@ export type Database = {
           bank_account?: string | null
           city?: string | null
           created_at?: string
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
+          is_active?: boolean
           location_identifier?: string | null
           name: string
           nip?: string | null
@@ -943,7 +949,10 @@ export type Database = {
           bank_account?: string | null
           city?: string | null
           created_at?: string
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
+          is_active?: boolean
           location_identifier?: string | null
           name?: string
           nip?: string | null

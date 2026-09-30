@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Edit, Trash2, Settings, Check, ChevronsUpDown, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, Check, ChevronsUpDown, RefreshCw, AlertCircle, Snowflake, Unlock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import LocationDialog from './LocationDialog';
@@ -41,6 +41,8 @@ interface Location {
   nip: string | null;
   regon: string | null;
   created_at: string;
+  is_active?: boolean;
+  frozen_at?: string | null;
 }
 
 interface LocationWithSettings extends Location {
@@ -90,6 +92,31 @@ const LocationsManagement = () => {
     },
     retry: 2,
     staleTime: 10000, // 10 sekund dla panelu admin
+  });
+
+  // Mutacja zamrażania / odmrażania placówki
+  const freezeMutation = useMutation({
+    mutationFn: async ({ id, freeze, date }: { id: string; freeze: boolean; date?: string }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('locations')
+        .update(
+          freeze
+            ? ({ is_active: false, frozen_at: date, frozen_by: auth.user?.id ?? null } as any)
+            : ({ is_active: true, frozen_at: null, frozen_by: null } as any)
+        )
+        .eq('id', id);
+      if (error) throw error;
+      return freeze;
+    },
+    onSuccess: (freeze) => {
+      queryClient.invalidateQueries({ queryKey: ['locations-with-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      toast({ title: 'Sukces', description: freeze ? 'Placówka została zamrożona.' : 'Placówka została odmrożona.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Błąd', description: error.message || 'Nie udało się zmienić stanu placówki', variant: 'destructive' });
+    },
   });
 
   // Mutacja do usuwania placówki
@@ -181,6 +208,27 @@ const LocationsManagement = () => {
   const handleAdd = () => {
     setSelectedLocation(null);
     setIsDialogOpen(true);
+  };
+
+  const handleToggleFreeze = (location: LocationWithSettings) => {
+    if (location.is_active === false) {
+      if (confirm(`Odmrozić placówkę "${location.name}"? Znowu będzie można dodawać i edytować dokumenty.`)) {
+        freezeMutation.mutate({ id: location.id, freeze: false });
+      }
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const input = prompt(
+      `Zamrożenie placówki "${location.name}".\n\nPodaj datę (RRRR-MM-DD), od której nie będzie można dodawać, edytować ani usuwać dokumentów. Wcześniejsze dane zostają bez zmian i są dalej widoczne w raportach.`,
+      today
+    );
+    if (input === null) return;
+    const date = input.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date).getTime())) {
+      toast({ title: 'Błąd', description: 'Nieprawidłowa data. Użyj formatu RRRR-MM-DD, np. 2027-01-01.', variant: 'destructive' });
+      return;
+    }
+    freezeMutation.mutate({ id: location.id, freeze: true, date });
   };
 
   const handleDelete = (location: Location) => {
@@ -343,8 +391,16 @@ const LocationsManagement = () => {
               </TableHeader>
               <TableBody>
                 {filteredLocations.map((location) => (
-                  <TableRow key={location.id}>
-                    <TableCell className="font-medium">{location.name}</TableCell>
+                  <TableRow key={location.id} className={location.is_active === false ? 'opacity-60' : ''}>
+                    <TableCell className="font-medium">
+                      {location.name}
+                      {location.is_active === false && (
+                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800">
+                          <Snowflake className="h-3 w-3" />
+                          Zamrożona od {location.frozen_at ? new Date(location.frozen_at).toLocaleDateString('pl-PL') : '-'}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {location.location_identifier ? (
                         <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded font-mono">
@@ -393,6 +449,17 @@ const LocationsManagement = () => {
                           title="Edytuj placówkę"
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleFreeze(location)}
+                          disabled={freezeMutation.isPending}
+                          title={location.is_active === false ? 'Odmroź placówkę' : 'Zamroź placówkę'}
+                        >
+                          {location.is_active === false
+                            ? <Unlock className="h-4 w-4" />
+                            : <Snowflake className="h-4 w-4" />}
                         </Button>
                         <Button
                           variant="ghost"
