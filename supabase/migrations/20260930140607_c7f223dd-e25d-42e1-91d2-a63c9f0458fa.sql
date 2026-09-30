@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.enforce_location_not_frozen() FROM PUBLIC, anon, authenticated;
