@@ -83,13 +83,14 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('locations')
-        .select('id, name')
+        .select('id, name, is_active, frozen_at')
         .order('name');
+      type Loc = { id: string; name: string; is_active?: boolean; frozen_at?: string | null };
       if (error) {
         console.error('❌ Błąd pobierania placówek:', error);
-        return [] as { id: string; name: string }[];
+        return [] as Loc[];
       }
-      return (data || []) as { id: string; name: string }[];
+      return (data || []) as Loc[];
     }
   });
 
@@ -243,7 +244,13 @@ const ReportsList: React.FC<ReportsListProps> = ({ onReportSelect, refreshKey = 
         .filter(r => r.month === monthNumber && r.year === yearNumber)
         .map(r => r.location_id)
     );
-    return allLocations.filter(loc => !withReport.has(loc.id));
+    const periodStart = `${yearNumber}-${String(monthNumber).padStart(2, '0')}-01`;
+    return allLocations.filter(loc => {
+      if (withReport.has(loc.id)) return false;
+      // Pomiń placówki zamrożone przed tym miesiącem lub na jego początku
+      if (loc.is_active === false && loc.frozen_at && loc.frozen_at <= periodStart) return false;
+      return true;
+    });
   }, [allLocations, reports, searchMonth, searchYear]);
 
   const filteredLocationOptions = useMemo(() => {
