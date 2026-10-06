@@ -96,6 +96,19 @@ const DocumentsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
+  // Sortowanie po stronie bazy (wszystkie strony, nie tylko bieżąca)
+  const [sortKey, setSortKey] = useState<'document_number' | 'document_name' | 'location' | 'document_date'>('document_number');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (key: typeof sortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+    setCurrentPage(1);
+  };
+
   // Wyszukiwanie uruchamia się dopiero po zatwierdzeniu (Enter / klik lupy)
   const submitSearch = () => {
     setDebouncedSearch(searchTerm);
