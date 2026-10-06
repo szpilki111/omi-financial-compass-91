@@ -169,7 +169,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((document) => {
+            {sortedDocuments.map((document) => {
               const locked = isDocumentLocked(document);
               const hasErrors =
                 document.validation_errors &&
