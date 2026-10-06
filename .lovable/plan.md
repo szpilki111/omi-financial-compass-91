@@ -1,19 +1,22 @@
-# Dokumenty innych placówek widoczne dla Prowincji
+# Ekonomat widzi dokumenty WSD Poznań na swojej liście
 
-## Co ustaliłem
-- Dokument WSDPOZ/2026/09/001 jest zapisany na WSD (4-4), a wszystkie jego operacje idą na konta WSD. Dane są poprawne.
-- Pracownicy Prowincji (Ekonomat Prowincji, A. Albiniak, R. Dąbkowski, M. Głowacki) mają w programie rolę **administrator**, a Ojciec Prowincjał rolę **prowincjał**. Obie role z założenia widzą dokumenty wszystkich placówek. Bez tego nie mogliby sprawdzać ani zatwierdzać raportów.
-- Lista dokumentów otwiera się u nich z filtrem „Wszystkie placówki”, dlatego dokumenty domów mieszają się z dokumentami Prowincji.
+## Co wynika z rozmowy
+Ojciec Dariusz loguje się jako Ekonomat. Na liście dokumentów od razu, bez szukania, widzi dokumenty WSD Poznań. Dokumentów innych domów i parafii tam nie widzi. Chce, żeby na Ekonomacie pokazywały się tylko dokumenty Prowincji. Ustalono, że nie chodzi o uprawnienia, tylko o filtr listy. Każda placówka ma od razu widzieć tylko swoje dokumenty.
+
+## Przyczyna (sprawdzona)
+- Konta administratorów otwierają listę z filtrem „Wszystkie placówki”, więc pokazują się na niej dokumenty wszystkich domów.
+- Lista jest ułożona alfabetycznie od końca według numeru dokumentu. „WSDPOZ/…” zaczyna się od W, więc trafia na samą górę. Dokumenty domów i parafii („DOM…”, „PAR…”) są pod setkami dokumentów „PROW…”, na dalszych stronach. Dlatego wyglądało, jakby problem dotyczył tylko WSD.
+- Dane są poprawne. Dokument WSD jest zapisany na WSD (4-4) i na konta WSD, a utworzył go Jerzy Kotowski.
 
 ## Co zmienię
-1. Lista dokumentów u administratora i prowincjała będzie domyślnie pokazywać tylko dokumenty jego własnej placówki, czyli Prowincji.
-2. Dokumenty innego domu albo wszystkich placówek będzie można zobaczyć tylko po świadomym wyborze w filtrze. Do sprawdzania i poprawiania nadal będą dostępne.
-3. Gdy w filtrze wybrane będą „Wszystkie placówki”, przy każdym dokumencie pojawi się nazwa placówki, żeby nie mylić dokumentów domów z dokumentami Prowincji.
-4. Uprawnienia zostają bez zmian, a raporty, obroty i zatwierdzanie działają jak dotąd.
+1. Po wejściu w Dokumenty administrator lub prowincjał od razu zobaczy tylko dokumenty swojej placówki. Na Ekonomacie będą to dokumenty Prowincji.
+2. Dokumenty innej placówki albo wszystkich placówek nadal będzie można zobaczyć, ale dopiero po wybraniu ich w filtrze.
+3. Przy „Wszystkich placówkach” przy każdym dokumencie będzie widoczna nazwa placówki.
+4. Uprawnienia, raporty i obroty zostają bez zmian. Użytkownicy domów, np. Jerzy Kotowski, nie zauważą żadnej różnicy.
 
-## Do decyzji
-Jeśli pracownicy Prowincji w ogóle nie mają widzieć dokumentów domów, nawet przez filtr, trzeba im zmienić rolę. Wtedy jednak stracą dostęp do raportów i administracji innych placówek. Tego nie robię bez Twojej decyzji.
+## Poza tym zadaniem (z tej samej rozmowy)
+Zmiana nazwy „WSD w Obrze” na „Dom Zakonny w Obrze” od 2027 r. jest już w programie: Administracja → Placówki → edycja nazwy. Wcześniejsze numery dokumentów zostaną takie, jakie były. Nie robię teraz nic więcej, chyba że zechcesz, żeby stare dokumenty pokazywały starą nazwę placówki.
 
 ## Szczegóły techniczne
-- `DocumentsPage.tsx`: początkowa wartość `selectedLocationId` dla roli admin/prowincjał będzie równa `user.location_id`, a jeśli go brak, `'all'`.
-- `DocumentsTable.tsx`: kolumna „Placówka” (`locations.name`) widoczna, gdy filtr = `'all'`.
+- `DocumentsPage.tsx`: `selectedLocationId` startuje od `user.location_id` dla admin/prowincjał, a gdy go brak, od `'all'`.
+- `DocumentsTable.tsx`: przy filtrze `'all'` kolumna „Placówka” z `locations.name`.
