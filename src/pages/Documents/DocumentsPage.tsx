@@ -77,7 +77,10 @@ const DocumentsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
+  // Admin/prowincjał domyślnie widzi tylko dokumenty własnej placówki; inne — po wyborze w filtrze
+  const [selectedLocationId, setSelectedLocationId] = useState<string>(() =>
+    (user?.role === 'admin' || user?.role === 'prowincjal') && user?.location ? user.location : 'all'
+  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [mt940Dialog, setMt940Dialog] = useState<{
     open: boolean;
@@ -673,7 +676,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
         </div>
 
         {/* Documents table */}
-        <DocumentsTable documents={filteredDocuments} onDocumentClick={handleDocumentClick} onDocumentDelete={handleDocumentDelete} onDocumentDuplicate={handleDocumentDuplicate} isLoading={isLoading} />
+        <DocumentsTable documents={filteredDocuments} onDocumentClick={handleDocumentClick} onDocumentDelete={handleDocumentDelete} onDocumentDuplicate={handleDocumentDuplicate} isLoading={isLoading} showLocation={isAdminOrProvincial && selectedLocationId === 'all'} />
 
         {/* Pagination */}
         {totalPages > 1 && (

@@ -25,6 +25,7 @@ interface Document {
     name: string;
   } | null;
   transaction_count?: number;
+  location_name_snapshot?: string | null;
   total_amount?: number;
 }
 
@@ -34,9 +35,10 @@ interface DocumentsTableProps {
   onDocumentDelete: (documentId: string, documentDate?: string, locationId?: string) => void;
   onDocumentDuplicate: (documentId: string) => void;
   isLoading: boolean;
+  showLocation?: boolean;
 }
 
-const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading }) => {
+const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading, showLocation = false }) => {
   const { user, isReadOnly } = useAuth();
   const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
 
@@ -90,6 +92,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
             <TableRow>
               <TableHead>Numer dokumentu</TableHead>
               <TableHead>Nazwa</TableHead>
+              {showLocation && <TableHead>Placówka</TableHead>}
               <TableHead>Data</TableHead>
               <TableHead className="w-24">Liczba operacji</TableHead>
               <TableHead className="text-right">Suma</TableHead>
@@ -149,6 +152,11 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
                     </div>
                   </TableCell>
                   <TableCell>{document.document_name}</TableCell>
+                  {showLocation && (
+                    <TableCell className="text-sm text-muted-foreground">
+                      {document.location_name_snapshot || document.locations?.name || "—"}
+                    </TableCell>
+                  )}
                   <TableCell>{format(new Date(document.document_date), "dd.MM.yyyy")}</TableCell>
                   <TableCell className="text-center w-24">{document.transaction_count || 0}</TableCell>
                   <TableCell className="text-right font-medium">
