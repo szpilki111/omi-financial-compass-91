@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.set_document_location_name_snapshot() FROM PUBLIC, anon, authenticated;
