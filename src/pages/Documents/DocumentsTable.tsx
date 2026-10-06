@@ -2,7 +2,7 @@ import React from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, AlertTriangle, Lock, Copy } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, Lock, Copy, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -41,6 +41,74 @@ interface DocumentsTableProps {
 const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading, showLocation = false }) => {
   const { user, isReadOnly } = useAuth();
   const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
+
+  type SortKey = "document_number" | "document_name" | "location" | "document_date" | "transaction_count" | "total_amount";
+  const [sortKey, setSortKey] = React.useState<SortKey>("document_number");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sortedDocuments = React.useMemo(() => {
+    if (!documents) return [];
+    const getSortValue = (doc: Document): string | number => {
+      switch (sortKey) {
+        case "transaction_count":
+          return doc.transaction_count || 0;
+        case "total_amount":
+          return doc.total_amount || 0;
+        case "location":
+          return doc.location_name_snapshot || doc.locations?.name || "";
+        default:
+          return (doc[sortKey] as string) ?? "";
+      }
+    };
+    const collator = new Intl.Collator("pl", { numeric: true, sensitivity: "base" });
+    const arr = [...documents];
+    arr.sort((a, b) => {
+      const va = getSortValue(a);
+      const vb = getSortValue(b);
+      let res: number;
+      if (typeof va === "number" && typeof vb === "number") {
+        res = va - vb;
+      } else {
+        res = collator.compare(String(va), String(vb));
+      }
+      return sortDir === "asc" ? res : -res;
+    });
+    return arr;
+  }, [documents, sortKey, sortDir]);
+
+  const renderSortableHeader = (key: SortKey, label: string, className?: string) => {
+    const isSorted = sortKey === key;
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => handleSort(key)}
+          className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+          title="Kliknij, aby posortować"
+        >
+          {label}
+          {isSorted ? (
+            sortDir === "asc" ? (
+              <ArrowUp className="h-3.5 w-3.5" />
+            ) : (
+              <ArrowDown className="h-3.5 w-3.5" />
+            )
+          ) : (
+            <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />
+          )}
+        </button>
+      </TableHead>
+    );
+  };
 
   const isDocumentLocked = (doc: Document): boolean => {
     if (!doc.validation_errors || !Array.isArray(doc.validation_errors)) return false;
@@ -90,18 +158,18 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Numer dokumentu</TableHead>
-              <TableHead>Nazwa</TableHead>
-              {showLocation && <TableHead>Placówka</TableHead>}
-              <TableHead>Data</TableHead>
-              <TableHead className="w-24">Liczba operacji</TableHead>
-              <TableHead className="text-right">Suma</TableHead>
+              {renderSortableHeader("document_number", "Numer dokumentu")}
+              {renderSortableHeader("document_name", "Nazwa")}
+              {showLocation && renderSortableHeader("location", "Placówka")}
+              {renderSortableHeader("document_date", "Data")}
+              {renderSortableHeader("transaction_count", "Liczba operacji", "w-24")}
+              {renderSortableHeader("total_amount", "Suma", "text-right")}
               <TableHead>Status</TableHead>
               <TableHead>Akcje</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((document) => {
+            {sortedDocuments.map((document) => {
               const locked = isDocumentLocked(document);
               const hasErrors =
                 document.validation_errors &&
