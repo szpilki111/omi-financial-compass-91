@@ -158,12 +158,12 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Numer dokumentu</TableHead>
-              <TableHead>Nazwa</TableHead>
-              {showLocation && <TableHead>Placówka</TableHead>}
-              <TableHead>Data</TableHead>
-              <TableHead className="w-24">Liczba operacji</TableHead>
-              <TableHead className="text-right">Suma</TableHead>
+              {renderSortableHeader("document_number", "Numer dokumentu")}
+              {renderSortableHeader("document_name", "Nazwa")}
+              {showLocation && renderSortableHeader("location", "Placówka")}
+              {renderSortableHeader("document_date", "Data")}
+              {renderSortableHeader("transaction_count", "Liczba operacji", "w-24")}
+              {renderSortableHeader("total_amount", "Suma", "text-right")}
               <TableHead>Status</TableHead>
               <TableHead>Akcje</TableHead>
             </TableRow>
