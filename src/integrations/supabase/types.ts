@@ -528,6 +528,7 @@ export type Database = {
           exchange_rate: number
           id: string
           location_id: string
+          location_name_snapshot: string | null
           updated_at: string
           user_id: string
           validation_errors: Json | null
@@ -541,6 +542,7 @@ export type Database = {
           exchange_rate?: number
           id?: string
           location_id: string
+          location_name_snapshot?: string | null
           updated_at?: string
           user_id: string
           validation_errors?: Json | null
@@ -554,6 +556,7 @@ export type Database = {
           exchange_rate?: number
           id?: string
           location_id?: string
+          location_name_snapshot?: string | null
           updated_at?: string
           user_id?: string
           validation_errors?: Json | null
