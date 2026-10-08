@@ -192,11 +192,18 @@ const DocumentsPage = () => {
           profiles!documents_user_id_fkey(name)
         `, { count: 'exact' });
 
-      // Sortowanie po stronie bazy — obejmuje wszystkie strony wyników
+      // Sortowanie po stronie bazy — obejmuje wszystkie strony wyników.
+      // Kolumny liczbowe (liczba operacji, suma) są liczone w aplikacji,
+      // więc dla nich zostawiamy domyślne sortowanie po numerze dokumentu.
       const sortColumn = sortKey === 'location' ? 'location_name_snapshot' : sortKey;
-      query = query.order(sortColumn, { ascending: sortDir === 'asc', nullsFirst: false });
-      // Stabilna kolejność przy równych wartościach
-      if (sortColumn !== 'document_number') {
+      const isDbSortable = sortColumn === 'document_number' || sortColumn === 'document_name' || sortColumn === 'document_date' || sortColumn === 'location_name_snapshot';
+      if (isDbSortable) {
+        query = query.order(sortColumn, { ascending: sortDir === 'asc', nullsFirst: false });
+        // Stabilna kolejność przy równych wartościach
+        if (sortColumn !== 'document_number') {
+          query = query.order('document_number', { ascending: false });
+        }
+      } else {
         query = query.order('document_number', { ascending: false });
       }
 
