@@ -139,7 +139,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch],
+    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch, sortKey, sortDir],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -190,9 +190,15 @@ const DocumentsPage = () => {
           *,
           locations(name),
           profiles!documents_user_id_fkey(name)
-        `, { count: 'exact' }).order('document_number', {
-        ascending: false
-      });
+        `, { count: 'exact' });
+
+      // Sortowanie po stronie bazy — obejmuje wszystkie strony wyników
+      const sortColumn = sortKey === 'location' ? 'location_name_snapshot' : sortKey;
+      query = query.order(sortColumn, { ascending: sortDir === 'asc', nullsFirst: false });
+      // Stabilna kolejność przy równych wartościach
+      if (sortColumn !== 'document_number') {
+        query = query.order('document_number', { ascending: false });
+      }
 
       // Filter by location if selected
       if (isAdminOrProvincial && selectedLocationId !== 'all') {
