@@ -1481,14 +1481,28 @@ const DocumentDialog = ({ isOpen, onClose, onDocumentCreated, document, location
   const handleParallelPosting = () => {
     const selectedTrans = selectedTransactions.map((index) => transactions[index]);
     // FIX: Nie zamieniamy stron - kopiujemy kwoty do odpowiednich miejsc
-    const parallelTransactionsCopy = selectedTrans.map((transaction) => ({
-      ...transaction,
-      // Zachowujemy strony - Wn → Wn, Ma → Ma
-      debit_account_id: "", // Konto zostawiamy puste do wypełnienia
-      credit_account_id: "", // Konto zostawiamy puste do wypełnienia
-      debit_amount: transaction.debit_amount, // Wn → Wn
-      credit_amount: transaction.credit_amount, // Ma → Ma
-    }));
+    // WAŻNE: kopia musi być NOWĄ operacją (bez id oryginału). Wcześniej kopiowane id
+    // powodowało, że zapis nadpisywał oryginalną operację (przenosił ją do równoległych
+    // i czyścił konta), przez co znikała z konta bankowego.
+    const parallelTransactionsCopy = selectedTrans.map((transaction) => {
+      const {
+        id: _id,
+        document_id: _docId,
+        parent_transaction_id: _parent,
+        is_split_transaction: _split,
+        created_at: _created,
+        updated_at: _updated,
+        ...rest
+      } = transaction as any;
+      return {
+        ...rest,
+        is_parallel: true,
+        debit_account_id: "",
+        credit_account_id: "",
+        debit_amount: transaction.debit_amount,
+        credit_amount: transaction.credit_amount,
+      } as Transaction;
+    });
 
     setParallelTransactions((prev) => [...prev, ...parallelTransactionsCopy]);
     setSelectedTransactions([]);
