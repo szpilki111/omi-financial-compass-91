@@ -97,7 +97,7 @@ const DocumentsPage = () => {
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
   // Sortowanie po stronie bazy (wszystkie strony, nie tylko bieżąca)
-  const [sortKey, setSortKey] = useState<'document_number' | 'document_name' | 'location' | 'document_date'>('document_number');
+  const [sortKey, setSortKey] = useState<'document_number' | 'document_name' | 'location' | 'document_date' | 'transaction_count' | 'total_amount'>('document_number');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (key: typeof sortKey) => {
     if (key === sortKey) {
