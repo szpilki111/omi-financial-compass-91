@@ -97,7 +97,7 @@ const DocumentsPage = () => {
   const isAdminOrProvincial = user?.role === 'admin' || user?.role === 'prowincjal';
 
   // Sortowanie po stronie bazy (wszystkie strony, nie tylko bieżąca)
-  const [sortKey, setSortKey] = useState<'document_number' | 'document_name' | 'location' | 'document_date'>('document_number');
+  const [sortKey, setSortKey] = useState<'document_number' | 'document_name' | 'location' | 'document_date' | 'transaction_count' | 'total_amount'>('document_number');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (key: typeof sortKey) => {
     if (key === sortKey) {
@@ -139,7 +139,7 @@ const DocumentsPage = () => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch],
+    queryKey: ['documents', currentPage, selectedLocationId, debouncedSearch, sortKey, sortDir],
     queryFn: async () => {
       console.log('Fetching documents page:', currentPage);
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -190,9 +190,22 @@ const DocumentsPage = () => {
           *,
           locations(name),
           profiles!documents_user_id_fkey(name)
-        `, { count: 'exact' }).order('document_number', {
-        ascending: false
-      });
+        `, { count: 'exact' });
+
+      // Sortowanie po stronie bazy — obejmuje wszystkie strony wyników.
+      // Kolumny liczbowe (liczba operacji, suma) są liczone w aplikacji,
+      // więc dla nich zostawiamy domyślne sortowanie po numerze dokumentu.
+      const sortColumn = sortKey === 'location' ? 'location_name_snapshot' : sortKey;
+      const isDbSortable = sortColumn === 'document_number' || sortColumn === 'document_name' || sortColumn === 'document_date' || sortColumn === 'location_name_snapshot';
+      if (isDbSortable) {
+        query = query.order(sortColumn, { ascending: sortDir === 'asc', nullsFirst: false });
+        // Stabilna kolejność przy równych wartościach
+        if (sortColumn !== 'document_number') {
+          query = query.order('document_number', { ascending: false });
+        }
+      } else {
+        query = query.order('document_number', { ascending: false });
+      }
 
       // Filter by location if selected
       if (isAdminOrProvincial && selectedLocationId !== 'all') {
@@ -689,7 +702,7 @@ Wieża;"4.800,00";420-1-3-6;"4.800,00";100
         </div>
 
         {/* Documents table */}
-        <DocumentsTable documents={filteredDocuments} onDocumentClick={handleDocumentClick} onDocumentDelete={handleDocumentDelete} onDocumentDuplicate={handleDocumentDuplicate} isLoading={isLoading} showLocation={isAdminOrProvincial && selectedLocationId === 'all'} />
+        <DocumentsTable documents={filteredDocuments} onDocumentClick={handleDocumentClick} onDocumentDelete={handleDocumentDelete} onDocumentDuplicate={handleDocumentDuplicate} isLoading={isLoading} showLocation={isAdminOrProvincial && selectedLocationId === 'all'} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
 
         {/* Pagination */}
         {totalPages > 1 && (
