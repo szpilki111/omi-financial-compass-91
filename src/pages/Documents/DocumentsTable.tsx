@@ -68,7 +68,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentCl
       <TableHead className={className}>
         <button
           type="button"
-          onClick={() => handleSort(key)}
+          onClick={() => onSort(key)}
           className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
           title="Kliknij, aby posortować"
         >
