@@ -29,6 +29,8 @@ interface Document {
   total_amount?: number;
 }
 
+type SortKey = "document_number" | "document_name" | "location" | "document_date" | "transaction_count" | "total_amount";
+
 interface DocumentsTableProps {
   documents: Document[];
   onDocumentClick: (document: Document) => void;
@@ -36,51 +38,26 @@ interface DocumentsTableProps {
   onDocumentDuplicate: (documentId: string) => void;
   isLoading: boolean;
   showLocation?: boolean;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onSort: (key: SortKey) => void;
 }
 
-const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading, showLocation = false }) => {
+const DocumentsTable: React.FC<DocumentsTableProps> = ({ documents, onDocumentClick, onDocumentDelete, onDocumentDuplicate, isLoading, showLocation = false, sortKey, sortDir, onSort }) => {
   const { user, isReadOnly } = useAuth();
   const isAdmin = user?.role === "prowincjal" || user?.role === "admin";
 
-  type SortKey = "document_number" | "document_name" | "location" | "document_date" | "transaction_count" | "total_amount";
-  const [sortKey, setSortKey] = React.useState<SortKey>("document_number");
-  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
-
-  const handleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  };
-
+  // Kolumny liczbowe (liczba operacji, suma) są liczone w aplikacji,
+  // więc sortujemy je lokalnie na bieżącej stronie; pozostałe kolumny
+  // sortuje baza danych na wszystkich stronach.
   const sortedDocuments = React.useMemo(() => {
     if (!documents) return [];
-    const getSortValue = (doc: Document): string | number => {
-      switch (sortKey) {
-        case "transaction_count":
-          return doc.transaction_count || 0;
-        case "total_amount":
-          return doc.total_amount || 0;
-        case "location":
-          return doc.location_name_snapshot || doc.locations?.name || "";
-        default:
-          return (doc[sortKey] as string) ?? "";
-      }
-    };
-    const collator = new Intl.Collator("pl", { numeric: true, sensitivity: "base" });
+    if (sortKey !== "transaction_count" && sortKey !== "total_amount") return documents;
     const arr = [...documents];
     arr.sort((a, b) => {
-      const va = getSortValue(a);
-      const vb = getSortValue(b);
-      let res: number;
-      if (typeof va === "number" && typeof vb === "number") {
-        res = va - vb;
-      } else {
-        res = collator.compare(String(va), String(vb));
-      }
-      return sortDir === "asc" ? res : -res;
+      const va = sortKey === "transaction_count" ? a.transaction_count || 0 : a.total_amount || 0;
+      const vb = sortKey === "transaction_count" ? b.transaction_count || 0 : b.total_amount || 0;
+      return sortDir === "asc" ? va - vb : vb - va;
     });
     return arr;
   }, [documents, sortKey, sortDir]);
